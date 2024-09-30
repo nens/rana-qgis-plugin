@@ -1,0 +1,27 @@
+# This file contains metadata for your plugin.
+
+# This file should be included when you package your plugin.
+# Mandatory items:
+
+[general]
+name=Rana
+qgisMinimumVersion=3.22
+description=Rana QGIS plugin
+version=0.0.1
+author=Nelen & Schuurmans
+email=servicedesk@nelen-schuurmans.nl
+
+about=Interact with Rana from QGIS.
+
+    Browse for files as raster, vector, 3Di schematisations or 3Di results.
+
+    Open, edit and save the file back to Rana.
+
+    A Rana subscription is required to use this plugin. See https://www.lizard.net.
+
+    For questions on the use of this plugin please contact us via
+    servicedesk@nelen-schuurmans.nl
+
+tracker=https://github.com/nens/rana-qgis-plugin/issues
+repository=https://github.com/nens/rana-qgis-plugin
+# End of mandatory metadata

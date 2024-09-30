@@ -1,0 +1,18 @@
+version: "1.0"
+
+services:
+  qgis:
+    build: .
+    ports:
+      - "7070:7070"
+    environment:
+      - DISPLAY=unix${DISPLAY}
+      # Note: run 'xhost +localhost' beforehand.
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
+      - .:/tests_directory/
+      - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
+    command: qgis
+
+volumes:
+  profile-dir:
