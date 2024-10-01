@@ -33,9 +33,3 @@ class RanaQgisPlugin:
         self.rana_browser.show()
         self.rana_browser.raise_()
         self.rana_browser.activateWindow()
-
-        tenant = get_tenant(tenant=TENANT)
-        QgsMessageLog.logMessage(f"Tenant: {tenant}")
-
-        projects = get_tenant_projects(tenant=TENANT)
-        QgsMessageLog.logMessage(f"Projects: {projects}")

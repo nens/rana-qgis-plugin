@@ -1,3 +1,4 @@
+import json
 import urllib
 import urllib.parse
 
@@ -67,7 +68,8 @@ class NetworkManager(object):
             description = self._reply.errorString()
         else:
             status = True
-            self._content = self._reply.readAll().data().decode()
+            raw_content = self._reply.readAll()
+            self._content = json.loads(str(raw_content, 'utf-8'))
 
         self._reply.deleteLater()
 

@@ -22,7 +22,8 @@ def get_tenant_projects(tenant: str):
     status, error = network_manager.fetch()
 
     if status:
-        projects = network_manager.content
+        response = network_manager.content
+        projects = response["items"]
         return projects
     else:
         QgsMessageLog.logMessage(f"Error: {error}")
