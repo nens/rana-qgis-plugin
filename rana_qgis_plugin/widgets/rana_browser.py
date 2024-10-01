@@ -22,10 +22,7 @@ class RanaBrowser(rana_uicls, rana_basecls):
 
     def fetch_projects(self):
         self.projects = get_tenant_projects(tenant=TENANT)
-        QgsMessageLog.logMessage(f"Projects: {self.projects}")
-
         self.projects_model.clear()
-
         header = ["Name"]
         self.projects_model.setHorizontalHeaderLabels(header)
         for project in self.projects:
