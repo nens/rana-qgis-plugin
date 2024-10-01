@@ -1,11 +1,9 @@
-import os.path
-
-from qgis.PyQt import uic
 from qgis.core import QgsMessageLog
-from qgis.PyQt.QtWidgets import QAction, QDialog
+from qgis.PyQt.QtWidgets import QAction
 
 from .utils import get_tenant, get_tenant_projects
 from .constant import PLUGIN_NAME, TENANT
+from .widgets.rana_browser import RanaBrowser
 
 
 def classFactory(iface):
@@ -15,8 +13,8 @@ def classFactory(iface):
 class RanaQgisPlugin:
     def __init__(self, iface):
         self.iface = iface
-        self.plugin_dir = os.path.dirname(__file__)
         self.menu = PLUGIN_NAME
+        self.rana_browser = None
         self.action = QAction(self.menu, iface.mainWindow())
         self.action.triggered.connect(self.run)
 
@@ -29,18 +27,15 @@ class RanaQgisPlugin:
         self.iface.removePluginMenu(self.menu, self.action)
 
     def run(self):
-        # Create a dialog and load the UI
-        dialog = QDialog()
-
-        # Load the .ui file
-        ui_file = os.path.join(self.plugin_dir, 'ui', 'rana.ui')
-        uic.loadUi(ui_file, dialog)
+        """Run method that loads and starts the plugin"""
+        if not self.rana_browser:
+            self.rana_browser = RanaBrowser(self)
+        self.rana_browser.show()
+        self.rana_browser.raise_()
+        self.rana_browser.activateWindow()
 
         tenant = get_tenant(tenant=TENANT)
         QgsMessageLog.logMessage(f"Tenant: {tenant}")
 
         projects = get_tenant_projects(tenant=TENANT)
         QgsMessageLog.logMessage(f"Projects: {projects}")
-
-        # Show the dialog
-        dialog.exec_()
