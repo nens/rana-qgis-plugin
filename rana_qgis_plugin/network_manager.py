@@ -1,0 +1,82 @@
+import urllib
+import urllib.parse
+
+from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
+from qgis.PyQt.QtCore import QCoreApplication, QUrl
+from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
+
+
+class NetworkManager(object):
+    """Class to get the content of a file with a given URL."""
+    def __init__(self, url: str, auth_cfg: str = None):
+        self._network_manager = QgsNetworkAccessManager.instance()
+        self._auth_manager = QgsApplication.authManager()
+        self._network_finished = False
+        self._network_timeout = False
+        self._url = url
+        self._reply = None
+        self._auth_cfg = auth_cfg
+        self._content = None
+
+        if auth_cfg:
+            is_auth_configured = self._auth_cfg in self._auth_manager.configIds()
+            if not is_auth_configured:
+                raise QgsProcessingException('Authorization not configured!')
+
+    @property
+    def content(self):
+        return self._content
+
+    @property
+    def network_finished(self):
+        return self._network_finished
+
+    @property
+    def network_timeout(self):
+        return self._network_timeout
+
+    def fetch(self, params: dict = None):
+        """Fetch the content (in the background).
+        :return: (status, error message)
+        :rtype: (boolean, string)
+        """
+        # Initialize some properties again
+        self._content = None
+        self._reply = None
+        self._network_finished = False
+        self._network_timeout = False
+
+        encoded_params = urllib.parse.urlencode(params) if params else None
+        url = f"{self._url}?{encoded_params}" if encoded_params else self._url
+        request = QNetworkRequest(QUrl(url))
+
+        if self._auth_cfg:
+            self._auth_manager.updateNetworkRequest(request, self._auth_cfg)
+
+        self._reply = self._network_manager.get(request)
+        self._reply.finished.connect(self.fetch_finished)
+        self._network_manager.requestTimedOut.connect(self.request_timeout)
+
+        while not self._reply.isFinished():
+            QCoreApplication.processEvents()
+
+        # Finished
+        description = None
+        if self._reply.error() != QNetworkReply.NoError:
+            status = False
+            description = self._reply.errorString()
+        else:
+            status = True
+            self._content = self._reply.readAll().data().decode()
+
+        self._reply.deleteLater()
+
+        return status, description
+
+    def fetch_finished(self):
+        """Called when fetching metadata has finished."""
+        self._network_finished = True
+
+    def request_timeout(self):
+        """Called when a request timeout signal is emitted."""
+        self._network_timeout = True

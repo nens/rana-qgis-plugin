@@ -1,0 +1,6 @@
+PLUGIN_NAME = "Rana"
+TENANT = "nenstest"
+TENANT_URL = f"https://test.ranawaterintelligence.com/v1-alpha/tenants/{TENANT}"
+OAUTH2_ID = "n9p1erl"
+RANA_SETTINGS_ENTRY = "Rana"
+RANA_AUTHCFG_ENTRY = f"{RANA_SETTINGS_ENTRY}/authcfg"

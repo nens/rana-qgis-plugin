@@ -1,10 +1,11 @@
 import os.path
 
 from qgis.PyQt import uic
-from qgis.core import QgsLogger
+from qgis.core import QgsMessageLog
 from qgis.PyQt.QtWidgets import QAction, QDialog
 
 from .utils import get_tenant
+from .constant import PLUGIN_NAME, TENANT
 
 
 def classFactory(iface):
@@ -12,12 +13,10 @@ def classFactory(iface):
 
 
 class RanaQgisPlugin:
-    PLUGIN_NAME = "Rana"
-
     def __init__(self, iface):
         self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
-        self.menu = self.PLUGIN_NAME
+        self.menu = PLUGIN_NAME
         self.action = QAction(self.menu, iface.mainWindow())
         self.action.triggered.connect(self.run)
 
@@ -37,8 +36,8 @@ class RanaQgisPlugin:
         ui_file = os.path.join(self.plugin_dir, 'ui', 'rana.ui')
         uic.loadUi(ui_file, dialog)
 
-        QgsLogger.warning("Get tenant")
-        get_tenant()
+        tenant = get_tenant(tenant=TENANT)
+        QgsMessageLog.logMessage(f"Tenant: {tenant}")
 
         # Show the dialog
         dialog.exec_()
