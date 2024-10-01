@@ -1,9 +1,6 @@
-from qgis.core import QgsMessageLog
 from qgis.PyQt.QtWidgets import QAction
-
-from .utils import get_tenant, get_tenant_projects
-from .constant import PLUGIN_NAME, TENANT
-from .widgets.rana_browser import RanaBrowser
+from .widgets.rana_browser import RanaProjectBrowser
+from .constant import PLUGIN_NAME
 
 
 def classFactory(iface):
@@ -14,7 +11,7 @@ class RanaQgisPlugin:
     def __init__(self, iface):
         self.iface = iface
         self.menu = PLUGIN_NAME
-        self.rana_browser = None
+        self.rana_project_browser = None
         self.action = QAction(self.menu, iface.mainWindow())
         self.action.triggered.connect(self.run)
 
@@ -28,8 +25,8 @@ class RanaQgisPlugin:
 
     def run(self):
         """Run method that loads and starts the plugin"""
-        if not self.rana_browser:
-            self.rana_browser = RanaBrowser(self)
-        self.rana_browser.show()
-        self.rana_browser.raise_()
-        self.rana_browser.activateWindow()
+        if not self.rana_project_browser:
+            self.rana_project_browser = RanaProjectBrowser()
+        self.rana_project_browser.show()
+        self.rana_project_browser.raise_()
+        self.rana_project_browser.activateWindow()
