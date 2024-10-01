@@ -4,7 +4,7 @@ from qgis.PyQt import uic
 from qgis.core import QgsMessageLog
 from qgis.PyQt.QtWidgets import QAction, QDialog
 
-from .utils import get_tenant
+from .utils import get_tenant, get_tenant_projects
 from .constant import PLUGIN_NAME, TENANT
 
 
@@ -38,6 +38,9 @@ class RanaQgisPlugin:
 
         tenant = get_tenant(tenant=TENANT)
         QgsMessageLog.logMessage(f"Tenant: {tenant}")
+
+        projects = get_tenant_projects(tenant=TENANT)
+        QgsMessageLog.logMessage(f"Projects: {projects}")
 
         # Show the dialog
         dialog.exec_()
