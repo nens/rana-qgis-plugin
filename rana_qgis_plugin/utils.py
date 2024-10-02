@@ -1,5 +1,3 @@
-import urllib.parse
-
 from qgis.core import QgsMessageLog
 
 from .network_manager import NetworkManager
@@ -31,11 +29,10 @@ def get_tenant_projects(tenant: str):
         QgsMessageLog.logMessage(f"Error: {error}")
 
 def get_tenant_project_files(tenant: str, project_id: str, params: dict = None):
-    encodedParams = urllib.parse.urlencode(params) if params else ""
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/ls?{encodedParams}"
+    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/ls"
 
     network_manager = NetworkManager(url, OAUTH2_ID)
-    status, error = network_manager.fetch()
+    status, error = network_manager.fetch(params)
 
     if status:
         response = network_manager.content

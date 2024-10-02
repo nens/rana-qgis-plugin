@@ -1,5 +1,4 @@
 import json
-import urllib
 import urllib.parse
 
 from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
