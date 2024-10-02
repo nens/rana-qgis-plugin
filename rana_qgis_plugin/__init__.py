@@ -1,32 +1,10 @@
-from qgis.PyQt.QtWidgets import QAction
-from .widgets.rana_browser import RanaProjectBrowser
-from .constant import PLUGIN_NAME
+def classFactory(iface):  # pylint: disable=invalid-name
+    """Load RanaQgisPlugin class from file rana_qgis_plugin.
 
+    :param iface: A QGIS interface instance.
+    :type iface: QgsInterface
+    """
 
-def classFactory(iface):
+    from .rana_qgis_plugin import RanaQgisPlugin
+
     return RanaQgisPlugin(iface)
-
-
-class RanaQgisPlugin:
-    def __init__(self, iface):
-        self.iface = iface
-        self.menu = PLUGIN_NAME
-        self.rana_project_browser = None
-        self.action = QAction(self.menu, iface.mainWindow())
-        self.action.triggered.connect(self.run)
-
-    def initGui(self):
-        """Add the plugin to the QGIS menu."""
-        self.iface.addPluginToMenu(self.menu, self.action)
-
-    def unload(self):
-        """Removes the plugin from the QGIS menu."""
-        self.iface.removePluginMenu(self.menu, self.action)
-
-    def run(self):
-        """Run method that loads and starts the plugin"""
-        if not self.rana_project_browser:
-            self.rana_project_browser = RanaProjectBrowser()
-        self.rana_project_browser.show()
-        self.rana_project_browser.raise_()
-        self.rana_project_browser.activateWindow()
