@@ -25,6 +25,11 @@ class RanaFileBrowser(uicls, basecls):
         self.files_tv.setModel(self.files_model)
         self.files_tv.doubleClicked.connect(self.click_file_or_directory)
         self.fetch_files()
+        
+        # File details
+        self.file_details_label = QLabel()
+        self.file_details_label.hide()
+        self.layout().addWidget(self.file_details_label)
 
     def fetch_files(self, path: str = None):
         self.files = get_tenant_project_files(TENANT, self.project_id, {"path": path} if path else None)
@@ -58,7 +63,6 @@ class RanaFileBrowser(uicls, basecls):
 
         # Add home button
         home_btn = QPushButton("Home")
-        # home_btn.setFlat(True)
         home_btn.setCursor(Qt.PointingHandCursor)
         home_btn.setDisabled(len(self.current_path) == 0)
         home_btn.clicked.connect(self.on_home_clicked)
@@ -68,18 +72,19 @@ class RanaFileBrowser(uicls, basecls):
         for i, directory in enumerate(self.current_path):
             self.breadcrumbs_layout.addWidget(QLabel(">"))
             btn = QPushButton(directory)
-            # btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setDisabled(i == len(self.current_path) - 1)
             btn.clicked.connect(lambda checked, i=i: self.on_breadcrumb_clicked(i))
             self.breadcrumbs_layout.addWidget(btn)
 
     def on_breadcrumb_clicked(self, index):
+        self.file_details_label.hide()
         self.current_path = self.current_path[:index+1]
         path = "/".join(self.current_path) + "/"
         self.fetch_files(path)
 
     def on_home_clicked(self):
+        self.file_details_label.hide()
         self.current_path = []
         self.fetch_files()
 
@@ -91,4 +96,13 @@ class RanaFileBrowser(uicls, basecls):
             self.current_path.append(directory_name)
             self.fetch_files(file["id"])
         else:
-            QgsMessageLog.logMessage(f"Open file: {file['id']}")
+            file_name = os.path.basename(file["id"].rstrip("/"))
+            self.current_path.append(file_name)
+            self.update_breadcrumbs()
+            self.show_file_details(file)
+
+    def show_file_details(self, file):
+        self.files_model.clear()
+        file_name = os.path.basename(file["id"].rstrip("/"))
+        self.file_details_label.setText(file_name)
+        self.file_details_label.show()
