@@ -1,3 +1,6 @@
+import os
+import requests
+
 from qgis.core import QgsMessageLog
 
 from .network_manager import NetworkManager
@@ -40,3 +43,16 @@ def get_tenant_project_files(tenant: str, project_id: str, params: dict = None):
         return items
     else:
         QgsMessageLog.logMessage(f"Error: {error}")
+
+def download_open_raster_file(url, file_name):
+    local_file_path = os.path.join("/tests_directory", file_name)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        with open(local_file_path, "wb") as file:
+            file.write(response.content)
+        return local_file_path
+    except requests.exceptions.RequestException as e:
+        QgsMessageLog.logMessage(f"Failed to download file: {str(e)}")
+    except Exception as e:
+        QgsMessageLog.logMessage(f"An error occurred: {str(e)}")
