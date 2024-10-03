@@ -18,6 +18,7 @@ class RanaFileBrowser(uicls, basecls):
         super().__init__(parent)
         self.setupUi(self)
         self.parent = parent
+        self.file_details_widget = RanaFileDetails(self.file_table_widget)
         self.project_id = project["id"]
         self.current_path = []
 
@@ -74,11 +75,15 @@ class RanaFileBrowser(uicls, basecls):
             self.breadcrumbs_layout.addWidget(btn)
 
     def on_breadcrumb_clicked(self, index):
+        self.file_details_widget.hide_file_details()
+        self.files_tv.show()
         self.current_path = self.current_path[:index+1]
         path = "/".join(self.current_path) + "/"
         self.fetch_files(path)
 
     def on_home_clicked(self):
+        self.file_details_widget.hide_file_details()
+        self.files_tv.show()
         self.current_path = []
         self.fetch_files()
 
@@ -93,21 +98,5 @@ class RanaFileBrowser(uicls, basecls):
             file_name = os.path.basename(file["id"].rstrip("/"))
             self.current_path.append(file_name)
             self.update_breadcrumbs()
-            self.show_file_details(file)
-
-    def show_file_details(self, file):
-        self.files_model.clear()
-        header = ["Filename", "Size", "Type"]
-        self.files_model.setHorizontalHeaderLabels(header)
-        file_name = os.path.basename(file["id"].rstrip("/"))
-        file_size = file["size"]
-        file_type = file["type"]
-        name_item = QStandardItem(file_name)
-        size_item = QStandardItem(f"{file_size} bytes")
-        type_item = QStandardItem(file_type)
-        file_items = [
-            name_item,
-            size_item,
-            type_item
-        ]
-        self.files_model.appendRow(file_items)
+            self.files_tv.hide()
+            self.file_details_widget.show_file_details(file)
