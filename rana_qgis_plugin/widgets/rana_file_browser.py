@@ -6,6 +6,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QPushButton
 
+from .rana_file_details import RanaFileDetails
 from rana_qgis_plugin.utils import get_tenant_project_files
 from rana_qgis_plugin.constant import TENANT
 
@@ -25,11 +26,6 @@ class RanaFileBrowser(uicls, basecls):
         self.files_tv.setModel(self.files_model)
         self.files_tv.doubleClicked.connect(self.click_file_or_directory)
         self.fetch_files()
-        
-        # File details
-        self.file_details_label = QLabel()
-        self.file_details_label.hide()
-        self.layout().addWidget(self.file_details_label)
 
     def fetch_files(self, path: str = None):
         self.files = get_tenant_project_files(TENANT, self.project_id, {"path": path} if path else None)
@@ -78,13 +74,11 @@ class RanaFileBrowser(uicls, basecls):
             self.breadcrumbs_layout.addWidget(btn)
 
     def on_breadcrumb_clicked(self, index):
-        self.file_details_label.hide()
         self.current_path = self.current_path[:index+1]
         path = "/".join(self.current_path) + "/"
         self.fetch_files(path)
 
     def on_home_clicked(self):
-        self.file_details_label.hide()
         self.current_path = []
         self.fetch_files()
 
@@ -103,6 +97,17 @@ class RanaFileBrowser(uicls, basecls):
 
     def show_file_details(self, file):
         self.files_model.clear()
+        header = ["Filename", "Size", "Type"]
+        self.files_model.setHorizontalHeaderLabels(header)
         file_name = os.path.basename(file["id"].rstrip("/"))
-        self.file_details_label.setText(file_name)
-        self.file_details_label.show()
+        file_size = file["size"]
+        file_type = file["type"]
+        name_item = QStandardItem(file_name)
+        size_item = QStandardItem(f"{file_size} bytes")
+        type_item = QStandardItem(file_type)
+        file_items = [
+            name_item,
+            size_item,
+            type_item
+        ]
+        self.files_model.appendRow(file_items)
