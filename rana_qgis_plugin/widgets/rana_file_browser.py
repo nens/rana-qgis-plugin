@@ -19,6 +19,7 @@ class RanaFileBrowser(uicls, basecls):
         self.setupUi(self)
         self.parent = parent
         self.file_details_widget = RanaFileDetails(self.file_table_widget)
+        self.project = project
         self.project_id = project["id"]
         self.current_path = []
 
@@ -99,4 +100,4 @@ class RanaFileBrowser(uicls, basecls):
             self.current_path.append(file_name)
             self.update_breadcrumbs()
             self.files_tv.hide()
-            self.file_details_widget.show_file_details(file, self.project_id)
+            self.file_details_widget.show_file_details(file, self.project)

@@ -13,6 +13,7 @@ class RanaFileDetails:
         self.table_widget.horizontalHeader().hide()
         self.table_widget.hide()
         self.project_id = None
+        self.project_name = None
         self.file = None
 
         # File open button
@@ -29,8 +30,9 @@ class RanaFileDetails:
     def hide_file_details(self):
         self.table_widget.hide()
 
-    def show_file_details(self, file, project_id: str):
-        self.project_id = project_id
+    def show_file_details(self, file, project):
+        self.project_id = project["id"]
+        self.project_name = project["name"]
         self.file = file
         self.table_widget.clearContents()
         self.table_widget.setRowCount(3)
@@ -57,8 +59,14 @@ class RanaFileDetails:
         if self.file and self.file["descriptor"] and self.file["descriptor"]["data_type"]:
             data_type = self.file["descriptor"]["data_type"]
             download_url = self.file["url"]
-            file_name = os.path.basename(self.file["id"].rstrip("/"))
-            local_file_path = download_file(download_url, file_name)
+            file_path = self.file["id"]
+            file_name = os.path.basename(file_path.rstrip("/"))
+            local_file_path = download_file(
+                url=download_url,
+                project_name=self.project_name,
+                file_path=file_path,
+                file_name=file_name
+            )
             if not local_file_path:
                 QgsMessageLog.logMessage(f"Download failed. Unable to open {data_type} file in QGIS.")
                 return

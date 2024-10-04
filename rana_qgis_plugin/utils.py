@@ -70,8 +70,13 @@ def finish_file_upload(tenant: str, project_id: str, payload: dict):
         QgsMessageLog.logMessage(f"Error completing file upload: {error}")
     return None
 
-def download_file(url, file_name):
-    local_file_path = os.path.join("/tests_directory", file_name)
+def download_file(url: str, project_name: str, file_path: str, file_name: str):
+    # Get the current working directory
+    base_dir = os.getcwd()
+    local_dir_structure = os.path.join(base_dir, project_name, os.path.dirname(file_path))
+    # Create the directory structure locally
+    os.makedirs(local_dir_structure, exist_ok=True)
+    local_file_path = os.path.join(local_dir_structure, file_name)
     try:
         response = requests.get(url)
         response.raise_for_status()
