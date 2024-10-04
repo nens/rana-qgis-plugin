@@ -99,4 +99,4 @@ class RanaFileBrowser(uicls, basecls):
             self.current_path.append(file_name)
             self.update_breadcrumbs()
             self.files_tv.hide()
-            self.file_details_widget.show_file_details(file)
+            self.file_details_widget.show_file_details(file, self.project_id)

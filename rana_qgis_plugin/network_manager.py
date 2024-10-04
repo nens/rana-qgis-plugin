@@ -7,7 +7,7 @@ from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 
 class NetworkManager(object):
-    """Class to get the content of a file with a given URL."""
+    """Network manager class for handling network requests."""
     def __init__(self, url: str, auth_cfg: str = None):
         self._network_manager = QgsNetworkAccessManager.instance()
         self._auth_manager = QgsApplication.authManager()
@@ -17,6 +17,7 @@ class NetworkManager(object):
         self._reply = None
         self._auth_cfg = auth_cfg
         self._content = None
+        self._request = None
 
         if auth_cfg:
             is_auth_configured = self._auth_cfg in self._auth_manager.configIds()
@@ -36,31 +37,43 @@ class NetworkManager(object):
         return self._network_timeout
 
     def fetch(self, params: dict = None):
-        """Fetch the content (in the background).
-        :return: (status, error message)
-        :rtype: (boolean, string)
-        """
+        self.prepare_request(params)
+        self._reply = self._network_manager.get(self._request)
+        return self.process_request()
+
+    def post(self, params: dict):
+        self.prepare_request(params)
+        self._reply = self._network_manager.post(self._request, json.dumps({}).encode("utf-8"))
+        return self.process_request()
+
+    def put(self, payload: dict):
+        self.prepare_request()
+        self._reply = self._network_manager.put(self._request, json.dumps(payload).encode("utf-8"))
+        return self.process_request()
+
+    def prepare_request(self, params: dict = None):
         # Initialize some properties again
         self._content = None
         self._reply = None
+        self._request = None
         self._network_finished = False
         self._network_timeout = False
 
         encoded_params = urllib.parse.urlencode(params) if params else None
         url = f"{self._url}?{encoded_params}" if encoded_params else self._url
-        request = QNetworkRequest(QUrl(url))
+        self._request = QNetworkRequest(QUrl(url))
+        self._request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
 
         if self._auth_cfg:
-            self._auth_manager.updateNetworkRequest(request, self._auth_cfg)
+            self._auth_manager.updateNetworkRequest(self._request, self._auth_cfg)
 
-        self._reply = self._network_manager.get(request)
+    def process_request(self):
         self._reply.finished.connect(self.fetch_finished)
         self._network_manager.requestTimedOut.connect(self.request_timeout)
 
         while not self._reply.isFinished():
             QCoreApplication.processEvents()
 
-        # Finished
         description = None
         if self._reply.error() != QNetworkReply.NoError:
             status = False

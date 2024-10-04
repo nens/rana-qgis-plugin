@@ -17,6 +17,7 @@ def get_tenant(tenant: str):
         return tenant
     else:
         QgsMessageLog.logMessage(f"Error: {error}")
+        return None
 
 def get_tenant_projects(tenant: str):
     url = f"{BASE_URL}/tenants/{tenant}/projects"
@@ -30,6 +31,7 @@ def get_tenant_projects(tenant: str):
         return items
     else:
         QgsMessageLog.logMessage(f"Error: {error}")
+        return None
 
 def get_tenant_project_files(tenant: str, project_id: str, params: dict = None):
     url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/ls"
@@ -43,8 +45,32 @@ def get_tenant_project_files(tenant: str, project_id: str, params: dict = None):
         return items
     else:
         QgsMessageLog.logMessage(f"Error: {error}")
+        return None
 
-def download_open_raster_file(url, file_name):
+def start_file_upload(tenant: str, project_id: str, params: dict):
+    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
+
+    network_manager = NetworkManager(url, OAUTH2_ID)
+    status, error = network_manager.post(params)
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        QgsMessageLog.logMessage(f"Error: {error}")
+        return None
+
+def finish_file_upload(tenant: str, project_id: str, payload: dict):
+    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
+    network_manager = NetworkManager(url, OAUTH2_ID)
+    status, error = network_manager.put(payload)
+    if status:
+        QgsMessageLog.logMessage("File successfully uploaded to Rana.")
+    else:
+        QgsMessageLog.logMessage(f"Error completing file upload: {error}")
+    return None
+
+def download_raster_file(url, file_name):
     local_file_path = os.path.join("/tests_directory", file_name)
     try:
         response = requests.get(url)
@@ -54,5 +80,7 @@ def download_open_raster_file(url, file_name):
         return local_file_path
     except requests.exceptions.RequestException as e:
         QgsMessageLog.logMessage(f"Failed to download file: {str(e)}")
+        return None
     except Exception as e:
         QgsMessageLog.logMessage(f"An error occurred: {str(e)}")
+        return None
