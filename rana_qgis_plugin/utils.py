@@ -51,7 +51,7 @@ def start_file_upload(tenant: str, project_id: str, params: dict):
     url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
 
     network_manager = NetworkManager(url, OAUTH2_ID)
-    status, error = network_manager.post(params)
+    status, error = network_manager.post(params=params)
 
     if status:
         response = network_manager.content
@@ -63,7 +63,7 @@ def start_file_upload(tenant: str, project_id: str, params: dict):
 def finish_file_upload(tenant: str, project_id: str, payload: dict):
     url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
     network_manager = NetworkManager(url, OAUTH2_ID)
-    status, error = network_manager.put(payload)
+    status, error = network_manager.put(payload=payload)
     if status:
         QgsMessageLog.logMessage("File successfully uploaded to Rana.")
     else:

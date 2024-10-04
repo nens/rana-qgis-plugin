@@ -41,13 +41,13 @@ class NetworkManager(object):
         self._reply = self._network_manager.get(self._request)
         return self.process_request()
 
-    def post(self, params: dict):
+    def post(self, params: dict = None, payload: dict = {}):
         self.prepare_request(params)
-        self._reply = self._network_manager.post(self._request, json.dumps({}).encode("utf-8"))
+        self._reply = self._network_manager.post(self._request, json.dumps(payload).encode("utf-8"))
         return self.process_request()
 
-    def put(self, payload: dict):
-        self.prepare_request()
+    def put(self, params: dict = None, payload: dict = {}):
+        self.prepare_request(params)
         self._reply = self._network_manager.put(self._request, json.dumps(payload).encode("utf-8"))
         return self.process_request()
 
