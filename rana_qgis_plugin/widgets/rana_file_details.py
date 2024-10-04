@@ -1,10 +1,10 @@
 import os
 import requests
 
-from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject
+from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout
 
-from rana_qgis_plugin.utils import download_raster_file, start_file_upload, finish_file_upload
+from rana_qgis_plugin.utils import download_file, start_file_upload, finish_file_upload
 from rana_qgis_plugin.constant import TENANT
 
 class RanaFileDetails:
@@ -54,19 +54,26 @@ class RanaFileDetails:
         self.table_widget.show()
 
     def open_file_in_qgis(self):
-        if self.file and self.file["descriptor"] and self.file["descriptor"]["data_type"] == "raster":
+        if self.file and self.file["descriptor"] and self.file["descriptor"]["data_type"]:
+            data_type = self.file["descriptor"]["data_type"]
             download_url = self.file["url"]
             file_name = os.path.basename(self.file["id"].rstrip("/"))
-            local_file_path = download_raster_file(download_url, file_name)
+            local_file_path = download_file(download_url, file_name)
             if not local_file_path:
-                QgsMessageLog.logMessage("Download failed. Unable to open the raster file.")
+                QgsMessageLog.logMessage(f"Download failed. Unable to open {data_type} file in QGIS.")
                 return
-            layer = QgsRasterLayer(local_file_path, file_name)
+            if data_type == "vector":
+                layer = QgsVectorLayer(local_file_path, file_name, "ogr")
+            elif data_type == "raster":
+                layer = QgsRasterLayer(local_file_path, file_name)
+            else:
+                QgsMessageLog.logMessage(f"Unsupported data type: {data_type}")
+                return
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
-                QgsMessageLog.logMessage(f"Added raster layer: {local_file_path}")
+                QgsMessageLog.logMessage(f"Added {data_type} layer: {local_file_path}")
             else:
-                QgsMessageLog.logMessage(f"Error adding raster layer: {local_file_path}")
+                QgsMessageLog.logMessage(f"Error adding {data_type} layer: {local_file_path}")
 
     def save_file_to_rana(self):
         if not self.file or not self.project_id:

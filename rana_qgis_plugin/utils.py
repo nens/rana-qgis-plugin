@@ -70,7 +70,7 @@ def finish_file_upload(tenant: str, project_id: str, payload: dict):
         QgsMessageLog.logMessage(f"Error completing file upload: {error}")
     return None
 
-def download_raster_file(url, file_name):
+def download_file(url, file_name):
     local_file_path = os.path.join("/tests_directory", file_name)
     try:
         response = requests.get(url)
