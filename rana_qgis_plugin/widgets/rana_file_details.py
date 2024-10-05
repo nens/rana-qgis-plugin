@@ -90,6 +90,11 @@ class RanaFileDetails:
         rana_file_path = self.file["id"]
         local_file_path = os.path.join("/tests_directory", file_name)
 
+        # Check if the file exists locally before uploading
+        if not os.path.exists(local_file_path):
+            QgsMessageLog.logMessage(f"File not found: {local_file_path}")
+            return
+
         # Save the file to Rana
         try:
             # Step 1: POST request to initiate the upload
