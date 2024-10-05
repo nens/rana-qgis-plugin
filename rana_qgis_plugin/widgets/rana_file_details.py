@@ -43,7 +43,7 @@ class RanaFileDetails:
         values = [
             os.path.basename(file["id"].rstrip("/")),
             f"{file["size"]} bytes",
-            file["type"]
+            file["media_type"]
         ]
 
         # Populate the table
