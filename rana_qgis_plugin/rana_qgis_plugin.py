@@ -1,6 +1,7 @@
 from qgis.PyQt.QtWidgets import QAction
 
-from .constant import PLUGIN_NAME, TENANT
+from .auth import setup_oauth2
+from .constant import PLUGIN_NAME
 from .widgets.rana_project_browser import RanaProjectBrowser
 
 
@@ -14,6 +15,7 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Add the plugin to the QGIS menu."""
+        setup_oauth2()
         self.iface.addPluginToMenu(self.menu, self.action)
 
     def unload(self):

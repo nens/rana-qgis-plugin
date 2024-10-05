@@ -1,15 +1,17 @@
 import os
+
 import requests
-
-from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QTableWidgetItem
+from qgis.core import QgsMessageLog, QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QTableWidgetItem
 
-from rana_qgis_plugin.utils import download_file, get_local_file_path, start_file_upload, finish_file_upload
 from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.utils import (download_file, finish_file_upload,
+                                    get_local_file_path, start_file_upload)
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "file.ui"))
+
 
 class RanaFileDetails(uicls, basecls):
     def __init__(self, parent=None):
@@ -48,10 +50,7 @@ class RanaFileDetails(uicls, basecls):
             file_path = self.file["id"]
             file_name = os.path.basename(file_path.rstrip("/"))
             local_file_path = download_file(
-                url=download_url,
-                project_name=self.project_name,
-                file_path=file_path,
-                file_name=file_name
+                url=download_url, project_name=self.project_name, file_path=file_path, file_name=file_name
             )
             if not local_file_path:
                 QgsMessageLog.logMessage(f"Download failed. Unable to open {data_type} file in QGIS.")
@@ -84,7 +83,7 @@ class RanaFileDetails(uicls, basecls):
         # Save the file to Rana
         try:
             # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(TENANT, self.project_id, { "path": rana_file_path })
+            upload_response = start_file_upload(TENANT, self.project_id, {"path": rana_file_path})
             if not upload_response:
                 QgsMessageLog.logMessage("Failed to initiate upload.")
                 return

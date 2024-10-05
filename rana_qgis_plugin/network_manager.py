@@ -1,13 +1,15 @@
 import json
 import urllib.parse
 
-from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
+from qgis.core import (QgsApplication, QgsNetworkAccessManager,
+                       QgsProcessingException)
 from qgis.PyQt.QtCore import QCoreApplication, QUrl
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 
 class NetworkManager(object):
     """Network manager class for handling network requests."""
+
     def __init__(self, url: str, auth_cfg: str = None):
         self._network_manager = QgsNetworkAccessManager.instance()
         self._auth_manager = QgsApplication.authManager()
@@ -22,7 +24,7 @@ class NetworkManager(object):
         if auth_cfg:
             is_auth_configured = self._auth_cfg in self._auth_manager.configIds()
             if not is_auth_configured:
-                raise QgsProcessingException('Authorization not configured!')
+                raise QgsProcessingException("Authorization not configured!")
 
     @property
     def content(self):
@@ -81,7 +83,7 @@ class NetworkManager(object):
         else:
             status = True
             raw_content = self._reply.readAll()
-            self._content = json.loads(str(raw_content, 'utf-8'))
+            self._content = json.loads(str(raw_content, "utf-8"))
 
         self._reply.deleteLater()
 
