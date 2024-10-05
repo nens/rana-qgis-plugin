@@ -33,7 +33,11 @@
        <widget class="QTreeView" name="files_tv"/>
       </item>
       <item>
-       <widget class="QTableWidget" name="file_table_widget"/>
+       <widget class="QTableWidget" name="file_table_widget">
+        <property name="visible">
+         <bool>false</bool>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

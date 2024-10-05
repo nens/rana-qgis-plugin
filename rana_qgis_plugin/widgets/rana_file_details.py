@@ -2,58 +2,44 @@ import os
 import requests
 
 from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout
+from qgis.PyQt.QtWidgets import QTableWidgetItem, QPushButton, QVBoxLayout
+from qgis.PyQt import uic
 
 from rana_qgis_plugin.utils import download_file, start_file_upload, finish_file_upload
 from rana_qgis_plugin.constant import TENANT
 
-class RanaFileDetails:
-    def __init__(self, table_widget: QTableWidget):
-        self.table_widget = table_widget
-        self.table_widget.horizontalHeader().hide()
-        self.table_widget.hide()
+base_dir = os.path.dirname(__file__)
+uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "file.ui"))
+
+class RanaFileDetails(uicls, basecls):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setupUi(self)
+        self.parent = parent
         self.project_id = None
         self.project_name = None
         self.file = None
-
-        # File open button
-        self.btn_open = QPushButton("Open in QGIS")
-        self.layout = QVBoxLayout(self.table_widget)
-        self.layout.addWidget(self.btn_open)
         self.btn_open.clicked.connect(self.open_file_in_qgis)
-
-        # File save button
-        self.btn_save = QPushButton("Save to Rana")
-        self.layout.addWidget(self.btn_save)
         self.btn_save.clicked.connect(self.save_file_to_rana)
-
-    def hide_file_details(self):
-        self.table_widget.hide()
 
     def show_file_details(self, file, project):
         self.project_id = project["id"]
         self.project_name = project["name"]
         self.file = file
         self.table_widget.clearContents()
-        self.table_widget.setRowCount(3)
-        self.table_widget.setColumnCount(2)
-
-        # Define labels and values
-        labels = ["Filename", "Size", "Type"]
-        values = [
-            os.path.basename(file["id"].rstrip("/")),
-            f"{file["size"]} bytes",
-            file["media_type"]
+        file_details = [
+            ("Filename", os.path.basename(file["id"].rstrip("/"))),
+            ("Size", f"{file['size']} bytes"),
+            ("Type", file["media_type"]),
         ]
 
         # Populate the table
-        for i, (label, value) in enumerate(zip(labels, values)):
+        for i, (label, value) in enumerate(file_details):
             self.table_widget.setItem(i, 0, QTableWidgetItem(label))
             self.table_widget.setItem(i, 1, QTableWidgetItem(value))
 
         # Resize the columns
         self.table_widget.resizeColumnsToContents()
-        self.table_widget.show()
 
     def open_file_in_qgis(self):
         if self.file and self.file["descriptor"] and self.file["descriptor"]["data_type"]:
