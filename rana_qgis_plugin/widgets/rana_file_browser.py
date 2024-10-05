@@ -13,6 +13,7 @@ from rana_qgis_plugin.constant import TENANT
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "browser.ui"))
 
+
 class RanaFileBrowser(uicls, basecls):
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -42,9 +43,7 @@ class RanaFileBrowser(uicls, basecls):
             file_name = os.path.basename(file["id"].rstrip("/"))
             name_item = QStandardItem(file_name)
             name_item.setData(file, role=Qt.UserRole)
-            file_items = [
-                name_item
-            ]
+            file_items = [name_item]
             self.files_model.appendRow(file_items)
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
@@ -78,7 +77,7 @@ class RanaFileBrowser(uicls, basecls):
     def on_breadcrumb_clicked(self, index):
         self.file_table_widget.hide()
         self.files_tv.show()
-        self.current_path = self.current_path[:index+1]
+        self.current_path = self.current_path[: index + 1]
         path = "/".join(self.current_path) + "/"
         self.fetch_files(path)
 

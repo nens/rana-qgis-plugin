@@ -12,6 +12,7 @@ from rana_qgis_plugin.constant import TENANT
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "projects.ui"))
 
+
 class RanaProjectBrowser(uicls, basecls):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -29,9 +30,7 @@ class RanaProjectBrowser(uicls, basecls):
         for project in self.projects:
             name_item = QStandardItem(project["name"])
             name_item.setData(project, role=Qt.UserRole)
-            project_items = [
-                name_item
-            ]
+            project_items = [name_item]
             self.projects_model.appendRow(project_items)
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
