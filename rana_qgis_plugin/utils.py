@@ -71,12 +71,8 @@ def finish_file_upload(tenant: str, project_id: str, payload: dict):
     return None
 
 def download_file(url: str, project_name: str, file_path: str, file_name: str):
-    # Get the current working directory
-    base_dir = os.getcwd()
-    local_dir_structure = os.path.join(base_dir, project_name, os.path.dirname(file_path))
-    # Create the directory structure locally
-    os.makedirs(local_dir_structure, exist_ok=True)
-    local_file_path = os.path.join(local_dir_structure, file_name)
+    local_dir_structure, local_file_path = get_local_file_path(project_name, file_path, file_name)
+    os.makedirs(local_dir_structure, exist_ok=True) # Create the directory structure locally
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -89,3 +85,9 @@ def download_file(url: str, project_name: str, file_path: str, file_name: str):
     except Exception as e:
         QgsMessageLog.logMessage(f"An error occurred: {str(e)}")
         return None
+
+def get_local_file_path(project_name: str, file_path: str, file_name: str):
+    base_dir = os.getcwd() # Get the current working directory
+    local_dir_structure = os.path.join(base_dir, project_name, os.path.dirname(file_path))
+    local_file_path = os.path.join(local_dir_structure, file_name)
+    return local_dir_structure, local_file_path

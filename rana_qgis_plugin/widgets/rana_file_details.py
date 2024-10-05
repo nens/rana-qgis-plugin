@@ -5,7 +5,7 @@ from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtWidgets import QTableWidgetItem
 from qgis.PyQt import uic
 
-from rana_qgis_plugin.utils import download_file, start_file_upload, finish_file_upload
+from rana_qgis_plugin.utils import download_file, get_local_file_path, start_file_upload, finish_file_upload
 from rana_qgis_plugin.constant import TENANT
 
 base_dir = os.path.dirname(__file__)
@@ -74,7 +74,7 @@ class RanaFileDetails(uicls, basecls):
             return
         file_name = os.path.basename(self.file["id"].rstrip("/"))
         rana_file_path = self.file["id"]
-        local_file_path = os.path.join("/tests_directory", file_name)
+        _, local_file_path = get_local_file_path(self.project_name, rana_file_path, file_name)
 
         # Check if the file exists locally before uploading
         if not os.path.exists(local_file_path):
