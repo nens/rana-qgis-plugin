@@ -6,9 +6,10 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QPushButton
 
-from .rana_file_details import RanaFileDetails
-from rana_qgis_plugin.utils import get_tenant_project_files
 from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.utils import get_tenant_project_files
+
+from .rana_file_details import RanaFileDetails
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "browser.ui"))

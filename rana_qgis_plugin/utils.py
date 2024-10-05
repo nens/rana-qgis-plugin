@@ -1,11 +1,11 @@
 import os
-import requests
 
+import requests
 from qgis.core import QgsMessageLog
 
-from .network_manager import NetworkManager
-from .constant import BASE_URL
 from .auth import get_authcfg_id
+from .constant import BASE_URL
+from .network_manager import NetworkManager
 
 
 def get_tenant(tenant: str):

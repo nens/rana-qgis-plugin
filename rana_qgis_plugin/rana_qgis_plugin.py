@@ -1,7 +1,7 @@
 from qgis.PyQt.QtWidgets import QAction
 
-from .constant import PLUGIN_NAME
 from .auth import setup_oauth2
+from .constant import PLUGIN_NAME
 from .widgets.rana_project_browser import RanaProjectBrowser
 
 

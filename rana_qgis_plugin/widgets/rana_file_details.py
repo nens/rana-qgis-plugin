@@ -1,12 +1,13 @@
 import os
+
 import requests
-
-from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QTableWidgetItem
+from qgis.core import QgsMessageLog, QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QTableWidgetItem
 
-from rana_qgis_plugin.utils import download_file, get_local_file_path, start_file_upload, finish_file_upload
 from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.utils import (download_file, finish_file_upload,
+                                    get_local_file_path, start_file_upload)
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "file.ui"))

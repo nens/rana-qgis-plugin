@@ -5,9 +5,10 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 
-from .rana_file_browser import RanaFileBrowser
-from rana_qgis_plugin.utils import get_tenant_projects
 from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.utils import get_tenant_projects
+
+from .rana_file_browser import RanaFileBrowser
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "projects.ui"))
