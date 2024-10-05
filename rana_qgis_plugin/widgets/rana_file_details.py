@@ -2,7 +2,7 @@ import os
 import requests
 
 from qgis.core import QgsMessageLog, QgsRasterLayer, QgsProject, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QTableWidgetItem, QPushButton, QVBoxLayout
+from qgis.PyQt.QtWidgets import QTableWidgetItem
 from qgis.PyQt import uic
 
 from rana_qgis_plugin.utils import download_file, start_file_upload, finish_file_upload
