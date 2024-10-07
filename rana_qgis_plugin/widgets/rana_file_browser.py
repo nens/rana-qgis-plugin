@@ -20,7 +20,7 @@ class RanaFileBrowser(uicls, basecls):
         super().__init__(parent)
         self.setupUi(self)
         self.parent = parent
-        self.file_details_widget = RanaFileDetails(self.file_table_widget)
+        self.file_details_widget = RanaFileDetails(self.file_widget)
         self.project = project
         self.project_id = project["id"]
         self.current_path = []
@@ -76,14 +76,14 @@ class RanaFileBrowser(uicls, basecls):
             self.breadcrumbs_layout.addWidget(btn)
 
     def on_breadcrumb_clicked(self, index):
-        self.file_table_widget.hide()
+        self.file_widget.hide()
         self.files_tv.show()
         self.current_path = self.current_path[: index + 1]
         path = "/".join(self.current_path) + "/"
         self.fetch_files(path)
 
     def on_home_clicked(self):
-        self.file_table_widget.hide()
+        self.file_widget.hide()
         self.files_tv.show()
         self.current_path = []
         self.fetch_files()
@@ -101,4 +101,4 @@ class RanaFileBrowser(uicls, basecls):
             self.update_breadcrumbs()
             self.files_tv.hide()
             self.file_details_widget.show_file_details(file, self.project)
-            self.file_table_widget.show()
+            self.file_widget.show()
