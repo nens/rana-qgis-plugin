@@ -1,8 +1,41 @@
+# This file contains metadata for your plugin.
+
+# This file should be included when you package your plugin.
+# Mandatory items:
+
 [general]
 name=Rana
 qgisMinimumVersion=3.22
 qgisMaximumVersion=3.99
 description=Rana QGIS plugin
-version=0.0.1
+version=0.1.0
 author=Nelen & Schuurmans
 email=servicedesk@nelen-schuurmans.nl
+
+about=Interact with Rana from QGIS.
+
+tracker=https://github.com/nens/rana-qgis-plugin/issues
+repository=https://github.com/nens/rana-qgis-plugin
+# End of mandatory metadata
+
+# Recommended items:
+
+homepage=https://test.ranawaterintelligence.com/
+category=Plugins
+icon=icon.svg
+# experimental flag
+experimental=False
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
+# Since QGIS 3.8, a comma separated list of plugins to be installed
+# (or upgraded) can be specified.
+# Check the documentation for more information.
+# plugin_dependencies=
+
+Category of the plugin: Raster, Vector, Database or Web
+# category=
+
+# If the plugin can run on QGIS Server.
+server=False
