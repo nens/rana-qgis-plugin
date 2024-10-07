@@ -3,13 +3,9 @@ import json
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsMessageLog
 from qgis.PyQt.QtCore import QSettings
 
-from .constant import (
-    COGNITO_AUTHENTICATION_ENDPOINT,
-    COGNITO_CLIENT_ID,
-    COGNITO_TOKEN_ENDPOINT,
-    RANA_AUTHCFG_ENTRY,
-    RANA_SETTINGS_ENTRY,
-)
+from .constant import (COGNITO_AUTHENTICATION_ENDPOINT, COGNITO_CLIENT_ID,
+                       COGNITO_TOKEN_ENDPOINT, RANA_AUTHCFG_ENTRY,
+                       RANA_SETTINGS_ENTRY)
 
 
 def get_authcfg_id():

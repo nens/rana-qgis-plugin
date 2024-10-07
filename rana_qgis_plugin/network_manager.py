@@ -1,7 +1,8 @@
 import json
 import urllib.parse
 
-from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
+from qgis.core import (QgsApplication, QgsNetworkAccessManager,
+                       QgsProcessingException)
 from qgis.PyQt.QtCore import QCoreApplication, QUrl
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 

@@ -6,7 +6,8 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QTableWidgetItem
 
 from rana_qgis_plugin.constant import TENANT
-from rana_qgis_plugin.utils import download_file, finish_file_upload, get_local_file_path, start_file_upload
+from rana_qgis_plugin.utils import (download_file, finish_file_upload,
+                                    get_local_file_path, start_file_upload)
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "file.ui"))
