@@ -5,10 +5,10 @@
 
 [general]
 name=Rana
-qgisMinimumVersion=3.22
+qgisMinimumVersion=3.38
 qgisMaximumVersion=3.99
 description=Rana QGIS plugin
-version=0.1.0
+version=0.1.1
 author=Nelen & Schuurmans
 email=servicedesk@nelen-schuurmans.nl
 
