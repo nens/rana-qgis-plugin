@@ -98,8 +98,8 @@ class RanaFileDetails(uicls, basecls):
             return
 
         # Check if file has been modified since it was last downloaded
-        file_conflict = self.check_for_file_conflict()
-        if file_conflict:
+        has_file_conflict = self.check_for_file_conflict()
+        if has_file_conflict:
             return
 
         # Save file to Rana
