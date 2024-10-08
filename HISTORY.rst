@@ -1,6 +1,12 @@
 History
 =======
 
+0.1.2 (unreleased)
+------------------
+
+- Fix bug with file conflict check: #8
+
+
 0.1.1 (2024-10-08)
 ------------------
 
