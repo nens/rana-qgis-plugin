@@ -80,12 +80,6 @@ class RanaFileDetails(uicls, basecls):
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
                 QgsMessageLog.logMessage(f"Added {data_type} layer: {local_file_path}")
-                if data_type == "vector":
-                    # Save vector layer to Rana automatically when editing is stopped
-                    layer.editingStopped.connect(self.save_file_to_rana)
-                else:
-                    # Raster layer is not editable yet
-                    QgsMessageLog.logMessage("Raster layers are not editable.")
             else:
                 QgsMessageLog.logMessage(f"Error adding {data_type} layer: {local_file_path}")
         else:
@@ -104,25 +98,9 @@ class RanaFileDetails(uicls, basecls):
             return
 
         # Check if file has been modified since it was last downloaded
-        last_modified_key = f"{self.project_name}/{rana_file_path}/last_modified"
-        local_last_modified = self.settings.value(last_modified_key)
-        last_modified = self.file["last_modified"]
-        if last_modified != local_last_modified:
-            # Message box for file conflict detection
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Warning)
-            msg_box.setWindowTitle("File Conflict Detected")
-            msg_box.setText("The file has been modified on the server since it was last downloaded.")
-            msg_box.setInformativeText("Do you want to overwrite the server copy with the local copy?")
-            overwrite_btn = msg_box.addButton(QMessageBox.Yes)
-            cancel_btn = msg_box.addButton(QMessageBox.No)
-            msg_box.exec_()
-            if msg_box.clickedButton() == cancel_btn:
-                QgsMessageLog.logMessage("File upload cancelled.")
-                return
-            elif msg_box.clickedButton() == overwrite_btn:
-                # Continue with the upload
-                QgsMessageLog.logMessage("Overwriting the server copy with the local copy.")
+        file_conflict = self.check_for_file_conflict()
+        if file_conflict:
+            return
 
         # Save file to Rana
         try:
@@ -140,3 +118,26 @@ class RanaFileDetails(uicls, basecls):
             finish_file_upload(TENANT, self.project_id, upload_response)
         except Exception as e:
             QgsMessageLog.logMessage(f"Error uploading file to Rana: {str(e)}")
+
+    def check_for_file_conflict(self):
+        file_path = self.file["id"]
+        last_modified_key = f"{self.project_name}/{file_path}/last_modified"
+        local_last_modified = self.settings.value(last_modified_key)
+        last_modified = self.file["last_modified"]
+        if last_modified != local_last_modified:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle("File Conflict Detected")
+            msg_box.setText("The file has been modified on the server since it was last downloaded.")
+            msg_box.setInformativeText("Do you want to overwrite the server copy with the local copy?")
+            overwrite_btn = msg_box.addButton(QMessageBox.Yes)
+            cancel_btn = msg_box.addButton(QMessageBox.No)
+            msg_box.exec_()
+            if msg_box.clickedButton() == cancel_btn:
+                QgsMessageLog.logMessage("File upload cancelled.")
+                return True
+            elif msg_box.clickedButton() == overwrite_btn:
+                QgsMessageLog.logMessage("Overwriting the server copy with the local copy.")
+                return False
+        else:
+            return False
