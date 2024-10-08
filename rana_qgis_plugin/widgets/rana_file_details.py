@@ -78,6 +78,12 @@ class RanaFileDetails(uicls, basecls):
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
                 QgsMessageLog.logMessage(f"Added {data_type} layer: {local_file_path}")
+                if data_type == "vector":
+                    # Save vector layer to Rana automatically when editing is stopped
+                    layer.editingStopped.connect(self.save_file_to_rana)
+                else:
+                    # Raster layer is not editable yet
+                    QgsMessageLog.logMessage("Raster layers are not editable.")
             else:
                 QgsMessageLog.logMessage(f"Error adding {data_type} layer: {local_file_path}")
         else:
