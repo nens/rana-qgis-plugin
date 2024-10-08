@@ -1,12 +1,17 @@
 import os
 
+import qgis.utils
 import requests
 from qgis.core import QgsMessageLog, QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import QMessageBox, QTableWidgetItem
 
-from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.constant import (
+    TENANT,
+    THREEDI_RESULTS_ANALYSIS_PLUGIN,
+    THREEDI_SCHEMATISATION_PLUGIN,
+)
 from rana_qgis_plugin.utils import (
     download_file,
     finish_file_upload,
@@ -50,9 +55,10 @@ class RanaFileDetails(uicls, basecls):
         self.table_widget.resizeColumnsToContents()
 
     def open_file_in_qgis(self):
+        supported_data_types = ["vector", "raster", "threedi_schematisation", "threedi_results"]
         if self.file and self.file["descriptor"] and self.file["descriptor"]["data_type"]:
             data_type = self.file["descriptor"]["data_type"]
-            if data_type not in ["vector", "raster"]:
+            if data_type not in supported_data_types:
                 QgsMessageLog.logMessage(f"Unsupported data type: {data_type}")
                 return
             download_url = self.file["url"]
@@ -75,7 +81,16 @@ class RanaFileDetails(uicls, basecls):
             # Add the layer to QGIS
             if data_type == "vector":
                 layer = QgsVectorLayer(local_file_path, file_name, "ogr")
+            elif data_type == "threedi_schematisation":
+                # Open the 3Di Schematisation Editor plugin
+                threedi_schematisation_editor = qgis.utils.plugins[THREEDI_SCHEMATISATION_PLUGIN]
+                threedi_schematisation_editor.open_model_from_geopackage(local_file_path)
+            elif data_type == "threedi_results":
+                # Open the 3Di Results Analysis plugin
+                threedi_result_analysis = qgis.utils.plugins[THREEDI_RESULTS_ANALYSIS_PLUGIN]
+                threedi_result_analysis.load_result(local_file_path)
             else:
+                # Raster layer
                 layer = QgsRasterLayer(local_file_path, file_name)
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
