@@ -42,7 +42,9 @@ class RanaFileBrowser(uicls, basecls):
         self.files_model.setHorizontalHeaderLabels(header)
         for file in self.files:
             file_name = os.path.basename(file["id"].rstrip("/"))
-            name_item = QStandardItem(file_name)
+            display_icon = "📁" if file["type"] == "directory" else "📄"
+            display_name = f"{display_icon} {file_name}"
+            name_item = QStandardItem(display_name)
             name_item.setData(file, role=Qt.UserRole)
             file_items = [name_item]
             self.files_model.appendRow(file_items)
