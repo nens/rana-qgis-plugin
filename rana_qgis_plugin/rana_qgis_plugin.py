@@ -33,6 +33,9 @@ class RanaQgisPlugin:
         """Removes the plugin menu item and icon from QGIS GUI."""
         self.iface.removePluginMenu(self.menu, self.action)
         self.iface.removeToolBarIcon(self.action)
+        if self.dock_widget:
+            self.iface.removeDockWidget(self.dock_widget)
+            self.dock_widget.deleteLater()
 
     def run(self):
         """Run method that loads and starts the plugin"""

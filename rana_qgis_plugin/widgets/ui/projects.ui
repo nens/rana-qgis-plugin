@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Widget</class>
- <widget class="QWidget" name="Widget">
-  <property name="focusPolicy">
-   <enum>Qt::StrongFocus</enum>
-  </property>
+ <class>RanaProjectWidget</class>
+ <widget class="QWidget" name="RanaProjectWidget">
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
     <widget class="QWidget" name="widget" native="true">
