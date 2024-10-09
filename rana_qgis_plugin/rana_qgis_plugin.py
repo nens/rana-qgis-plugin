@@ -1,7 +1,8 @@
 import os.path
 
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QDockWidget, QSizePolicy
 
 from .auth import setup_oauth2
 from .constant import PLUGIN_NAME
@@ -12,6 +13,7 @@ class RanaQgisPlugin:
     def __init__(self, iface):
         self.iface = iface
         self.menu = PLUGIN_NAME
+        self.dock_widget = None
         self.rana_project_browser = None
         self.toolbar = self.iface.addToolBar(self.menu)
         self.icon = QIcon(os.path.join(os.path.dirname(__file__), "icon.svg"))
@@ -34,8 +36,11 @@ class RanaQgisPlugin:
 
     def run(self):
         """Run method that loads and starts the plugin"""
-        if not self.rana_project_browser:
+        if not self.dock_widget:
             self.rana_project_browser = RanaProjectBrowser()
-        self.rana_project_browser.show()
-        self.rana_project_browser.raise_()
-        self.rana_project_browser.activateWindow()
+            self.dock_widget = QDockWidget(self.menu, self.iface.mainWindow())
+            self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+            self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.dock_widget.setWidget(self.rana_project_browser)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
+        self.dock_widget.show()
