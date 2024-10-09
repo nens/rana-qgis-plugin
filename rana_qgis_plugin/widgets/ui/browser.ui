@@ -4,22 +4,16 @@
  <widget class="QWidget" name="RanaFileBrowserWidget">
   <layout class="QGridLayout" name="gridLayout">
    <item row="0" column="0">
-    <widget class="QWidget" name="widget" native="true">
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <item>
-       <layout class="QHBoxLayout" name="breadcrumbs_layout"/>
-      </item>
-      <item>
-       <widget class="QTreeView" name="files_tv"/>
-      </item>
-      <item>
-       <widget class="QWidget" name="file_widget">
-        <property name="visible">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
+    <layout class="QHBoxLayout" name="breadcrumbs_layout"/>
+   </item>
+   <item row="1" column="0">
+    <widget class="QTreeView" name="files_tv"/>
+   </item>
+   <item row="2" column="0">
+    <widget class="QWidget" name="file_widget" native="true">
+     <property name="visible">
+      <bool>false</bool>
+     </property>
     </widget>
    </item>
   </layout>

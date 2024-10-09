@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Dialog</class>
- <widget class="QWidget" name="main_widget">
+ <class>RanaFileWidget</class>
+ <widget class="QWidget" name="RanaFileWidget">
   <layout class="QGridLayout" name="gridLayout">
-   <item>
+   <item row="0" column="0">
     <widget class="QTableWidget" name="table_widget">
      <property name="rowCount">
       <number>3</number>
@@ -16,7 +16,7 @@
      </attribute>
     </widget>
    </item>
-   <item>
+   <item row="1" column="0">
     <widget class="QWidget" name="button_widget" native="true">
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
