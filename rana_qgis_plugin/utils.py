@@ -100,7 +100,7 @@ def download_file(url: str, project_name: str, file_path: str, file_name: str):
 
 
 def get_local_file_path(project_name: str, file_path: str, file_name: str):
-    base_dir = os.getcwd()  # Get the current working directory
+    base_dir = os.path.join(os.path.expanduser("~"), "Rana")
     local_dir_structure = os.path.join(base_dir, project_name, os.path.dirname(file_path))
     local_file_path = os.path.join(local_dir_structure, file_name)
     return local_dir_structure, local_file_path
