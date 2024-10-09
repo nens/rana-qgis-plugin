@@ -2,23 +2,9 @@
 <ui version="4.0">
  <class>Dialog</class>
  <widget class="QWidget" name="main_widget">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>750</width>
-    <height>420</height>
-   </rect>
-  </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
+  <layout class="QGridLayout" name="gridLayout">
    <item>
     <widget class="QTableWidget" name="table_widget">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
      <property name="rowCount">
       <number>3</number>
      </property>
@@ -32,7 +18,7 @@
    </item>
    <item>
     <widget class="QWidget" name="button_widget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout">
+     <layout class="QVBoxLayout" name="verticalLayout">
       <item>
        <widget class="QPushButton" name="btn_open">
         <property name="text">
