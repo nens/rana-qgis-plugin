@@ -16,6 +16,7 @@ class RanaQgisPlugin:
         self.dock_widget = None
         self.rana_project_browser = None
         self.toolbar = self.iface.addToolBar(self.menu)
+        self.toolbar.setObjectName(self.menu)
         self.icon = QIcon(os.path.join(os.path.dirname(__file__), "icon.svg"))
         self.action = QAction(self.icon, self.menu, iface.mainWindow())
         self.action.triggered.connect(self.run)
@@ -44,6 +45,7 @@ class RanaQgisPlugin:
             self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
             self.dock_widget.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable)
             self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.dock_widget.setObjectName(self.menu)
             self.rana_project_browser = RanaProjectBrowser(self.dock_widget)
             self.dock_widget.setWidget(self.rana_project_browser)
         self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
