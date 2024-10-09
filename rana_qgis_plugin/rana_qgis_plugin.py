@@ -40,11 +40,11 @@ class RanaQgisPlugin:
     def run(self):
         """Run method that loads and starts the plugin"""
         if not self.dock_widget:
-            self.rana_project_browser = RanaProjectBrowser()
             self.dock_widget = QDockWidget(self.menu, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
             self.dock_widget.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable)
             self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.rana_project_browser = RanaProjectBrowser(self.dock_widget)
             self.dock_widget.setWidget(self.rana_project_browser)
         self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
         self.dock_widget.show()

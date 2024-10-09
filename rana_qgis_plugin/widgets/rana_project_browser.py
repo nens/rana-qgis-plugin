@@ -15,9 +15,10 @@ uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "projects.ui"))
 
 
 class RanaProjectBrowser(uicls, basecls):
-    def __init__(self, parent=None):
+    def __init__(self, dock_widget, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+        self.dock_widget = dock_widget
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
         self.projects = []
@@ -40,7 +41,6 @@ class RanaProjectBrowser(uicls, basecls):
     def select_project(self, index):
         project_item = self.projects_model.itemFromIndex(index)
         project = project_item.data(Qt.UserRole)
-        project_name = project["name"]
-        fileBrowser = RanaFileBrowser(project)
-        fileBrowser.setWindowTitle(f"Browse project files for {project_name}")
-        fileBrowser.exec_()
+        self.projects_tv.hide()
+        file_browser = RanaFileBrowser(project)
+        self.dock_widget.setWidget(file_browser)
