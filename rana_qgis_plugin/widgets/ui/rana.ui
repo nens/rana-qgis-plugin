@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RanaMainWidget</class>
+ <widget class="QWidget" name="RanaMainWidget">
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <layout class="QHBoxLayout" name="breadcrumbs_layout"/>
+   </item>
+   <item row="1" column="0">
+    <widget class="QStackedWidget" name="rana_widget">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="projects_widget">
+      <layout class="QGridLayout" name="projects_layout">
+       <item row="0" column="0">
+        <widget class="QTreeView" name="projects_tv">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>1</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="files_widget">
+      <layout class="QGridLayout" name="files_layout">
+       <item row="0" column="0">
+        <widget class="QTreeView" name="files_tv"/>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="file_widget">
+      <layout class="QGridLayout" name="file_layout">
+       <item row="0" column="0">
+        <widget class="QTableWidget" name="file_table_widget">
+         <property name="rowCount">
+          <number>3</number>
+         </property>
+         <property name="columnCount">
+          <number>2</number>
+         </property>
+         <attribute name="horizontalHeaderVisible">
+          <bool>false</bool>
+         </attribute>
+         <row/>
+         <row/>
+         <row/>
+         <column/>
+         <column/>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QWidget" name="button_widget" native="true">
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <widget class="QPushButton" name="btn_open">
+            <property name="text">
+             <string>Open in QGIS</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btn_save">
+            <property name="text">
+             <string>Save to Rana</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

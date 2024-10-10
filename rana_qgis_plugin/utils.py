@@ -54,6 +54,20 @@ def get_tenant_project_files(tenant: str, project_id: str, params: dict = None):
         QgsMessageLog.logMessage(f"Error: {error}")
         return None
 
+def get_tenant_project_file(tenant: str, project_id: str, params: dict):
+    authcfg_id = get_authcfg_id()
+    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/stat"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        QgsMessageLog.logMessage(f"Error: {error}")
+        return None
+
 
 def start_file_upload(tenant: str, project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
