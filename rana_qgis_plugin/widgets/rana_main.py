@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import QLabel, QPushButton, QTableWidgetItem
 
 from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.utils import (
+    display_bytes,
     get_tenant_project_files,
     get_tenant_projects,
     open_file_in_qgis,
@@ -33,7 +34,7 @@ class RanaMainWidget(uicls, basecls):
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
-        self.fetch_projects()
+        self.fetch_and_populate_projects()
 
         # Files widget
         self.files = []
@@ -60,7 +61,6 @@ class RanaMainWidget(uicls, basecls):
         # Add the breadcrumbs
         for i, path in enumerate(self.paths):
             btn = QPushButton(path)
-            btn.setCursor(Qt.PointingHandCursor)
             btn.setDisabled(i == len(self.paths) - 1)
             btn.clicked.connect(lambda _, i=i: self.on_breadcrumb_click(i))
             self.breadcrumbs_layout.addWidget(btn)
@@ -76,13 +76,13 @@ class RanaMainWidget(uicls, basecls):
         else:
             only_directory_paths = self.paths[2:]  # Skip the first two paths: Home and Project
             path = "/".join(only_directory_paths) + ("/" if only_directory_paths else "")
-            self.fetch_files(path)
+            self.fetch_and_populate_files(path)
             self.show_files_widget()
 
-    def fetch_projects(self):
+    def fetch_and_populate_projects(self):
         self.projects = get_tenant_projects(TENANT)
         self.projects_model.clear()
-        header = ["Name"]
+        header = ["Project Name"]
         self.projects_model.setHorizontalHeaderLabels(header)
         for project in self.projects:
             name_item = QStandardItem(project["name"])
@@ -97,22 +97,34 @@ class RanaMainWidget(uicls, basecls):
         project_item = self.projects_model.itemFromIndex(index)
         self.project = project_item.data(Qt.UserRole)
         self.paths.append(self.project["name"])
-        self.fetch_files()
+        self.fetch_and_populate_files()
         self.show_files_widget()
 
-    def fetch_files(self, path: str = None):
+    def fetch_and_populate_files(self, path: str = None):
         self.files = get_tenant_project_files(TENANT, self.project["id"], {"path": path} if path else None)
         self.files_model.clear()
-        header = ["Name"]
+        header = ["Filename"]
         self.files_model.setHorizontalHeaderLabels(header)
-        for file in self.files:
+
+        directories = [file for file in self.files if file["type"] == "directory"]
+        files = [file for file in self.files if file["type"] == "file"]
+
+        # Add directories first
+        for directory in directories:
+            dir_name = os.path.basename(directory["id"].rstrip("/"))
+            display_name = f"📁 {dir_name}"
+            name_item = QStandardItem(display_name)
+            name_item.setData(directory, role=Qt.UserRole)
+            self.files_model.appendRow([name_item])
+
+        # Add files second
+        for file in files:
             file_name = os.path.basename(file["id"].rstrip("/"))
-            display_icon = "📁" if file["type"] == "directory" else "📄"
-            display_name = f"{display_icon} {file_name}"
+            display_name = f"📄 {file_name}"
             name_item = QStandardItem(display_name)
             name_item.setData(file, role=Qt.UserRole)
-            file_items = [name_item]
-            self.files_model.appendRow(file_items)
+            self.files_model.appendRow([name_item])
+
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
 
@@ -123,7 +135,7 @@ class RanaMainWidget(uicls, basecls):
         if self.file["type"] == "directory":
             directory_name = os.path.basename(file_path.rstrip("/"))
             self.paths.append(directory_name)
-            self.fetch_files(file_path)
+            self.fetch_and_populate_files(file_path)
             self.rana_widget.setCurrentIndex(1)
         else:
             file_name = os.path.basename(file_path.rstrip("/"))
@@ -134,10 +146,13 @@ class RanaMainWidget(uicls, basecls):
 
     def show_file_details(self):
         self.file_table_widget.clearContents()
+        username = self.file["user"]["given_name"] + " " + self.file["user"]["family_name"]
         file_details = [
             ("Name", os.path.basename(self.file["id"].rstrip("/"))),
-            ("Size", f"{self.file['size']} bytes"),
+            ("Size", display_bytes(self.file["size"])),
             ("Type", self.file["media_type"]),
+            ("Added by", username),
+            ("Last modified", self.file["last_modified"]),
         ]
         for i, (label, value) in enumerate(file_details):
             self.file_table_widget.setItem(i, 0, QTableWidgetItem(label))

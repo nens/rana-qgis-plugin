@@ -1,3 +1,4 @@
+import math
 import os
 
 import requests
@@ -218,3 +219,13 @@ def check_for_file_conflict(project, file):
             return False
     else:
         return False
+
+
+def display_bytes(bytes: int) -> str:
+    sizes = ["Bytes", "KB", "MB", "GB", "TB"]
+    if bytes == 0:
+        return "0 Byte"
+    i = int(math.floor(math.log(bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(bytes / p, 2)
+    return f"{s} {sizes[i]}"
