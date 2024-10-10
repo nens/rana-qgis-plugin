@@ -23,6 +23,34 @@
          </property>
         </widget>
        </item>
+       <item row="1" column="0">
+        <layout class="QHBoxLayout" name="pagination_layout">
+         <item>
+          <widget class="QPushButton" name="btn_previous">
+           <property name="text">
+            <string>&lt;</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_page_number">
+           <property name="text">
+            <string>1/1</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btn_next">
+           <property name="text">
+            <string>&gt;</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="files_widget">

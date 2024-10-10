@@ -1,3 +1,4 @@
+import math
 import os
 
 from qgis.PyQt import uic
@@ -28,6 +29,12 @@ class RanaMainWidget(uicls, basecls):
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
         self.update_breadcrumbs()
+
+        # Pagination
+        self.items_per_page = 10
+        self.current_page = 1
+        self.btn_previous.clicked.connect(self.to_previous_page)
+        self.btn_next.clicked.connect(self.to_next_page)
 
         # Projects widget
         self.projects = []
@@ -79,12 +86,34 @@ class RanaMainWidget(uicls, basecls):
             self.fetch_and_populate_files(path)
             self.show_files_widget()
 
+    def update_pagination(self):
+        total_items = len(self.projects)
+        total_pages = math.ceil(total_items / self.items_per_page)
+        self.label_page_number.setText(f"{self.current_page}/{total_pages}")
+        self.btn_previous.setDisabled(self.current_page == 1)
+        self.btn_next.setDisabled(self.current_page == total_pages)
+
+    def to_previous_page(self):
+        self.current_page -= 1
+        self.fetch_and_populate_projects()
+
+    def to_next_page(self):
+        self.current_page += 1
+        self.fetch_and_populate_projects()
+
     def fetch_and_populate_projects(self):
         self.projects = get_tenant_projects(TENANT)
         self.projects_model.clear()
         header = ["Project Name"]
         self.projects_model.setHorizontalHeaderLabels(header)
-        for project in self.projects:
+
+        # Paginate the projects
+        start_index = (self.current_page - 1) * self.items_per_page
+        end_index = start_index + self.items_per_page
+        paginated_projects = self.projects[start_index:end_index]
+
+        # Add paginated projects to the project model
+        for project in paginated_projects:
             name_item = QStandardItem(project["name"])
             name_item.setData(project, role=Qt.UserRole)
             project_items = [name_item]
@@ -92,6 +121,7 @@ class RanaMainWidget(uicls, basecls):
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.doubleClicked.connect(self.select_project)
+        self.update_pagination()
 
     def select_project(self, index):
         project_item = self.projects_model.itemFromIndex(index)
