@@ -1,21 +1,16 @@
 import os
 
-import requests
-from qgis.core import QgsMessageLog, QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QLabel, QMessageBox, QPushButton, QTableWidgetItem
+from qgis.PyQt.QtWidgets import QLabel, QPushButton, QTableWidgetItem
 
 from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.utils import (
-    download_file,
-    finish_file_upload,
-    get_local_file_path,
-    get_tenant_project_file,
     get_tenant_project_files,
     get_tenant_projects,
-    start_file_upload,
+    open_file_in_qgis,
+    save_file_to_rana,
 )
 
 base_dir = os.path.dirname(__file__)
@@ -29,11 +24,15 @@ class RanaMainWidget(uicls, basecls):
         self.settings = QSettings()
         self.paths = ["Home"]
 
+        # Breadcrumbs
+        self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
+        self.update_breadcrumbs()
+
         # Projects widget
-        self.projects_model = QStandardItemModel()
-        self.projects_tv.setModel(self.projects_model)
         self.projects = []
         self.project = None
+        self.projects_model = QStandardItemModel()
+        self.projects_tv.setModel(self.projects_model)
         self.fetch_projects()
 
         # Files widget
@@ -44,12 +43,8 @@ class RanaMainWidget(uicls, basecls):
 
         # File details widget
         self.file = None
-        self.btn_open.clicked.connect(self.open_file_in_qgis)
-        self.btn_save.clicked.connect(self.save_file_to_rana)
-
-        # Breadcrumbs
-        self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
-        self.update_breadcrumbs()
+        self.btn_open.clicked.connect(lambda: open_file_in_qgis(self.project, self.file))
+        self.btn_save.clicked.connect(lambda: save_file_to_rana(self.project, self.file))
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -148,97 +143,3 @@ class RanaMainWidget(uicls, basecls):
             self.file_table_widget.setItem(i, 0, QTableWidgetItem(label))
             self.file_table_widget.setItem(i, 1, QTableWidgetItem(value))
         self.file_table_widget.resizeColumnsToContents()
-
-    def open_file_in_qgis(self):
-        if self.file and self.file["descriptor"] and self.file["descriptor"]["data_type"]:
-            data_type = self.file["descriptor"]["data_type"]
-            if data_type not in ["vector", "raster"]:
-                QgsMessageLog.logMessage(f"Unsupported data type: {data_type}")
-                return
-            download_url = self.file["url"]
-            file_path = self.file["id"]
-            file_name = os.path.basename(file_path.rstrip("/"))
-            local_file_path = download_file(
-                url=download_url,
-                project_name=self.project["name"],
-                file_path=file_path,
-                file_name=file_name,
-            )
-            if not local_file_path:
-                QgsMessageLog.logMessage(f"Download failed. Unable to open {data_type} file in QGIS.")
-                return
-
-            # Save the last modified date of the downloaded file in QSettings
-            last_modified_key = f"{self.project['name']}/{file_path}/last_modified"
-            self.settings.setValue(last_modified_key, self.file["last_modified"])
-
-            # Add the layer to QGIS
-            if data_type == "vector":
-                layer = QgsVectorLayer(local_file_path, file_name, "ogr")
-            else:
-                layer = QgsRasterLayer(local_file_path, file_name)
-            if layer.isValid():
-                QgsProject.instance().addMapLayer(layer)
-                QgsMessageLog.logMessage(f"Added {data_type} layer: {local_file_path}")
-            else:
-                QgsMessageLog.logMessage(f"Error adding {data_type} layer: {local_file_path}")
-        else:
-            QgsMessageLog.logMessage(f"Unsupported data type: {self.file['media_type']}")
-
-    def save_file_to_rana(self):
-        if not self.file or not self.project["id"]:
-            return
-        file_name = os.path.basename(self.file["id"].rstrip("/"))
-        file_path = self.file["id"]
-        _, local_file_path = get_local_file_path(self.project["name"], file_path, file_name)
-
-        # Check if file exists locally before uploading
-        if not os.path.exists(local_file_path):
-            QgsMessageLog.logMessage(f"File not found: {local_file_path}")
-            return
-
-        # Check if file has been modified since it was last downloaded
-        has_file_conflict = self.check_for_file_conflict()
-        if has_file_conflict:
-            return
-
-        # Save file to Rana
-        try:
-            # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(TENANT, self.project["id"], {"path": file_path})
-            if not upload_response:
-                QgsMessageLog.logMessage("Failed to initiate upload.")
-                return
-            upload_url = upload_response["urls"][0]
-            # Step 2: Upload the file to the upload_url
-            with open(local_file_path, "rb") as file:
-                response = requests.put(upload_url, data=file)
-                response.raise_for_status()
-            # Step 3: Complete the upload
-            finish_file_upload(TENANT, self.project["id"], upload_response)
-        except Exception as e:
-            QgsMessageLog.logMessage(f"Error uploading file to Rana: {str(e)}")
-
-    def check_for_file_conflict(self):
-        file_path = self.file["id"]
-        last_modified_key = f"{self.project['name']}/{file_path}/last_modified"
-        local_last_modified = self.settings.value(last_modified_key)
-        server_file = get_tenant_project_file(TENANT, self.project["id"], {"path": file_path})
-        last_modified = server_file["last_modified"]
-        if last_modified != local_last_modified:
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Warning)
-            msg_box.setWindowTitle("File Conflict Detected")
-            msg_box.setText("The file has been modified on the server since it was last downloaded.")
-            msg_box.setInformativeText("Do you want to overwrite the server copy with the local copy?")
-            overwrite_btn = msg_box.addButton(QMessageBox.Yes)
-            cancel_btn = msg_box.addButton(QMessageBox.No)
-            msg_box.exec_()
-            if msg_box.clickedButton() == cancel_btn:
-                QgsMessageLog.logMessage("File upload cancelled.")
-                return True
-            elif msg_box.clickedButton() == overwrite_btn:
-                QgsMessageLog.logMessage("Overwriting the server copy with the local copy.")
-                return False
-        else:
-            return False
