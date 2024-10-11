@@ -3,7 +3,8 @@ import os
 
 import requests
 from qgis.core import QgsMessageLog, QgsProject, QgsRasterLayer, QgsVectorLayer
-from qgis.PyQt.QtCore import QSettings
+from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt.QtGui import QFontMetrics
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from .auth import get_authcfg_id
@@ -229,3 +230,9 @@ def display_bytes(bytes: int) -> str:
     p = math.pow(1024, i)
     s = round(bytes / p, 2)
     return f"{s} {sizes[i]}"
+
+
+def elide_text(font, text, max_width):
+    # Calculate elided text based on font and max width
+    font_metrics = QFontMetrics(font)
+    return font_metrics.elidedText(text, Qt.ElideRight, max_width)

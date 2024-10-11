@@ -4,12 +4,13 @@ import os
 from qgis.core import QgsMessageLog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QLabel, QPushButton, QTableWidgetItem
+from qgis.PyQt.QtGui import QFontMetrics, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.utils import (
     display_bytes,
+    elide_text,
     get_tenant_project_files,
     get_tenant_projects,
     open_file_in_qgis,
@@ -70,10 +71,13 @@ class RanaMainWidget(uicls, basecls):
 
         # Add the breadcrumbs
         for i, path in enumerate(self.paths):
-            btn = QPushButton(path)
-            btn.setDisabled(i == len(self.paths) - 1)
-            btn.clicked.connect(lambda _, i=i: self.on_breadcrumb_click(i))
-            self.breadcrumbs_layout.addWidget(btn)
+            label_text = elide_text(self.font(), path, 100)
+            link = f"<a href='{i}'>{label_text}</a>"
+            label = QLabel(label_text if i == len(self.paths) - 1 else link)
+            label.setTextFormat(Qt.RichText)
+            label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            label.linkActivated.connect(lambda _, i=i: self.on_breadcrumb_click(i))
+            self.breadcrumbs_layout.addWidget(label)
             if i != len(self.paths) - 1:
                 separator = QLabel(">")
                 self.breadcrumbs_layout.addWidget(separator)
