@@ -14,6 +14,13 @@
      <widget class="QWidget" name="projects_widget">
       <layout class="QGridLayout" name="projects_layout">
        <item row="0" column="0">
+        <widget class="QLineEdit" name="projects_search">
+         <property name="placeholderText">
+          <string>🔍 Search for project by name</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
         <widget class="QTreeView" name="projects_tv">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -23,7 +30,7 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
+       <item row="2" column="0">
         <layout class="QHBoxLayout" name="pagination_layout">
          <item>
           <widget class="QPushButton" name="btn_previous">

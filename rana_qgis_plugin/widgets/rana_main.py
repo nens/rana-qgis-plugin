@@ -40,12 +40,14 @@ class RanaMainWidget(uicls, basecls):
 
         # Projects widget
         self.projects = []
+        self.filtered_projects = []
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.doubleClicked.connect(self.select_project)
+        self.projects_search.textChanged.connect(self.filter_projects)
         self.fetch_projects()
-        self.populate_projects()
+        self.populate_projects(self.projects)
 
         # Files widget
         self.files = []
@@ -93,8 +95,8 @@ class RanaMainWidget(uicls, basecls):
             self.fetch_and_populate_files(path)
             self.show_files_widget()
 
-    def update_pagination(self):
-        total_items = len(self.projects)
+    def update_pagination(self, projects: list):
+        total_items = len(projects)
         total_pages = math.ceil(total_items / self.items_per_page)
         self.label_page_number.setText(f"Page {self.current_page}/{total_pages}")
         self.btn_previous.setDisabled(self.current_page == 1)
@@ -102,34 +104,38 @@ class RanaMainWidget(uicls, basecls):
 
     def to_previous_page(self):
         self.current_page -= 1
-        self.populate_projects()
+        self.populate_projects(self.filtered_projects if self.filtered_projects else self.projects)
 
     def to_next_page(self):
         self.current_page += 1
-        self.populate_projects()
+        self.populate_projects(self.filtered_projects if self.filtered_projects else self.projects)
 
     def fetch_projects(self):
         self.projects = get_tenant_projects(TENANT)
 
-    def populate_projects(self):
+    def populate_projects(self, projects: list):
         self.projects_model.clear()
         header = ["Project Name"]
         self.projects_model.setHorizontalHeaderLabels(header)
 
-        # Paginate the projects
+        # Paginate projects
         start_index = (self.current_page - 1) * self.items_per_page
         end_index = start_index + self.items_per_page
-        paginated_projects = self.projects[start_index:end_index]
+        paginated_projects = projects[start_index:end_index]
 
         # Add paginated projects to the project model
         for project in paginated_projects:
             name_item = QStandardItem(project["name"])
             name_item.setData(project, role=Qt.UserRole)
-            project_items = [name_item]
-            self.projects_model.appendRow(project_items)
+            self.projects_model.appendRow([name_item])
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
-        self.update_pagination()
+        self.update_pagination(projects)
+
+    def filter_projects(self, text: str):
+        self.current_page = 1
+        self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
+        self.populate_projects(self.filtered_projects)
 
     def select_project(self, index):
         project_item = self.projects_model.itemFromIndex(index)
