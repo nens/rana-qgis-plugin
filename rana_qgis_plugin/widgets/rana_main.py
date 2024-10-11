@@ -4,7 +4,7 @@ import os
 from qgis.core import QgsMessageLog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QFontMetrics, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.constant import TENANT
@@ -202,3 +202,12 @@ class RanaMainWidget(uicls, basecls):
             self.file_table_widget.setItem(i, 0, QTableWidgetItem(label))
             self.file_table_widget.setItem(i, 1, QTableWidgetItem(value))
         self.file_table_widget.resizeColumnsToContents()
+
+        # Show/hide the buttons based on the file data type
+        data_type = self.file["descriptor"]["data_type"] if self.file["descriptor"] else None
+        if data_type in ["vector", "raster"]:
+            self.btn_open.show()
+            self.btn_save.show()
+        else:
+            self.btn_open.hide()
+            self.btn_save.hide()
