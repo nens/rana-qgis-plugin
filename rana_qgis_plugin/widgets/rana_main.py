@@ -84,7 +84,7 @@ class RanaMainWidget(uicls, basecls):
                 separator = QLabel(">")
                 self.breadcrumbs_layout.addWidget(separator)
 
-    def on_breadcrumb_click(self, index):
+    def on_breadcrumb_click(self, index: int):
         self.paths = self.paths[: index + 1]
         if index == 0:
             self.rana_widget.setCurrentIndex(0)
@@ -137,7 +137,7 @@ class RanaMainWidget(uicls, basecls):
         self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
         self.populate_projects(self.filtered_projects)
 
-    def select_project(self, index):
+    def select_project(self, index: int):
         project_item = self.projects_model.itemFromIndex(index)
         self.project = project_item.data(Qt.UserRole)
         self.paths.append(self.project["name"])
@@ -172,7 +172,7 @@ class RanaMainWidget(uicls, basecls):
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
 
-    def select_file_or_directory(self, index):
+    def select_file_or_directory(self, index: int):
         file_item = self.files_model.itemFromIndex(index)
         self.file = file_item.data(Qt.UserRole)
         file_path = self.file["id"]

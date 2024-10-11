@@ -4,7 +4,7 @@ import os
 import requests
 from qgis.core import QgsMessageLog, QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QFontMetrics
+from qgis.PyQt.QtGui import QFont, QFontMetrics
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from .auth import get_authcfg_id
@@ -125,7 +125,7 @@ def get_local_file_path(project_name: str, file_path: str, file_name: str):
     return local_dir_structure, local_file_path
 
 
-def open_file_in_qgis(project, file):
+def open_file_in_qgis(project: dict, file: dict):
     if file and file["descriptor"] and file["descriptor"]["data_type"]:
         data_type = file["descriptor"]["data_type"]
         if data_type not in ["vector", "raster"]:
@@ -162,7 +162,7 @@ def open_file_in_qgis(project, file):
         QgsMessageLog.logMessage(f"Unsupported data type: {file['media_type']}")
 
 
-def save_file_to_rana(project, file):
+def save_file_to_rana(project: dict, file: dict):
     if not file or not project["id"]:
         return
     file_name = os.path.basename(file["id"].rstrip("/"))
@@ -197,7 +197,7 @@ def save_file_to_rana(project, file):
         QgsMessageLog.logMessage(f"Error uploading file to Rana: {str(e)}")
 
 
-def check_for_file_conflict(project, file):
+def check_for_file_conflict(project: dict, file: dict):
     file_path = file["id"]
     last_modified_key = f"{project['name']}/{file_path}/last_modified"
     local_last_modified = QSettings().value(last_modified_key)
@@ -232,7 +232,7 @@ def display_bytes(bytes: int) -> str:
     return f"{s} {sizes[i]}"
 
 
-def elide_text(font, text, max_width):
+def elide_text(font: QFont, text: str, max_width: int) -> str:
     # Calculate elided text based on font and max width
     font_metrics = QFontMetrics(font)
     return font_metrics.elidedText(text, Qt.ElideRight, max_width)
