@@ -1,6 +1,7 @@
 import math
 import os
 
+from qgis.core import QgsMessageLog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
@@ -41,6 +42,7 @@ class RanaMainWidget(uicls, basecls):
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
+        self.projects_tv.doubleClicked.connect(self.select_project)
         self.fetch_projects()
         self.populate_projects()
 
@@ -123,7 +125,6 @@ class RanaMainWidget(uicls, basecls):
             self.projects_model.appendRow(project_items)
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
-        self.projects_tv.doubleClicked.connect(self.select_project)
         self.update_pagination()
 
     def select_project(self, index):
