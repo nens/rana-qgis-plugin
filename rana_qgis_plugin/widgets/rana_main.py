@@ -41,7 +41,8 @@ class RanaMainWidget(uicls, basecls):
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
-        self.fetch_and_populate_projects()
+        self.fetch_projects()
+        self.populate_projects()
 
         # Files widget
         self.files = []
@@ -89,20 +90,22 @@ class RanaMainWidget(uicls, basecls):
     def update_pagination(self):
         total_items = len(self.projects)
         total_pages = math.ceil(total_items / self.items_per_page)
-        self.label_page_number.setText(f"{self.current_page}/{total_pages}")
+        self.label_page_number.setText(f"Page {self.current_page}/{total_pages}")
         self.btn_previous.setDisabled(self.current_page == 1)
         self.btn_next.setDisabled(self.current_page == total_pages)
 
     def to_previous_page(self):
         self.current_page -= 1
-        self.fetch_and_populate_projects()
+        self.populate_projects()
 
     def to_next_page(self):
         self.current_page += 1
-        self.fetch_and_populate_projects()
+        self.populate_projects()
 
-    def fetch_and_populate_projects(self):
+    def fetch_projects(self):
         self.projects = get_tenant_projects(TENANT)
+
+    def populate_projects(self):
         self.projects_model.clear()
         header = ["Project Name"]
         self.projects_model.setHorizontalHeaderLabels(header)

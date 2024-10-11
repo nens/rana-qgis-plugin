@@ -27,6 +27,12 @@
         <layout class="QHBoxLayout" name="pagination_layout">
          <item>
           <widget class="QPushButton" name="btn_previous">
+           <property name="maximumSize">
+            <size>
+             <width>100</width>
+             <height>16777215</height>
+            </size>
+           </property>
            <property name="text">
             <string>&lt;</string>
            </property>
@@ -35,7 +41,7 @@
          <item>
           <widget class="QLabel" name="label_page_number">
            <property name="text">
-            <string>1/1</string>
+            <string>Page 1/1</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>
@@ -44,6 +50,12 @@
          </item>
          <item>
           <widget class="QPushButton" name="btn_next">
+           <property name="maximumSize">
+            <size>
+             <width>100</width>
+             <height>16777215</height>
+            </size>
+           </property>
            <property name="text">
             <string>&gt;</string>
            </property>
