@@ -75,6 +75,7 @@ def get_tenant_project_file(tenant: str, project_id: str, params: dict):
 
 
 def start_file_upload(tenant: str, project_id: str, params: dict):
+    QgsMessageLog.logMessage("Initiating file upload...")
     authcfg_id = get_authcfg_id()
     url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
 
@@ -95,7 +96,8 @@ def finish_file_upload(tenant: str, project_id: str, payload: dict):
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.put(payload=payload)
     if status:
-        QgsMessageLog.logMessage("File successfully uploaded to Rana.")
+        QgsMessageLog.logMessage("File successfully uploaded to Rana")
+        QMessageBox.information(None, "Upload Complete", "File uploaded successfully.")
     else:
         QgsMessageLog.logMessage(f"Error completing file upload: {error}")
     return None
