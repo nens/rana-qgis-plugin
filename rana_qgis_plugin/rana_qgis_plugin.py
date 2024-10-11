@@ -5,6 +5,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QSizePolicy
 
 from .auth import setup_oauth2
+from .communication import UICommunication
 from .constant import PLUGIN_NAME
 from .widgets.rana_browser import RanaBrowser
 
@@ -14,17 +15,18 @@ class RanaQgisPlugin:
         self.iface = iface
         self.menu = PLUGIN_NAME
         self.dock_widget = None
-        self.rana_main_widget = None
+        self.rana_browser = None
         self.toolbar = self.iface.addToolBar(self.menu)
         self.toolbar.setObjectName(self.menu)
         self.icon = QIcon(os.path.join(os.path.dirname(__file__), "icon.svg"))
         self.action = QAction(self.icon, self.menu, iface.mainWindow())
         self.action.triggered.connect(self.run)
+        self.communication = UICommunication(self.iface, self.menu)
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
         # Setup OAuth2 authentication
-        setup_oauth2()
+        setup_oauth2(self.communication)
 
         # Add the menu item and toolbar icon
         self.iface.addPluginToMenu(self.menu, self.action)
@@ -46,7 +48,7 @@ class RanaQgisPlugin:
             self.dock_widget.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable)
             self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.dock_widget.setObjectName(self.menu)
-            self.rana_main_widget = RanaBrowser(self.dock_widget)
-            self.dock_widget.setWidget(self.rana_main_widget)
+            self.rana_browser = RanaBrowser(self.communication)
+            self.dock_widget.setWidget(self.rana_browser)
         self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
         self.dock_widget.show()

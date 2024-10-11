@@ -1,6 +1,6 @@
 import json
 
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsMessageLog
+from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
 from .constant import (
@@ -18,7 +18,7 @@ def get_authcfg_id():
     return authcfg_id
 
 
-def setup_oauth2():
+def setup_oauth2(communication):
     settings = QSettings()
     auth_manager = QgsApplication.authManager()
     auth_manager.setMasterPassword()
@@ -61,4 +61,4 @@ def setup_oauth2():
     if new_authcfg_id:
         settings.setValue(RANA_AUTHCFG_ENTRY, new_authcfg_id)
     else:
-        QgsMessageLog("Failed to create OAuth2 configuration", "Rana", QgsMessageLog.CRITICAL)
+        communication.log_warn("Failed to create OAuth2 configuration")
