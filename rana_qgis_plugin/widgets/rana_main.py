@@ -33,7 +33,7 @@ class RanaMainWidget(uicls, basecls):
         self.update_breadcrumbs()
 
         # Pagination
-        self.items_per_page = 10
+        self.items_per_page = 25
         self.current_page = 1
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
