@@ -3,6 +3,7 @@ import json
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
+from .communication import UICommunication
 from .constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
     COGNITO_CLIENT_ID,
@@ -18,7 +19,7 @@ def get_authcfg_id():
     return authcfg_id
 
 
-def setup_oauth2(communication):
+def setup_oauth2(communication: UICommunication):
     settings = QSettings()
     auth_manager = QgsApplication.authManager()
     auth_manager.setMasterPassword()
