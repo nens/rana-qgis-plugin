@@ -61,4 +61,4 @@ def setup_oauth2():
     if new_authcfg_id:
         settings.setValue(RANA_AUTHCFG_ENTRY, new_authcfg_id)
     else:
-        QgsMessageLog("Failed to create OAuth2 configuration")
+        QgsMessageLog("Failed to create OAuth2 configuration", "Rana", QgsMessageLog.CRITICAL)
