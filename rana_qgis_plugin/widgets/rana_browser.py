@@ -22,10 +22,10 @@ uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
 
 class RanaBrowser(uicls, basecls):
-    def __init__(self, communication, parent=None):
+    def __init__(self, communication: UICommunication, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-        self.communication: UICommunication = communication
+        self.communication = communication
         self.settings = QSettings()
         self.paths = ["Projects"]
 
