@@ -21,12 +21,12 @@ base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
 
-class RanaMainWidget(uicls, basecls):
+class RanaBrowser(uicls, basecls):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
         self.settings = QSettings()
-        self.paths = ["Home"]
+        self.paths = ["Projects"]
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
@@ -90,7 +90,7 @@ class RanaMainWidget(uicls, basecls):
             self.rana_widget.setCurrentIndex(0)
             self.update_breadcrumbs()
         else:
-            only_directory_paths = self.paths[2:]  # Skip the first two paths: Home and Project
+            only_directory_paths = self.paths[2:]  # Skip the first two paths: Projects and project_name
             path = "/".join(only_directory_paths) + ("/" if only_directory_paths else "")
             self.fetch_and_populate_files(path)
             self.show_files_widget()

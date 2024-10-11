@@ -6,7 +6,7 @@ from qgis.PyQt.QtWidgets import QAction, QDockWidget, QSizePolicy
 
 from .auth import setup_oauth2
 from .constant import PLUGIN_NAME
-from .widgets.rana_main import RanaMainWidget
+from .widgets.rana_browser import RanaBrowser
 
 
 class RanaQgisPlugin:
@@ -46,7 +46,7 @@ class RanaQgisPlugin:
             self.dock_widget.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable)
             self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.dock_widget.setObjectName(self.menu)
-            self.rana_main_widget = RanaMainWidget(self.dock_widget)
+            self.rana_main_widget = RanaBrowser(self.dock_widget)
             self.dock_widget.setWidget(self.rana_main_widget)
         self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
         self.dock_widget.show()
