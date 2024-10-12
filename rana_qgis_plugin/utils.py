@@ -99,6 +99,7 @@ def finish_file_upload(communication: UICommunication, tenant: str, project_id: 
     if status:
         communication.clear_message_bar()
         communication.bar_info("File uploaded to Rana successfully.")
+        communication.show_info("File uploaded to Rana successfully.")
     else:
         communication.show_error(f"Failed to upload file: {error}")
     return None
