@@ -129,10 +129,10 @@ def get_local_file_path(project_name: str, file_path: str, file_name: str):
     return local_dir_structure, local_file_path
 
 
-def open_file_in_qgis(communication: UICommunication, project: dict, file: dict):
+def open_file_in_qgis(communication: UICommunication, project: dict, file: dict, supported_data_types: list):
     if file and file["descriptor"] and file["descriptor"]["data_type"]:
         data_type = file["descriptor"]["data_type"]
-        if data_type not in ["vector", "raster"]:
+        if data_type not in supported_data_types:
             communication.show_warn(f"Unsupported data type: {data_type}")
             return
         download_url = file["url"]

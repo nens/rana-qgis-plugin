@@ -22,6 +22,8 @@ uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
 
 class RanaBrowser(uicls, basecls):
+    SUPPORTED_DATA_TYPES = ["vector", "raster", "threedi_schematisation"]
+
     def __init__(self, communication: UICommunication, parent=None):
         super().__init__(parent)
         self.setupUi(self)
@@ -58,7 +60,7 @@ class RanaBrowser(uicls, basecls):
 
         # File details widget
         self.file = None
-        self.btn_open.clicked.connect(lambda: open_file_in_qgis(self.communication, self.project, self.file))
+        self.btn_open.clicked.connect(lambda: open_file_in_qgis(self.communication, self.project, self.file, self.SUPPORTED_DATA_TYPES))
         self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.file))
 
     def show_files_widget(self):
@@ -209,7 +211,7 @@ class RanaBrowser(uicls, basecls):
 
         # Show/hide the buttons based on the file data type
         data_type = self.file["descriptor"]["data_type"] if self.file["descriptor"] else None
-        if data_type in ["vector", "raster"]:
+        if data_type in self.SUPPORTED_DATA_TYPES:
             self.btn_open.show()
             self.btn_save.show()
         else:

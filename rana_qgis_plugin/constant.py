@@ -9,6 +9,3 @@ COGNITO_TOKEN_ENDPOINT = "https://auth.lizard.net/oauth2/token"
 TENANT = "nenstest"  # needs to get from API later
 BASE_URL = "https://test.ranawaterintelligence.com/v1-alpha"
 TENANT_URL = f"https://test.ranawaterintelligence.com/v1-alpha/tenants/{TENANT}"
-
-THREEDI_SCHEMATISATION_PLUGIN = "threedi_schematisation_editor"
-THREEDI_RESULTS_ANALYSIS_PLUGIN = "threedi_results_analysis"
