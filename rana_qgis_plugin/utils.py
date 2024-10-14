@@ -10,6 +10,7 @@ from .auth import get_authcfg_id
 from .communication import UICommunication
 from .constant import BASE_URL, TENANT
 from .network_manager import NetworkManager
+from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
 def get_tenant(communication: UICommunication, tenant: str):
@@ -156,8 +157,20 @@ def open_file_in_qgis(communication: UICommunication, project: dict, file: dict,
         # Add the layer to QGIS
         if data_type == "vector":
             layer = QgsVectorLayer(local_file_path, file_name, "ogr")
-        else:
+        elif data_type == "raster":
             layer = QgsRasterLayer(local_file_path, file_name)
+        elif data_type == "threedi_schematisation":
+            threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
+            if threedi_models_and_simulations:
+                communication.bar_info("Opening file in ThreeDi Models and Simulations plugin ...")
+            else:
+                communication.bar_info(
+                    "3Di Models and Simulations plugin not found. Please enable the 3Di Models and Simulations plugin to open this file."
+                )
+            return
+        else:
+            communication.show_warn(f"Unsupported data type: {data_type}")
+            return
         if layer.isValid():
             QgsProject.instance().addMapLayer(layer)
             communication.clear_message_bar()

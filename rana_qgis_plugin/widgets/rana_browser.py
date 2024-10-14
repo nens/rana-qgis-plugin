@@ -60,7 +60,9 @@ class RanaBrowser(uicls, basecls):
 
         # File details widget
         self.file = None
-        self.btn_open.clicked.connect(lambda: open_file_in_qgis(self.communication, self.project, self.file, self.SUPPORTED_DATA_TYPES))
+        self.btn_open.clicked.connect(
+            lambda: open_file_in_qgis(self.communication, self.project, self.file, self.SUPPORTED_DATA_TYPES)
+        )
         self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.file))
 
     def show_files_widget(self):
