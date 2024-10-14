@@ -1,12 +1,12 @@
 import math
 import os
 
-from qgis.core import QgsMessageLog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.utils import (
     display_bytes,
@@ -21,12 +21,13 @@ base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
 
-class RanaMainWidget(uicls, basecls):
-    def __init__(self, parent=None):
+class RanaBrowser(uicls, basecls):
+    def __init__(self, communication: UICommunication, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+        self.communication = communication
         self.settings = QSettings()
-        self.paths = ["Home"]
+        self.paths = ["Projects"]
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
@@ -57,8 +58,8 @@ class RanaMainWidget(uicls, basecls):
 
         # File details widget
         self.file = None
-        self.btn_open.clicked.connect(lambda: open_file_in_qgis(self.project, self.file))
-        self.btn_save.clicked.connect(lambda: save_file_to_rana(self.project, self.file))
+        self.btn_open.clicked.connect(lambda: open_file_in_qgis(self.communication, self.project, self.file))
+        self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.file))
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -90,7 +91,7 @@ class RanaMainWidget(uicls, basecls):
             self.rana_widget.setCurrentIndex(0)
             self.update_breadcrumbs()
         else:
-            only_directory_paths = self.paths[2:]  # Skip the first two paths: Home and Project
+            only_directory_paths = self.paths[2:]  # Skip the first two paths: Projects and project_name
             path = "/".join(only_directory_paths) + ("/" if only_directory_paths else "")
             self.fetch_and_populate_files(path)
             self.show_files_widget()
@@ -111,7 +112,7 @@ class RanaMainWidget(uicls, basecls):
         self.populate_projects(self.filtered_projects if self.filtered_projects else self.projects)
 
     def fetch_projects(self):
-        self.projects = get_tenant_projects(TENANT)
+        self.projects = get_tenant_projects(self.communication, TENANT)
 
     def populate_projects(self, projects: list):
         self.projects_model.clear()
@@ -145,7 +146,9 @@ class RanaMainWidget(uicls, basecls):
         self.show_files_widget()
 
     def fetch_and_populate_files(self, path: str = None):
-        self.files = get_tenant_project_files(TENANT, self.project["id"], {"path": path} if path else None)
+        self.files = get_tenant_project_files(
+            self.communication, TENANT, self.project["id"], {"path": path} if path else None
+        )
         self.files_model.clear()
         header = ["Filename"]
         self.files_model.setHorizontalHeaderLabels(header)

@@ -6,6 +6,7 @@ History
 
 - Fix bug with file conflict check: #8
 - Dock the plugin to the right side panel, add pagination, search bar for projects: #10
+- Add UI communication system: #11
 
 
 0.1.1 (2024-10-08)
