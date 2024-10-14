@@ -197,7 +197,8 @@ class RanaBrowser(uicls, basecls):
         file_details = [
             ("Name", os.path.basename(self.file["id"].rstrip("/"))),
             ("Size", display_bytes(self.file["size"])),
-            ("Type", self.file["media_type"]),
+            ("File type", self.file["media_type"]),
+            ("Data type", self.file["descriptor"]["data_type"] if self.file["descriptor"] else "Unknown"),
             ("Added by", username),
             ("Last modified", self.file["last_modified"]),
         ]
