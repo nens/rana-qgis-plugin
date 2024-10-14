@@ -1,7 +1,7 @@
 History
 =======
 
-0.1.2 (unreleased)
+0.1.4 (2024-10-14)
 ------------------
 
 - Fix bug with file conflict check: #8
