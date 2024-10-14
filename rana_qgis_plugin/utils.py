@@ -182,7 +182,7 @@ def save_file_to_rana(communication: UICommunication, project: dict, file: dict)
         return
 
     # Check if file has been modified since it was last downloaded
-    continue_upload = check_for_file_conflict(communication, project, file)
+    continue_upload = handle_file_conflict(communication, project, file)
     if not continue_upload:
         return
 
@@ -204,14 +204,14 @@ def save_file_to_rana(communication: UICommunication, project: dict, file: dict)
         communication.show_error(f"Failed to upload file to Rana: {str(e)}")
 
 
-def check_for_file_conflict(communication: UICommunication, project: dict, file: dict):
+def handle_file_conflict(communication: UICommunication, project: dict, file: dict):
     file_path = file["id"]
     last_modified_key = f"{project['name']}/{file_path}/last_modified"
     local_last_modified = QSettings().value(last_modified_key)
     server_file = get_tenant_project_file(communication, TENANT, project["id"], {"path": file_path})
     if not server_file:
         communication.show_error("Failed to get file from server. Check if file has been moved or deleted.")
-        return False
+        return False  # Stop with the upload
     last_modified = server_file["last_modified"]
     if last_modified != local_last_modified:
         warn_and_ask_msg = (
@@ -221,7 +221,7 @@ def check_for_file_conflict(communication: UICommunication, project: dict, file:
         do_overwrite = communication.ask(None, "File conflict", warn_and_ask_msg)
         return do_overwrite
     else:
-        return True
+        return True  # Continue with the upload
 
 
 def display_bytes(bytes: int) -> str:
