@@ -1,8 +1,9 @@
 import json
 
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsMessageLog
+from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
+from .communication import UICommunication
 from .constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
     COGNITO_CLIENT_ID,
@@ -18,7 +19,7 @@ def get_authcfg_id():
     return authcfg_id
 
 
-def setup_oauth2():
+def setup_oauth2(communication: UICommunication):
     settings = QSettings()
     auth_manager = QgsApplication.authManager()
     auth_manager.setMasterPassword()
@@ -34,30 +35,31 @@ def setup_oauth2():
 
     if authcfg_id:
         settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
+        return
+
+    # Create a new QgsAuthMethodConfig instance for OAuth2
+    authcfg = QgsAuthMethodConfig()
+    authcfg.setMethod("OAuth2")
+    authcfg.setName(RANA_SETTINGS_ENTRY)
+
+    # Set the configuration map for OAuth2
+    config_map = {
+        "clientId": COGNITO_CLIENT_ID,
+        "grantFlow": 3,
+        "redirectHost": "localhost",
+        "redirectPort": 7070,
+        "redirectUrl": "rana-callback",
+        "refreshTokenUrl": COGNITO_TOKEN_ENDPOINT,
+        "requestUrl": COGNITO_AUTHENTICATION_ENDPOINT,
+        "tokenUrl": COGNITO_TOKEN_ENDPOINT,
+    }
+    config_map_json = json.dumps(config_map)
+    authcfg.setConfigMap({"oauth2config": config_map_json})
+
+    # Store the OAuth2 configuration
+    auth_manager.storeAuthenticationConfig(authcfg)
+    new_authcfg_id = authcfg.id()
+    if new_authcfg_id:
+        settings.setValue(RANA_AUTHCFG_ENTRY, new_authcfg_id)
     else:
-        # Create a new QgsAuthMethodConfig instance for OAuth2
-        authcfg = QgsAuthMethodConfig()
-        authcfg.setMethod("OAuth2")
-        authcfg.setName(RANA_SETTINGS_ENTRY)
-
-        # Set the configuration map for OAuth2
-        config_map = {
-            "clientId": COGNITO_CLIENT_ID,
-            "grantFlow": 3,
-            "redirectHost": "localhost",
-            "redirectPort": 7070,
-            "redirectUrl": "rana-callback",
-            "refreshTokenUrl": COGNITO_TOKEN_ENDPOINT,
-            "requestUrl": COGNITO_AUTHENTICATION_ENDPOINT,
-            "tokenUrl": COGNITO_TOKEN_ENDPOINT,
-        }
-        config_map_json = json.dumps(config_map)
-        authcfg.setConfigMap({"oauth2config": config_map_json})
-
-        # Store the OAuth2 configuration
-        auth_manager.storeAuthenticationConfig(authcfg)
-        new_authcfg_id = authcfg.id()
-        if new_authcfg_id:
-            settings.setValue(RANA_AUTHCFG_ENTRY, new_authcfg_id)
-        else:
-            QgsMessageLog("Failed to create OAuth2 configuration")
+        communication.log_warn("Failed to create OAuth2 configuration")
