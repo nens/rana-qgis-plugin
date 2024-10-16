@@ -50,5 +50,5 @@ class RanaQgisPlugin:
             self.dock_widget.setObjectName(self.menu)
             self.rana_browser = RanaBrowser(self.communication)
             self.dock_widget.setWidget(self.rana_browser)
-        self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
+        self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True)
         self.dock_widget.show()
