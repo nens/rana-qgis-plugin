@@ -67,15 +67,9 @@ def open_file_in_qgis(communication: UICommunication, project: dict, file: dict,
             layer = QgsRasterLayer(local_file_path, file_name)
         elif data_type == "threedi_schematisation":
             threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
-            threedi_schematisation_editor = get_schematisation_editor_instance()
             if not threedi_models_and_simulations:
                 communication.show_error(
                     "Please enable the 3Di Models and Simulations plugin to open this schematisation."
-                )
-                return
-            if not threedi_schematisation_editor:
-                communication.show_error(
-                    "Please enable the 3Di Schematisation Editor plugin to open this schematisation."
                 )
                 return
             communication.bar_info("Opening the schematisation in 3Di Models and Simulations plugin ...")

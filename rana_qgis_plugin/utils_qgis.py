@@ -13,8 +13,3 @@ def get_plugin_instance(plugin_name):
 def get_threedi_models_and_simulations_instance():
     """Return ThreeDi Models and Simulations plugin instance."""
     return get_plugin_instance("threedi_models_and_simulations")
-
-
-def get_schematisation_editor_instance():
-    """Return Schematisation Editor plugin instance."""
-    return get_plugin_instance("threedi_schematisation_editor")
