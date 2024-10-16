@@ -9,7 +9,7 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics
 from .communication import UICommunication
 from .constant import TENANT
 from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload
-from .utils_qgis import get_schematisation_editor_instance, get_threedi_models_and_simulations_instance
+from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
 def download_file(communication: UICommunication, url: str, project_name: str, file_path: str, file_name: str):
