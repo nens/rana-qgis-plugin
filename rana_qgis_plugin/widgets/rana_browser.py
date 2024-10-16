@@ -8,14 +8,8 @@ from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
-from rana_qgis_plugin.utils import (
-    display_bytes,
-    elide_text,
-    get_tenant_project_files,
-    get_tenant_projects,
-    open_file_in_qgis,
-    save_file_to_rana,
-)
+from rana_qgis_plugin.utils import display_bytes, elide_text, open_file_in_qgis, save_file_to_rana
+from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
@@ -198,11 +192,12 @@ class RanaBrowser(uicls, basecls):
     def show_file_details(self):
         self.file_table_widget.clearContents()
         username = self.file["user"]["given_name"] + " " + self.file["user"]["family_name"]
+        data_type = self.file["descriptor"]["data_type"] if self.file["descriptor"] else "Unknown"
         file_details = [
             ("Name", os.path.basename(self.file["id"].rstrip("/"))),
             ("Size", display_bytes(self.file["size"])),
             ("File type", self.file["media_type"]),
-            ("Data type", self.file["descriptor"]["data_type"] if self.file["descriptor"] else "Unknown"),
+            ("Data type", data_type),
             ("Added by", username),
             ("Last modified", self.file["last_modified"]),
         ]
@@ -212,8 +207,10 @@ class RanaBrowser(uicls, basecls):
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
-        data_type = self.file["descriptor"]["data_type"] if self.file["descriptor"] else None
-        if data_type in self.SUPPORTED_DATA_TYPES:
+        if data_type == "threedi_schematisation":
+            self.btn_open.show()
+            self.btn_save.hide()
+        elif data_type in self.SUPPORTED_DATA_TYPES:
             self.btn_open.show()
             self.btn_save.show()
         else:
