@@ -32,7 +32,7 @@ def get_tenant_projects(communication: UICommunication, tenant: str):
         return items
     else:
         communication.show_error(f"Failed to get projects: {error}")
-        return None
+        return []
 
 
 def get_tenant_project_files(communication: UICommunication, tenant: str, project_id: str, params: dict = None):
@@ -48,7 +48,7 @@ def get_tenant_project_files(communication: UICommunication, tenant: str, projec
         return items
     else:
         communication.show_error(f"Failed to get files: {error}")
-        return None
+        return []
 
 
 def get_tenant_project_file(communication: UICommunication, tenant: str, project_id: str, params: dict):

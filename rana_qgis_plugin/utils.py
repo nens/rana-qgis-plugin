@@ -9,7 +9,7 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics
 from .communication import UICommunication
 from .constant import TENANT
 from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload
-from .utils_qgis import get_threedi_models_and_simulations_instance
+from .utils_qgis import get_schematisation_editor_instance, get_threedi_models_and_simulations_instance
 
 
 def download_file(communication: UICommunication, url: str, project_name: str, file_path: str, file_name: str):
@@ -67,13 +67,20 @@ def open_file_in_qgis(communication: UICommunication, project: dict, file: dict,
             layer = QgsRasterLayer(local_file_path, file_name)
         elif data_type == "threedi_schematisation":
             threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
-            if threedi_models_and_simulations:
-                communication.bar_info("Opening file in 3Di Models and Simulations plugin ...")
-                threedi_models_and_simulations.run()
-            else:
-                communication.bar_info(
-                    "3Di Models and Simulations plugin not found. Please enable the 3Di Models and Simulations plugin to open this file."
+            threedi_schematisation_editor = get_schematisation_editor_instance()
+            if not threedi_models_and_simulations:
+                communication.show_error(
+                    "Please enable the 3Di Models and Simulations plugin to open this schematisation."
                 )
+                return
+            if not threedi_schematisation_editor:
+                communication.show_error(
+                    "Please enable the 3Di Schematisation Editor plugin to open this schematisation."
+                )
+                return
+            communication.bar_info("Opening the schematisation in 3Di Models and Simulations plugin ...")
+            threedi_models_and_simulations.run()
+            threedi_models_and_simulations.dockwidget.test_dockwidget()
             return
         else:
             communication.show_warn(f"Unsupported data type: {data_type}")
