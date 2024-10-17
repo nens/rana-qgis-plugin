@@ -76,14 +76,12 @@ def open_file_in_qgis(
                 return
             schematisation = schematisation_instance["schematisation"]
             revision = schematisation_instance["latest_revision"]
-            if revision:
-                communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
-                threedi_models_and_simulations.run()
-                threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(
-                    schematisation, revision
-                )
-            else:
-                communication.show_error("Cannot open a schematisation without a revision.")
+            if not revision:
+                communication.show_warn("Cannot open a schematisation without a revision.")
+                return
+            communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
+            threedi_models_and_simulations.run()
+            threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
             return
         else:
             communication.show_warn(f"Unsupported data type: {data_type}")
