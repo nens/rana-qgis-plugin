@@ -54,8 +54,15 @@ class RanaBrowser(uicls, basecls):
 
         # File details widget
         self.file = None
+        self.schematisation = None
         self.btn_open.clicked.connect(
-            lambda: open_file_in_qgis(self.communication, self.project, self.file, self.SUPPORTED_DATA_TYPES)
+            lambda: open_file_in_qgis(
+                communication=self.communication,
+                project=self.project,
+                file=self.file,
+                schematisation_instance=self.schematisation,
+                supported_data_types=self.SUPPORTED_DATA_TYPES,
+            )
         )
         self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.file))
 
@@ -201,9 +208,23 @@ class RanaBrowser(uicls, basecls):
             ("Added by", username),
             ("Last modified", self.file["last_modified"]),
         ]
+        if data_type == "threedi_schematisation":
+            self.schematisation = get_threedi_schematisation(self.communication, TENANT, self.file["descriptor_id"])
+            if self.schematisation:
+                schematisation = self.schematisation["schematisation"]
+                revision = self.schematisation["latest_revision"]
+                schematisation_details = [
+                    ("Schematisation ID", schematisation["id"]),
+                    ("Latest revision ID", revision["id"] if revision else None),
+                ]
+                file_details.extend(schematisation_details)
+            else:
+                self.communication.show_error("Failed to download 3Di schematisation.")
+        self.file_table_widget.setRowCount(len(file_details))
+        self.file_table_widget.horizontalHeader().setStretchLastSection(True)
         for i, (label, value) in enumerate(file_details):
             self.file_table_widget.setItem(i, 0, QTableWidgetItem(label))
-            self.file_table_widget.setItem(i, 1, QTableWidgetItem(value))
+            self.file_table_widget.setItem(i, 1, QTableWidgetItem(str(value)))
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type

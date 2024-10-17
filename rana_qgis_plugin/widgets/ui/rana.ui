@@ -84,7 +84,7 @@
        <item row="0" column="0">
         <widget class="QTableWidget" name="file_table_widget">
          <property name="rowCount">
-          <number>5</number>
+          <number>1</number>
          </property>
          <property name="columnCount">
           <number>2</number>

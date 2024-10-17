@@ -36,7 +36,9 @@ def get_local_file_path(project_name: str, file_path: str, file_name: str):
     return local_dir_structure, local_file_path
 
 
-def open_file_in_qgis(communication: UICommunication, project: dict, file: dict, supported_data_types: list):
+def open_file_in_qgis(
+    communication: UICommunication, project: dict, file: dict, schematisation_instance: dict, supported_data_types: list
+):
     if file and file["descriptor"] and file["descriptor"]["data_type"]:
         data_type = file["descriptor"]["data_type"]
         if data_type not in supported_data_types:
@@ -65,16 +67,20 @@ def open_file_in_qgis(communication: UICommunication, project: dict, file: dict,
             layer = QgsVectorLayer(local_file_path, file_name, "ogr")
         elif data_type == "raster":
             layer = QgsRasterLayer(local_file_path, file_name)
-        elif data_type == "threedi_schematisation":
+        elif data_type == "threedi_schematisation" and schematisation_instance:
             threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
             if not threedi_models_and_simulations:
                 communication.show_error(
                     "Please enable the 3Di Models and Simulations plugin to open this schematisation."
                 )
                 return
-            communication.bar_info("Opening the schematisation in 3Di Models and Simulations plugin ...")
-            threedi_models_and_simulations.run()
-            threedi_models_and_simulations.dockwidget.test_dockwidget()
+            schematisation = schematisation_instance["schematisation"]
+            revision = schematisation_instance["latest_revision"]
+            if revision:
+                threedi_models_and_simulations.run()
+                threedi_models_and_simulations.dockwidget.build_options.load_schematisation(schematisation, revision)
+            else:
+                communication.show_error("Cannot open a schematisation without a revision.")
             return
         else:
             communication.show_warn(f"Unsupported data type: {data_type}")
