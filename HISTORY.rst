@@ -1,11 +1,16 @@
 History
 =======
 
+0.1.5 (unreleased)
+------------------
+
+- Show and open 3Di schematisation: #9
+
+
 0.1.4 (2024-10-14)
 ------------------
 
 - Fix bug with file conflict check: #8
-- Show and open 3Di schematisation: #9
 - Dock the plugin to the right side panel, add pagination, search bar for projects: #10
 - Add UI communication system: #11
 
