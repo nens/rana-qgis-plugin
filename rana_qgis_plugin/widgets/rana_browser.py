@@ -53,18 +53,18 @@ class RanaBrowser(uicls, basecls):
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
 
         # File details widget
-        self.file = None
+        self.selected_file = None
         self.schematisation = None
         self.btn_open.clicked.connect(
             lambda: open_file_in_qgis(
                 communication=self.communication,
                 project=self.project,
-                file=self.file,
+                file=self.selected_file,
                 schematisation_instance=self.schematisation,
                 supported_data_types=self.SUPPORTED_DATA_TYPES,
             )
         )
-        self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.file))
+        self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.selected_file))
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -182,9 +182,9 @@ class RanaBrowser(uicls, basecls):
 
     def select_file_or_directory(self, index: int):
         file_item = self.files_model.itemFromIndex(index)
-        self.file = file_item.data(Qt.UserRole)
-        file_path = self.file["id"]
-        if self.file["type"] == "directory":
+        self.selected_file = file_item.data(Qt.UserRole)
+        file_path = self.selected_file["id"]
+        if self.selected_file["type"] == "directory":
             directory_name = os.path.basename(file_path.rstrip("/"))
             self.paths.append(directory_name)
             self.fetch_and_populate_files(file_path)
@@ -192,24 +192,26 @@ class RanaBrowser(uicls, basecls):
         else:
             file_name = os.path.basename(file_path.rstrip("/"))
             self.paths.append(file_name)
-            self.show_file_details()
+            self.show_selected_file_details()
             self.rana_widget.setCurrentIndex(2)
         self.update_breadcrumbs()
 
-    def show_file_details(self):
+    def show_selected_file_details(self):
         self.file_table_widget.clearContents()
-        username = self.file["user"]["given_name"] + " " + self.file["user"]["family_name"]
-        data_type = self.file["descriptor"]["data_type"] if self.file["descriptor"] else "Unknown"
+        username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
+        data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
         file_details = [
-            ("Name", os.path.basename(self.file["id"].rstrip("/"))),
-            ("Size", display_bytes(self.file["size"])),
-            ("File type", self.file["media_type"]),
+            ("Name", os.path.basename(self.selected_file["id"].rstrip("/"))),
+            ("Size", display_bytes(self.selected_file["size"])),
+            ("File type", self.selected_file["media_type"]),
             ("Data type", data_type),
             ("Added by", username),
-            ("Last modified", self.file["last_modified"]),
+            ("Last modified", self.selected_file["last_modified"]),
         ]
         if data_type == "threedi_schematisation":
-            self.schematisation = get_threedi_schematisation(self.communication, TENANT, self.file["descriptor_id"])
+            self.schematisation = get_threedi_schematisation(
+                self.communication, TENANT, self.selected_file["descriptor_id"]
+            )
             if self.schematisation:
                 schematisation = self.schematisation["schematisation"]
                 revision = self.schematisation["latest_revision"]
