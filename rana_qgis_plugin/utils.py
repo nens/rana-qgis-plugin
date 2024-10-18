@@ -6,103 +6,10 @@ from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics
 
-from .auth import get_authcfg_id
 from .communication import UICommunication
-from .constant import BASE_URL, TENANT
-from .network_manager import NetworkManager
-
-
-def get_tenant(communication: UICommunication, tenant: str):
-    authcfg_id = get_authcfg_id()
-    tenant_url = f"{BASE_URL}/tenants/{tenant}"
-
-    network_manager = NetworkManager(tenant_url, authcfg_id)
-    status, error = network_manager.fetch()
-
-    if status:
-        tenant = network_manager.content
-        return tenant
-    else:
-        communication.show_error(f"Failed to get tenant: {error}")
-        return None
-
-
-def get_tenant_projects(communication: UICommunication, tenant: str):
-    authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch()
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get projects: {error}")
-        return None
-
-
-def get_tenant_project_files(communication: UICommunication, tenant: str, project_id: str, params: dict = None):
-    authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/ls"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get files: {error}")
-        return None
-
-
-def get_tenant_project_file(communication: UICommunication, tenant: str, project_id: str, params: dict):
-    authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/stat"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        communication.show_error(f"Failed to get file: {error}")
-        return None
-
-
-def start_file_upload(communication: UICommunication, tenant: str, project_id: str, params: dict):
-    communication.clear_message_bar()
-    communication.bar_info("Initiating file upload ...")
-    authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.post(params=params)
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        communication.show_error(f"Failed to initiate file upload: {error}")
-        return None
-
-
-def finish_file_upload(communication: UICommunication, tenant: str, project_id: str, payload: dict):
-    authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.put(payload=payload)
-    if status:
-        communication.clear_message_bar()
-        communication.bar_info("File uploaded to Rana successfully.")
-        communication.show_info("File uploaded to Rana successfully.")
-    else:
-        communication.show_error(f"Failed to upload file: {error}")
-    return None
+from .constant import TENANT
+from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload
+from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
 def download_file(communication: UICommunication, url: str, project_name: str, file_path: str, file_name: str):
@@ -129,10 +36,12 @@ def get_local_file_path(project_name: str, file_path: str, file_name: str):
     return local_dir_structure, local_file_path
 
 
-def open_file_in_qgis(communication: UICommunication, project: dict, file: dict):
+def open_file_in_qgis(
+    communication: UICommunication, project: dict, file: dict, schematisation_instance: dict, supported_data_types: list
+):
     if file and file["descriptor"] and file["descriptor"]["data_type"]:
         data_type = file["descriptor"]["data_type"]
-        if data_type not in ["vector", "raster"]:
+        if data_type not in supported_data_types:
             communication.show_warn(f"Unsupported data type: {data_type}")
             return
         download_url = file["url"]
@@ -156,8 +65,27 @@ def open_file_in_qgis(communication: UICommunication, project: dict, file: dict)
         # Add the layer to QGIS
         if data_type == "vector":
             layer = QgsVectorLayer(local_file_path, file_name, "ogr")
-        else:
+        elif data_type == "raster":
             layer = QgsRasterLayer(local_file_path, file_name)
+        elif data_type == "threedi_schematisation" and schematisation_instance:
+            threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
+            if not threedi_models_and_simulations:
+                communication.show_error(
+                    "Please enable the 3Di Models and Simulations plugin to open this schematisation."
+                )
+                return
+            schematisation = schematisation_instance["schematisation"]
+            revision = schematisation_instance["latest_revision"]
+            if not revision:
+                communication.show_warn("Cannot open a schematisation without a revision.")
+                return
+            communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
+            threedi_models_and_simulations.run()
+            threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
+            return
+        else:
+            communication.show_warn(f"Unsupported data type: {data_type}")
+            return
         if layer.isValid():
             QgsProject.instance().addMapLayer(layer)
             communication.clear_message_bar()

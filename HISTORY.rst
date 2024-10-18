@@ -1,6 +1,12 @@
 History
 =======
 
+0.1.5 (unreleased)
+------------------
+
+- Show and open 3Di schematisation: #9
+
+
 0.1.4 (2024-10-14)
 ------------------
 
