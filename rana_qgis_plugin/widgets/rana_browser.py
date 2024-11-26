@@ -41,7 +41,7 @@ class RanaBrowser(uicls, basecls):
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
-        self.projects_tv.doubleClicked.connect(self.select_project)
+        self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
         self.fetch_projects()
         self.populate_projects(self.projects)
