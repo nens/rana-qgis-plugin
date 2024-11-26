@@ -52,6 +52,7 @@ def setup_oauth2(communication: UICommunication):
         "refreshTokenUrl": COGNITO_TOKEN_ENDPOINT,
         "requestUrl": COGNITO_AUTHENTICATION_ENDPOINT,
         "tokenUrl": COGNITO_TOKEN_ENDPOINT,
+        "persistToken": True,
     }
     config_map_json = json.dumps(config_map)
     authcfg.setConfigMap({"oauth2config": config_map_json})
