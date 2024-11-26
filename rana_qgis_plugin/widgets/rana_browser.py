@@ -8,7 +8,7 @@ from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
-from rana_qgis_plugin.utils import display_bytes, elide_text, open_file_in_qgis, save_file_to_rana
+from rana_qgis_plugin.utils import display_bytes, elide_text, open_file_in_qgis, save_file_to_rana, set_icon
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 
 base_dir = os.path.dirname(__file__)
@@ -43,6 +43,8 @@ class RanaBrowser(uicls, basecls):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
+        set_icon(self.refresh_btn, "refresh.svg")
+        self.refresh_btn.clicked.connect(self.refresh_projects)
         self.fetch_projects()
         self.populate_projects(self.projects)
 
@@ -118,6 +120,15 @@ class RanaBrowser(uicls, basecls):
 
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication, TENANT)
+
+    def refresh_projects(self):
+        self.current_page = 1
+        self.fetch_projects()
+        search_text = self.projects_search.text()
+        if search_text:
+            self.filter_projects(search_text)
+            return
+        self.populate_projects(self.projects)
 
     def populate_projects(self, projects: list):
         self.projects_model.clear()
