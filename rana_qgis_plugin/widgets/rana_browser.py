@@ -150,12 +150,10 @@ class RanaBrowser(uicls, basecls):
 
         # Add paginated projects to the project model
         for project in paginated_projects:
-            # Project name item
             project_name = project["name"]
             name_item = QStandardItem(project_name)
             name_item.setToolTip(project_name)
             name_item.setData(project, role=Qt.UserRole)
-            # Last activity item
             last_activity = project["last_activity"]
             last_activity_localtime = convert_to_local_time(last_activity)
             last_activity_relative = convert_to_relative_time(last_activity)
@@ -166,6 +164,7 @@ class RanaBrowser(uicls, basecls):
             self.projects_model.appendRow([name_item, last_activity_item])
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
+        self.projects_tv.setColumnWidth(0, 300)
         self.update_pagination(projects)
 
     def filter_projects(self, text: str):
@@ -185,7 +184,7 @@ class RanaBrowser(uicls, basecls):
             self.communication, TENANT, self.project["id"], {"path": path} if path else None
         )
         self.files_model.clear()
-        header = ["Filename"]
+        header = ["Filename", "Data type", "Size", "Last modified"]
         self.files_model.setHorizontalHeaderLabels(header)
 
         directories = [file for file in self.files if file["type"] == "directory"]
@@ -196,6 +195,7 @@ class RanaBrowser(uicls, basecls):
             dir_name = os.path.basename(directory["id"].rstrip("/"))
             display_name = f"📁 {dir_name}"
             name_item = QStandardItem(display_name)
+            name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.UserRole)
             self.files_model.appendRow([name_item])
 
@@ -204,11 +204,19 @@ class RanaBrowser(uicls, basecls):
             file_name = os.path.basename(file["id"].rstrip("/"))
             display_name = f"📄 {file_name}"
             name_item = QStandardItem(display_name)
+            name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.UserRole)
-            self.files_model.appendRow([name_item])
+            data_type = file["descriptor"]["data_type"] if file["descriptor"] else "Unknown"
+            data_type_item = QStandardItem(data_type)
+            size_item = QStandardItem(display_bytes(file["size"])) if data_type != "threedi_schematisation" else None
+            last_modified = convert_to_local_time(file["last_modified"])
+            last_modified_item = QStandardItem(last_modified)
+            # Add items to the model
+            self.files_model.appendRow([name_item, data_type_item, size_item, last_modified_item])
 
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
+        self.files_tv.setColumnWidth(0, 300)
 
     def select_file_or_directory(self, index: int):
         file_item = self.files_model.itemFromIndex(index)
@@ -228,12 +236,14 @@ class RanaBrowser(uicls, basecls):
 
     def show_selected_file_details(self):
         self.file_table_widget.clearContents()
+        filename = os.path.basename(self.selected_file["id"].rstrip("/"))
         username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
         data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
+        size = display_bytes(self.selected_file["size"]) if data_type != "threedi_schematisation" else "N/A"
         file_details = [
-            ("Name", os.path.basename(self.selected_file["id"].rstrip("/"))),
-            ("Size", display_bytes(self.selected_file["size"])),
+            ("Name", filename),
+            ("Size", size),
             ("File type", self.selected_file["media_type"]),
             ("Data type", data_type),
             ("Added by", username),
