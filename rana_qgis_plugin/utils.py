@@ -1,7 +1,10 @@
 import math
 import os
+from datetime import datetime, timezone
 
 import requests
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QIcon
@@ -184,3 +187,28 @@ def set_icon(widget: QToolButton, icon_filename: str):
     path = icon_path(icon_filename)
     icon = QIcon(path)
     widget.setIcon(icon)
+
+
+def convert_to_local_time(timestamp: str):
+    time = parser.isoparse(timestamp)
+    return time.astimezone().strftime("%d-%m-%Y %H:%M")
+
+
+def convert_to_relative_time(timestamp: str):
+    """Convert a timestamp into a relative time string."""
+    now = datetime.now(timezone.utc)
+    past = parser.isoparse(timestamp)
+    delta = relativedelta(now, past)
+
+    if delta.years > 0:
+        return f"{delta.years} year{'s' if delta.years > 1 else ''} ago"
+    elif delta.months > 0:
+        return f"{delta.months} month{'s' if delta.months > 1 else ''} ago"
+    elif delta.days > 0:
+        return f"{delta.days} day{'s' if delta.days > 1 else ''} ago"
+    elif delta.hours > 0:
+        return f"{delta.hours} hour{'s' if delta.hours > 1 else ''} ago"
+    elif delta.minutes > 0:
+        return f"{delta.minutes} minute{'s' if delta.minutes > 1 else ''} ago"
+    else:
+        return "Just now"

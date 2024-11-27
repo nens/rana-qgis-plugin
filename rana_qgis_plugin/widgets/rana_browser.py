@@ -8,7 +8,15 @@ from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
-from rana_qgis_plugin.utils import display_bytes, elide_text, open_file_in_qgis, save_file_to_rana, set_icon
+from rana_qgis_plugin.utils import (
+    convert_to_local_time,
+    convert_to_relative_time,
+    display_bytes,
+    elide_text,
+    open_file_in_qgis,
+    save_file_to_rana,
+    set_icon,
+)
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 
 base_dir = os.path.dirname(__file__)
@@ -132,7 +140,7 @@ class RanaBrowser(uicls, basecls):
 
     def populate_projects(self, projects: list):
         self.projects_model.clear()
-        header = ["Project Name"]
+        header = ["Project Name", "Last activity"]
         self.projects_model.setHorizontalHeaderLabels(header)
 
         # Paginate projects
@@ -142,9 +150,20 @@ class RanaBrowser(uicls, basecls):
 
         # Add paginated projects to the project model
         for project in paginated_projects:
-            name_item = QStandardItem(project["name"])
+            # Project name item
+            project_name = project["name"]
+            name_item = QStandardItem(project_name)
+            name_item.setToolTip(project_name)
             name_item.setData(project, role=Qt.UserRole)
-            self.projects_model.appendRow([name_item])
+            # Last activity item
+            last_activity = project["last_activity"]
+            last_activity_localtime = convert_to_local_time(last_activity)
+            last_activity_relative = convert_to_relative_time(last_activity)
+            last_activity_item = QStandardItem(last_activity_relative)
+            last_activity_item.setToolTip(last_activity_localtime)
+            last_activity_item.setData(project, role=Qt.UserRole)
+            # Add items to the model
+            self.projects_model.appendRow([name_item, last_activity_item])
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
         self.update_pagination(projects)
