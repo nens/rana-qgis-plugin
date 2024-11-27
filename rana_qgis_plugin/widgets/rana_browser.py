@@ -2,13 +2,21 @@ import math
 import os
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
-from rana_qgis_plugin.utils import display_bytes, elide_text, open_file_in_qgis, save_file_to_rana
+from rana_qgis_plugin.utils import (
+    convert_to_local_time,
+    convert_to_relative_time,
+    display_bytes,
+    elide_text,
+    open_file_in_qgis,
+    save_file_to_rana,
+    set_icon,
+)
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 
 base_dir = os.path.dirname(__file__)
@@ -41,8 +49,10 @@ class RanaBrowser(uicls, basecls):
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
-        self.projects_tv.doubleClicked.connect(self.select_project)
+        self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
+        set_icon(self.refresh_btn, "refresh.svg")
+        self.refresh_btn.clicked.connect(self.refresh_projects)
         self.fetch_projects()
         self.populate_projects(self.projects)
 
@@ -119,9 +129,18 @@ class RanaBrowser(uicls, basecls):
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication, TENANT)
 
+    def refresh_projects(self):
+        self.current_page = 1
+        self.fetch_projects()
+        search_text = self.projects_search.text()
+        if search_text:
+            self.filter_projects(search_text)
+            return
+        self.populate_projects(self.projects)
+
     def populate_projects(self, projects: list):
         self.projects_model.clear()
-        header = ["Project Name"]
+        header = ["Project Name", "Last activity"]
         self.projects_model.setHorizontalHeaderLabels(header)
 
         # Paginate projects
@@ -131,11 +150,20 @@ class RanaBrowser(uicls, basecls):
 
         # Add paginated projects to the project model
         for project in paginated_projects:
-            name_item = QStandardItem(project["name"])
+            project_name = project["name"]
+            name_item = QStandardItem(project_name)
+            name_item.setToolTip(project_name)
             name_item.setData(project, role=Qt.UserRole)
-            self.projects_model.appendRow([name_item])
+            last_activity = project["last_activity"]
+            last_activity_localtime = convert_to_local_time(last_activity)
+            last_activity_relative = convert_to_relative_time(last_activity)
+            last_activity_item = QStandardItem(last_activity_relative)
+            last_activity_item.setToolTip(last_activity_localtime)
+            # Add items to the model
+            self.projects_model.appendRow([name_item, last_activity_item])
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
+        self.projects_tv.setColumnWidth(0, 300)
         self.update_pagination(projects)
 
     def filter_projects(self, text: str):
@@ -143,7 +171,10 @@ class RanaBrowser(uicls, basecls):
         self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
         self.populate_projects(self.filtered_projects)
 
-    def select_project(self, index: int):
+    def select_project(self, index: QModelIndex):
+        # Only allow selection of the first column (project name)
+        if index.column() != 0:
+            return
         project_item = self.projects_model.itemFromIndex(index)
         self.project = project_item.data(Qt.UserRole)
         self.paths.append(self.project["name"])
@@ -155,7 +186,7 @@ class RanaBrowser(uicls, basecls):
             self.communication, TENANT, self.project["id"], {"path": path} if path else None
         )
         self.files_model.clear()
-        header = ["Filename"]
+        header = ["Filename", "Data type", "Size", "Last modified"]
         self.files_model.setHorizontalHeaderLabels(header)
 
         directories = [file for file in self.files if file["type"] == "directory"]
@@ -166,6 +197,7 @@ class RanaBrowser(uicls, basecls):
             dir_name = os.path.basename(directory["id"].rstrip("/"))
             display_name = f"📁 {dir_name}"
             name_item = QStandardItem(display_name)
+            name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.UserRole)
             self.files_model.appendRow([name_item])
 
@@ -174,13 +206,24 @@ class RanaBrowser(uicls, basecls):
             file_name = os.path.basename(file["id"].rstrip("/"))
             display_name = f"📄 {file_name}"
             name_item = QStandardItem(display_name)
+            name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.UserRole)
-            self.files_model.appendRow([name_item])
+            data_type = file["descriptor"]["data_type"] if file["descriptor"] else "Unknown"
+            data_type_item = QStandardItem(data_type)
+            size_item = QStandardItem(display_bytes(file["size"])) if data_type != "threedi_schematisation" else None
+            last_modified = convert_to_local_time(file["last_modified"])
+            last_modified_item = QStandardItem(last_modified)
+            # Add items to the model
+            self.files_model.appendRow([name_item, data_type_item, size_item, last_modified_item])
 
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
+        self.files_tv.setColumnWidth(0, 300)
 
-    def select_file_or_directory(self, index: int):
+    def select_file_or_directory(self, index: QModelIndex):
+        # Only allow selection of the first column (filename)
+        if index.column() != 0:
+            return
         file_item = self.files_model.itemFromIndex(index)
         self.selected_file = file_item.data(Qt.UserRole)
         file_path = self.selected_file["id"]
@@ -198,15 +241,18 @@ class RanaBrowser(uicls, basecls):
 
     def show_selected_file_details(self):
         self.file_table_widget.clearContents()
+        filename = os.path.basename(self.selected_file["id"].rstrip("/"))
         username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
         data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
+        last_modified = convert_to_local_time(self.selected_file["last_modified"])
+        size = display_bytes(self.selected_file["size"]) if data_type != "threedi_schematisation" else "N/A"
         file_details = [
-            ("Name", os.path.basename(self.selected_file["id"].rstrip("/"))),
-            ("Size", display_bytes(self.selected_file["size"])),
+            ("Name", filename),
+            ("Size", size),
             ("File type", self.selected_file["media_type"]),
             ("Data type", data_type),
             ("Added by", username),
-            ("Last modified", self.selected_file["last_modified"]),
+            ("Last modified", last_modified),
         ]
         if data_type == "threedi_schematisation":
             self.schematisation = get_threedi_schematisation(

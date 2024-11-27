@@ -1,10 +1,14 @@
 import math
 import os
+from datetime import datetime, timezone
 
 import requests
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QFont, QFontMetrics
+from qgis.PyQt.QtGui import QFont, QFontMetrics, QIcon
+from qgis.PyQt.QtWidgets import QToolButton
 
 from .communication import UICommunication
 from .constant import TENANT
@@ -37,7 +41,11 @@ def get_local_file_path(project_name: str, file_path: str, file_name: str):
 
 
 def open_file_in_qgis(
-    communication: UICommunication, project: dict, file: dict, schematisation_instance: dict, supported_data_types: list
+    communication: UICommunication,
+    project: dict,
+    file: dict,
+    schematisation_instance: dict,
+    supported_data_types: list,
 ):
     if file and file["descriptor"] and file["descriptor"]["data_type"]:
         data_type = file["descriptor"]["data_type"]
@@ -166,3 +174,41 @@ def elide_text(font: QFont, text: str, max_width: int) -> str:
     # Calculate elided text based on font and max width
     font_metrics = QFontMetrics(font)
     return font_metrics.elidedText(text, Qt.ElideRight, max_width)
+
+
+def icon_path(icon_filename: str):
+    """Setting up path to the icon with given filename."""
+    path = os.path.join(os.path.dirname(__file__), "icons", icon_filename)
+    return path
+
+
+def set_icon(widget: QToolButton, icon_filename: str):
+    """Setting up widget icon based on given icon filename."""
+    path = icon_path(icon_filename)
+    icon = QIcon(path)
+    widget.setIcon(icon)
+
+
+def convert_to_local_time(timestamp: str):
+    time = parser.isoparse(timestamp)
+    return time.astimezone().strftime("%d-%m-%Y %H:%M")
+
+
+def convert_to_relative_time(timestamp: str):
+    """Convert a timestamp into a relative time string."""
+    now = datetime.now(timezone.utc)
+    past = parser.isoparse(timestamp)
+    delta = relativedelta(now, past)
+
+    if delta.years > 0:
+        return f"{delta.years} year{'s' if delta.years > 1 else ''} ago"
+    elif delta.months > 0:
+        return f"{delta.months} month{'s' if delta.months > 1 else ''} ago"
+    elif delta.days > 0:
+        return f"{delta.days} day{'s' if delta.days > 1 else ''} ago"
+    elif delta.hours > 0:
+        return f"{delta.hours} hour{'s' if delta.hours > 1 else ''} ago"
+    elif delta.minutes > 0:
+        return f"{delta.minutes} minute{'s' if delta.minutes > 1 else ''} ago"
+    else:
+        return "Just now"

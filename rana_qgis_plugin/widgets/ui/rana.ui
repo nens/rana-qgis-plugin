@@ -13,24 +13,7 @@
      </property>
      <widget class="QWidget" name="projects_widget">
       <layout class="QGridLayout" name="projects_layout">
-       <item row="0" column="0">
-        <widget class="QLineEdit" name="projects_search">
-         <property name="placeholderText">
-          <string>🔍 Search for project by name</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QTreeView" name="projects_tv">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-           <horstretch>1</horstretch>
-           <verstretch>1</verstretch>
-          </sizepolicy>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
+       <item row="3" column="0">
         <layout class="QHBoxLayout" name="pagination_layout">
          <item>
           <widget class="QPushButton" name="btn_previous">
@@ -65,6 +48,44 @@
            </property>
            <property name="text">
             <string>&gt;</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="2" column="0">
+        <widget class="QTreeView" name="projects_tv">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>1</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QLineEdit" name="projects_search">
+           <property name="placeholderText">
+            <string>🔍 Search for project by name</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="refresh_btn">
+           <property name="toolTip">
+            <string>Refresh</string>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>../icons/refresh.svg</normaloff>../icons/refresh.svg</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>18</width>
+             <height>18</height>
+            </size>
            </property>
           </widget>
          </item>
