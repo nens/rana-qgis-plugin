@@ -2,7 +2,7 @@ import math
 import os
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
@@ -159,7 +159,6 @@ class RanaBrowser(uicls, basecls):
             last_activity_relative = convert_to_relative_time(last_activity)
             last_activity_item = QStandardItem(last_activity_relative)
             last_activity_item.setToolTip(last_activity_localtime)
-            last_activity_item.setData(project, role=Qt.UserRole)
             # Add items to the model
             self.projects_model.appendRow([name_item, last_activity_item])
         for i in range(len(header)):
@@ -172,7 +171,10 @@ class RanaBrowser(uicls, basecls):
         self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
         self.populate_projects(self.filtered_projects)
 
-    def select_project(self, index: int):
+    def select_project(self, index: QModelIndex):
+        # Only allow selection of the first column (project name)
+        if index.column() != 0:
+            return
         project_item = self.projects_model.itemFromIndex(index)
         self.project = project_item.data(Qt.UserRole)
         self.paths.append(self.project["name"])
@@ -218,7 +220,10 @@ class RanaBrowser(uicls, basecls):
             self.files_tv.resizeColumnToContents(i)
         self.files_tv.setColumnWidth(0, 300)
 
-    def select_file_or_directory(self, index: int):
+    def select_file_or_directory(self, index: QModelIndex):
+        # Only allow selection of the first column (filename)
+        if index.column() != 0:
+            return
         file_item = self.files_model.itemFromIndex(index)
         self.selected_file = file_item.data(Qt.UserRole)
         file_path = self.selected_file["id"]
