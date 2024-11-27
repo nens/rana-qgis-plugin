@@ -230,13 +230,14 @@ class RanaBrowser(uicls, basecls):
         self.file_table_widget.clearContents()
         username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
         data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
+        last_modified = convert_to_local_time(self.selected_file["last_modified"])
         file_details = [
             ("Name", os.path.basename(self.selected_file["id"].rstrip("/"))),
             ("Size", display_bytes(self.selected_file["size"])),
             ("File type", self.selected_file["media_type"]),
             ("Data type", data_type),
             ("Added by", username),
-            ("Last modified", self.selected_file["last_modified"]),
+            ("Last modified", last_modified),
         ]
         if data_type == "threedi_schematisation":
             self.schematisation = get_threedi_schematisation(
