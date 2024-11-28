@@ -33,19 +33,19 @@ class RanaQgisPlugin:
         # Add the menu item and toolbar icon
         self.iface.addPluginToMenu(self.menu, self.action)
         self.toolbar.addAction(self.action)
-        self.addHelpMenuItem()
+        self.add_rana_menu()
 
     def login(self):
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
-        self.addHelpMenuItem()
+        self.add_rana_menu()
         self.dock_widget.show()
 
     def logout(self):
         self.communication.bar_info("Logout initiated! You will be logged out from Rana shortly.")
         webbrowser.open(LOGOUT_URL)
         remove_authcfg()
-        self.addHelpMenuItem()
+        self.add_rana_menu()
         self.dock_widget.close()
 
     def find_rana_menu(self):
@@ -54,7 +54,7 @@ class RanaQgisPlugin:
                 return action.menu()
         return None
 
-    def addHelpMenuItem(self):
+    def add_rana_menu(self):
         menu = self.find_rana_menu()
         if not menu:
             menu = QMenu("Rana", self.iface.mainWindow().menuBar())
