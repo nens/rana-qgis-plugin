@@ -5,7 +5,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
-from .auth import remove_authcfg, setup_oauth2
+from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME, TENANT
 from .utils_api import get_tenant
@@ -39,12 +39,15 @@ class RanaQgisPlugin:
         setup_oauth2(self.communication)
         self.dock_widget.show()
         get_tenant(self.communication, TENANT)
+        self.addHelpMenuItem()
+        self.communication.bar_info("Login initiated! Please check your browser.")
 
     def logout(self):
+        self.communication.bar_info("Logout initiated! You will be logged out from Rana shortly.")
         webbrowser.open(LOGOUT_URL)
         remove_authcfg()
         self.dock_widget.close()
-        self.communication.bar_info("Logout successful! You have been logged out from Rana.")
+        self.addHelpMenuItem()
 
     def find_rana_menu(self):
         for i, action in enumerate(self.iface.mainWindow().menuBar().actions()):
@@ -58,14 +61,16 @@ class RanaQgisPlugin:
             menu = QMenu("Rana", self.iface.mainWindow().menuBar())
             menu.setObjectName("rana")
             self.iface.mainWindow().menuBar().addMenu(menu)
-        # Logout action
-        logout_action = QAction("Logout", self.iface.mainWindow())
-        logout_action.triggered.connect(self.logout)
-        menu.addAction(logout_action)
-        # Login action
-        login_action = QAction("Login", self.iface.mainWindow())
-        login_action.triggered.connect(self.login)
-        menu.addAction(login_action)
+        menu.clear()
+        authcfg_id = get_authcfg_id()
+        if authcfg_id:
+            logout_action = QAction("Logout", self.iface.mainWindow())
+            logout_action.triggered.connect(self.logout)
+            menu.addAction(logout_action)
+        else:
+            login_action = QAction("Login", self.iface.mainWindow())
+            login_action.triggered.connect(self.login)
+            menu.addAction(login_action)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
