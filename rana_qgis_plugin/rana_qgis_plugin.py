@@ -7,8 +7,8 @@ from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
 from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .communication import UICommunication
-from .constant import LOGOUT_URL, PLUGIN_NAME, TENANT
-from .utils_api import get_tenant, get_user_info
+from .constant import LOGOUT_URL, PLUGIN_NAME
+from .utils_api import get_user_info
 from .widgets.rana_browser import RanaBrowser
 
 
@@ -36,18 +36,17 @@ class RanaQgisPlugin:
         self.addHelpMenuItem()
 
     def login(self):
-        setup_oauth2(self.communication)
-        self.dock_widget.show()
-        get_tenant(self.communication, TENANT)
-        self.addHelpMenuItem()
         self.communication.bar_info("Login initiated! Please check your browser.")
+        setup_oauth2(self.communication)
+        self.addHelpMenuItem()
+        self.dock_widget.show()
 
     def logout(self):
         self.communication.bar_info("Logout initiated! You will be logged out from Rana shortly.")
         webbrowser.open(LOGOUT_URL)
         remove_authcfg()
-        self.dock_widget.close()
         self.addHelpMenuItem()
+        self.dock_widget.close()
 
     def find_rana_menu(self):
         for i, action in enumerate(self.iface.mainWindow().menuBar().actions()):
