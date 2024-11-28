@@ -19,6 +19,14 @@ def get_authcfg_id():
     return authcfg_id
 
 
+def remove_authcfg():
+    settings = QSettings()
+    authcfg_id = settings.value(RANA_AUTHCFG_ENTRY)
+    auth_manager = QgsApplication.authManager()
+    auth_manager.removeAuthenticationConfig(authcfg_id)
+    settings.remove(RANA_AUTHCFG_ENTRY)
+
+
 def setup_oauth2(communication: UICommunication):
     settings = QSettings()
     auth_manager = QgsApplication.authManager()
