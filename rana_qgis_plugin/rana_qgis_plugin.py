@@ -27,26 +27,25 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
-        # Setup OAuth2 authentication
-        setup_oauth2(self.communication)
-
-        # Add the menu item and toolbar icon
         self.iface.addPluginToMenu(self.menu, self.action)
         self.toolbar.addAction(self.action)
         self.add_rana_menu()
+        setup_oauth2(self.communication)
 
     def login(self):
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
         self.add_rana_menu()
-        self.dock_widget.show()
+        if self.dock_widget:
+            self.dock_widget.show()
 
     def logout(self):
         self.communication.bar_info("Logout initiated! You will be logged out from Rana shortly.")
         webbrowser.open(LOGOUT_URL)
         remove_authcfg()
         self.add_rana_menu()
-        self.dock_widget.close()
+        if self.dock_widget:
+            self.dock_widget.close()
 
     def find_rana_menu(self):
         for i, action in enumerate(self.iface.mainWindow().menuBar().actions()):
@@ -55,6 +54,7 @@ class RanaQgisPlugin:
         return None
 
     def add_rana_menu(self):
+        """Add Rana menu to the main menu bar."""
         menu = self.find_rana_menu()
         if not menu:
             menu = QMenu("Rana", self.iface.mainWindow().menuBar())
