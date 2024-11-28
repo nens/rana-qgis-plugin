@@ -1,7 +1,22 @@
 from .auth import get_authcfg_id
 from .communication import UICommunication
-from .constant import API_URL
+from .constant import API_URL, COGNITO_USER_INFO_ENDPOINT
 from .network_manager import NetworkManager
+
+
+def get_user_info(communication: UICommunication):
+    authcfg_id = get_authcfg_id()
+    url = COGNITO_USER_INFO_ENDPOINT
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch()
+
+    if status:
+        user_info = network_manager.content
+        return user_info
+    else:
+        communication.show_error(f"Failed to get user info from cognito: {error}")
+        return None
 
 
 def get_tenant(communication: UICommunication, tenant: str):

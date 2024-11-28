@@ -8,7 +8,7 @@ from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME, TENANT
-from .utils_api import get_tenant
+from .utils_api import get_tenant, get_user_info
 from .widgets.rana_browser import RanaBrowser
 
 
@@ -64,6 +64,12 @@ class RanaQgisPlugin:
         menu.clear()
         authcfg_id = get_authcfg_id()
         if authcfg_id:
+            user = get_user_info(self.communication)
+            if user:
+                user_name = f"{user["given_name"]} {user["family_name"]}"
+                user_action = QAction(user_name, self.iface.mainWindow())
+                user_action.setEnabled(False)
+                menu.addAction(user_action)
             logout_action = QAction("Logout", self.iface.mainWindow())
             logout_action.triggered.connect(self.logout)
             menu.addAction(logout_action)
