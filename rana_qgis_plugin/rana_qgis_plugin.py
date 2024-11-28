@@ -30,9 +30,9 @@ class RanaQgisPlugin:
         self.iface.addPluginToMenu(self.menu, self.action)
         self.toolbar.addAction(self.action)
         self.add_rana_menu()
-        setup_oauth2(self.communication)
 
     def login(self):
+        self.communication.clear_message_bar()
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
         self.add_rana_menu()
@@ -40,6 +40,7 @@ class RanaQgisPlugin:
             self.dock_widget.show()
 
     def logout(self):
+        self.communication.clear_message_bar()
         self.communication.bar_info("Logout initiated! You will be logged out from Rana shortly.")
         webbrowser.open(LOGOUT_URL)
         remove_authcfg()
@@ -87,6 +88,9 @@ class RanaQgisPlugin:
 
     def run(self):
         """Run method that loads and starts the plugin"""
+        authcfg_id = get_authcfg_id()
+        if not authcfg_id:
+            self.login()
         if not self.dock_widget:
             self.dock_widget = QDockWidget(self.menu, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)

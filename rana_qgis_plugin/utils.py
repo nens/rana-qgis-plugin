@@ -87,6 +87,7 @@ def open_file_in_qgis(
             if not revision:
                 communication.show_warn("Cannot open a schematisation without a revision.")
                 return
+            communication.clear_message_bar()
             communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
             threedi_models_and_simulations.run()
             threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
