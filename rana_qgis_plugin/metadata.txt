@@ -22,7 +22,7 @@ repository=https://github.com/nens/rana-qgis-plugin
 
 homepage=https://test.ranawaterintelligence.com/
 category=Plugins
-icon=icon.svg
+icon=icons/rana.svg
 # experimental flag
 experimental=False
 

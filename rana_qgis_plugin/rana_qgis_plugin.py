@@ -1,13 +1,12 @@
-import os.path
 import webbrowser
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
 from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
+from .icons import login_icon, logout_icon, rana_icon
 from .utils_api import get_user_info
 from .widgets.rana_browser import RanaBrowser
 
@@ -20,7 +19,7 @@ class RanaQgisPlugin:
         self.rana_browser = None
         self.toolbar = self.iface.addToolBar(self.menu)
         self.toolbar.setObjectName(self.menu)
-        self.icon = QIcon(os.path.join(os.path.dirname(__file__), "icon.svg"))
+        self.icon = rana_icon
         self.action = QAction(self.icon, self.menu, iface.mainWindow())
         self.action.triggered.connect(self.run)
         self.communication = UICommunication(self.iface, self.menu)
@@ -70,11 +69,11 @@ class RanaQgisPlugin:
                 user_action = QAction(user_name, self.iface.mainWindow())
                 user_action.setEnabled(False)
                 menu.addAction(user_action)
-            logout_action = QAction("Logout", self.iface.mainWindow())
+            logout_action = QAction(logout_icon, "Logout", self.iface.mainWindow())
             logout_action.triggered.connect(self.logout)
             menu.addAction(logout_action)
         else:
-            login_action = QAction("Login", self.iface.mainWindow())
+            login_action = QAction(login_icon, "Login", self.iface.mainWindow())
             login_action.triggered.connect(self.login)
             menu.addAction(login_action)
 

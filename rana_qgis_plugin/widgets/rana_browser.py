@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.icons import refresh_icon
 from rana_qgis_plugin.utils import (
     convert_to_local_time,
     convert_to_relative_time,
@@ -15,7 +16,6 @@ from rana_qgis_plugin.utils import (
     elide_text,
     open_file_in_qgis,
     save_file_to_rana,
-    set_icon,
 )
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 
@@ -51,7 +51,7 @@ class RanaBrowser(uicls, basecls):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
-        set_icon(self.refresh_btn, "refresh.svg")
+        self.refresh_btn.setIcon(refresh_icon)
         self.refresh_btn.clicked.connect(self.refresh_projects)
         self.fetch_projects()
         self.populate_projects(self.projects)
