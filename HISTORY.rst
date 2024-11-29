@@ -1,7 +1,13 @@
 History
 =======
 
-0.1.6 (unreleased)
+0.1.7 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.1.6 (2024-11-29)
 ------------------
 
 - Login/logout actions and rana menu: #13
