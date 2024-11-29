@@ -70,7 +70,7 @@ class RanaQgisPlugin:
         if authcfg_id:
             user = get_user_info(self.communication)
             if user:
-                user_name = f"{user["given_name"]} {user["family_name"]}"
+                user_name = f"{user['given_name']} {user['family_name']}"
                 user_action = QAction(user_name, self.iface.mainWindow())
                 user_action.setEnabled(False)
                 menu.addAction(user_action)

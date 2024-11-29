@@ -1,10 +1,16 @@
 History
 =======
 
-0.1.7 (unreleased)
+0.1.8 (unreleased)
 ------------------
 
 - Nothing changed yet.
+
+
+0.1.7 (2024-11-29)
+------------------
+
+- Fix f-string syntax error: #14
 
 
 0.1.6 (2024-11-29)
