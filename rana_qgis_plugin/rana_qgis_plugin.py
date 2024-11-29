@@ -8,6 +8,7 @@ from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
 from .icons import login_icon, logout_icon, rana_icon
 from .utils_api import get_user_info
+from .widgets.about_rana_dialog import AboutRanaDialog
 from .widgets.rana_browser import RanaBrowser
 
 
@@ -47,6 +48,10 @@ class RanaQgisPlugin:
         if self.dock_widget:
             self.dock_widget.close()
 
+    def open_about_rana_dialog(self):
+        dialog = AboutRanaDialog(self.iface.mainWindow())
+        dialog.exec_()
+
     def find_rana_menu(self):
         for i, action in enumerate(self.iface.mainWindow().menuBar().actions()):
             if action.menu().objectName() == "rana":
@@ -76,6 +81,9 @@ class RanaQgisPlugin:
             login_action = QAction(login_icon, "Login", self.iface.mainWindow())
             login_action.triggered.connect(self.login)
             menu.addAction(login_action)
+        about_rana_action = QAction(rana_icon, "About Rana Desktop Client", self.iface.mainWindow())
+        about_rana_action.triggered.connect(self.open_about_rana_dialog)
+        menu.addAction(about_rana_action)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
