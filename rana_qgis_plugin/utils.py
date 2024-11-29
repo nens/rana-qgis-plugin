@@ -7,8 +7,7 @@ from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QFont, QFontMetrics, QIcon
-from qgis.PyQt.QtWidgets import QToolButton
+from qgis.PyQt.QtGui import QFont, QFontMetrics
 
 from .communication import UICommunication
 from .constant import TENANT
@@ -87,6 +86,7 @@ def open_file_in_qgis(
             if not revision:
                 communication.show_warn("Cannot open a schematisation without a revision.")
                 return
+            communication.clear_message_bar()
             communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
             threedi_models_and_simulations.run()
             threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
@@ -174,19 +174,6 @@ def elide_text(font: QFont, text: str, max_width: int) -> str:
     # Calculate elided text based on font and max width
     font_metrics = QFontMetrics(font)
     return font_metrics.elidedText(text, Qt.ElideRight, max_width)
-
-
-def icon_path(icon_filename: str):
-    """Setting up path to the icon with given filename."""
-    path = os.path.join(os.path.dirname(__file__), "icons", icon_filename)
-    return path
-
-
-def set_icon(widget: QToolButton, icon_filename: str):
-    """Setting up widget icon based on given icon filename."""
-    path = icon_path(icon_filename)
-    icon = QIcon(path)
-    widget.setIcon(icon)
 
 
 def convert_to_local_time(timestamp: str):

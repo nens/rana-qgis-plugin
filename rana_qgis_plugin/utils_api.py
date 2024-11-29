@@ -1,12 +1,27 @@
 from .auth import get_authcfg_id
 from .communication import UICommunication
-from .constant import BASE_URL
+from .constant import API_URL, COGNITO_USER_INFO_ENDPOINT
 from .network_manager import NetworkManager
+
+
+def get_user_info(communication: UICommunication):
+    authcfg_id = get_authcfg_id()
+    url = COGNITO_USER_INFO_ENDPOINT
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch()
+
+    if status:
+        user_info = network_manager.content
+        return user_info
+    else:
+        communication.show_error(f"Failed to get user info from cognito: {error}")
+        return None
 
 
 def get_tenant(communication: UICommunication, tenant: str):
     authcfg_id = get_authcfg_id()
-    tenant_url = f"{BASE_URL}/tenants/{tenant}"
+    tenant_url = f"{API_URL}/tenants/{tenant}"
 
     network_manager = NetworkManager(tenant_url, authcfg_id)
     status, error = network_manager.fetch()
@@ -21,7 +36,7 @@ def get_tenant(communication: UICommunication, tenant: str):
 
 def get_tenant_projects(communication: UICommunication, tenant: str):
     authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects"
+    url = f"{API_URL}/tenants/{tenant}/projects"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
@@ -37,7 +52,7 @@ def get_tenant_projects(communication: UICommunication, tenant: str):
 
 def get_tenant_project_files(communication: UICommunication, tenant: str, project_id: str, params: dict = None):
     authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/ls"
+    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/ls"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
@@ -53,7 +68,7 @@ def get_tenant_project_files(communication: UICommunication, tenant: str, projec
 
 def get_tenant_project_file(communication: UICommunication, tenant: str, project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/stat"
+    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/stat"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
@@ -70,7 +85,7 @@ def start_file_upload(communication: UICommunication, tenant: str, project_id: s
     communication.clear_message_bar()
     communication.bar_info("Initiating file upload ...")
     authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
+    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.post(params=params)
@@ -85,7 +100,7 @@ def start_file_upload(communication: UICommunication, tenant: str, project_id: s
 
 def finish_file_upload(communication: UICommunication, tenant: str, project_id: str, payload: dict):
     authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
+    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.put(payload=payload)
     if status:
@@ -99,7 +114,7 @@ def finish_file_upload(communication: UICommunication, tenant: str, project_id: 
 
 def get_threedi_schematisation(communication: UICommunication, tenant: str, descriptor_id: str):
     authcfg_id = get_authcfg_id()
-    url = f"{BASE_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
+    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
     if status:

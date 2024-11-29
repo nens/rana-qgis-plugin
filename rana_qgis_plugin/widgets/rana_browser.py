@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
+from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     convert_to_local_time,
     convert_to_relative_time,
@@ -15,7 +16,6 @@ from rana_qgis_plugin.utils import (
     elide_text,
     open_file_in_qgis,
     save_file_to_rana,
-    set_icon,
 )
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 
@@ -51,7 +51,7 @@ class RanaBrowser(uicls, basecls):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
-        set_icon(self.refresh_btn, "refresh.svg")
+        self.refresh_btn.setIcon(refresh_icon)
         self.refresh_btn.clicked.connect(self.refresh_projects)
         self.fetch_projects()
         self.populate_projects(self.projects)
@@ -195,8 +195,7 @@ class RanaBrowser(uicls, basecls):
         # Add directories first
         for directory in directories:
             dir_name = os.path.basename(directory["id"].rstrip("/"))
-            display_name = f"📁 {dir_name}"
-            name_item = QStandardItem(display_name)
+            name_item = QStandardItem(dir_icon, dir_name)
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.UserRole)
             self.files_model.appendRow([name_item])
@@ -204,8 +203,7 @@ class RanaBrowser(uicls, basecls):
         # Add files second
         for file in files:
             file_name = os.path.basename(file["id"].rstrip("/"))
-            display_name = f"📄 {file_name}"
-            name_item = QStandardItem(display_name)
+            name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.UserRole)
             data_type = file["descriptor"]["data_type"] if file["descriptor"] else "Unknown"
