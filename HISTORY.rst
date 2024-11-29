@@ -4,7 +4,11 @@ History
 0.1.6 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Login/logout actions and rana menu: #13
+- About Rana dialog: #13
+- Improvements for Rana QGIS plugin: #12
+- Persist authentication token between QGIS sessions
+- Use QGIS 3.40 in Dockerfile
 
 
 0.1.5 (2024-11-12)
