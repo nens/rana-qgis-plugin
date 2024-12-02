@@ -4,6 +4,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
 from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
+from .auth_3di import setup_3di_auth
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
 from .icons import login_icon, logout_icon, rana_icon
@@ -35,6 +36,7 @@ class RanaQgisPlugin:
         self.communication.clear_message_bar()
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
+        setup_3di_auth(self.communication)
         self.add_rana_menu()
         if self.dock_widget:
             self.dock_widget.show()

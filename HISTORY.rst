@@ -4,7 +4,7 @@ History
 0.1.8 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Login to 3Di from Rana using a personal API key: #15
 
 
 0.1.7 (2024-11-29)
