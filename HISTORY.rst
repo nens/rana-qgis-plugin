@@ -4,7 +4,7 @@ History
 0.1.8 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Sorting for all columns: #15
 
 
 0.1.7 (2024-11-29)

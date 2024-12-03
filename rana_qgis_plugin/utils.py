@@ -7,7 +7,7 @@ from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QFont, QFontMetrics
+from qgis.PyQt.QtGui import QFont, QFontMetrics, QStandardItem
 
 from .communication import UICommunication
 from .constant import TENANT
@@ -176,6 +176,11 @@ def elide_text(font: QFont, text: str, max_width: int) -> str:
     return font_metrics.elidedText(text, Qt.ElideRight, max_width)
 
 
+def convert_to_timestamp(timestamp: str):
+    dt = datetime.fromisoformat(timestamp)
+    return dt.timestamp()
+
+
 def convert_to_local_time(timestamp: str):
     time = parser.isoparse(timestamp)
     return time.astimezone().strftime("%d-%m-%Y %H:%M")
@@ -199,3 +204,8 @@ def convert_to_relative_time(timestamp: str):
         return f"{delta.minutes} minute{'s' if delta.minutes > 1 else ''} ago"
     else:
         return "Just now"
+
+
+class NumericItem(QStandardItem):
+    def __lt__(self, other):
+        return self.data(Qt.UserRole) < other.data(Qt.UserRole)

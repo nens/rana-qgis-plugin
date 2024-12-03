@@ -10,8 +10,10 @@ from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
+    NumericItem,
     convert_to_local_time,
     convert_to_relative_time,
+    convert_to_timestamp,
     display_bytes,
     elide_text,
     open_file_in_qgis,
@@ -49,6 +51,8 @@ class RanaBrowser(uicls, basecls):
         self.project = None
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
+        self.projects_tv.setSortingEnabled(True)
+        self.projects_tv.header().setSortIndicatorShown(True)
         self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
         self.refresh_btn.setIcon(refresh_icon)
@@ -60,6 +64,8 @@ class RanaBrowser(uicls, basecls):
         self.files = []
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
+        self.files_tv.setSortingEnabled(True)
+        self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
 
         # File details widget
@@ -155,9 +161,11 @@ class RanaBrowser(uicls, basecls):
             name_item.setToolTip(project_name)
             name_item.setData(project, role=Qt.UserRole)
             last_activity = project["last_activity"]
+            last_activity_timestamp = convert_to_timestamp(last_activity)
             last_activity_localtime = convert_to_local_time(last_activity)
             last_activity_relative = convert_to_relative_time(last_activity)
-            last_activity_item = QStandardItem(last_activity_relative)
+            last_activity_item = NumericItem(last_activity_relative)
+            last_activity_item.setData(last_activity_timestamp, role=Qt.UserRole)
             last_activity_item.setToolTip(last_activity_localtime)
             # Add items to the model
             self.projects_model.appendRow([name_item, last_activity_item])
@@ -208,7 +216,9 @@ class RanaBrowser(uicls, basecls):
             name_item.setData(file, role=Qt.UserRole)
             data_type = file["descriptor"]["data_type"] if file["descriptor"] else "Unknown"
             data_type_item = QStandardItem(data_type)
-            size_item = QStandardItem(display_bytes(file["size"])) if data_type != "threedi_schematisation" else None
+            size_display = display_bytes(file["size"]) if data_type != "threedi_schematisation" else "N/A"
+            size_item = NumericItem(size_display)
+            size_item.setData(file["size"] if data_type != "threedi_schematisation" else 0, role=Qt.UserRole)
             last_modified = convert_to_local_time(file["last_modified"])
             last_modified_item = QStandardItem(last_modified)
             # Add items to the model
