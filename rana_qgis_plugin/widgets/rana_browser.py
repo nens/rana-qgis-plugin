@@ -220,7 +220,9 @@ class RanaBrowser(uicls, basecls):
             size_item = NumericItem(size_display)
             size_item.setData(file["size"] if data_type != "threedi_schematisation" else -1, role=Qt.UserRole)
             last_modified = convert_to_local_time(file["last_modified"])
-            last_modified_item = QStandardItem(last_modified)
+            last_modified_timestamp = convert_to_timestamp(file["last_modified"])
+            last_modified_item = NumericItem(last_modified)
+            last_modified_item.setData(last_modified_timestamp, role=Qt.UserRole)
             # Add items to the model
             self.files_model.appendRow([name_item, data_type_item, size_item, last_modified_item])
 

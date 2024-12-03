@@ -1,10 +1,16 @@
 History
 =======
 
-0.1.9 (unreleased)
+0.1.10 (unreleased)
 ------------------
 
 - Nothing changed yet.
+
+
+0.1.9 (2024-12-03)
+------------------
+
+- Fix sorting on last modified for files
 
 
 0.1.8 (2024-12-03)
