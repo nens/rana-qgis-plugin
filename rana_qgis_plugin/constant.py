@@ -3,6 +3,7 @@ from urllib.parse import quote
 PLUGIN_NAME = "Rana"
 RANA_SETTINGS_ENTRY = "Rana"
 RANA_AUTHCFG_ENTRY = f"{RANA_SETTINGS_ENTRY}/authcfg"
+THREEDI_AUTHCFG_ENTRY = "threedi/authcfg"
 
 COGNITO_CLIENT_ID = "77chge3p2dq74a5uspvt136piu"
 COGNITO_AUTHENTICATION_ENDPOINT = "https://auth.lizard.net/oauth2/authorize"
