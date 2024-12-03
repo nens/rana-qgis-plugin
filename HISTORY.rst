@@ -1,7 +1,13 @@
 History
 =======
 
-0.1.8 (unreleased)
+0.1.9 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.1.8 (2024-12-03)
 ------------------
 
 - Sorting for all columns: #16
