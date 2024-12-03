@@ -1,10 +1,19 @@
+from typing import Optional, TypedDict
+
 from .auth import get_authcfg_id
 from .communication import UICommunication
 from .constant import API_URL, COGNITO_USER_INFO_ENDPOINT
 from .network_manager import NetworkManager
 
 
-def get_user_info(communication: UICommunication):
+class UserInfo(TypedDict):
+    sub: str
+    given_name: str
+    family_name: str
+    email: str
+
+
+def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
     authcfg_id = get_authcfg_id()
     url = COGNITO_USER_INFO_ENDPOINT
 
@@ -122,4 +131,25 @@ def get_threedi_schematisation(communication: UICommunication, tenant: str, desc
         return response
     else:
         communication.show_error(f"Failed to retrieve schematisation: {error}")
+        return None
+
+
+def get_threedi_personal_api_key(communication: UICommunication, tenant: str, user_id: str) -> Optional[str]:
+    communication.clear_message_bar()
+    communication.bar_info("Getting 3Di personal API key ...")
+    authcfg_id = get_authcfg_id()
+    url = f"{API_URL}/tenants/{tenant}/users/{user_id}/3di-personal-api-key"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.post()
+
+    if status:
+        response = network_manager.content
+        if "key" in response:
+            return response["key"]
+        else:
+            communication.show_error("Failed to retrieve 3Di personal API key.")
+            return None
+    else:
+        communication.show_error(f"Failed to retrieve 3Di personal api key: {error}")
         return None

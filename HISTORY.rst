@@ -4,7 +4,8 @@ History
 0.1.8 (unreleased)
 ------------------
 
-- Sorting for all columns: #15
+- Sorting for all columns: #16
+- Login to 3Di from Rana using a personal API key: #15
 
 
 0.1.7 (2024-11-29)
