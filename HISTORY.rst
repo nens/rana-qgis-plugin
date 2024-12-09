@@ -1,7 +1,13 @@
 History
 =======
 
-0.1.10 (unreleased)
+0.1.11 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.1.10 (2024-12-09)
 ------------------
 
 - Change 3Di personal API keys endpoint (backend change).
