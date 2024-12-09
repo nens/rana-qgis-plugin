@@ -138,7 +138,7 @@ def get_threedi_personal_api_key(communication: UICommunication, tenant: str, us
     communication.clear_message_bar()
     communication.bar_info("Getting 3Di personal API key ...")
     authcfg_id = get_authcfg_id()
-    url = f"{API_URL}/tenants/{tenant}/users/{user_id}/3di-personal-api-key"
+    url = f"{API_URL}/tenants/{tenant}/users/{user_id}/3di-personal-api-keys"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.post()

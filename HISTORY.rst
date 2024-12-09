@@ -4,7 +4,7 @@ History
 0.1.10 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Change 3Di personal API keys endpoint (backend change).
 
 
 0.1.9 (2024-12-03)
