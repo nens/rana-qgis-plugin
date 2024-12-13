@@ -4,7 +4,7 @@ History
 0.1.11 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Apply sorting to all projects, not only paginated ones: #17
 
 
 0.1.10 (2024-12-09)

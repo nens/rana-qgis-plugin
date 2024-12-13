@@ -53,6 +53,7 @@ class RanaBrowser(uicls, basecls):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
+        self.projects_tv.header().sortIndicatorChanged.connect(self.sort_projects)
         self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
         self.refresh_btn.setIcon(refresh_icon)
@@ -145,7 +146,7 @@ class RanaBrowser(uicls, basecls):
         self.populate_projects(self.projects)
 
     def populate_projects(self, projects: list):
-        self.projects_model.clear()
+        self.projects_model.removeRows(0, self.projects_model.rowCount())
         header = ["Project Name", "Last activity"]
         self.projects_model.setHorizontalHeaderLabels(header)
 
@@ -178,6 +179,21 @@ class RanaBrowser(uicls, basecls):
         self.current_page = 1
         self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
         self.populate_projects(self.filtered_projects)
+
+    def sort_projects(self, logical_index: int, order: Qt.SortOrder):
+        self.current_page = 1
+        key_funcs = [
+            lambda x: x["name"].lower(),
+            lambda x: -convert_to_timestamp(x["last_activity"]),
+        ]
+        key_func = key_funcs[logical_index]
+        reversed_order = order == Qt.DescendingOrder
+        self.projects.sort(key=key_func, reverse=reversed_order)
+        search_text = self.projects_search.text()
+        if search_text:
+            self.filter_projects(search_text)
+            return
+        self.populate_projects(self.projects)
 
     def select_project(self, index: QModelIndex):
         # Only allow selection of the first column (project name)
