@@ -63,7 +63,7 @@ class RanaBrowser(uicls, basecls):
         self.refresh_btn.setIcon(refresh_icon)
         self.refresh_btn.clicked.connect(self.refresh_projects)
         self.fetch_projects()
-        self.populate_projects(self.projects)
+        self.populate_projects()
 
         # Files widget
         self.files = []
@@ -124,18 +124,18 @@ class RanaBrowser(uicls, basecls):
 
     def update_pagination(self, projects: list):
         total_items = len(projects)
-        total_pages = math.ceil(total_items / self.items_per_page)
+        total_pages = math.ceil(total_items / self.items_per_page) if total_items > 0 else 1
         self.label_page_number.setText(f"Page {self.current_page}/{total_pages}")
         self.btn_previous.setDisabled(self.current_page == 1)
         self.btn_next.setDisabled(self.current_page == total_pages)
 
     def to_previous_page(self):
         self.current_page -= 1
-        self.populate_projects(self.filtered_projects if self.filtered_projects else self.projects)
+        self.populate_projects()
 
     def to_next_page(self):
         self.current_page += 1
-        self.populate_projects(self.filtered_projects if self.filtered_projects else self.projects)
+        self.populate_projects()
 
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication, TENANT)
@@ -147,9 +147,9 @@ class RanaBrowser(uicls, basecls):
         if search_text:
             self.filter_projects(search_text, clear=True)
             return
-        self.populate_projects(self.projects, clear=True)
+        self.populate_projects(clear=True)
 
-    def populate_projects(self, projects: list, clear: bool = False):
+    def populate_projects(self, clear: bool = False):
         if clear:
             self.projects_model.clear()
         self.projects_model.removeRows(0, self.projects_model.rowCount())
@@ -157,6 +157,8 @@ class RanaBrowser(uicls, basecls):
         self.projects_model.setHorizontalHeaderLabels(header)
 
         # Paginate projects
+        search_text = self.projects_search.text()
+        projects = self.filtered_projects if search_text else self.projects
         start_index = (self.current_page - 1) * self.items_per_page
         end_index = start_index + self.items_per_page
         paginated_projects = projects[start_index:end_index]
@@ -183,8 +185,11 @@ class RanaBrowser(uicls, basecls):
 
     def filter_projects(self, text: str, clear: bool = False):
         self.current_page = 1
-        self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
-        self.populate_projects(self.filtered_projects, clear=clear)
+        if text:
+            self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
+        else:
+            self.filtered_projects = []
+        self.populate_projects(clear=clear)
 
     def sort_projects(self, logical_index: int, order: Qt.SortOrder):
         self.current_page = 1
@@ -199,7 +204,7 @@ class RanaBrowser(uicls, basecls):
         if search_text:
             self.filter_projects(search_text)
             return
-        self.populate_projects(self.projects)
+        self.populate_projects()
 
     def select_project(self, index: QModelIndex):
         # Only allow selection of the first column (project name)
