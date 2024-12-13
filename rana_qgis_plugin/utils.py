@@ -15,7 +15,13 @@ from .utils_api import finish_file_upload, get_tenant_project_file, start_file_u
 from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
-def download_file(communication: UICommunication, url: str, project_name: str, file_path: str, file_name: str):
+def download_file(
+    communication: UICommunication,
+    url: str,
+    project_name: str,
+    file_path: str,
+    file_name: str,
+):
     local_dir_structure, local_file_path = get_local_file_path(project_name, file_path, file_name)
     os.makedirs(local_dir_structure, exist_ok=True)  # Create the directory structure locally
     try:
