@@ -206,14 +206,20 @@ class RanaBrowser(uicls, basecls):
         self.populate_projects()
 
     def select_project(self, index: QModelIndex):
-        # Only allow selection of the first column (project name)
-        if index.column() != 0:
-            return
-        project_item = self.projects_model.itemFromIndex(index)
-        self.project = project_item.data(Qt.UserRole)
-        self.paths.append(self.project["name"])
-        self.fetch_and_populate_files()
-        self.show_files_widget()
+        self.rana_widget.setEnabled(False)
+        self.communication.progress_bar("Loading project...", clear_msg_bar=True)
+        try:
+            # Only allow selection of the first column (project name)
+            if index.column() != 0:
+                return
+            project_item = self.projects_model.itemFromIndex(index)
+            self.project = project_item.data(Qt.UserRole)
+            self.paths.append(self.project["name"])
+            self.fetch_and_populate_files()
+            self.show_files_widget()
+        finally:
+            self.communication.clear_message_bar()
+            self.rana_widget.setEnabled(True)
 
     def fetch_and_populate_files(self, path: str = None):
         self.files = get_tenant_project_files(
@@ -263,23 +269,29 @@ class RanaBrowser(uicls, basecls):
         self.files_tv.setColumnWidth(0, 300)
 
     def select_file_or_directory(self, index: QModelIndex):
-        # Only allow selection of the first column (filename)
-        if index.column() != 0:
-            return
-        file_item = self.files_model.itemFromIndex(index)
-        self.selected_file = file_item.data(Qt.UserRole)
-        file_path = self.selected_file["id"]
-        if self.selected_file["type"] == "directory":
-            directory_name = os.path.basename(file_path.rstrip("/"))
-            self.paths.append(directory_name)
-            self.fetch_and_populate_files(file_path)
-            self.rana_widget.setCurrentIndex(1)
-        else:
-            file_name = os.path.basename(file_path.rstrip("/"))
-            self.paths.append(file_name)
-            self.show_selected_file_details()
-            self.rana_widget.setCurrentIndex(2)
-        self.update_breadcrumbs()
+        self.rana_widget.setEnabled(False)
+        self.communication.progress_bar("Loading files...", clear_msg_bar=True)
+        try:
+            # Only allow selection of the first column (filename)
+            if index.column() != 0:
+                return
+            file_item = self.files_model.itemFromIndex(index)
+            self.selected_file = file_item.data(Qt.UserRole)
+            file_path = self.selected_file["id"]
+            if self.selected_file["type"] == "directory":
+                directory_name = os.path.basename(file_path.rstrip("/"))
+                self.paths.append(directory_name)
+                self.fetch_and_populate_files(file_path)
+                self.rana_widget.setCurrentIndex(1)
+            else:
+                file_name = os.path.basename(file_path.rstrip("/"))
+                self.paths.append(file_name)
+                self.show_selected_file_details()
+                self.rana_widget.setCurrentIndex(2)
+        finally:
+            self.update_breadcrumbs()
+            self.communication.clear_message_bar()
+            self.rana_widget.setEnabled(True)
 
     def show_selected_file_details(self):
         self.file_table_widget.clearContents()
