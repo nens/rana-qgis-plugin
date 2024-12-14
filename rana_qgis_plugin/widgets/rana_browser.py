@@ -191,15 +191,14 @@ class RanaBrowser(uicls, basecls):
             self.filtered_projects = []
         self.populate_projects(clear=clear)
 
-    def sort_projects(self, logical_index: int, order: Qt.SortOrder):
+    def sort_projects(self, column_index: int, order: Qt.SortOrder):
         self.current_page = 1
         key_funcs = [
-            lambda x: x["name"].lower(),
-            lambda x: -convert_to_timestamp(x["last_activity"]),
+            lambda project: project["name"].lower(),
+            lambda project: -convert_to_timestamp(project["last_activity"]),
         ]
-        key_func = key_funcs[logical_index]
-        reversed_order = order == Qt.DescendingOrder
-        self.projects.sort(key=key_func, reverse=reversed_order)
+        key_func = key_funcs[column_index]
+        self.projects.sort(key=key_func, reverse=(order == Qt.DescendingOrder))
         search_text = self.projects_search.text()
         if search_text:
             self.filter_projects(search_text)
