@@ -15,29 +15,6 @@ from .utils_api import finish_file_upload, get_tenant_project_file, start_file_u
 from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
-def download_file(
-    communication: UICommunication,
-    url: str,
-    project_name: str,
-    file_path: str,
-    file_name: str,
-):
-    local_dir_structure, local_file_path = get_local_file_path(project_name, file_path, file_name)
-    os.makedirs(local_dir_structure, exist_ok=True)  # Create the directory structure locally
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        with open(local_file_path, "wb") as file:
-            file.write(response.content)
-        return local_file_path
-    except requests.exceptions.RequestException as e:
-        communication.show_error(f"Failed to download file: {str(e)}")
-        return None
-    except Exception as e:
-        communication.show_error(f"An error occurred: {str(e)}")
-        return None
-
-
 def get_local_file_path(project_name: str, file_path: str, file_name: str):
     base_dir = os.path.join(os.path.expanduser("~"), "Rana")
     local_dir_structure = os.path.join(base_dir, project_name, os.path.dirname(file_path))
@@ -45,69 +22,48 @@ def get_local_file_path(project_name: str, file_path: str, file_name: str):
     return local_dir_structure, local_file_path
 
 
-def open_file_in_qgis(
+def add_layer_to_qgis(
     communication: UICommunication,
-    project: dict,
+    local_file_path: str,
+    project_name: str,
     file: dict,
     schematisation_instance: dict,
-    supported_data_types: list,
 ):
-    if file and file["descriptor"] and file["descriptor"]["data_type"]:
-        data_type = file["descriptor"]["data_type"]
-        if data_type not in supported_data_types:
-            communication.show_warn(f"Unsupported data type: {data_type}")
-            return
-        download_url = file["url"]
-        file_path = file["id"]
-        file_name = os.path.basename(file_path.rstrip("/"))
-        local_file_path = download_file(
-            communication=communication,
-            url=download_url,
-            project_name=project["name"],
-            file_path=file_path,
-            file_name=file_name,
-        )
-        if not local_file_path:
-            communication.show_error(f"Download failed. Unable to open {data_type} file in QGIS.")
-            return
+    file_path = file["id"]
+    file_name = os.path.basename(file_path.rstrip("/"))
+    data_type = file["descriptor"]["data_type"]
 
-        # Save the last modified date of the downloaded file in QSettings
-        last_modified_key = f"{project['name']}/{file_path}/last_modified"
-        QSettings().setValue(last_modified_key, file["last_modified"])
+    # Save the last modified date of the downloaded file in QSettings
+    last_modified_key = f"{project_name}/{file_path}/last_modified"
+    QSettings().setValue(last_modified_key, file["last_modified"])
 
-        # Add the layer to QGIS
-        if data_type == "vector":
-            layer = QgsVectorLayer(local_file_path, file_name, "ogr")
-        elif data_type == "raster":
-            layer = QgsRasterLayer(local_file_path, file_name)
-        elif data_type == "threedi_schematisation" and schematisation_instance:
-            threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
-            if not threedi_models_and_simulations:
-                communication.show_error(
-                    "Please enable the 3Di Models and Simulations plugin to open this schematisation."
-                )
-                return
-            schematisation = schematisation_instance["schematisation"]
-            revision = schematisation_instance["latest_revision"]
-            if not revision:
-                communication.show_warn("Cannot open a schematisation without a revision.")
-                return
-            communication.clear_message_bar()
-            communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
-            threedi_models_and_simulations.run()
-            threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
+    # Add the layer to QGIS
+    if data_type == "vector":
+        layer = QgsVectorLayer(local_file_path, file_name, "ogr")
+    elif data_type == "raster":
+        layer = QgsRasterLayer(local_file_path, file_name)
+    elif data_type == "threedi_schematisation" and schematisation_instance:
+        threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
+        if not threedi_models_and_simulations:
+            communication.show_error("Please enable the 3Di Models and Simulations plugin to open this schematisation.")
             return
-        else:
-            communication.show_warn(f"Unsupported data type: {data_type}")
+        schematisation = schematisation_instance["schematisation"]
+        revision = schematisation_instance["latest_revision"]
+        if not revision:
+            communication.show_warn("Cannot open a schematisation without a revision.")
             return
-        if layer.isValid():
-            QgsProject.instance().addMapLayer(layer)
-            communication.clear_message_bar()
-            communication.bar_info(f"Added {data_type} layer: {local_file_path}")
-        else:
-            communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
+        communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
+        threedi_models_and_simulations.run()
+        threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
+        return
     else:
-        communication.show_warn(f"Unsupported data type: {file['media_type']}")
+        communication.show_warn(f"Unsupported data type: {data_type}")
+        return
+    if layer.isValid():
+        QgsProject.instance().addMapLayer(layer)
+        communication.bar_info(f"Added {data_type} layer: {local_file_path}")
+    else:
+        communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
 
 
 def save_file_to_rana(communication: UICommunication, project: dict, file: dict):

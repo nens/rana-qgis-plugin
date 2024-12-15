@@ -2,7 +2,7 @@ import math
 import os
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
@@ -11,19 +11,16 @@ from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
+    add_layer_to_qgis,
     convert_to_local_time,
     convert_to_relative_time,
     convert_to_timestamp,
     display_bytes,
     elide_text,
-    open_file_in_qgis,
     save_file_to_rana,
 )
-from rana_qgis_plugin.utils_api import (
-    get_tenant_project_files,
-    get_tenant_projects,
-    get_threedi_schematisation,
-)
+from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
+from rana_qgis_plugin.workers import FileDownloadWorker
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
@@ -38,6 +35,7 @@ class RanaBrowser(uicls, basecls):
         self.communication = communication
         self.settings = QSettings()
         self.paths = ["Projects"]
+        self.file_download_thread: QThread = None
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
@@ -76,15 +74,7 @@ class RanaBrowser(uicls, basecls):
         # File details widget
         self.selected_file = None
         self.schematisation = None
-        self.btn_open.clicked.connect(
-            lambda: open_file_in_qgis(
-                communication=self.communication,
-                project=self.project,
-                file=self.selected_file,
-                schematisation_instance=self.schematisation,
-                supported_data_types=self.SUPPORTED_DATA_TYPES,
-            )
-        )
+        self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.selected_file))
 
     def show_files_widget(self):
@@ -339,3 +329,53 @@ class RanaBrowser(uicls, basecls):
         else:
             self.btn_open.hide()
             self.btn_save.hide()
+
+    def open_file_in_qgis(self):
+        file = self.selected_file
+        if file and file["descriptor"] and file["descriptor"]["data_type"]:
+            data_type = file["descriptor"]["data_type"]
+            if data_type not in self.SUPPORTED_DATA_TYPES:
+                self.communication.show_warn(f"Unsupported data type: {data_type}")
+                return
+            self.initialize_file_download_thread()
+            self.file_download_thread.start()
+        else:
+            self.communication.show_warn(f"Unsupported data type: {file['media_type']}")
+
+    def initialize_file_download_thread(self):
+        self.communication.bar_info("Start downloading file...")
+        self.rana_widget.setEnabled(False)
+        self.file_download_thread = FileDownloadWorker(
+            url=self.selected_file["url"],
+            path=self.selected_file["id"],
+            project_name=self.project["name"],
+            file_name=os.path.basename(self.selected_file["id"].rstrip("/")),
+        )
+        self.file_download_thread.finished.connect(self.on_file_download_finished)
+        self.file_download_thread.failed.connect(self.on_file_download_failed)
+        self.file_download_thread.progress.connect(self.on_file_download_progress)
+
+    def on_file_download_finished(self, local_file_path: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.bar_info(f"File downloaded to: {local_file_path}")
+        self.file_download_thread.quit()
+        self.file_download_thread.wait()
+        self.file_download_thread = None
+        add_layer_to_qgis(
+            self.communication,
+            local_file_path,
+            self.project["name"],
+            self.selected_file,
+            self.schematisation,
+        )
+
+    def on_file_download_failed(self, error: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.show_error(error)
+
+    def on_file_download_progress(self, progress: int):
+        self.communication.progress_bar(
+            msg="Downloading file...", minimum=0, maximum=100, init_value=progress, clear_msg_bar=True
+        )
