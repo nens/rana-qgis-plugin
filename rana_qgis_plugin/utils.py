@@ -2,7 +2,6 @@ import math
 import os
 from datetime import datetime, timezone
 
-import requests
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
@@ -10,8 +9,6 @@ from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QStandardItem
 
 from .communication import UICommunication
-from .constant import TENANT
-from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload
 from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
@@ -43,6 +40,7 @@ def add_layer_to_qgis(
     elif data_type == "raster":
         layer = QgsRasterLayer(local_file_path, file_name)
     elif data_type == "threedi_schematisation" and schematisation_instance:
+        communication.clear_message_bar()
         threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
         if not threedi_models_and_simulations:
             communication.show_error("Please enable the 3Di Models and Simulations plugin to open this schematisation.")
@@ -64,62 +62,6 @@ def add_layer_to_qgis(
         communication.bar_info(f"Added {data_type} layer: {local_file_path}")
     else:
         communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
-
-
-def save_file_to_rana(communication: UICommunication, project: dict, file: dict):
-    if not file or not project["id"]:
-        return
-    file_name = os.path.basename(file["id"].rstrip("/"))
-    file_path = file["id"]
-    _, local_file_path = get_local_file_path(project["name"], file_path, file_name)
-
-    # Check if file exists locally before uploading
-    if not os.path.exists(local_file_path):
-        communication.clear_message_bar()
-        communication.bar_error(f"File not found: {local_file_path}")
-        return
-
-    # Check if file has been modified since it was last downloaded
-    continue_upload = handle_file_conflict(communication, project, file)
-    if not continue_upload:
-        return
-
-    # Save file to Rana
-    try:
-        # Step 1: POST request to initiate the upload
-        upload_response = start_file_upload(communication, TENANT, project["id"], {"path": file_path})
-        if not upload_response:
-            communication.show_error("Failed to initiate file upload.")
-            return
-        upload_url = upload_response["urls"][0]
-        # Step 2: Upload the file to the upload_url
-        with open(local_file_path, "rb") as file:
-            response = requests.put(upload_url, data=file)
-            response.raise_for_status()
-        # Step 3: Complete the upload
-        finish_file_upload(communication, TENANT, project["id"], upload_response)
-    except Exception as e:
-        communication.show_error(f"Failed to upload file to Rana: {str(e)}")
-
-
-def handle_file_conflict(communication: UICommunication, project: dict, file: dict):
-    file_path = file["id"]
-    last_modified_key = f"{project['name']}/{file_path}/last_modified"
-    local_last_modified = QSettings().value(last_modified_key)
-    server_file = get_tenant_project_file(communication, TENANT, project["id"], {"path": file_path})
-    if not server_file:
-        communication.show_error("Failed to get file from server. Check if file has been moved or deleted.")
-        return False  # Stop with the upload
-    last_modified = server_file["last_modified"]
-    if last_modified != local_last_modified:
-        warn_and_ask_msg = (
-            "The file has been modified on the server since it was last downloaded.\n"
-            "Do you want to overwrite the server copy with the local copy?"
-        )
-        do_overwrite = communication.ask(None, "File conflict", warn_and_ask_msg)
-        return do_overwrite
-    else:
-        return True  # Continue with the upload
 
 
 def display_bytes(bytes: int) -> str:
