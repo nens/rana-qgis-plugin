@@ -1,7 +1,13 @@
 History
 =======
 
-0.1.11 (unreleased)
+0.1.12 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.1.11 (2024-12-16)
 ------------------
 
 - Apply sorting to all projects, not only paginated ones: #17
