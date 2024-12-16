@@ -1,7 +1,13 @@
 History
 =======
 
-0.1.12 (unreleased)
+0.1.13 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.1.12 (2024-12-16)
 ------------------
 
 - Fix datetime ISO format bug with python 3.9.
