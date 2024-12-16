@@ -4,7 +4,7 @@ History
 0.1.12 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Fix datetime ISO format bug with python 3.9.
 
 
 0.1.11 (2024-12-16)
