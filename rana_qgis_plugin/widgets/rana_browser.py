@@ -2,7 +2,7 @@ import math
 import os
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
@@ -11,19 +11,15 @@ from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
+    add_layer_to_qgis,
     convert_to_local_time,
     convert_to_relative_time,
     convert_to_timestamp,
     display_bytes,
     elide_text,
-    open_file_in_qgis,
-    save_file_to_rana,
 )
-from rana_qgis_plugin.utils_api import (
-    get_tenant_project_files,
-    get_tenant_projects,
-    get_threedi_schematisation,
-)
+from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
+from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
@@ -38,6 +34,8 @@ class RanaBrowser(uicls, basecls):
         self.communication = communication
         self.settings = QSettings()
         self.paths = ["Projects"]
+        self.file_download_worker: QThread = None
+        self.file_upload_worker: QThread = None
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
@@ -76,16 +74,8 @@ class RanaBrowser(uicls, basecls):
         # File details widget
         self.selected_file = None
         self.schematisation = None
-        self.btn_open.clicked.connect(
-            lambda: open_file_in_qgis(
-                communication=self.communication,
-                project=self.project,
-                file=self.selected_file,
-                schematisation_instance=self.schematisation,
-                supported_data_types=self.SUPPORTED_DATA_TYPES,
-            )
-        )
-        self.btn_save.clicked.connect(lambda: save_file_to_rana(self.communication, self.project, self.selected_file))
+        self.btn_open.clicked.connect(self.open_file_in_qgis)
+        self.btn_save.clicked.connect(self.upload_file_to_rana)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -206,14 +196,21 @@ class RanaBrowser(uicls, basecls):
         self.populate_projects()
 
     def select_project(self, index: QModelIndex):
-        # Only allow selection of the first column (project name)
-        if index.column() != 0:
-            return
-        project_item = self.projects_model.itemFromIndex(index)
-        self.project = project_item.data(Qt.UserRole)
-        self.paths.append(self.project["name"])
-        self.fetch_and_populate_files()
-        self.show_files_widget()
+        self.rana_widget.setEnabled(False)
+        self.communication.progress_bar("Loading project...", clear_msg_bar=True)
+        try:
+            # Only allow selection of the first column (project name)
+            if index.column() != 0:
+                return
+            project_item = self.projects_model.itemFromIndex(index)
+            self.project = project_item.data(Qt.UserRole)
+            self.paths.append(self.project["name"])
+            self.paths = self.paths[:2]
+            self.fetch_and_populate_files()
+            self.show_files_widget()
+        finally:
+            self.communication.clear_message_bar()
+            self.rana_widget.setEnabled(True)
 
     def fetch_and_populate_files(self, path: str = None):
         self.files = get_tenant_project_files(
@@ -263,23 +260,29 @@ class RanaBrowser(uicls, basecls):
         self.files_tv.setColumnWidth(0, 300)
 
     def select_file_or_directory(self, index: QModelIndex):
-        # Only allow selection of the first column (filename)
-        if index.column() != 0:
-            return
-        file_item = self.files_model.itemFromIndex(index)
-        self.selected_file = file_item.data(Qt.UserRole)
-        file_path = self.selected_file["id"]
-        if self.selected_file["type"] == "directory":
-            directory_name = os.path.basename(file_path.rstrip("/"))
-            self.paths.append(directory_name)
-            self.fetch_and_populate_files(file_path)
-            self.rana_widget.setCurrentIndex(1)
-        else:
-            file_name = os.path.basename(file_path.rstrip("/"))
-            self.paths.append(file_name)
-            self.show_selected_file_details()
-            self.rana_widget.setCurrentIndex(2)
-        self.update_breadcrumbs()
+        self.rana_widget.setEnabled(False)
+        self.communication.progress_bar("Loading files...", clear_msg_bar=True)
+        try:
+            # Only allow selection of the first column (filename)
+            if index.column() != 0:
+                return
+            file_item = self.files_model.itemFromIndex(index)
+            self.selected_file = file_item.data(Qt.UserRole)
+            file_path = self.selected_file["id"]
+            if self.selected_file["type"] == "directory":
+                directory_name = os.path.basename(file_path.rstrip("/"))
+                self.paths.append(directory_name)
+                self.fetch_and_populate_files(file_path)
+                self.rana_widget.setCurrentIndex(1)
+            else:
+                file_name = os.path.basename(file_path.rstrip("/"))
+                self.paths.append(file_name)
+                self.show_selected_file_details()
+                self.rana_widget.setCurrentIndex(2)
+        finally:
+            self.update_breadcrumbs()
+            self.communication.clear_message_bar()
+            self.rana_widget.setEnabled(True)
 
     def show_selected_file_details(self):
         self.file_table_widget.clearContents()
@@ -327,3 +330,92 @@ class RanaBrowser(uicls, basecls):
         else:
             self.btn_open.hide()
             self.btn_save.hide()
+
+    def open_file_in_qgis(self):
+        file = self.selected_file
+        if file and file["descriptor"] and file["descriptor"]["data_type"]:
+            data_type = file["descriptor"]["data_type"]
+            if data_type not in self.SUPPORTED_DATA_TYPES:
+                self.communication.show_warn(f"Unsupported data type: {data_type}")
+                return
+            self.initialize_file_download_worker()
+            self.file_download_worker.start()
+        else:
+            self.communication.show_warn(f"Unsupported data type: {file['media_type']}")
+
+    def initialize_file_download_worker(self):
+        self.communication.bar_info("Start downloading file...")
+        self.rana_widget.setEnabled(False)
+        self.file_download_worker = FileDownloadWorker(
+            url=self.selected_file["url"],
+            path=self.selected_file["id"],
+            project_name=self.project["name"],
+            file_name=os.path.basename(self.selected_file["id"].rstrip("/")),
+        )
+        self.file_download_worker.finished.connect(self.on_file_download_finished)
+        self.file_download_worker.failed.connect(self.on_file_download_failed)
+        self.file_download_worker.progress.connect(self.on_file_download_progress)
+
+    def on_file_download_finished(self, local_file_path: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.bar_info(f"File downloaded to: {local_file_path}")
+        self.file_download_worker.quit()
+        self.file_download_worker.wait()
+        self.file_download_worker = None
+        add_layer_to_qgis(
+            self.communication,
+            local_file_path,
+            self.project["name"],
+            self.selected_file,
+            self.schematisation,
+        )
+
+    def on_file_download_failed(self, error: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.show_error(error)
+
+    def on_file_download_progress(self, progress: int):
+        self.communication.progress_bar("Downloading file...", 0, 100, progress, clear_msg_bar=True)
+
+    def upload_file_to_rana(self):
+        self.initialize_file_upload_worker()
+        self.file_upload_worker.start()
+
+    def initialize_file_upload_worker(self):
+        self.communication.bar_info("Start uploading file to Rana...")
+        self.rana_widget.setEnabled(False)
+        self.file_upload_worker = FileUploadWorker(
+            tenant=TENANT,
+            project=self.project,
+            file=self.selected_file,
+        )
+        self.file_upload_worker.finished.connect(self.on_file_upload_finished)
+        self.file_upload_worker.failed.connect(self.on_file_upload_failed)
+        self.file_upload_worker.progress.connect(self.on_file_upload_progress)
+        self.file_upload_worker.conflict.connect(self.handle_file_conflict)
+
+    def handle_file_conflict(self):
+        warn_and_ask_msg = (
+            "The file has been modified on the server since it was last downloaded.\n"
+            "Do you want to overwrite the server copy with the local copy?"
+        )
+        file_overwrite = self.communication.ask(None, "File conflict", warn_and_ask_msg)
+        self.file_upload_worker.file_overwrite = file_overwrite
+
+    def on_file_upload_finished(self):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.bar_info(f"File uploaded to Rana successfully!")
+        self.file_upload_worker.quit()
+        self.file_upload_worker.wait()
+        self.file_upload_worker = None
+
+    def on_file_upload_failed(self, error: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.show_error(error)
+
+    def on_file_upload_progress(self, progress: int):
+        self.communication.progress_bar("Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True)

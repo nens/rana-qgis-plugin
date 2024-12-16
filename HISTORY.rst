@@ -5,6 +5,7 @@ History
 ------------------
 
 - Apply sorting to all projects, not only paginated ones: #17
+- Show progress bar and use workers for long running tasks: #18
 
 
 0.1.10 (2024-12-09)

@@ -75,49 +75,42 @@ def get_tenant_project_files(communication: UICommunication, tenant: str, projec
         return []
 
 
-def get_tenant_project_file(communication: UICommunication, tenant: str, project_id: str, params: dict):
+def get_tenant_project_file(tenant: str, project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/stat"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
+    status = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
         return response
     else:
-        communication.show_error(f"Failed to get file: {error}")
         return None
 
 
-def start_file_upload(communication: UICommunication, tenant: str, project_id: str, params: dict):
-    communication.clear_message_bar()
-    communication.bar_info("Initiating file upload ...")
+def start_file_upload(tenant: str, project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.post(params=params)
+    status = network_manager.post(params=params)
 
     if status:
         response = network_manager.content
         return response
     else:
-        communication.show_error(f"Failed to initiate file upload: {error}")
         return None
 
 
-def finish_file_upload(communication: UICommunication, tenant: str, project_id: str, payload: dict):
+def finish_file_upload(tenant: str, project_id: str, payload: dict):
     authcfg_id = get_authcfg_id()
     url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.put(payload=payload)
+    status = network_manager.put(payload=payload)
     if status:
-        communication.clear_message_bar()
-        communication.bar_info("File uploaded to Rana successfully.")
-        communication.show_info("File uploaded to Rana successfully.")
-    else:
-        communication.show_error(f"Failed to upload file: {error}")
+        response = network_manager.content
+        return response
     return None
 
 
