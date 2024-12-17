@@ -82,7 +82,7 @@ def elide_text(font: QFont, text: str, max_width: int) -> str:
 
 def convert_to_timestamp(timestamp: str):
     if timestamp.endswith("Z"):
-        timestamp.replace("Z", "+00:00")
+        timestamp = timestamp.replace("Z", "+00:00")
     dt = datetime.fromisoformat(timestamp)
     return dt.timestamp()
 
