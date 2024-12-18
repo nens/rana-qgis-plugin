@@ -107,10 +107,16 @@ class RanaBrowser(uicls, basecls):
             self.rana_widget.setCurrentIndex(0)
             self.update_breadcrumbs()
         else:
-            only_directory_paths = self.paths[2:]  # Skip the first two paths: Projects and project_name
-            path = "/".join(only_directory_paths) + ("/" if only_directory_paths else "")
-            self.fetch_and_populate_files(path)
-            self.show_files_widget()
+            self.rana_widget.setEnabled(False)
+            self.communication.progress_bar("Loading files...", clear_msg_bar=True)
+            try:
+                only_directory_paths = self.paths[2:]  # Skip the first two paths: Projects and project_name
+                path = "/".join(only_directory_paths) + ("/" if only_directory_paths else "")
+                self.fetch_and_populate_files(path)
+                self.show_files_widget()
+            finally:
+                self.communication.clear_message_bar()
+                self.rana_widget.setEnabled(True)
 
     def update_pagination(self, projects: list):
         total_items = len(projects)
