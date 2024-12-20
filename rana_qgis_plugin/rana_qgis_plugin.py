@@ -3,7 +3,7 @@ import webbrowser
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
-from .auth import get_authcfg_id, remove_authcfg, setup_oauth2, set_tenant_id
+from .auth import get_authcfg_id, remove_authcfg, set_tenant_id, setup_oauth2
 from .auth_3di import setup_3di_auth
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
@@ -54,11 +54,11 @@ class RanaQgisPlugin:
     def set_tenant(self):
         user = get_user_info(self.communication)
         if not user:
-            raise Exception("User information could not be retrieved.")
+            return
         user_id = user["sub"]
         tenants = get_user_tenants(self.communication, user_id)
         if not tenants:
-            raise Exception(f"No tenant found for user with id: {user_id}")
+            return
         tenant = tenants[0]
         set_tenant_id(tenant["id"])
         self.communication.clear_message_bar()

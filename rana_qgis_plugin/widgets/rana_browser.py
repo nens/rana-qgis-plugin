@@ -304,9 +304,7 @@ class RanaBrowser(uicls, basecls):
             ("Last modified", last_modified),
         ]
         if data_type == "threedi_schematisation":
-            self.schematisation = get_threedi_schematisation(
-                self.communication, self.selected_file["descriptor_id"]
-            )
+            self.schematisation = get_threedi_schematisation(self.communication, self.selected_file["descriptor_id"])
             if self.schematisation:
                 schematisation = self.schematisation["schematisation"]
                 revision = self.schematisation["latest_revision"]
