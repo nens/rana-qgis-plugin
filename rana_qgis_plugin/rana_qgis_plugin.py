@@ -3,12 +3,12 @@ import webbrowser
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
-from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
+from .auth import get_authcfg_id, remove_authcfg, setup_oauth2, set_tenant_id
 from .auth_3di import setup_3di_auth
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
 from .icons import login_icon, logout_icon, rana_icon
-from .utils_api import get_user_info
+from .utils_api import get_user_info, get_user_tenants
 from .widgets.about_rana_dialog import AboutRanaDialog
 from .widgets.rana_browser import RanaBrowser
 
@@ -49,6 +49,18 @@ class RanaQgisPlugin:
         self.add_rana_menu()
         if self.dock_widget:
             self.dock_widget.close()
+
+    def set_tenant(self):
+        user = get_user_info(self.communication)
+        if not user:
+            return
+        user_id = user["sub"]
+        tenants = get_user_tenants(self.communication, user_id)
+        if tenants:
+            tenant = tenants[0]
+            set_tenant_id(tenant)
+            self.communication.bar_info(f"Set tenant to {tenant}")
+            return tenant
 
     def open_about_rana_dialog(self):
         dialog = AboutRanaDialog(self.iface.mainWindow())

@@ -10,7 +10,19 @@ from .constant import (
     COGNITO_TOKEN_ENDPOINT,
     RANA_AUTHCFG_ENTRY,
     RANA_SETTINGS_ENTRY,
+    RANA_TENANT_ENTRY,
 )
+
+
+def set_tenant_id(tenant: str):
+    settings = QSettings()
+    settings.setValue(RANA_TENANT_ENTRY, tenant)
+
+
+def get_tenant_id():
+    settings = QSettings()
+    tenant = settings.value(RANA_TENANT_ENTRY)
+    return tenant
 
 
 def get_authcfg_id():

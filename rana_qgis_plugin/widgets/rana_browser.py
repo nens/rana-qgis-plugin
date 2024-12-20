@@ -7,7 +7,6 @@ from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
@@ -134,7 +133,7 @@ class RanaBrowser(uicls, basecls):
         self.populate_projects()
 
     def fetch_projects(self):
-        self.projects = get_tenant_projects(self.communication, TENANT)
+        self.projects = get_tenant_projects(self.communication)
 
     def refresh_projects(self):
         self.current_page = 1
@@ -221,7 +220,6 @@ class RanaBrowser(uicls, basecls):
     def fetch_and_populate_files(self, path: str = None):
         self.files = get_tenant_project_files(
             self.communication,
-            TENANT,
             self.project["id"],
             {"path": path} if path else None,
         )
@@ -307,7 +305,7 @@ class RanaBrowser(uicls, basecls):
         ]
         if data_type == "threedi_schematisation":
             self.schematisation = get_threedi_schematisation(
-                self.communication, TENANT, self.selected_file["descriptor_id"]
+                self.communication, self.selected_file["descriptor_id"]
             )
             if self.schematisation:
                 schematisation = self.schematisation["schematisation"]
@@ -393,7 +391,6 @@ class RanaBrowser(uicls, basecls):
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
         self.file_upload_worker = FileUploadWorker(
-            tenant=TENANT,
             project=self.project,
             file=self.selected_file,
         )
