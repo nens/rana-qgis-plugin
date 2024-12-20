@@ -37,6 +37,7 @@ class RanaQgisPlugin:
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
         setup_3di_auth(self.communication)
+        self.set_tenant()
         self.add_rana_menu()
         if self.dock_widget:
             self.dock_widget.show()
@@ -53,14 +54,15 @@ class RanaQgisPlugin:
     def set_tenant(self):
         user = get_user_info(self.communication)
         if not user:
-            return
+            raise Exception("User information could not be retrieved.")
         user_id = user["sub"]
         tenants = get_user_tenants(self.communication, user_id)
-        if tenants:
-            tenant = tenants[0]
-            set_tenant_id(tenant)
-            self.communication.bar_info(f"Set tenant to {tenant}")
-            return tenant
+        if not tenants:
+            raise Exception(f"No tenant found for user with id: {user_id}")
+        tenant = tenants[0]
+        set_tenant_id(tenant["id"])
+        self.communication.clear_message_bar()
+        self.communication.bar_info(f"Tenant set to: {tenant['name']}")
 
     def open_about_rana_dialog(self):
         dialog = AboutRanaDialog(self.iface.mainWindow())
