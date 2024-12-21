@@ -6,6 +6,7 @@ History
 
 - Hide vertical header in the File table widget.
 - Show progress bar when navigating using the breadcrumbs.
+- Retrieve and set tenant id in the plugin: #19
 
 
 0.1.13 (2024-12-17)
