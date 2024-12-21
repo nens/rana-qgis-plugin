@@ -3,7 +3,7 @@ import webbrowser
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
-from .auth import get_authcfg_id, remove_authcfg, set_tenant_id, setup_oauth2
+from .auth import get_authcfg_id, get_tenant_id, remove_authcfg, set_tenant_id, setup_oauth2
 from .auth_3di import setup_3di_auth
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
@@ -37,7 +37,6 @@ class RanaQgisPlugin:
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
         setup_3di_auth(self.communication)
-        self.set_tenant()
         self.add_rana_menu()
         if self.dock_widget:
             self.dock_widget.show()
@@ -52,6 +51,11 @@ class RanaQgisPlugin:
             self.dock_widget.close()
 
     def set_tenant(self):
+        tenant_id = get_tenant_id()
+        if tenant_id:
+            self.communication.clear_message_bar()
+            self.communication.bar_info(f"Current tenant is: {tenant_id}")
+            return
         user = get_user_info(self.communication)
         if not user:
             return
@@ -62,7 +66,7 @@ class RanaQgisPlugin:
         tenant = tenants[0]
         set_tenant_id(tenant["id"])
         self.communication.clear_message_bar()
-        self.communication.bar_info(f"Tenant set to: {tenant['name']}")
+        self.communication.bar_info(f"Tenant set to: {tenant['id']}")
 
     def open_about_rana_dialog(self):
         dialog = AboutRanaDialog(self.iface.mainWindow())
@@ -114,6 +118,7 @@ class RanaQgisPlugin:
         authcfg_id = get_authcfg_id()
         if not authcfg_id:
             self.login()
+        self.set_tenant()
         if not self.dock_widget:
             self.dock_widget = QDockWidget(self.menu, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
