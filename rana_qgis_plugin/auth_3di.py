@@ -54,7 +54,6 @@ def setup_3di_auth(communication: UICommunication):
             return
     user = get_user_info(communication)
     if not user:
-        communication.show_error("Failed to get user information from Rana.")
         return
     personal_api_key = get_threedi_personal_api_key(communication, user["sub"])
     if personal_api_key:
