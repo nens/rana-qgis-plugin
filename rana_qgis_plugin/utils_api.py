@@ -1,9 +1,10 @@
 from typing import Optional, TypedDict
 
-from .auth import get_authcfg_id, get_tenant_id
+from .auth import get_authcfg_id
 from .communication import UICommunication
 from .constant import API_URL, COGNITO_USER_INFO_ENDPOINT
 from .network_manager import NetworkManager
+from .utils import get_tenant_id
 
 
 class UserInfo(TypedDict):

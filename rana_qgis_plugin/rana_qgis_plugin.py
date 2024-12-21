@@ -3,11 +3,12 @@ import webbrowser
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
 
-from .auth import get_authcfg_id, get_tenant_id, remove_authcfg, set_tenant_id, setup_oauth2
+from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .auth_3di import setup_3di_auth
 from .communication import UICommunication
 from .constant import LOGOUT_URL, PLUGIN_NAME
 from .icons import login_icon, logout_icon, rana_icon
+from .utils import get_tenant_id, set_tenant_id
 from .utils_api import get_user_info, get_user_tenants
 from .widgets.about_rana_dialog import AboutRanaDialog
 from .widgets.rana_browser import RanaBrowser

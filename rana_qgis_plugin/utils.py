@@ -9,10 +9,22 @@ from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QStandardItem
 
 from .communication import UICommunication
+from .constant import RANA_TENANT_ENTRY
 from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
-def get_local_file_path(project_name: str, file_path: str, file_name: str):
+def set_tenant_id(tenant: str):
+    settings = QSettings()
+    settings.setValue(RANA_TENANT_ENTRY, tenant)
+
+
+def get_tenant_id() -> str:
+    settings = QSettings()
+    tenant = settings.value(RANA_TENANT_ENTRY)
+    return tenant
+
+
+def get_local_file_path(project_name: str, file_path: str, file_name: str) -> tuple[str, str]:
     base_dir = os.path.join(os.path.expanduser("~"), "Rana")
     local_dir_structure = os.path.join(base_dir, project_name, os.path.dirname(file_path))
     local_file_path = os.path.join(local_dir_structure, file_name)
@@ -80,19 +92,19 @@ def elide_text(font: QFont, text: str, max_width: int) -> str:
     return font_metrics.elidedText(text, Qt.ElideRight, max_width)
 
 
-def convert_to_timestamp(timestamp: str):
+def convert_to_timestamp(timestamp: str) -> float:
     if timestamp.endswith("Z"):
         timestamp = timestamp.replace("Z", "+00:00")
     dt = datetime.fromisoformat(timestamp)
     return dt.timestamp()
 
 
-def convert_to_local_time(timestamp: str):
+def convert_to_local_time(timestamp: str) -> str:
     time = parser.isoparse(timestamp)
     return time.astimezone().strftime("%d-%m-%Y %H:%M")
 
 
-def convert_to_relative_time(timestamp: str):
+def convert_to_relative_time(timestamp: str) -> str:
     """Convert a timestamp into a relative time string."""
     now = datetime.now(timezone.utc)
     past = parser.isoparse(timestamp)
