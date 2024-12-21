@@ -8,7 +8,7 @@ from .utils import get_tenant_id
 
 
 class UserInfo(TypedDict):
-    sub: str
+    sub: str  # user_id
     given_name: str
     family_name: str
     email: str

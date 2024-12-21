@@ -60,8 +60,7 @@ class RanaQgisPlugin:
         user = get_user_info(self.communication)
         if not user:
             return
-        user_id = user["sub"]
-        tenants = get_user_tenants(self.communication, user_id)
+        tenants = get_user_tenants(self.communication, user["sub"])
         if not tenants:
             return
         tenant = tenants[0]
