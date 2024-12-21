@@ -293,6 +293,7 @@ class RanaBrowser(uicls, basecls):
         filename = os.path.basename(self.selected_file["id"].rstrip("/"))
         username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
         data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
+        meta = self.selected_file["descriptor"]["meta"] if self.selected_file["descriptor"] else None
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
         size = display_bytes(self.selected_file["size"]) if data_type != "threedi_schematisation" else "N/A"
         file_details = [
@@ -303,6 +304,30 @@ class RanaBrowser(uicls, basecls):
             ("Added by", username),
             ("Last modified", last_modified),
         ]
+        if data_type == "scenario" and meta:
+            simulation = meta["simulation"]
+            schematisation = meta["schematisation"]
+            interval = simulation["interval"]
+            if interval:
+                start = convert_to_local_time(interval[0])
+                end = convert_to_local_time(interval[1])
+            else:
+                start = "N/A"
+                end = "N/A"
+            scenario_details = [
+                ("Simulation name", simulation["name"]),
+                ("Simulation ID", simulation["id"]),
+                ("Schematisation name", schematisation["name"]),
+                ("Schematisation ID", schematisation["id"]),
+                ("Schematisation version", schematisation["version"]),
+                ("Revision ID", schematisation["revision_id"]),
+                ("Model ID", schematisation["model_id"]),
+                ("Model software", simulation["software"]["id"]),
+                ("Software version", simulation["software"]["version"]),
+                ("Start", start),
+                ("End", end),
+            ]
+            file_details.extend(scenario_details)
         if data_type == "threedi_schematisation":
             self.schematisation = get_threedi_schematisation(self.communication, self.selected_file["descriptor_id"])
             if self.schematisation:

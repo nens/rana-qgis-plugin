@@ -9,3 +9,4 @@ TODO
    the selected tenant in QSettings
    (Note that this option is only available if
    there is more than one tenant in the list)
+6. Show scenario details - DONE
