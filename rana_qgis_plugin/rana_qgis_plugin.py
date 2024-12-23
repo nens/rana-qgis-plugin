@@ -1,7 +1,7 @@
 import webbrowser
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu, QSizePolicy
+from qgis.PyQt.QtWidgets import QAction, QButtonGroup, QDialog, QDockWidget, QMenu, QRadioButton, QSizePolicy
 
 from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .auth_3di import setup_3di_auth
@@ -12,11 +12,13 @@ from .utils import get_tenant_id, set_tenant_id
 from .utils_api import get_user_info, get_user_tenants
 from .widgets.about_rana_dialog import AboutRanaDialog
 from .widgets.rana_browser import RanaBrowser
+from .widgets.tenant_selection_dialog import TenantSelectionDialog
 
 
 class RanaQgisPlugin:
     def __init__(self, iface):
         self.iface = iface
+        self.tenants = []
         self.menu = PLUGIN_NAME
         self.dock_widget = None
         self.rana_browser = None
@@ -57,13 +59,9 @@ class RanaQgisPlugin:
             self.communication.clear_message_bar()
             self.communication.bar_info(f"Current tenant is: {tenant_id}")
             return
-        user = get_user_info(self.communication)
-        if not user:
+        if not self.tenants:
             return
-        tenants = get_user_tenants(self.communication, user["sub"])
-        if not tenants:
-            return
-        tenant = tenants[0]
+        tenant = self.tenants[0]
         set_tenant_id(tenant["id"])
         self.communication.clear_message_bar()
         self.communication.bar_info(f"Tenant set to: {tenant['id']}")
@@ -71,6 +69,28 @@ class RanaQgisPlugin:
     def open_about_rana_dialog(self):
         dialog = AboutRanaDialog(self.iface.mainWindow())
         dialog.exec_()
+
+    def open_tenant_selection_dialog(self):
+        current_tenant_id = get_tenant_id()
+        dialog = TenantSelectionDialog(self.iface.mainWindow())
+        button_group = QButtonGroup(dialog)
+        for tenant in self.tenants:
+            tenant_name, tenant_id = tenant["name"], tenant["id"]
+            tenant_name = tenant_name.replace("&", "&&")  # Escape '&' character
+            radio_button = QRadioButton(f"{tenant_name} ({tenant_id})", dialog)
+            radio_button.setObjectName(tenant_id)
+            button_group.addButton(radio_button)
+            dialog.tenants_widget.layout().addWidget(radio_button)
+            if tenant_id == current_tenant_id:
+                radio_button.setChecked(True)
+        dialog.adjustSize()
+        if dialog.exec_() == QDialog.Accepted:
+            selected_button = button_group.checkedButton()
+            tenant_id = selected_button.objectName()
+            if tenant_id != current_tenant_id:
+                set_tenant_id(tenant_id)
+                self.communication.clear_message_bar()
+                self.communication.bar_info(f"Tenant set to: {tenant_id}")
 
     def find_rana_menu(self):
         for i, action in enumerate(self.iface.mainWindow().menuBar().actions()):
@@ -90,10 +110,16 @@ class RanaQgisPlugin:
         if authcfg_id:
             user = get_user_info(self.communication)
             if user:
+                user_id = user["sub"]
                 user_name = f"{user['given_name']} {user['family_name']}"
                 user_action = QAction(user_name, self.iface.mainWindow())
                 user_action.setEnabled(False)
                 menu.addAction(user_action)
+                self.tenants = get_user_tenants(self.communication, user_id)
+                if len(self.tenants) > 0:
+                    switch_tenant_action = QAction("Switch Tenant", self.iface.mainWindow())
+                    switch_tenant_action.triggered.connect(self.open_tenant_selection_dialog)
+                    menu.addAction(switch_tenant_action)
             logout_action = QAction(logout_icon, "Logout", self.iface.mainWindow())
             logout_action.triggered.connect(self.logout)
             menu.addAction(logout_action)
