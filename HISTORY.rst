@@ -6,6 +6,8 @@ History
 
 - Hide vertical header in the File table widget.
 - Show progress bar when navigating using the breadcrumbs.
+- Set and select a tenant: #19
+- Show scenario details: #19
 
 
 0.1.13 (2024-12-17)

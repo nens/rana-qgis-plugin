@@ -64,12 +64,10 @@ class FileUploadWorker(QThread):
 
     def __init__(
         self,
-        tenant: str,
         project: dict,
         file: dict,
     ):
         super().__init__()
-        self.tenant = tenant
         self.project = project
         self.file = file
         self.file_overwrite = None  # Set to True to overwrite file, False to abort upload
@@ -79,7 +77,7 @@ class FileUploadWorker(QThread):
     def handle_file_conflict(self):
         file_path = self.file["id"]
         local_last_modified = QSettings().value(self.last_modified_key)
-        server_file = get_tenant_project_file(self.tenant, self.project["id"], {"path": file_path})
+        server_file = get_tenant_project_file(self.project["id"], {"path": file_path})
         if not server_file:
             self.failed.emit("Failed to get file from server. Check if file has been moved or deleted.")
             return False
@@ -116,7 +114,7 @@ class FileUploadWorker(QThread):
         try:
             self.progress.emit(0)
             # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(self.tenant, self.project["id"], {"path": file_path})
+            upload_response = start_file_upload(self.project["id"], {"path": file_path})
             if not upload_response:
                 self.failed.emit("Failed to initiate file upload.")
                 return
@@ -129,7 +127,6 @@ class FileUploadWorker(QThread):
             # Step 3: Complete the upload
             self.progress.emit(80)
             response = finish_file_upload(
-                self.tenant,
                 self.project["id"],
                 upload_response,
             )

@@ -7,7 +7,6 @@ from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.constant import TENANT
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
@@ -134,7 +133,7 @@ class RanaBrowser(uicls, basecls):
         self.populate_projects()
 
     def fetch_projects(self):
-        self.projects = get_tenant_projects(self.communication, TENANT)
+        self.projects = get_tenant_projects(self.communication)
 
     def refresh_projects(self):
         self.current_page = 1
@@ -144,6 +143,9 @@ class RanaBrowser(uicls, basecls):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
+        self.paths = ["Projects"]
+        self.update_breadcrumbs()
+        self.rana_widget.setCurrentIndex(0)
 
     def populate_projects(self, clear: bool = False):
         if clear:
@@ -221,7 +223,6 @@ class RanaBrowser(uicls, basecls):
     def fetch_and_populate_files(self, path: str = None):
         self.files = get_tenant_project_files(
             self.communication,
-            TENANT,
             self.project["id"],
             {"path": path} if path else None,
         )
@@ -295,6 +296,7 @@ class RanaBrowser(uicls, basecls):
         filename = os.path.basename(self.selected_file["id"].rstrip("/"))
         username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
         data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
+        meta = self.selected_file["descriptor"]["meta"] if self.selected_file["descriptor"] else None
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
         size = display_bytes(self.selected_file["size"]) if data_type != "threedi_schematisation" else "N/A"
         file_details = [
@@ -305,10 +307,32 @@ class RanaBrowser(uicls, basecls):
             ("Added by", username),
             ("Last modified", last_modified),
         ]
+        if data_type == "scenario" and meta:
+            simulation = meta["simulation"]
+            schematisation = meta["schematisation"]
+            interval = simulation["interval"]
+            if interval:
+                start = convert_to_local_time(interval[0])
+                end = convert_to_local_time(interval[1])
+            else:
+                start = "N/A"
+                end = "N/A"
+            scenario_details = [
+                ("Simulation name", simulation["name"]),
+                ("Simulation ID", simulation["id"]),
+                ("Schematisation name", schematisation["name"]),
+                ("Schematisation ID", schematisation["id"]),
+                ("Schematisation version", schematisation["version"]),
+                ("Revision ID", schematisation["revision_id"]),
+                ("Model ID", schematisation["model_id"]),
+                ("Model software", simulation["software"]["id"]),
+                ("Software version", simulation["software"]["version"]),
+                ("Start", start),
+                ("End", end),
+            ]
+            file_details.extend(scenario_details)
         if data_type == "threedi_schematisation":
-            self.schematisation = get_threedi_schematisation(
-                self.communication, TENANT, self.selected_file["descriptor_id"]
-            )
+            self.schematisation = get_threedi_schematisation(self.communication, self.selected_file["descriptor_id"])
             if self.schematisation:
                 schematisation = self.schematisation["schematisation"]
                 revision = self.schematisation["latest_revision"]
@@ -393,7 +417,6 @@ class RanaBrowser(uicls, basecls):
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
         self.file_upload_worker = FileUploadWorker(
-            tenant=TENANT,
             project=self.project,
             file=self.selected_file,
         )
