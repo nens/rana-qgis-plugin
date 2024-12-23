@@ -143,6 +143,9 @@ class RanaBrowser(uicls, basecls):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
+        self.paths = ["Projects"]
+        self.update_breadcrumbs()
+        self.rana_widget.setCurrentIndex(0)
 
     def populate_projects(self, clear: bool = False):
         if clear:

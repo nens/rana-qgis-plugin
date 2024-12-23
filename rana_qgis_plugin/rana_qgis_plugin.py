@@ -86,11 +86,13 @@ class RanaQgisPlugin:
         dialog.adjustSize()
         if dialog.exec_() == QDialog.Accepted:
             selected_button = button_group.checkedButton()
-            tenant_id = selected_button.objectName()
-            if tenant_id != current_tenant_id:
-                set_tenant_id(tenant_id)
+            selected_tenant_id = selected_button.objectName()
+            if selected_tenant_id != current_tenant_id:
+                set_tenant_id(selected_tenant_id)
                 self.communication.clear_message_bar()
-                self.communication.bar_info(f"Tenant set to: {tenant_id}")
+                self.communication.bar_info(f"Tenant set to: {selected_tenant_id}")
+                if self.rana_browser:
+                    self.rana_browser.refresh_projects()
 
     def find_rana_menu(self):
         for i, action in enumerate(self.iface.mainWindow().menuBar().actions()):
@@ -116,7 +118,7 @@ class RanaQgisPlugin:
                 user_action.setEnabled(False)
                 menu.addAction(user_action)
                 self.tenants = get_user_tenants(self.communication, user_id)
-                if len(self.tenants) > 0:
+                if len(self.tenants) > 1:
                     switch_tenant_action = QAction("Switch Tenant", self.iface.mainWindow())
                     switch_tenant_action.triggered.connect(self.open_tenant_selection_dialog)
                     menu.addAction(switch_tenant_action)
