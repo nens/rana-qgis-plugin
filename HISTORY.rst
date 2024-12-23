@@ -1,7 +1,13 @@
 History
 =======
 
-0.1.14 (unreleased)
+0.1.15 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.1.14 (2024-12-23)
 ------------------
 
 - Hide vertical header in the File table widget.
