@@ -1,10 +1,16 @@
 History
 =======
 
-0.1.15 (unreleased)
+1.0.1 (unreleased)
 ------------------
 
 - Nothing changed yet.
+
+
+1.0.0 (2025-01-14)
+------------------
+
+- Change cognito client ID and base URL to production: #20
 
 
 0.1.14 (2024-12-23)
