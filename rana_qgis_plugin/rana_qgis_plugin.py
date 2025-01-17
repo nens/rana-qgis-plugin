@@ -39,8 +39,8 @@ class RanaQgisPlugin:
         self.communication.clear_message_bar()
         self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
-        setup_3di_auth(self.communication)
         self.add_rana_menu()
+        setup_3di_auth(self.communication)
         if self.dock_widget:
             self.dock_widget.show()
 
@@ -56,8 +56,6 @@ class RanaQgisPlugin:
     def set_tenant(self):
         tenant_id = get_tenant_id()
         if tenant_id:
-            self.communication.clear_message_bar()
-            self.communication.bar_info(f"Current tenant is: {tenant_id}")
             return
         if not self.tenants:
             return
@@ -118,6 +116,7 @@ class RanaQgisPlugin:
                 user_action.setEnabled(False)
                 menu.addAction(user_action)
                 self.tenants = get_user_tenants(self.communication, user_id)
+                self.set_tenant()
                 if len(self.tenants) > 1:
                     switch_tenant_action = QAction("Switch Tenant", self.iface.mainWindow())
                     switch_tenant_action.triggered.connect(self.open_tenant_selection_dialog)
