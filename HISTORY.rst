@@ -1,10 +1,16 @@
 History
 =======
 
-1.0.1 (unreleased)
+1.2.0 (unreleased)
 ------------------
 
 - Nothing changed yet.
+
+
+1.1.0 (2025-01-17)
+------------------
+
+- Fix bug getting 3Di personal API key failed.
 
 
 1.0.0 (2025-01-14)
