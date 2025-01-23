@@ -20,18 +20,18 @@ class FileDownloadWorker(QThread):
         self,
         url: str,
         path: str,
-        project_name: str,
+        project_slug: str,
         file_name: str,
     ):
         super().__init__()
         self.url = url
         self.path = path
-        self.project_name = project_name
+        self.project_slug = project_slug
         self.file_name = file_name
 
     @pyqtSlot()
     def run(self):
-        local_dir_structure, local_file_path = get_local_file_path(self.project_name, self.path, self.file_name)
+        local_dir_structure, local_file_path = get_local_file_path(self.project_slug, self.path, self.file_name)
         os.makedirs(local_dir_structure, exist_ok=True)
         try:
             with requests.get(self.url, stream=True) as response:
@@ -95,10 +95,10 @@ class FileUploadWorker(QThread):
     def run(self):
         if not self.file or not self.project["id"]:
             return
-        project_name = self.project["name"]
+        project_slug = self.project["slug"]
         file_name = os.path.basename(self.file["id"].rstrip("/"))
         file_path = self.file["id"]
-        _, local_file_path = get_local_file_path(project_name, file_path, file_name)
+        _, local_file_path = get_local_file_path(project_slug, file_path, file_name)
 
         # Check if file exists locally before uploading
         if not os.path.exists(local_file_path):

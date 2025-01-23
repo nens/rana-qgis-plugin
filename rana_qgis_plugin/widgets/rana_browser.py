@@ -379,7 +379,7 @@ class RanaBrowser(uicls, basecls):
         self.file_download_worker = FileDownloadWorker(
             url=self.selected_file["url"],
             path=self.selected_file["id"],
-            project_name=self.project["name"],
+            project_slug=self.project["slug"],
             file_name=os.path.basename(self.selected_file["id"].rstrip("/")),
         )
         self.file_download_worker.finished.connect(self.on_file_download_finished)
