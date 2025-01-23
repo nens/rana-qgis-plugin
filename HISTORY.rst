@@ -1,7 +1,13 @@
 History
 =======
 
-1.1.1 (unreleased)
+1.2.0 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+1.1.1 (2025-01-23)
 ------------------
 
 - Use project slug instead of project name for local directory name.
