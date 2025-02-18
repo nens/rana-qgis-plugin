@@ -4,7 +4,7 @@ History
 1.2.0 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Fix vector file with multiple layers cannot be opened in QGIS: #21
 
 
 1.1.1 (2025-01-23)
