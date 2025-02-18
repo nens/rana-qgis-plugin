@@ -55,6 +55,7 @@ def add_layer_to_qgis(
         else:
             communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
     elif data_type == "vector":
+        # Load the vector layer and its sub layers
         base_layer = QgsVectorLayer(local_file_path, "temp", "ogr")
         if not base_layer.isValid():
             communication.show_error(f"Vector layer is not valid: {local_file_path}")
