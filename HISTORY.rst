@@ -4,7 +4,7 @@ History
 1.1.3 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Fix QGIS crash due to https://github.com/nens/rana/issues/1390: #22
 
 
 1.1.2 (2025-02-18)
