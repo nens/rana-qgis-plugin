@@ -2,7 +2,7 @@ import json
 import urllib.parse
 
 from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
-from qgis.PyQt.QtCore import QEventLoop, QUrl
+from qgis.PyQt.QtCore import QCoreApplication, QUrl
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 
@@ -12,6 +12,8 @@ class NetworkManager(object):
     def __init__(self, url: str, auth_cfg: str = None):
         self._network_manager = QgsNetworkAccessManager.instance()
         self._auth_manager = QgsApplication.authManager()
+        self._network_finished = False
+        self._network_timeout = False
         self._url = url
         self._reply = None
         self._auth_cfg = auth_cfg
@@ -26,6 +28,14 @@ class NetworkManager(object):
     @property
     def content(self):
         return self._content
+
+    @property
+    def network_finished(self):
+        return self._network_finished
+
+    @property
+    def network_timeout(self):
+        return self._network_timeout
 
     def fetch(self, params: dict = None):
         self.prepare_request(params)
@@ -47,6 +57,8 @@ class NetworkManager(object):
         self._content = None
         self._reply = None
         self._request = None
+        self._network_finished = False
+        self._network_timeout = False
 
         encoded_params = urllib.parse.urlencode(params) if params else None
         url = f"{self._url}?{encoded_params}" if encoded_params else self._url
@@ -57,14 +69,11 @@ class NetworkManager(object):
             self._auth_manager.updateNetworkRequest(self._request, self._auth_cfg)
 
     def process_request(self):
-        loop = QEventLoop()
+        self._reply.finished.connect(self.fetch_finished)
+        self._network_manager.requestTimedOut.connect(self.request_timeout)
 
-        # Connect the finished and timeout signals to stop the event loop
-        self._reply.finished.connect(loop.quit)
-        self._network_manager.requestTimedOut.connect(loop.quit)
-
-        # Start the event loop and wait for the request to finish
-        loop.exec_()
+        while not self._reply.isFinished():
+            QCoreApplication.processEvents()
 
         description = None
         if self._reply.error() != QNetworkReply.NoError:
@@ -78,3 +87,11 @@ class NetworkManager(object):
         self._reply.deleteLater()
 
         return status, description
+
+    def fetch_finished(self):
+        """Called when fetching metadata has finished."""
+        self._network_finished = True
+
+    def request_timeout(self):
+        """Called when a request timeout signal is emitted."""
+        self._network_timeout = True

@@ -33,13 +33,11 @@ class RanaQgisPlugin:
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
         self.iface.addPluginToMenu(self.menu, self.action)
         self.toolbar.addAction(self.action)
-        self.add_rana_menu()
 
     def login(self):
-        self.communication.clear_message_bar()
-        self.communication.bar_info("Login initiated! Please check your browser.")
         setup_oauth2(self.communication)
         self.add_rana_menu()
+        self.set_tenant()
         setup_3di_auth(self.communication)
         if self.dock_widget:
             self.dock_widget.show()
@@ -116,7 +114,6 @@ class RanaQgisPlugin:
                 user_action.setEnabled(False)
                 menu.addAction(user_action)
                 self.tenants = get_user_tenants(self.communication, user_id)
-                self.set_tenant()
                 if len(self.tenants) > 1:
                     switch_tenant_action = QAction("Switch Tenant", self.iface.mainWindow())
                     switch_tenant_action.triggered.connect(self.open_tenant_selection_dialog)
@@ -142,10 +139,7 @@ class RanaQgisPlugin:
 
     def run(self):
         """Run method that loads and starts the plugin"""
-        authcfg_id = get_authcfg_id()
-        if not authcfg_id:
-            self.login()
-        self.set_tenant()
+        self.login()
         if not self.dock_widget:
             self.dock_widget = QDockWidget(self.menu, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
