@@ -1,7 +1,13 @@
 History
 =======
 
-1.1.4 (unreleased)
+1.1.5 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+1.1.4 (2025-02-28)
 ------------------
 
 - Fix QGIS crash caused by add_rana_menu method: #23
