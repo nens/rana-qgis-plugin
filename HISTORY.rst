@@ -4,7 +4,7 @@ History
 1.1.4 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Revert PR #22 to fix QGIS crash.
 
 
 1.1.3 (2025-02-25)
