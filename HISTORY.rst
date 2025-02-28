@@ -4,6 +4,7 @@ History
 1.1.4 (unreleased)
 ------------------
 
+- Fix QGIS crash caused by add_rana_menu method: #23
 - Revert PR #22 to fix QGIS crash.
 
 
