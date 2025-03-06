@@ -88,7 +88,10 @@ class RanaBrowser(uicls, basecls):
             return
         file_name = os.path.basename(self.selected_file["id"].rstrip("/"))
         all_layers = QgsProject.instance().mapLayers()
-        layers = [layer for layer in all_layers.values() if layer.name() == file_name]
+        layers = [layer for layer in all_layers.values() if file_name in layer.source()]
+        if not layers:
+            return
+        layers = layers[:4] # Limit to 4 layers due to memory issue
         qgis_layers = {layer.name(): layer for layer in layers}
         group = {"layers": list(qgis_layers.keys())}
 
@@ -100,7 +103,7 @@ class RanaBrowser(uicls, basecls):
             self.communication.show_warn(warning)
 
         # Save style.json
-        local_dir = get_local_file_path(self.project["slug"], self.selected_file["id"], file_name)
+        local_dir, _ = get_local_file_path(self.project["slug"], self.selected_file["id"], file_name)
         style_json_path = os.path.join(local_dir, f"style.json")
         with open(style_json_path, "w") as file:
             json.dump(mb_style, file, indent=2)
@@ -112,6 +115,7 @@ class RanaBrowser(uicls, basecls):
             # Save sprite metada
             Path(os.path.join(local_dir, "sprite.json")).write_text(sprite_sheet["json"])
             Path(os.path.join(local_dir, "sprite@2x.json")).write_text(sprite_sheet["json2x"])
+        self.communication.bar_info(f"Style files generated and saved to: {local_dir}")
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
