@@ -1,9 +1,6 @@
-import json
 import math
 import os
-from pathlib import Path
 
-from qgis.core import QgsProject
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
@@ -11,7 +8,6 @@ from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
-from rana_qgis_plugin.libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from rana_qgis_plugin.utils import (
     NumericItem,
     add_layer_to_qgis,
@@ -20,7 +16,6 @@ from rana_qgis_plugin.utils import (
     convert_to_timestamp,
     display_bytes,
     elide_text,
-    get_local_file_path,
 )
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
 from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker
@@ -80,42 +75,6 @@ class RanaBrowser(uicls, basecls):
         self.schematisation = None
         self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(self.upload_file_to_rana)
-        self.btn_generate.clicked.connect(self.generate_vector_style)
-
-    def generate_vector_style(self):
-        """Generate styling files for vector layers."""
-        if not self.selected_file:
-            return
-        file_name = os.path.basename(self.selected_file["id"].rstrip("/"))
-        all_layers = QgsProject.instance().mapLayers()
-        layers = [layer for layer in all_layers.values() if file_name in layer.source()]
-        if not layers:
-            return
-        layers = layers[:4] # Limit to 4 layers due to memory issue
-        qgis_layers = {layer.name(): layer for layer in layers}
-        group = {"layers": list(qgis_layers.keys())}
-
-        # Convert the group to a Mapbox GL style JSON
-        _, warning, mb_style, sprite_sheet = convertGroup(
-            group, qgis_layers, baseUrl="http://baseUrl", workspace="workspace", name="default"
-        )
-        if warning:
-            self.communication.show_warn(warning)
-
-        # Save style.json
-        local_dir, _ = get_local_file_path(self.project["slug"], self.selected_file["id"], file_name)
-        style_json_path = os.path.join(local_dir, f"style.json")
-        with open(style_json_path, "w") as file:
-            json.dump(mb_style, file, indent=2)
-
-        if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-            # Save sprite images
-            sprite_sheet["img"].save(os.path.join(local_dir, "sprite.png"))
-            sprite_sheet["img2x"].save(os.path.join(local_dir, "sprite@2x.png"))
-            # Save sprite metada
-            Path(os.path.join(local_dir, "sprite.json")).write_text(sprite_sheet["json"])
-            Path(os.path.join(local_dir, "sprite@2x.json")).write_text(sprite_sheet["json2x"])
-        self.communication.bar_info(f"Style files generated and saved to: {local_dir}")
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
