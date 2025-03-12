@@ -50,9 +50,10 @@ def get_tenant_projects(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{API_URL}/tenants/{tenant}/projects"
+    params = {"limit": 1000}
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch()
+    status, error = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
