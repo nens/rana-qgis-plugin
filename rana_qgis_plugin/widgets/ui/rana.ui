@@ -118,6 +118,13 @@
         <widget class="QWidget" name="button_widget" native="true">
          <layout class="QVBoxLayout" name="verticalLayout">
           <item>
+           <widget class="QPushButton" name="btn_generate">
+            <property name="text">
+             <string>Generate style</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="btn_open">
             <property name="text">
              <string>Open in QGIS</string>
