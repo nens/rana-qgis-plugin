@@ -4,7 +4,7 @@
     - Do I need to save it locally? -> YES
     - Do I need 1 qml / layer or 1 qml / multiple layers -> 1 qml / layer
 
-2. Fix the crashing issue
+2. Fix the crashing issue - IN PROGRESS
 
 3. Upload the vector styling files to Rana
 
