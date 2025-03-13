@@ -1,12 +1,8 @@
-import json
 import os
-from pathlib import Path
 
 import requests
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
-from qgis.core import QgsProject
 
-from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path
 from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload
 
@@ -142,67 +138,3 @@ class FileUploadWorker(QThread):
             self.finished.emit()
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
-
-
-class VectorStyleWorker(QThread):
-    """Worker thread for generating vector styling files"""
-
-    finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
-    warning = pyqtSignal(str)
-
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-    ):
-        super().__init__()
-        self.project = project
-        self.file = file
-
-    @pyqtSlot()
-    def run(self):
-        if not self.file:
-            self.failed.emit("File not found.")
-            return
-        file_path = self.file["id"]
-        file_name = os.path.basename(file_path.rstrip("/"))
-        all_layers = QgsProject.instance().mapLayers().values()
-        layers = [layer for layer in all_layers if file_name in layer.source()]
-
-        if not layers:
-            self.failed.emit(f"No layers found for {file_name}.")
-            return
-
-        qgis_layers = {layer.name(): layer for layer in layers}
-        group = {"layers": list(qgis_layers.keys())}
-        base_url = "http://baseUrl"
-
-        # Convert QGIS layers to styling files for the Rana Web Client
-        try:
-            _, warning, mb_style, sprite_sheet = convertGroup(
-                group, qgis_layers, base_url, workspace="workspace", name="default"
-            )
-            if warning:
-                self.warning.emit(warning)
-
-            # Save the styling files
-            local_dir, _ = get_local_file_path(self.project["slug"], file_path, file_name)
-            os.makedirs(local_dir, exist_ok=True)
-            style_json_path = os.path.join(local_dir, "style.json")
-            with open(style_json_path, "w") as file:
-                json.dump(mb_style, file, indent=2)
-
-            # Save sprite images if available
-            if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-                # Save sprite images
-                sprite_sheet["img"].save(os.path.join(local_dir, "sprite.png"))
-                sprite_sheet["img2x"].save(os.path.join(local_dir, "sprite@2x.png"))
-                # Save sprite metada
-                Path(os.path.join(local_dir, "sprite.json")).write_text(sprite_sheet["json"])
-                Path(os.path.join(local_dir, "sprite@2x.json")).write_text(sprite_sheet["json2x"])
-
-            # Finish
-            self.finished.emit(f"Styling files generated and saved to: {local_dir}")
-        except Exception as e:
-            self.failed.emit(f"Failed to generate styling files: {str(e)}")

@@ -1,6 +1,8 @@
+import json
 import math
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -10,6 +12,7 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics, QStandardItem
 
 from .communication import UICommunication
 from .constant import RANA_TENANT_ENTRY
+from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
@@ -102,6 +105,53 @@ def add_layer_to_qgis(
         threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
     else:
         communication.show_warn(f"Unsupported data type: {data_type}")
+
+
+def generate_vector_styling_files(communication: UICommunication, project: dict, file: dict):
+    if not file:
+        communication.failed.emit("File not found.")
+        return
+    file_path = file["id"]
+    file_name = os.path.basename(file_path.rstrip("/"))
+    all_layers = QgsProject.instance().mapLayers().values()
+    layers = [layer for layer in all_layers if file_name in layer.source()]
+
+    if not layers:
+        communication.failed.emit(f"No layers found for {file_name}.")
+        return
+
+    qgis_layers = {layer.name(): layer for layer in layers}
+    group = {"layers": list(qgis_layers.keys())}
+    base_url = "http://baseUrl"
+
+    # Convert QGIS layers to styling files for the Rana Web Client
+    try:
+        _, warning, mb_style, sprite_sheet = convertGroup(
+            group, qgis_layers, base_url, workspace="workspace", name="default"
+        )
+        if warning:
+            communication.show_warn(warning)
+
+        # Save the styling files
+        local_dir, _ = get_local_file_path(project["slug"], file_path, file_name)
+        os.makedirs(local_dir, exist_ok=True)
+        style_json_path = os.path.join(local_dir, "style.json")
+        with open(style_json_path, "w") as file:
+            json.dump(mb_style, file, indent=2)
+
+        # Save sprite images if available
+        if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
+            # Save sprite images
+            sprite_sheet["img"].save(os.path.join(local_dir, "sprite.png"))
+            sprite_sheet["img2x"].save(os.path.join(local_dir, "sprite@2x.png"))
+            # Save sprite metada
+            Path(os.path.join(local_dir, "sprite.json")).write_text(sprite_sheet["json"])
+            Path(os.path.join(local_dir, "sprite@2x.json")).write_text(sprite_sheet["json2x"])
+
+        # Finish
+        communication.bar_info(f"Styling files generated and saved to: {local_dir}")
+    except Exception as e:
+        communication.show_error(f"Failed to generate styling files for {file_name}: {str(e)}")
 
 
 def display_bytes(bytes: int) -> str:

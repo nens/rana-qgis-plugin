@@ -16,9 +16,10 @@ from rana_qgis_plugin.utils import (
     convert_to_timestamp,
     display_bytes,
     elide_text,
+    generate_vector_styling_files,
 )
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
-from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker, VectorStyleWorker
+from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
@@ -76,18 +77,9 @@ class RanaBrowser(uicls, basecls):
         self.schematisation = None
         self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(self.upload_file_to_rana)
-        self.btn_generate.clicked.connect(self.generate_vector_style)
-
-    def generate_vector_style(self):
-        """Start the worker for generating vector styling files"""
-        self.vector_style_worker = VectorStyleWorker(
-            self.project,
-            self.selected_file,
+        self.btn_generate.clicked.connect(
+            lambda: generate_vector_styling_files(self.communication, self.project, self.selected_file)
         )
-        self.vector_style_worker.finished.connect(self.communication.bar_info)
-        self.vector_style_worker.failed.connect(self.communication.show_error)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
-        self.vector_style_worker.start()
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
