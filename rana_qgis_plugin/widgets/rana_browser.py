@@ -36,7 +36,6 @@ class RanaBrowser(uicls, basecls):
         self.paths = ["Projects"]
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
-        self.vector_style_worker: QThread = None
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
