@@ -92,8 +92,11 @@ def processLayer(layer):
         else:
             if not isinstance(renderer, QgsNullSymbolRenderer):
                 if not isinstance(renderer, QgsRuleBasedRenderer):
-                    ruleRenderer = QgsRuleBasedRenderer.convertFromRenderer(
-                        renderer)
+                    if renderer is None:
+                        _warnings.append("No renderer found for layer: %s" % layer.name())
+                        return
+                    cloned_renderer = renderer.clone()
+                    ruleRenderer = QgsRuleBasedRenderer.convertFromRenderer(cloned_renderer)
                 else:
                     ruleRenderer = renderer
                 if ruleRenderer is None:
