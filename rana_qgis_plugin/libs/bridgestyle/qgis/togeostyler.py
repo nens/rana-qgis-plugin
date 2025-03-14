@@ -95,7 +95,8 @@ def processLayer(layer):
         else:
             if not isinstance(renderer, QgsNullSymbolRenderer):
                 if not isinstance(renderer, QgsRuleBasedRenderer):
-                    ruleRenderer = QgsRuleBasedRenderer.convertFromRenderer(renderer)
+                    ruleRenderer = QgsRuleBasedRenderer.convertFromRenderer(
+                        renderer)
                 else:
                     ruleRenderer = renderer
                 if ruleRenderer is None:
