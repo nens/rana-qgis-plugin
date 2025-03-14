@@ -83,6 +83,9 @@ def processLayer(layer):
     if layer.type() == layer.VectorLayer:
         rules = []
         renderer = layer.renderer()
+        if renderer is None:
+            _warnings.append("No renderer found for layer: %s" % layer.name())
+            return
         if isinstance(renderer, QgsHeatmapRenderer):
             symbolizer, transformation = heatmapRenderer(renderer)
             if symbolizer and transformation:
@@ -92,11 +95,7 @@ def processLayer(layer):
         else:
             if not isinstance(renderer, QgsNullSymbolRenderer):
                 if not isinstance(renderer, QgsRuleBasedRenderer):
-                    if renderer is None:
-                        _warnings.append("No renderer found for layer: %s" % layer.name())
-                        return
-                    cloned_renderer = renderer.clone()
-                    ruleRenderer = QgsRuleBasedRenderer.convertFromRenderer(cloned_renderer)
+                    ruleRenderer = QgsRuleBasedRenderer.convertFromRenderer(renderer)
                 else:
                     ruleRenderer = renderer
                 if ruleRenderer is None:
