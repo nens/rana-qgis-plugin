@@ -123,6 +123,21 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
+def upload_vector_styling_file(descriptor_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.put()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
 def get_threedi_schematisation(communication: UICommunication, descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

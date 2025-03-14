@@ -1,10 +1,14 @@
+import json
 import os
+from pathlib import Path
 
 import requests
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
+from qgis.core import QgsProject
 
-from .utils import get_local_file_path
-from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload
+from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
+from .utils import get_local_file_path, image_to_bytes
+from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload, upload_vector_styling_file
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -138,3 +142,76 @@ class FileUploadWorker(QThread):
             self.finished.emit()
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
+
+
+class VectorStyleWorker(QThread):
+    """Worker thread for generating vector styling files"""
+
+    finished = pyqtSignal(str)
+    failed = pyqtSignal(str)
+    warning = pyqtSignal(str)
+
+    def __init__(
+        self,
+        project: dict,
+        file: dict,
+    ):
+        super().__init__()
+        self.project = project
+        self.file = file
+
+    def upload_to_s3(self, url: str, data: dict, content_type: str):
+        try:
+            headers = {"Content-Type": content_type}
+            response = requests.put(url, data=data, headers=headers)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
+
+    @pyqtSlot()
+    def run(self):
+        if not self.file:
+            self.failed.emit("File not found.")
+            return
+        file_path = self.file["id"]
+        file_name = os.path.basename(file_path.rstrip("/"))
+        descriptor_id = self.file["descriptor_id"]
+        all_layers = QgsProject.instance().mapLayers().values()
+        layers = [layer for layer in all_layers if file_name in layer.source()]
+
+        if not layers:
+            self.failed.emit(f"No layers found for {file_name}.")
+            return
+
+        qgis_layers = {layer.name(): layer for layer in layers}
+        group = {"layers": list(qgis_layers.keys())}
+        base_url = "http://baseUrl"
+
+        # Convert QGIS layers to styling files for the Rana Web Client
+        try:
+            _, warning, mb_style, sprite_sheet = convertGroup(
+                group, qgis_layers, base_url, workspace="workspace", name="default"
+            )
+            if warning:
+                self.warning.emit(warning)
+
+            upload_urls = upload_vector_styling_file(descriptor_id)
+
+            if not upload_urls:
+                self.failed.emit("Failed to get vector style upload URLs from the API.")
+                return
+
+            # Upload style.json
+            self.upload_to_s3(upload_urls["style.json"], json.dumps(mb_style), "application/json")
+
+            # Upload sprite images if available
+            if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
+                self.upload_to_s3(upload_urls["sprite.png"], image_to_bytes(sprite_sheet["img"]), "image/png")
+                self.upload_to_s3(upload_urls["sprite@2x.png"], image_to_bytes(sprite_sheet["img2x"]), "image/png")
+                self.upload_to_s3(upload_urls["sprite.json"], sprite_sheet["json"], "application/json")
+                self.upload_to_s3(upload_urls["sprite@2x.json"], sprite_sheet["json2x"], "application/json")
+
+            # Finish
+            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+        except Exception as e:
+            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
