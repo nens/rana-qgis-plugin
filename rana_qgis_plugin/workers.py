@@ -8,7 +8,7 @@ from qgis.core import QgsProject
 
 from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path, image_to_bytes
-from .utils_api import finish_file_upload, get_tenant_project_file, start_file_upload, upload_vector_styling_file
+from .utils_api import finish_file_upload, get_tenant_project_file, get_vector_style_upload_urls, start_file_upload
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -161,6 +161,7 @@ class VectorStyleWorker(QThread):
         self.file = file
 
     def upload_to_s3(self, url: str, data: dict, content_type: str):
+        """Method to upload to S3"""
         try:
             headers = {"Content-Type": content_type}
             response = requests.put(url, data=data, headers=headers)
@@ -195,7 +196,8 @@ class VectorStyleWorker(QThread):
             if warning:
                 self.warning.emit(warning)
 
-            upload_urls = upload_vector_styling_file(descriptor_id)
+            # Get upload URLs to S3
+            upload_urls = get_vector_style_upload_urls(descriptor_id)
 
             if not upload_urls:
                 self.failed.emit("Failed to get vector style upload URLs from the API.")

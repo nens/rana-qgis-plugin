@@ -123,7 +123,7 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
-def upload_vector_styling_file(descriptor_id: str):
+def get_vector_style_upload_urls(descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
