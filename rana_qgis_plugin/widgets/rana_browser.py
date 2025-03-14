@@ -76,7 +76,7 @@ class RanaBrowser(uicls, basecls):
         self.schematisation = None
         self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(self.upload_file_to_rana)
-        self.btn_generate.clicked.connect(self.generate_vector_styling_files)
+        self.btn_save_vector_style.clicked.connect(self.generate_vector_styling_files)
 
     def generate_vector_styling_files(self):
         """Start the worker for generating vector styling files"""
@@ -367,12 +367,16 @@ class RanaBrowser(uicls, basecls):
         if data_type == "threedi_schematisation":
             self.btn_open.show()
             self.btn_save.hide()
+            self.btn_save_vector_style.hide()
         elif data_type in self.SUPPORTED_DATA_TYPES:
             self.btn_open.show()
             self.btn_save.show()
+            if data_type == "vector":
+                self.btn_save_vector_style.show()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
+            self.btn_save_vector_style.hide()
 
     def open_file_in_qgis(self):
         file = self.selected_file

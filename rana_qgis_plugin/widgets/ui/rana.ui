@@ -118,16 +118,16 @@
         <widget class="QWidget" name="button_widget" native="true">
          <layout class="QVBoxLayout" name="verticalLayout">
           <item>
-           <widget class="QPushButton" name="btn_generate">
+           <widget class="QPushButton" name="btn_open">
             <property name="text">
-             <string>Generate style</string>
+             <string>Open in QGIS</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="btn_open">
+           <widget class="QPushButton" name="btn_save_vector_style">
             <property name="text">
-             <string>Open in QGIS</string>
+             <string>Save vector style to Rana</string>
             </property>
            </widget>
           </item>
