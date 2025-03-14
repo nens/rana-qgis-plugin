@@ -76,18 +76,7 @@ class RanaBrowser(uicls, basecls):
         self.schematisation = None
         self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(self.upload_file_to_rana)
-        self.btn_save_vector_style.clicked.connect(self.generate_vector_styling_files)
-
-    def generate_vector_styling_files(self):
-        """Start the worker for generating vector styling files"""
-        self.vector_style_worker = VectorStyleWorker(
-            self.project,
-            self.selected_file,
-        )
-        self.vector_style_worker.finished.connect(self.communication.bar_info)
-        self.vector_style_worker.failed.connect(self.communication.show_error)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
-        self.vector_style_worker.start()
+        self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -379,6 +368,7 @@ class RanaBrowser(uicls, basecls):
             self.btn_save_vector_style.hide()
 
     def open_file_in_qgis(self):
+        """Start the worker to download and open files in QGIS"""
         file = self.selected_file
         if file and file["descriptor"] and file["descriptor"]["data_type"]:
             data_type = file["descriptor"]["data_type"]
@@ -427,6 +417,7 @@ class RanaBrowser(uicls, basecls):
         self.communication.progress_bar("Downloading file...", 0, 100, progress, clear_msg_bar=True)
 
     def upload_file_to_rana(self):
+        """Start the worker for uploading files"""
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
 
@@ -465,3 +456,26 @@ class RanaBrowser(uicls, basecls):
 
     def on_file_upload_progress(self, progress: int):
         self.communication.progress_bar("Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True)
+
+    def save_vector_styling_files(self):
+        """Start the worker for saving vector styling files"""
+        self.rana_widget.setEnabled(False)
+        self.communication.progress_bar("Generating and saving vector styling files...", clear_msg_bar=True)
+        self.vector_style_worker = VectorStyleWorker(
+            self.project,
+            self.selected_file,
+        )
+        self.vector_style_worker.finished.connect(self.on_vector_style_finished)
+        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
+        self.vector_style_worker.warning.connect(self.communication.show_warn)
+        self.vector_style_worker.start()
+
+    def on_vector_style_finished(self, msg: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.show_info(msg)
+
+    def on_vector_style_failed(self, msg: str):
+        self.rana_widget.setEnabled(True)
+        self.communication.clear_message_bar()
+        self.communication.show_error(msg)

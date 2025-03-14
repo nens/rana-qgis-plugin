@@ -181,7 +181,7 @@ class VectorStyleWorker(QThread):
         layers = [layer for layer in all_layers if file_name in layer.source()]
 
         if not layers:
-            self.failed.emit(f"No layers found for {file_name}.")
+            self.failed.emit(f"No layers found for {file_name}. Open the file in QGIS and try again.")
             return
 
         qgis_layers = {layer.name(): layer for layer in layers}
