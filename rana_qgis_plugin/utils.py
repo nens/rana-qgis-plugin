@@ -39,12 +39,12 @@ def add_layer_to_qgis(
     file: dict,
     schematisation_instance: dict,
 ):
-    file_path = file["id"]
-    file_name = os.path.basename(file_path.rstrip("/"))
+    path = file["id"]
+    file_name = os.path.basename(path.rstrip("/"))
     data_type = file["descriptor"]["data_type"]
 
     # Save the last modified date of the downloaded file in QSettings
-    last_modified_key = f"{project_name}/{file_path}/last_modified"
+    last_modified_key = f"{project_name}/{path}/last_modified"
     QSettings().setValue(last_modified_key, file["last_modified"])
 
     # Add the layer to QGIS
@@ -70,6 +70,11 @@ def add_layer_to_qgis(
             layer = QgsVectorLayer(local_file_path, file_name, "ogr")
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
+                # Apply the QML style file to the layer
+                qml_path = os.path.join(os.path.dirname(local_file_path), f"{file_name}.qml")
+                if os.path.exists(qml_path):
+                    layer.loadNamedStyle(qml_path)
+                    layer.triggerRepaint()
                 communication.bar_info(f"Added {data_type} layer: {local_file_path}")
             else:
                 communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
@@ -84,6 +89,11 @@ def add_layer_to_qgis(
             layer = QgsVectorLayer(layer_uri, layer_name, "ogr")
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
+                # Apply the QML style file to the layer
+                qml_path = os.path.join(os.path.dirname(local_file_path), f"{layer_name}.qml")
+                if os.path.exists(qml_path):
+                    layer.loadNamedStyle(qml_path)
+                    layer.triggerRepaint()
             else:
                 communication.show_error(f"Failed to add {layer_name} layer from: {local_file_path}")
         communication.bar_info(f"Added {data_type} layer: {local_file_path}")
