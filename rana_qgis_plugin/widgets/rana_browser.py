@@ -384,10 +384,8 @@ class RanaBrowser(uicls, basecls):
         self.communication.bar_info("Start downloading file...")
         self.rana_widget.setEnabled(False)
         self.file_download_worker = FileDownloadWorker(
-            url=self.selected_file["url"],
-            path=self.selected_file["id"],
-            project_slug=self.project["slug"],
-            file_name=os.path.basename(self.selected_file["id"].rstrip("/")),
+            self.project,
+            self.selected_file,
         )
         self.file_download_worker.finished.connect(self.on_file_download_finished)
         self.file_download_worker.failed.connect(self.on_file_download_failed)
@@ -425,8 +423,8 @@ class RanaBrowser(uicls, basecls):
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
         self.file_upload_worker = FileUploadWorker(
-            project=self.project,
-            file=self.selected_file,
+            self.project,
+            self.selected_file,
         )
         self.file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.file_upload_worker.failed.connect(self.on_file_upload_failed)
