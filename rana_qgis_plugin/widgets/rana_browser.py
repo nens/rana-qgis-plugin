@@ -360,6 +360,7 @@ class RanaBrowser(uicls, basecls):
         elif data_type in self.SUPPORTED_DATA_TYPES:
             self.btn_open.show()
             self.btn_save.show()
+            self.btn_save_vector_style.hide()
             if data_type == "vector":
                 self.btn_save_vector_style.show()
         else:

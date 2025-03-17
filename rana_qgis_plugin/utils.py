@@ -56,35 +56,12 @@ def add_layer_to_qgis(
         else:
             communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
     elif data_type == "vector":
-        # Load the vector layer and its sub layers
-        base_layer = QgsVectorLayer(local_file_path, "temp", "ogr")
-        if not base_layer.isValid():
-            communication.show_error(f"Vector layer is not valid: {local_file_path}")
+        layers = file["descriptor"]["meta"].get("layers", [])
+        if not layers:
+            communication.show_warn(f"No layers found for {file_name}.")
             return
-        sub_layers = base_layer.dataProvider().subLayers()
-        if not sub_layers:
-            communication.show_error(f"Failed to get sub layers from: {local_file_path}")
-            return
-        if len(sub_layers) == 1:
-            # Single layer vector file
-            layer = QgsVectorLayer(local_file_path, file_name, "ogr")
-            if layer.isValid():
-                QgsProject.instance().addMapLayer(layer)
-                # Apply the QML style file to the layer
-                qml_path = os.path.join(os.path.dirname(local_file_path), f"{file_name}.qml")
-                if os.path.exists(qml_path):
-                    layer.loadNamedStyle(qml_path)
-                    layer.triggerRepaint()
-                communication.bar_info(f"Added {data_type} layer: {local_file_path}")
-            else:
-                communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
-            return
-        for sub_layer in sub_layers:
-            # Multiple layer vector file
-            # Extract correct layer name from the sub_layer string
-            # Example sub_layer string: "0!!::!!v2_2d_boundary_conditions!!::!!0!!::!!LineString!!::!!the_geom!!::!!"
-            # we need to get only the layer name: "v2_2d_boundary_conditions"
-            layer_name = sub_layer.split("!!::!!")[1]
+        for layer in layers:
+            layer_name = layer["id"]
             layer_uri = f"{local_file_path}|layername={layer_name}"
             layer = QgsVectorLayer(layer_uri, layer_name, "ogr")
             if layer.isValid():
@@ -96,7 +73,7 @@ def add_layer_to_qgis(
                     layer.triggerRepaint()
             else:
                 communication.show_error(f"Failed to add {layer_name} layer from: {local_file_path}")
-        communication.bar_info(f"Added {data_type} layer: {local_file_path}")
+        communication.bar_info(f"Added {data_type} file: {local_file_path}")
     elif data_type == "threedi_schematisation" and schematisation_instance:
         communication.clear_message_bar()
         threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
