@@ -22,23 +22,22 @@ class FileDownloadWorker(QThread):
 
     def __init__(
         self,
-        url: str,
-        path: str,
-        project_slug: str,
-        file_name: str,
+        project: dict,
+        file: dict,
     ):
         super().__init__()
-        self.url = url
-        self.path = path
-        self.project_slug = project_slug
-        self.file_name = file_name
+        self.project = project
+        self.file = file
 
     @pyqtSlot()
     def run(self):
-        local_dir_structure, local_file_path = get_local_file_path(self.project_slug, self.path, self.file_name)
+        project_slug = self.project["slug"]
+        url = self.file["url"]
+        path = self.file["id"]
+        local_dir_structure, local_file_path = get_local_file_path(project_slug, path)
         os.makedirs(local_dir_structure, exist_ok=True)
         try:
-            with requests.get(self.url, stream=True) as response:
+            with requests.get(url, stream=True) as response:
                 response.raise_for_status()
                 total_size = int(response.headers.get("content-length", 0))
                 downloaded_size = 0
@@ -100,9 +99,8 @@ class FileUploadWorker(QThread):
         if not self.file or not self.project["id"]:
             return
         project_slug = self.project["slug"]
-        file_name = os.path.basename(self.file["id"].rstrip("/"))
-        file_path = self.file["id"]
-        _, local_file_path = get_local_file_path(project_slug, file_path, file_name)
+        path = self.file["id"]
+        _, local_file_path = get_local_file_path(project_slug, path)
 
         # Check if file exists locally before uploading
         if not os.path.exists(local_file_path):
@@ -118,7 +116,7 @@ class FileUploadWorker(QThread):
         try:
             self.progress.emit(0)
             # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(self.project["id"], {"path": file_path})
+            upload_response = start_file_upload(self.project["id"], {"path": path})
             if not upload_response:
                 self.failed.emit("Failed to initiate file upload.")
                 return
@@ -174,8 +172,8 @@ class VectorStyleWorker(QThread):
         if not self.file:
             self.failed.emit("File not found.")
             return
-        file_path = self.file["id"]
-        file_name = os.path.basename(file_path.rstrip("/"))
+        path = self.file["id"]
+        file_name = os.path.basename(path.rstrip("/"))
         descriptor_id = self.file["descriptor_id"]
         all_layers = QgsProject.instance().mapLayers().values()
         layers = [layer for layer in all_layers if file_name in layer.source()]
@@ -187,6 +185,13 @@ class VectorStyleWorker(QThread):
         qgis_layers = {layer.name(): layer for layer in layers}
         group = {"layers": list(qgis_layers.keys())}
         base_url = "http://baseUrl"
+
+        # Save QML style files for each layer to local directory
+        local_dir, _ = get_local_file_path(self.project["slug"], path)
+        os.makedirs(local_dir, exist_ok=True)
+        for layer in layers:
+            qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
+            layer.saveNamedStyle(str(qml_path))
 
         # Convert QGIS layers to styling files for the Rana Web Client
         try:
