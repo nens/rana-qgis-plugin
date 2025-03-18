@@ -1,6 +1,6 @@
 import json
 import os
-from pathlib import Path
+import zipfile
 
 import requests
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
@@ -8,7 +8,13 @@ from qgis.core import QgsProject
 
 from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path, image_to_bytes
-from .utils_api import finish_file_upload, get_tenant_project_file, get_vector_style_upload_urls, start_file_upload
+from .utils_api import (
+    finish_file_upload,
+    get_tenant_project_file,
+    get_vector_style_file,
+    get_vector_style_upload_urls,
+    start_file_upload,
+)
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -29,11 +35,25 @@ class FileDownloadWorker(QThread):
         self.project = project
         self.file = file
 
+    def save_qml_zip(self, qml_zip_content: bytes, local_dir: str):
+        """Save the QML zip content to disk and unzip it."""
+        try:
+            zip_path = os.path.join(local_dir, "qml.zip")
+            with open(zip_path, "wb") as file:
+                file.write(qml_zip_content)
+            # Unzip the QML zip
+            with zipfile.ZipFile(zip_path, "r") as zip_file:
+                zip_file.extractall(local_dir)
+            os.remove(zip_path)
+        except Exception as e:
+            self.failed.emit(f"Failed to save and unzip QML zip: {str(e)}")
+
     @pyqtSlot()
     def run(self):
         project_slug = self.project["slug"]
         url = self.file["url"]
         path = self.file["id"]
+        descriptor_id = self.file["descriptor_id"]
         local_dir_structure, local_file_path = get_local_file_path(project_slug, path)
         os.makedirs(local_dir_structure, exist_ok=True)
         try:
@@ -50,6 +70,12 @@ class FileDownloadWorker(QThread):
                         if progress > previous_progress:
                             self.progress.emit(progress)
                             previous_progress = progress
+            # Fetch the QML zip
+            qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+            if qml_zip_content:
+                self.save_qml_zip(qml_zip_content, local_dir_structure)
+            else:
+                self.failed.emit("Failed to get QML zip file.")
             self.finished.emit(local_file_path)
         except requests.exceptions.RequestException as e:
             self.failed.emit(f"Failed to download file: {str(e)}")
@@ -167,6 +193,18 @@ class VectorStyleWorker(QThread):
         except requests.exceptions.RequestException as e:
             self.failed.emit(f"Failed to upload file to S3: {str(e)}")
 
+    def create_qml_zip(self, local_dir: str, zip_path: str):
+        """Craete a QML zip file for all the qml files in the local directory"""
+        try:
+            with zipfile.ZipFile(zip_path, "w") as zip_file:
+                for root, _, files in os.walk(local_dir):
+                    for file in files:
+                        if file.endswith(".qml"):
+                            file_path = os.path.join(root, file)
+                            zip_file.write(file_path, os.path.relpath(file_path, local_dir))
+        except Exception as e:
+            self.failed.emit(f"Failed to create QML zip: {str(e)}")
+
     @pyqtSlot()
     def run(self):
         if not self.file:
@@ -217,6 +255,13 @@ class VectorStyleWorker(QThread):
                 self.upload_to_s3(upload_urls["sprite@2x.png"], image_to_bytes(sprite_sheet["img2x"]), "image/png")
                 self.upload_to_s3(upload_urls["sprite.json"], sprite_sheet["json"], "application/json")
                 self.upload_to_s3(upload_urls["sprite@2x.json"], sprite_sheet["json2x"], "application/json")
+
+            # Zip and upload QML zip
+            zip_path = os.path.join(local_dir, "qml.zip")
+            self.create_qml_zip(local_dir, zip_path)
+            with open(zip_path, "rb") as file:
+                self.upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
+            os.remove(zip_path)
 
             # Finish
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
