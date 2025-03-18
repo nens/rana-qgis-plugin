@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import zipfile
@@ -35,18 +36,13 @@ class FileDownloadWorker(QThread):
         self.project = project
         self.file = file
 
-    def save_qml_zip(self, qml_zip_content: bytes, local_dir: str):
-        """Save the QML zip content to disk and unzip it."""
+    def extract_qml_zip(self, qml_zip_content: bytes, local_dir: str):
+        """Extract the QML zip content."""
         try:
-            zip_path = os.path.join(local_dir, "qml.zip")
-            with open(zip_path, "wb") as file:
-                file.write(qml_zip_content)
-            # Unzip the QML zip
-            with zipfile.ZipFile(zip_path, "r") as zip_file:
+            with zipfile.ZipFile(io.BytesIO(qml_zip_content), "r") as zip_file:
                 zip_file.extractall(local_dir)
-            os.remove(zip_path)
         except Exception as e:
-            self.failed.emit(f"Failed to save and unzip QML zip: {str(e)}")
+            self.failed.emit(f"Failed to extract QML zip: {str(e)}")
 
     @pyqtSlot()
     def run(self):
@@ -73,7 +69,7 @@ class FileDownloadWorker(QThread):
             # Fetch the QML zip
             qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
             if qml_zip_content:
-                self.save_qml_zip(qml_zip_content, local_dir_structure)
+                self.extract_qml_zip(qml_zip_content, local_dir_structure)
             else:
                 self.failed.emit("Failed to get QML zip file.")
             self.finished.emit(local_file_path)

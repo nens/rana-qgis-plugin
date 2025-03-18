@@ -151,7 +151,7 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
     if status and redirect_url:
         try:
             headers = {"Content-Type": "application/zip"}
-            response = requests.get(redirect_url, headers=headers)
+            response = requests.get(redirect_url, headers=headers, timeout=10)
             return response.content
         except requests.RequestException as e:
             return None
