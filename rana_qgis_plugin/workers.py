@@ -36,14 +36,6 @@ class FileDownloadWorker(QThread):
         self.project = project
         self.file = file
 
-    def extract_qml_zip(self, qml_zip_content: bytes, local_dir: str):
-        """Extract the QML zip content."""
-        try:
-            with zipfile.ZipFile(io.BytesIO(qml_zip_content), "r") as zip_file:
-                zip_file.extractall(local_dir)
-        except Exception as e:
-            self.failed.emit(f"Failed to extract QML zip: {str(e)}")
-
     @pyqtSlot()
     def run(self):
         project_slug = self.project["slug"]
@@ -66,12 +58,13 @@ class FileDownloadWorker(QThread):
                         if progress > previous_progress:
                             self.progress.emit(progress)
                             previous_progress = progress
-            # Fetch the QML zip
+            # Fetch and extract the QML zip
             qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
             if qml_zip_content:
-                self.extract_qml_zip(qml_zip_content, local_dir_structure)
-            else:
-                self.failed.emit("Failed to get QML zip file.")
+                stream = io.BytesIO(qml_zip_content)
+                if zipfile.is_zipfile(stream):
+                    with zipfile.ZipFile(stream, "r") as zip_file:
+                        zip_file.extractall(local_dir_structure)
             self.finished.emit(local_file_path)
         except requests.exceptions.RequestException as e:
             self.failed.emit(f"Failed to download file: {str(e)}")
