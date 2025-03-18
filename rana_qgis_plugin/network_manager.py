@@ -81,6 +81,12 @@ class NetworkManager(object):
             description = self._reply.errorString()
         else:
             status = True
+            if self._reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 307:
+                # For HTTP status code 307 (Temporary Redirect),
+                # look for the 'Location' header to get the new redirect URL
+                location = self._reply.rawHeader(b"Location")
+                if location:
+                    return status, str(location, "utf-8")
             raw_content = self._reply.readAll()
             self._content = json.loads(str(raw_content, "utf-8"))
 

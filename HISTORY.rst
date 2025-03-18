@@ -5,6 +5,7 @@ History
 ------------------
 
 - Add bridgestyle package to libs: #24
+- Save and sync vector styling files to Rana: #25
 
 
 1.1.4 (2025-02-28)

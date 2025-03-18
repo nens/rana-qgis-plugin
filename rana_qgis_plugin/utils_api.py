@@ -1,5 +1,7 @@
 from typing import Optional, TypedDict
 
+import requests
+
 from .auth import get_authcfg_id
 from .communication import UICommunication
 from .constant import API_URL, COGNITO_USER_INFO_ENDPOINT
@@ -50,9 +52,10 @@ def get_tenant_projects(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{API_URL}/tenants/{tenant}/projects"
+    params = {"limit": 1000}
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch()
+    status, error = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
@@ -120,6 +123,40 @@ def finish_file_upload(project_id: str, payload: dict):
         response = network_manager.content
         return response
     return None
+
+
+def get_vector_style_upload_urls(descriptor_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.put()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
+def get_vector_style_file(descriptor_id: str, file_name: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style/{file_name}"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, redirect_url = network_manager.fetch()
+
+    if status and redirect_url:
+        try:
+            headers = {"Content-Type": "application/zip"}
+            response = requests.get(redirect_url, headers=headers, timeout=10)
+            return response.content
+        except requests.RequestException as e:
+            return None
+    else:
+        return None
 
 
 def get_threedi_schematisation(communication: UICommunication, descriptor_id: str):

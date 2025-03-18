@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
-from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtGui import QFont, QFontMetrics, QStandardItem
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
+from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 
 from .communication import UICommunication
 from .constant import RANA_TENANT_ENTRY
@@ -24,9 +24,10 @@ def get_tenant_id() -> str:
     return tenant
 
 
-def get_local_file_path(project_slug: str, file_path: str, file_name: str) -> tuple[str, str]:
+def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
+    file_name = os.path.basename(path.rstrip("/"))
     base_dir = os.path.join(os.path.expanduser("~"), "Rana")
-    local_dir_structure = os.path.join(base_dir, project_slug, os.path.dirname(file_path))
+    local_dir_structure = os.path.join(base_dir, project_slug, os.path.dirname(path), file_name)
     local_file_path = os.path.join(local_dir_structure, file_name)
     return local_dir_structure, local_file_path
 
@@ -38,12 +39,12 @@ def add_layer_to_qgis(
     file: dict,
     schematisation_instance: dict,
 ):
-    file_path = file["id"]
-    file_name = os.path.basename(file_path.rstrip("/"))
+    path = file["id"]
+    file_name = os.path.basename(path.rstrip("/"))
     data_type = file["descriptor"]["data_type"]
 
     # Save the last modified date of the downloaded file in QSettings
-    last_modified_key = f"{project_name}/{file_path}/last_modified"
+    last_modified_key = f"{project_name}/{path}/last_modified"
     QSettings().setValue(last_modified_key, file["last_modified"])
 
     # Add the layer to QGIS
@@ -55,37 +56,24 @@ def add_layer_to_qgis(
         else:
             communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
     elif data_type == "vector":
-        # Load the vector layer and its sub layers
-        base_layer = QgsVectorLayer(local_file_path, "temp", "ogr")
-        if not base_layer.isValid():
-            communication.show_error(f"Vector layer is not valid: {local_file_path}")
+        layers = file["descriptor"]["meta"].get("layers", [])
+        if not layers:
+            communication.show_warn(f"No layers found for {file_name}.")
             return
-        sub_layers = base_layer.dataProvider().subLayers()
-        if not sub_layers:
-            communication.show_error(f"Failed to get sub layers from: {local_file_path}")
-            return
-        if len(sub_layers) == 1:
-            # Single layer vector file
-            layer = QgsVectorLayer(local_file_path, file_name, "ogr")
-            if layer.isValid():
-                QgsProject.instance().addMapLayer(layer)
-                communication.bar_info(f"Added {data_type} layer: {local_file_path}")
-            else:
-                communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
-            return
-        for sub_layer in sub_layers:
-            # Multiple layer vector file
-            # Extract correct layer name from the sub_layer string
-            # Example sub_layer string: "0!!::!!v2_2d_boundary_conditions!!::!!0!!::!!LineString!!::!!the_geom!!::!!"
-            # we need to get only the layer name: "v2_2d_boundary_conditions"
-            layer_name = sub_layer.split("!!::!!")[1]
+        for layer in layers:
+            layer_name = layer["id"]
             layer_uri = f"{local_file_path}|layername={layer_name}"
             layer = QgsVectorLayer(layer_uri, layer_name, "ogr")
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
+                # Apply the QML style file to the layer
+                qml_path = os.path.join(os.path.dirname(local_file_path), f"{layer_name}.qml")
+                if os.path.exists(qml_path):
+                    layer.loadNamedStyle(qml_path)
+                    layer.triggerRepaint()
             else:
                 communication.show_error(f"Failed to add {layer_name} layer from: {local_file_path}")
-        communication.bar_info(f"Added {data_type} layer: {local_file_path}")
+        communication.bar_info(f"Added {data_type} file: {local_file_path}")
     elif data_type == "threedi_schematisation" and schematisation_instance:
         communication.clear_message_bar()
         threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
@@ -150,6 +138,15 @@ def convert_to_relative_time(timestamp: str) -> str:
         return f"{delta.minutes} minute{'s' if delta.minutes > 1 else ''} ago"
     else:
         return "Just now"
+
+
+def image_to_bytes(image: QImage) -> bytes:
+    """Convert QImage to bytes."""
+    byte_array = QByteArray()
+    buffer = QBuffer(byte_array)
+    buffer.open(QIODevice.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(byte_array.data())
 
 
 class NumericItem(QStandardItem):
