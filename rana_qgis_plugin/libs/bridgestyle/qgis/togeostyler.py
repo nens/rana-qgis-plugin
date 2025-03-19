@@ -1036,8 +1036,9 @@ def saveSpritesSheet(icons, folder):
     img, img2x, painter, painter2x, spritesheet, spritesheet2x = initSpriteSheet(width, height)
     x = 0
     for name, _sprites in sprites.items():
+        name_without_ext = os.path.splitext(name)[0]
         s, s2x = _sprites
-        drawSpriteSheet(name, painter, painter2x, spritesheet, spritesheet2x, x, s, s2x)
+        drawSpriteSheet(name_without_ext, painter, painter2x, spritesheet, spritesheet2x, x, s, s2x)
         x += s.width()
     painter.end()
     painter2x.end()
