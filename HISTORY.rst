@@ -6,6 +6,7 @@ History
 
 - Add bridgestyle package to libs: #24
 - Save and sync vector styling files to Rana: #25
+- Fix wrong key name in sprites.json in bridgestyle: #27
 
 
 1.1.4 (2025-02-28)
