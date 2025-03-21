@@ -26,8 +26,9 @@ def get_tenant_id() -> str:
 
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     file_name = os.path.basename(path.rstrip("/"))
+    file_name_without_extension = os.path.splitext(file_name)[0]
     base_dir = os.path.join(os.path.expanduser("~"), "Rana")
-    local_dir_structure = os.path.join(base_dir, project_slug, os.path.dirname(path), file_name)
+    local_dir_structure = os.path.join(base_dir, project_slug, os.path.dirname(path), file_name_without_extension)
     local_file_path = os.path.join(local_dir_structure, file_name)
     return local_dir_structure, local_file_path
 
