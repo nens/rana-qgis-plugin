@@ -348,8 +348,12 @@ class RanaBrowser(uicls, basecls):
         self.file_table_widget.setRowCount(len(file_details))
         self.file_table_widget.horizontalHeader().setStretchLastSection(True)
         for i, (label, value) in enumerate(file_details):
-            self.file_table_widget.setItem(i, 0, QTableWidgetItem(label))
-            self.file_table_widget.setItem(i, 1, QTableWidgetItem(str(value)))
+            label_item = QTableWidgetItem(label)
+            label_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            value_item = QTableWidgetItem(str(value))
+            value_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            self.file_table_widget.setItem(i, 0, label_item)
+            self.file_table_widget.setItem(i, 1, value_item)
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
