@@ -9,6 +9,7 @@ History
 - Fix wrong key name in sprites.json in bridgestyle: #27
 - Fix local_dir_structure name to exclude file extension
 - Make table cells not editable in the file details table
+- Add technical documentation for Rana Desktop Client
 
 
 1.1.4 (2025-02-28)
