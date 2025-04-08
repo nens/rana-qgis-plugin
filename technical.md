@@ -48,7 +48,6 @@ Some tasks that are time consuming are done in separate workers, including:
 
 - File download in the `FileDownloadWorker`
 - File upload in the `FileUploadWorker`
-- Vector style in the `VectorStyleWorker`
 
 The workers are defined in `rana_qgis_plugin/workers.py`.
 

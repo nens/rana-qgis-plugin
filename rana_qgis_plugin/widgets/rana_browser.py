@@ -18,7 +18,7 @@ from rana_qgis_plugin.utils import (
     elide_text,
 )
 from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
-from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker, VectorStyleWorker
+from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
@@ -76,8 +76,7 @@ class RanaBrowser(uicls, basecls):
         self.selected_file = None
         self.schematisation = None
         self.btn_open.clicked.connect(self.open_file_in_qgis)
-        self.btn_save.clicked.connect(self.upload_file_to_rana)
-        self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
+        self.btn_save.clicked.connect(self.save_file_to_rana)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -251,7 +250,7 @@ class RanaBrowser(uicls, basecls):
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.UserRole)
-            data_type = file["descriptor"]["data_type"] if file["descriptor"] else "Unknown"
+            data_type = file["data_type"]
             data_type_item = QStandardItem(data_type)
             size_display = display_bytes(file["size"]) if data_type != "threedi_schematisation" else "N/A"
             size_item = NumericItem(size_display)
@@ -299,7 +298,7 @@ class RanaBrowser(uicls, basecls):
         self.file_table_widget.clearContents()
         filename = os.path.basename(self.selected_file["id"].rstrip("/"))
         username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
-        data_type = self.selected_file["descriptor"]["data_type"] if self.selected_file["descriptor"] else "Unknown"
+        data_type = self.selected_file["data_type"]
         meta = self.selected_file["descriptor"]["meta"] if self.selected_file["descriptor"] else None
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
         size = display_bytes(self.selected_file["size"]) if data_type != "threedi_schematisation" else "N/A"
@@ -362,30 +361,12 @@ class RanaBrowser(uicls, basecls):
         if data_type == "threedi_schematisation":
             self.btn_open.show()
             self.btn_save.hide()
-            self.btn_save_vector_style.hide()
         elif data_type in self.SUPPORTED_DATA_TYPES:
             self.btn_open.show()
             self.btn_save.show()
-            self.btn_save_vector_style.hide()
-            if data_type == "vector":
-                self.btn_save_vector_style.show()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-
-    def open_file_in_qgis(self):
-        """Start the worker to download and open files in QGIS"""
-        file = self.selected_file
-        if file and file["descriptor"] and file["descriptor"]["data_type"]:
-            data_type = file["descriptor"]["data_type"]
-            if data_type not in self.SUPPORTED_DATA_TYPES:
-                self.communication.show_warn(f"Unsupported data type: {data_type}")
-                return
-            self.initialize_file_download_worker()
-            self.file_download_worker.start()
-        else:
-            self.communication.show_warn(f"Unsupported data type: {file['media_type']}")
 
     def initialize_file_download_worker(self):
         self.communication.bar_info("Start downloading file...")
@@ -421,12 +402,8 @@ class RanaBrowser(uicls, basecls):
     def on_file_download_progress(self, progress: int):
         self.communication.progress_bar("Downloading file...", 0, 100, progress, clear_msg_bar=True)
 
-    def upload_file_to_rana(self):
+    def save_file_to_rana(self):
         """Start the worker for uploading files"""
-        self.initialize_file_upload_worker()
-        self.file_upload_worker.start()
-
-    def initialize_file_upload_worker(self):
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
         self.file_upload_worker = FileUploadWorker(
@@ -437,6 +414,7 @@ class RanaBrowser(uicls, basecls):
         self.file_upload_worker.failed.connect(self.on_file_upload_failed)
         self.file_upload_worker.progress.connect(self.on_file_upload_progress)
         self.file_upload_worker.conflict.connect(self.handle_file_conflict)
+        self.file_upload_worker.start()
 
     def handle_file_conflict(self):
         warn_and_ask_msg = (
@@ -462,25 +440,11 @@ class RanaBrowser(uicls, basecls):
     def on_file_upload_progress(self, progress: int):
         self.communication.progress_bar("Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True)
 
-    def save_vector_styling_files(self):
-        """Start the worker for saving vector styling files"""
-        self.rana_widget.setEnabled(False)
-        self.communication.progress_bar("Generating and saving vector styling files...", clear_msg_bar=True)
-        self.vector_style_worker = VectorStyleWorker(
-            self.project,
-            self.selected_file,
-        )
-        self.vector_style_worker.finished.connect(self.on_vector_style_finished)
-        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
-        self.vector_style_worker.start()
-
-    def on_vector_style_finished(self, msg: str):
-        self.rana_widget.setEnabled(True)
-        self.communication.clear_message_bar()
-        self.communication.show_info(msg)
-
-    def on_vector_style_failed(self, msg: str):
-        self.rana_widget.setEnabled(True)
-        self.communication.clear_message_bar()
-        self.communication.show_error(msg)
+    def open_file_in_qgis(self):
+        """Start the worker to download and open files in QGIS"""
+        data_type = self.selected_file["data_type"]
+        if data_type in self.SUPPORTED_DATA_TYPES:
+            self.initialize_file_download_worker()
+            self.file_download_worker.start()
+        else:
+            self.communication.show_warn(f"Unsupported data type: {data_type}")
