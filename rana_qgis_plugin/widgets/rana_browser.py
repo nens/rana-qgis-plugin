@@ -62,6 +62,7 @@ class RanaBrowser(uicls, basecls):
         self.refresh_btn.clicked.connect(self.refresh_projects)
         self.fetch_projects()
         self.populate_projects()
+        self.projects_tv.header().setSortIndicator(1, Qt.AscendingOrder)
 
         # Files widget
         self.files = []
@@ -145,6 +146,7 @@ class RanaBrowser(uicls, basecls):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
+        self.projects_tv.header().setSortIndicator(1, Qt.AscendingOrder)
         self.paths = ["Projects"]
         self.update_breadcrumbs()
         self.rana_widget.setCurrentIndex(0)
