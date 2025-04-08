@@ -42,7 +42,7 @@ def add_layer_to_qgis(
 ):
     path = file["id"]
     file_name = os.path.basename(path.rstrip("/"))
-    data_type = file["descriptor"]["data_type"]
+    data_type = file["data_type"]
 
     # Save the last modified date of the downloaded file in QSettings
     last_modified_key = f"{project_name}/{path}/last_modified"
