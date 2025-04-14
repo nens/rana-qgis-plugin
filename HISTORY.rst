@@ -1,7 +1,13 @@
 History
 =======
 
-1.1.5 (unreleased)
+1.1.6 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+1.1.5 (2025-04-14)
 ------------------
 
 - Add bridgestyle package to libs: #24
