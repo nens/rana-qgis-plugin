@@ -12,6 +12,7 @@ History
 - Add technical documentation for Rana Desktop Client
 - Sort projects by last activity in ascending order
 - Include the vector style upload in the file upload process: #28
+- Fix simple markers not showing in the Web Client: #29
 
 
 1.1.4 (2025-02-28)
