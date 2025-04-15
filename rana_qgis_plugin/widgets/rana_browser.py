@@ -414,6 +414,7 @@ class RanaBrowser(uicls, basecls):
         self.file_upload_worker.failed.connect(self.on_file_upload_failed)
         self.file_upload_worker.progress.connect(self.on_file_upload_progress)
         self.file_upload_worker.conflict.connect(self.handle_file_conflict)
+        self.file_upload_worker.warning.connect(lambda msg: self.communication.show_warn(msg))
         self.file_upload_worker.start()
 
     def handle_file_conflict(self):

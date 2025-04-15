@@ -79,6 +79,7 @@ class FileUploadWorker(QThread):
     finished = pyqtSignal()
     conflict = pyqtSignal()
     failed = pyqtSignal(str)
+    warning = pyqtSignal(str)
 
     def __init__(
         self,
@@ -177,11 +178,11 @@ class FileUploadWorker(QThread):
             # Convert QGIS layers to styling files for the Rana Web Client
             try:
                 self.progress.emit(0)
-                _, warning, mb_style, sprite_sheet = convertGroup(
+                _, warnings, mb_style, sprite_sheet = convertGroup(
                     group, qgis_layers, base_url, workspace="workspace", name="default"
                 )
-                if warning:
-                    self.warning.emit(warning)
+                if warnings:
+                    self.warning.emit(", ".join(warnings))
 
                 # Get upload URLs to S3
                 upload_urls = get_vector_style_upload_urls(descriptor_id)
@@ -207,7 +208,7 @@ class FileUploadWorker(QThread):
                     self.upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
                 os.remove(zip_path)
             except Exception as e:
-                self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+                self.warning.emit(f"Failed to convert styling files: {str(e)}")
 
         # Upload file to Rana
         try:
