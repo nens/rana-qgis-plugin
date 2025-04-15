@@ -4,7 +4,8 @@ History
 1.1.6 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Show warning messages when converting vector files fails
+- Logging out does not open web browser anymore
 
 
 1.1.5 (2025-04-14)

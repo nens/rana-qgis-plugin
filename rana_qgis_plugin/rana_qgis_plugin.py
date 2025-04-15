@@ -1,5 +1,3 @@
-import webbrowser
-
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QButtonGroup, QDialog, QDockWidget, QMenu, QRadioButton, QSizePolicy
 
@@ -44,10 +42,9 @@ class RanaQgisPlugin:
 
     def logout(self):
         self.communication.clear_message_bar()
-        self.communication.bar_info("Logout initiated! You will be logged out from Rana shortly.")
-        webbrowser.open(LOGOUT_URL)
         remove_authcfg()
         self.add_rana_menu()
+        self.communication.bar_info("You have been logged out.")
         if self.dock_widget:
             self.dock_widget.close()
 
