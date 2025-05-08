@@ -57,6 +57,9 @@ def add_layer_to_qgis(
         else:
             communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
     elif data_type == "vector":
+        if file["descriptor"]["meta"] is None:
+            communication.show_warn(f"No metadata found for {file_name}, processing probably has not finished yet.")
+            return
         layers = file["descriptor"]["meta"].get("layers", [])
         if not layers:
             communication.show_warn(f"No layers found for {file_name}.")
