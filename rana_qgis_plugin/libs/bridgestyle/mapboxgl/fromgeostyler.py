@@ -4,13 +4,8 @@ import os
 import tempfile
 
 from ..qgis import togeostyler as qgis2geostyler
-from ..qgis.expressions import (
-    OGC_PROPERTYNAME,
-    OGC_IS_EQUAL_TO,
-    OGC_IS_NULL,
-    OGC_IS_NOT_NULL,
-    OGC_SUB
-)
+from ..qgis.expressions import (OGC_IS_EQUAL_TO, OGC_IS_NOT_NULL, OGC_IS_NULL,
+                                OGC_PROPERTYNAME, OGC_SUB)
 
 # Globals
 _warnings = []
@@ -48,6 +43,7 @@ def convertGroup(group, qgis_layers, baseUrl, workspace, name):
     for layername in group["layers"]:
         layer = qgis_layers[layername]
         geostyler, icons, sprites, warnings = qgis2geostyler.convert(layer)
+        allWarnings.extend(warnings)
         allSprites.update(sprites)  # combine/accumulate sprites
         geostylers[layername] = geostyler
         mbox, mbWarnings = convert(geostyler, None)

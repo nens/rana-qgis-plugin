@@ -4,7 +4,7 @@ History
 1.1.7 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Fixed symbol compatibility test and warning in bridge-style code. #1681
 
 
 1.1.6 (2025-04-15)
