@@ -89,7 +89,9 @@ class FileUploadWorker(QThread):
         super().__init__()
         self.project = project
         self.file = file
-        self.file_overwrite = None  # Set to True to overwrite file, False to abort upload
+        self.file_overwrite = (
+            None  # Set to True to overwrite file, False to abort upload
+        )
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
 
@@ -110,7 +112,9 @@ class FileUploadWorker(QThread):
                     for file in files:
                         if file.endswith(".qml"):
                             file_path = os.path.join(root, file)
-                            zip_file.write(file_path, os.path.relpath(file_path, local_dir))
+                            zip_file.write(
+                                file_path, os.path.relpath(file_path, local_dir)
+                            )
         except Exception as e:
             self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
@@ -119,7 +123,9 @@ class FileUploadWorker(QThread):
         local_last_modified = QSettings().value(self.last_modified_key)
         server_file = get_tenant_project_file(self.project["id"], {"path": file_path})
         if not server_file:
-            self.failed.emit("Failed to get file from server. Check if file has been moved or deleted.")
+            self.failed.emit(
+                "Failed to get file from server. Check if file has been moved or deleted."
+            )
             return False
         self.last_modified = server_file["last_modified"]
         if self.last_modified != local_last_modified:
@@ -160,7 +166,9 @@ class FileUploadWorker(QThread):
             layers = [layer for layer in all_layers if file_name in layer.source()]
 
             if not layers:
-                self.failed.emit(f"No layers found for {file_name}. Open the file in QGIS and try again.")
+                self.failed.emit(
+                    f"No layers found for {file_name}. Open the file in QGIS and try again."
+                )
                 return
 
             # Save vector styling files to Rana
@@ -188,18 +196,42 @@ class FileUploadWorker(QThread):
                 upload_urls = get_vector_style_upload_urls(descriptor_id)
 
                 if not upload_urls:
-                    self.failed.emit("Failed to get vector style upload URLs from the API.")
+                    self.failed.emit(
+                        "Failed to get vector style upload URLs from the API."
+                    )
                     return
 
                 # Upload style.json
-                self.upload_to_s3(upload_urls["style.json"], json.dumps(mb_style), "application/json")
+                self.upload_to_s3(
+                    upload_urls["style.json"], json.dumps(mb_style), "application/json"
+                )
 
                 # Upload sprite images if available
-                if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-                    self.upload_to_s3(upload_urls["sprite.png"], image_to_bytes(sprite_sheet["img"]), "image/png")
-                    self.upload_to_s3(upload_urls["sprite@2x.png"], image_to_bytes(sprite_sheet["img2x"]), "image/png")
-                    self.upload_to_s3(upload_urls["sprite.json"], sprite_sheet["json"], "application/json")
-                    self.upload_to_s3(upload_urls["sprite@2x.json"], sprite_sheet["json2x"], "application/json")
+                if (
+                    sprite_sheet
+                    and sprite_sheet.get("img")
+                    and sprite_sheet.get("img2x")
+                ):
+                    self.upload_to_s3(
+                        upload_urls["sprite.png"],
+                        image_to_bytes(sprite_sheet["img"]),
+                        "image/png",
+                    )
+                    self.upload_to_s3(
+                        upload_urls["sprite@2x.png"],
+                        image_to_bytes(sprite_sheet["img2x"]),
+                        "image/png",
+                    )
+                    self.upload_to_s3(
+                        upload_urls["sprite.json"],
+                        sprite_sheet["json"],
+                        "application/json",
+                    )
+                    self.upload_to_s3(
+                        upload_urls["sprite@2x.json"],
+                        sprite_sheet["json2x"],
+                        "application/json",
+                    )
 
                 # Zip and upload QML zip
                 zip_path = os.path.join(local_dir, "qml.zip")

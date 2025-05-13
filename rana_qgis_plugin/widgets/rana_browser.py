@@ -17,7 +17,11 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
 )
-from rana_qgis_plugin.utils_api import get_tenant_project_files, get_tenant_projects, get_threedi_schematisation
+from rana_qgis_plugin.utils_api import (
+    get_tenant_project_files,
+    get_tenant_projects,
+    get_threedi_schematisation,
+)
 from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker
 
 base_dir = os.path.dirname(__file__)
@@ -111,8 +115,12 @@ class RanaBrowser(uicls, basecls):
             self.rana_widget.setEnabled(False)
             self.communication.progress_bar("Loading files...", clear_msg_bar=True)
             try:
-                only_directory_paths = self.paths[2:]  # Skip the first two paths: Projects and project_name
-                path = "/".join(only_directory_paths) + ("/" if only_directory_paths else "")
+                only_directory_paths = self.paths[
+                    2:
+                ]  # Skip the first two paths: Projects and project_name
+                path = "/".join(only_directory_paths) + (
+                    "/" if only_directory_paths else ""
+                )
                 self.fetch_and_populate_files(path)
                 self.show_files_widget()
             finally:
@@ -121,7 +129,9 @@ class RanaBrowser(uicls, basecls):
 
     def update_pagination(self, projects: list):
         total_items = len(projects)
-        total_pages = math.ceil(total_items / self.items_per_page) if total_items > 0 else 1
+        total_pages = (
+            math.ceil(total_items / self.items_per_page) if total_items > 0 else 1
+        )
         self.label_page_number.setText(f"Page {self.current_page}/{total_pages}")
         self.btn_previous.setDisabled(self.current_page == 1)
         self.btn_next.setDisabled(self.current_page == total_pages)
@@ -187,7 +197,11 @@ class RanaBrowser(uicls, basecls):
     def filter_projects(self, text: str, clear: bool = False):
         self.current_page = 1
         if text:
-            self.filtered_projects = [project for project in self.projects if text.lower() in project["name"].lower()]
+            self.filtered_projects = [
+                project
+                for project in self.projects
+                if text.lower() in project["name"].lower()
+            ]
         else:
             self.filtered_projects = []
         self.populate_projects(clear=clear)
@@ -252,7 +266,11 @@ class RanaBrowser(uicls, basecls):
             name_item.setData(file, role=Qt.UserRole)
             data_type = file["data_type"]
             data_type_item = QStandardItem(data_type)
-            size_display = display_bytes(file["size"]) if data_type != "threedi_schematisation" else "N/A"
+            size_display = (
+                display_bytes(file["size"])
+                if data_type != "threedi_schematisation"
+                else "N/A"
+            )
             size_item = NumericItem(size_display)
             size_item.setData(
                 file["size"] if data_type != "threedi_schematisation" else -1,
@@ -263,7 +281,9 @@ class RanaBrowser(uicls, basecls):
             last_modified_item = NumericItem(last_modified)
             last_modified_item.setData(last_modified_timestamp, role=Qt.UserRole)
             # Add items to the model
-            self.files_model.appendRow([name_item, data_type_item, size_item, last_modified_item])
+            self.files_model.appendRow(
+                [name_item, data_type_item, size_item, last_modified_item]
+            )
 
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
@@ -297,11 +317,23 @@ class RanaBrowser(uicls, basecls):
     def show_selected_file_details(self):
         self.file_table_widget.clearContents()
         filename = os.path.basename(self.selected_file["id"].rstrip("/"))
-        username = self.selected_file["user"]["given_name"] + " " + self.selected_file["user"]["family_name"]
+        username = (
+            self.selected_file["user"]["given_name"]
+            + " "
+            + self.selected_file["user"]["family_name"]
+        )
         data_type = self.selected_file["data_type"]
-        meta = self.selected_file["descriptor"]["meta"] if self.selected_file["descriptor"] else None
+        meta = (
+            self.selected_file["descriptor"]["meta"]
+            if self.selected_file["descriptor"]
+            else None
+        )
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
-        size = display_bytes(self.selected_file["size"]) if data_type != "threedi_schematisation" else "N/A"
+        size = (
+            display_bytes(self.selected_file["size"])
+            if data_type != "threedi_schematisation"
+            else "N/A"
+        )
         file_details = [
             ("Name", filename),
             ("Size", size),
@@ -335,7 +367,9 @@ class RanaBrowser(uicls, basecls):
             ]
             file_details.extend(scenario_details)
         if data_type == "threedi_schematisation":
-            self.schematisation = get_threedi_schematisation(self.communication, self.selected_file["descriptor_id"])
+            self.schematisation = get_threedi_schematisation(
+                self.communication, self.selected_file["descriptor_id"]
+            )
             if self.schematisation:
                 schematisation = self.schematisation["schematisation"]
                 revision = self.schematisation["latest_revision"]
@@ -400,7 +434,9 @@ class RanaBrowser(uicls, basecls):
         self.communication.show_error(error)
 
     def on_file_download_progress(self, progress: int):
-        self.communication.progress_bar("Downloading file...", 0, 100, progress, clear_msg_bar=True)
+        self.communication.progress_bar(
+            "Downloading file...", 0, 100, progress, clear_msg_bar=True
+        )
 
     def save_file_to_rana(self):
         """Start the worker for uploading files"""
@@ -414,7 +450,9 @@ class RanaBrowser(uicls, basecls):
         self.file_upload_worker.failed.connect(self.on_file_upload_failed)
         self.file_upload_worker.progress.connect(self.on_file_upload_progress)
         self.file_upload_worker.conflict.connect(self.handle_file_conflict)
-        self.file_upload_worker.warning.connect(lambda msg: self.communication.show_warn(msg))
+        self.file_upload_worker.warning.connect(
+            lambda msg: self.communication.show_warn(msg)
+        )
         self.file_upload_worker.start()
 
     def handle_file_conflict(self):
@@ -439,7 +477,9 @@ class RanaBrowser(uicls, basecls):
         self.communication.show_error(error)
 
     def on_file_upload_progress(self, progress: int):
-        self.communication.progress_bar("Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True)
+        self.communication.progress_bar(
+            "Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True
+        )
 
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
