@@ -28,7 +28,9 @@ def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     file_name = os.path.basename(path.rstrip("/"))
     file_name_without_extension = os.path.splitext(file_name)[0]
     base_dir = os.path.join(os.path.expanduser("~"), "Rana")
-    local_dir_structure = os.path.join(base_dir, project_slug, os.path.dirname(path), file_name_without_extension)
+    local_dir_structure = os.path.join(
+        base_dir, project_slug, os.path.dirname(path), file_name_without_extension
+    )
     local_file_path = os.path.join(local_dir_structure, file_name)
     return local_dir_structure, local_file_path
 
@@ -55,10 +57,14 @@ def add_layer_to_qgis(
             QgsProject.instance().addMapLayer(layer)
             communication.bar_info(f"Added {data_type} layer: {local_file_path}")
         else:
-            communication.show_error(f"Failed to add {data_type} layer: {local_file_path}")
+            communication.show_error(
+                f"Failed to add {data_type} layer: {local_file_path}"
+            )
     elif data_type == "vector":
         if file["descriptor"]["meta"] is None:
-            communication.show_warn(f"No metadata found for {file_name}, processing probably has not finished yet.")
+            communication.show_warn(
+                f"No metadata found for {file_name}, processing probably has not finished yet."
+            )
             return
         layers = file["descriptor"]["meta"].get("layers", [])
         if not layers:
@@ -71,27 +77,37 @@ def add_layer_to_qgis(
             if layer.isValid():
                 QgsProject.instance().addMapLayer(layer)
                 # Apply the QML style file to the layer
-                qml_path = os.path.join(os.path.dirname(local_file_path), f"{layer_name}.qml")
+                qml_path = os.path.join(
+                    os.path.dirname(local_file_path), f"{layer_name}.qml"
+                )
                 if os.path.exists(qml_path):
                     layer.loadNamedStyle(qml_path)
                     layer.triggerRepaint()
             else:
-                communication.show_error(f"Failed to add {layer_name} layer from: {local_file_path}")
+                communication.show_error(
+                    f"Failed to add {layer_name} layer from: {local_file_path}"
+                )
         communication.bar_info(f"Added {data_type} file: {local_file_path}")
     elif data_type == "threedi_schematisation" and schematisation_instance:
         communication.clear_message_bar()
         threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
         if not threedi_models_and_simulations:
-            communication.show_error("Please enable the 3Di Models and Simulations plugin to open this schematisation.")
+            communication.show_error(
+                "Please enable the 3Di Models and Simulations plugin to open this schematisation."
+            )
             return
         schematisation = schematisation_instance["schematisation"]
         revision = schematisation_instance["latest_revision"]
         if not revision:
             communication.show_warn("Cannot open a schematisation without a revision.")
             return
-        communication.bar_info(f"Opening the schematisation in the 3Di Models and Simulations plugin...")
+        communication.bar_info(
+            f"Opening the schematisation in the 3Di Models and Simulations plugin..."
+        )
         threedi_models_and_simulations.run()
-        threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(schematisation, revision)
+        threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(
+            schematisation, revision
+        )
     else:
         communication.show_warn(f"Unsupported data type: {data_type}")
 

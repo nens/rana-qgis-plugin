@@ -43,21 +43,27 @@ class UICommunication:
     def bar_info(self, msg, dur=5):
         """Showing info message bar."""
         if self.iface is not None:
-            self.message_bar.pushMessage(self.context, msg, level=Qgis.Info, duration=dur)
+            self.message_bar.pushMessage(
+                self.context, msg, level=Qgis.Info, duration=dur
+            )
         else:
             print(msg)
 
     def bar_warn(self, msg, dur=5):
         """Showing warning message bar."""
         if self.iface is not None:
-            self.message_bar.pushMessage(self.context, msg, level=Qgis.Warning, duration=dur)
+            self.message_bar.pushMessage(
+                self.context, msg, level=Qgis.Warning, duration=dur
+            )
         else:
             print(msg)
 
     def bar_error(self, msg, dur=5):
         """Showing error message bar."""
         if self.iface is not None:
-            self.message_bar.pushMessage(self.context, msg, level=Qgis.Critical, duration=dur)
+            self.message_bar.pushMessage(
+                self.context, msg, level=Qgis.Critical, duration=dur
+            )
         else:
             print(msg)
 
@@ -97,7 +103,9 @@ class UICommunication:
         if self.iface is None:
             return None
         parent = parent if parent is not None else self.iface.mainWindow()
-        item, accept = QInputDialog.getItem(parent, title, message, items, editable=False)
+        item, accept = QInputDialog.getItem(
+            parent, title, message, items, editable=False
+        )
         if accept is False:
             return None
         return item
@@ -114,7 +122,9 @@ class UICommunication:
         """Log the info message to QGIS logs."""
         self.log_msg(msg, level=Qgis.Info)
 
-    def progress_bar(self, msg, minimum=0, maximum=0, init_value=0, clear_msg_bar=False):
+    def progress_bar(
+        self, msg, minimum=0, maximum=0, init_value=0, clear_msg_bar=False
+    ):
         """Setting progress bar."""
         if self.iface is None:
             return None

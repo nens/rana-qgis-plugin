@@ -1,5 +1,13 @@
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QAction, QButtonGroup, QDialog, QDockWidget, QMenu, QRadioButton, QSizePolicy
+from qgis.PyQt.QtWidgets import (
+    QAction,
+    QButtonGroup,
+    QDialog,
+    QDockWidget,
+    QMenu,
+    QRadioButton,
+    QSizePolicy,
+)
 
 from .auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from .auth_3di import setup_3di_auth
@@ -112,8 +120,12 @@ class RanaQgisPlugin:
                 menu.addAction(user_action)
                 self.tenants = get_user_tenants(self.communication, user_id)
                 if len(self.tenants) > 1:
-                    switch_tenant_action = QAction("Switch Tenant", self.iface.mainWindow())
-                    switch_tenant_action.triggered.connect(self.open_tenant_selection_dialog)
+                    switch_tenant_action = QAction(
+                        "Switch Tenant", self.iface.mainWindow()
+                    )
+                    switch_tenant_action.triggered.connect(
+                        self.open_tenant_selection_dialog
+                    )
                     menu.addAction(switch_tenant_action)
             logout_action = QAction(logout_icon, "Logout", self.iface.mainWindow())
             logout_action.triggered.connect(self.logout)
@@ -122,7 +134,9 @@ class RanaQgisPlugin:
             login_action = QAction(login_icon, "Login", self.iface.mainWindow())
             login_action.triggered.connect(self.login)
             menu.addAction(login_action)
-        about_rana_action = QAction(rana_icon, "About Rana Desktop Client", self.iface.mainWindow())
+        about_rana_action = QAction(
+            rana_icon, "About Rana Desktop Client", self.iface.mainWindow()
+        )
         about_rana_action.triggered.connect(self.open_about_rana_dialog)
         menu.addAction(about_rana_action)
 
@@ -139,11 +153,17 @@ class RanaQgisPlugin:
         self.login()
         if not self.dock_widget:
             self.dock_widget = QDockWidget(self.menu, self.iface.mainWindow())
-            self.dock_widget.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-            self.dock_widget.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable)
+            self.dock_widget.setAllowedAreas(
+                Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+            )
+            self.dock_widget.setFeatures(
+                QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable
+            )
             self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.dock_widget.setObjectName(self.menu)
             self.rana_browser = RanaBrowser(self.communication)
             self.dock_widget.setWidget(self.rana_browser)
-        self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True)
+        self.iface.addTabifiedDockWidget(
+            Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True
+        )
         self.dock_widget.show()

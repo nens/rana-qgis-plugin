@@ -44,12 +44,16 @@ class NetworkManager(object):
 
     def post(self, params: dict = None, payload: dict = {}):
         self.prepare_request(params)
-        self._reply = self._network_manager.post(self._request, json.dumps(payload).encode("utf-8"))
+        self._reply = self._network_manager.post(
+            self._request, json.dumps(payload).encode("utf-8")
+        )
         return self.process_request()
 
     def put(self, params: dict = None, payload: dict = {}):
         self.prepare_request(params)
-        self._reply = self._network_manager.put(self._request, json.dumps(payload).encode("utf-8"))
+        self._reply = self._network_manager.put(
+            self._request, json.dumps(payload).encode("utf-8")
+        )
         return self.process_request()
 
     def prepare_request(self, params: dict = None):
