@@ -47,12 +47,17 @@ jobs:
       - name: Upload zip to artifacts.lizard.net on tag release
         run: |
           ZIP_NAME=$(find . -type f -name 'rana_qgis_plugin.*.zip')
-          curl -X POST \
-              --retry 3 \
-              --progress-bar \
-              -H "Content-Type: multipart/form-data" \
-              -F key=${ARTIFACTS_SERVER_KEY} \
-              -F artifact=@${ZIP_NAME} \
-              https://artifacts.lizard.net/upload/rana-qgis-plugin/
+          if wget --spider https://plugins.lizard.net/${ZIP_NAME} 2>/dev/null;
+          then
+            curl -X POST \
+                --retry 3 \
+                --progress-bar \
+                -H "Content-Type: multipart/form-data" \
+                -F key=${ARTIFACTS_SERVER_KEY} \
+                -F artifact=@${ZIP_NAME} \
+                https://artifacts.lizard.net/upload/rana-qgis-plugin/
+          else
+            echo "Cannot upload $ZIP_NAME; file is already present on plugins.lizard.net> &2 && exit 1"
+          fi
         env:
           ARTIFACTS_SERVER_KEY: ${{ secrets.ARTIFACTS_KEY }}
