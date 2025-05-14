@@ -8,6 +8,7 @@ on:
   pull_request:  # just build the zip on PR, skip release
     paths:
       - "rana_qgis_plugin/metadata.txt"
+  workflow_dispatch:
 
 jobs:
   build:
