@@ -47,7 +47,8 @@ jobs:
 
       - name: Upload zip to artifacts.lizard.net on tag release
         run: |
-          ZIP_NAME=$(find . -type f -name 'rana_qgis_plugin.*.zip')
+          # strip leading ./ from find result so URL is correct
+          ZIP_NAME=$(find . -type f -name 'rana_qgis_plugin.*.zip' -printf '%f\n')
           if wget --spider https://plugins.lizard.net/${ZIP_NAME} 2>/dev/null;
           then
             echo "Cannot upload $ZIP_NAME; file is already present on plugins.lizard.net> &2 && exit 1"
