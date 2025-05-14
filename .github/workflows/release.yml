@@ -1,0 +1,65 @@
+name: Build and publish
+
+# Run on PR requests. And on master itself.
+on:
+  push:
+    tags:
+      - "*"
+  pull_request:  # just build the zip on PR, skip release
+    paths:
+      - "rana_qgis_plugin/metadata.txt"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build zipped plugin
+        run: |
+          python zip_plugin.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          path: ./rana_qgis_plugin.*.zip
+          retention-days: 5
+
+  publish:
+    name: Publish on artifacts.lizard.net
+    needs: [build]
+    runs-on: ubuntu-latest
+    # release on every tag
+    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: artifact
+          path: .
+
+      - name: Upload zip to artifacts.lizard.net on tag release
+        run: |
+          # strip leading ./ from find result so URL is correct
+          ZIP_NAME=$(find . -type f -name 'rana_qgis_plugin.*.zip' -printf '%f\n')
+          if wget --spider https://plugins.lizard.net/${ZIP_NAME} 2>/dev/null;
+          then
+            echo "Cannot upload $ZIP_NAME; file is already present on plugins.lizard.net> &2 && exit 1"
+          else
+            curl --request POST \
+                 --retry 3 \
+                 --progress-bar \
+                 --header "Content-Type: multipart/form-data" \
+                 --form key=${ARTIFACTS_SERVER_KEY} \
+                 --form artifact=@${ZIP_NAME} \
+                 https://artifacts.lizard.net/upload/rana-qgis-plugin/
+          fi
+        env:
+          ARTIFACTS_SERVER_KEY: ${{ secrets.ARTIFACTS_KEY }}
