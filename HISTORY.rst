@@ -8,6 +8,7 @@ History
 - Desktop client crashes when opening a vector file that isn't "Complete" in processing. #1731
 - Add lint workflow with pre-commit and ruff. nens/rana#1795
 - Run linter.
+- Add build and release workflow. nens/rana#1794
 
 
 1.1.6 (2025-04-15)
