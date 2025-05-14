@@ -52,13 +52,13 @@ jobs:
           then
             echo "Cannot upload $ZIP_NAME; file is already present on plugins.lizard.net> &2 && exit 1"
           else
-            curl -X POST \
-                --retry 3 \
-                --progress-bar \
-                -H "Content-Type: multipart/form-data" \
-                -F key=${ARTIFACTS_SERVER_KEY} \
-                -F artifact=@${ZIP_NAME} \
-                https://artifacts.lizard.net/upload/rana-qgis-plugin/
+            curl --request POST \
+                 --retry 3 \
+                 --progress-bar \
+                 --header "Content-Type: multipart/form-data" \
+                 --form key=${ARTIFACTS_SERVER_KEY} \
+                 --form artifact=@${ZIP_NAME} \
+                 https://artifacts.lizard.net/upload/rana-qgis-plugin/
           fi
         env:
           ARTIFACTS_SERVER_KEY: ${{ secrets.ARTIFACTS_KEY }}
