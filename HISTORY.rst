@@ -9,6 +9,7 @@ History
 - Add lint workflow with pre-commit and ruff. nens/rana#1795
 - Run linter.
 - Add build and release workflow. nens/rana#1794
+- Use dict to show user-friendly data type name. nens/rana#1872
 
 
 1.1.6 (2025-04-15)
