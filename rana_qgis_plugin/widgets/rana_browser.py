@@ -32,7 +32,7 @@ class RanaBrowser(uicls, basecls):
     SUPPORTED_DATA_TYPES = {
         "vector": "vector",
         "raster": "raster",
-        "threedi_schematisation": "3Di schematisation"
+        "threedi_schematisation": "3Di schematisation",
     }
 
     def __init__(self, communication: UICommunication, parent=None):
@@ -269,7 +269,9 @@ class RanaBrowser(uicls, basecls):
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.UserRole)
             data_type = file["data_type"]
-            data_type_item = QStandardItem(self.SUPPORTED_DATA_TYPES.get(data_type, data_type))
+            data_type_item = QStandardItem(
+                self.SUPPORTED_DATA_TYPES.get(data_type, data_type)
+            )
             size_display = (
                 display_bytes(file["size"])
                 if data_type != "threedi_schematisation"
