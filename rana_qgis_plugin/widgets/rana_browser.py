@@ -29,7 +29,11 @@ uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
 
 class RanaBrowser(uicls, basecls):
-    SUPPORTED_DATA_TYPES = ["vector", "raster", "threedi_schematisation"]
+    SUPPORTED_DATA_TYPES = {
+        "vector": "vector",
+        "raster": "raster",
+        "threedi_schematisation": "3Di schematisation",
+    }
 
     def __init__(self, communication: UICommunication, parent=None):
         super().__init__(parent)
@@ -265,7 +269,9 @@ class RanaBrowser(uicls, basecls):
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.UserRole)
             data_type = file["data_type"]
-            data_type_item = QStandardItem(data_type)
+            data_type_item = QStandardItem(
+                self.SUPPORTED_DATA_TYPES.get(data_type, data_type)
+            )
             size_display = (
                 display_bytes(file["size"])
                 if data_type != "threedi_schematisation"
@@ -338,7 +344,7 @@ class RanaBrowser(uicls, basecls):
             ("Name", filename),
             ("Size", size),
             ("File type", self.selected_file["media_type"]),
-            ("Data type", data_type),
+            ("Data type", self.SUPPORTED_DATA_TYPES.get(data_type, data_type)),
             ("Added by", username),
             ("Last modified", last_modified),
         ]
@@ -395,7 +401,7 @@ class RanaBrowser(uicls, basecls):
         if data_type == "threedi_schematisation":
             self.btn_open.show()
             self.btn_save.hide()
-        elif data_type in self.SUPPORTED_DATA_TYPES:
+        elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
         else:
@@ -484,7 +490,7 @@ class RanaBrowser(uicls, basecls):
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
         data_type = self.selected_file["data_type"]
-        if data_type in self.SUPPORTED_DATA_TYPES:
+        if data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.initialize_file_download_worker()
             self.file_download_worker.start()
         else:
