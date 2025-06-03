@@ -58,13 +58,14 @@ class FileDownloadWorker(QThread):
                         if progress > previous_progress:
                             self.progress.emit(progress)
                             previous_progress = progress
-            # Fetch and extract the QML zip
-            qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
-            if qml_zip_content:
-                stream = io.BytesIO(qml_zip_content)
-                if zipfile.is_zipfile(stream):
-                    with zipfile.ZipFile(stream, "r") as zip_file:
-                        zip_file.extractall(local_dir_structure)
+            # Fetch and extract the QML zip for vector files
+            if self.file["data_type"] == "vector":
+                qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+                if qml_zip_content:
+                    stream = io.BytesIO(qml_zip_content)
+                    if zipfile.is_zipfile(stream):
+                        with zipfile.ZipFile(stream, "r") as zip_file:
+                            zip_file.extractall(local_dir_structure)
             self.finished.emit(local_file_path)
         except requests.exceptions.RequestException as e:
             self.failed.emit(f"Failed to download file: {str(e)}")

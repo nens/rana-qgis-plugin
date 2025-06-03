@@ -6,6 +6,7 @@ History
 
 - Fixed symbol compatibility test and warning in bridge-style code. #1681
 - Desktop client crashes when opening a vector file that isn't "Complete" in processing. #1731
+- Only retrieve vector style file for vector files. nens/rana#1541
 - Add lint workflow with pre-commit and ruff. nens/rana#1795
 - Run linter.
 - Add build and release workflow. nens/rana#1794
