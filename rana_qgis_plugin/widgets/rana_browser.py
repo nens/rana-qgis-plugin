@@ -22,7 +22,11 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_projects,
     get_threedi_schematisation,
 )
-from rana_qgis_plugin.workers import FileDownloadWorker, FileUploadWorker, VectorStyleWorker
+from rana_qgis_plugin.workers import (
+    FileDownloadWorker,
+    FileUploadWorker,
+    VectorStyleWorker,
+)
 
 base_dir = os.path.dirname(__file__)
 uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
@@ -522,7 +526,9 @@ class RanaBrowser(uicls, basecls):
     def save_vector_styling_files(self):
         """Start the worker for saving vector styling files"""
         self.rana_widget.setEnabled(False)
-        self.communication.progress_bar("Generating and saving vector styling files...", clear_msg_bar=True)
+        self.communication.progress_bar(
+            "Generating and saving vector styling files...", clear_msg_bar=True
+        )
         self.vector_style_worker = VectorStyleWorker(
             self.project,
             self.selected_file,

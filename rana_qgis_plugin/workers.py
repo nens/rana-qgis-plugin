@@ -196,7 +196,9 @@ class VectorStyleWorker(QThread):
                     for file in files:
                         if file.endswith(".qml"):
                             file_path = os.path.join(root, file)
-                            zip_file.write(file_path, os.path.relpath(file_path, local_dir))
+                            zip_file.write(
+                                file_path, os.path.relpath(file_path, local_dir)
+                            )
         except Exception as e:
             self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
@@ -241,9 +243,7 @@ class VectorStyleWorker(QThread):
             upload_urls = get_vector_style_upload_urls(descriptor_id)
 
             if not upload_urls:
-                self.failed.emit(
-                    "Failed to get vector style upload URLs from the API."
-                )
+                self.failed.emit("Failed to get vector style upload URLs from the API.")
                 return
 
             # Upload style.json
@@ -253,10 +253,24 @@ class VectorStyleWorker(QThread):
 
             # Upload sprite images if available
             if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-                self.upload_to_s3(upload_urls["sprite.png"], image_to_bytes(sprite_sheet["img"]), "image/png")
-                self.upload_to_s3(upload_urls["sprite@2x.png"], image_to_bytes(sprite_sheet["img2x"]), "image/png")
-                self.upload_to_s3(upload_urls["sprite.json"], sprite_sheet["json"], "application/json")
-                self.upload_to_s3(upload_urls["sprite@2x.json"], sprite_sheet["json2x"], "application/json")
+                self.upload_to_s3(
+                    upload_urls["sprite.png"],
+                    image_to_bytes(sprite_sheet["img"]),
+                    "image/png",
+                )
+                self.upload_to_s3(
+                    upload_urls["sprite@2x.png"],
+                    image_to_bytes(sprite_sheet["img2x"]),
+                    "image/png",
+                )
+                self.upload_to_s3(
+                    upload_urls["sprite.json"], sprite_sheet["json"], "application/json"
+                )
+                self.upload_to_s3(
+                    upload_urls["sprite@2x.json"],
+                    sprite_sheet["json2x"],
+                    "application/json",
+                )
 
             # Zip and upload QML zip
             zip_path = os.path.join(local_dir, "qml.zip")
