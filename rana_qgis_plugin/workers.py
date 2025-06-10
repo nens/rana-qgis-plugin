@@ -232,7 +232,6 @@ class VectorStyleWorker(QThread):
 
         # Convert QGIS layers to styling files for the Rana Web Client
         try:
-            self.progress.emit(0)
             _, warnings, mb_style, sprite_sheet = convertGroup(
                 group, qgis_layers, base_url, workspace="workspace", name="default"
             )
