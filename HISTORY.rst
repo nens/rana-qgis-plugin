@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.7 (unreleased)
+1.1.7 (2025-06-10)
 ------------------
 
 - Fixed symbol compatibility test and warning in bridge-style code. #1681
