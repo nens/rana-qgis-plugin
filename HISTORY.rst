@@ -11,6 +11,7 @@ History
 - Run linter.
 - Add build and release workflow. nens/rana#1794
 - Use dict to show user-friendly data type name. nens/rana#1872
+- Split Rana save button into style save and data save button. nens/rana#1840
 
 
 1.1.6 (2025-04-15)
