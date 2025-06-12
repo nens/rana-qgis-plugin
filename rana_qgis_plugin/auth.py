@@ -3,14 +3,14 @@ import json
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
-from .communication import UICommunication
-from .constant import (
+from rana_qgis_plugin.communication import UICommunication
+from rana_qgis_plugin.constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
-    COGNITO_CLIENT_ID,
     COGNITO_TOKEN_ENDPOINT,
     RANA_AUTHCFG_ENTRY,
     RANA_SETTINGS_ENTRY,
 )
+from rana_qgis_plugin.utils_settings import cognito_client_id
 
 
 def get_authcfg_id():
@@ -52,7 +52,7 @@ def setup_oauth2(communication: UICommunication):
 
     # Set the configuration map for OAuth2
     config_map = {
-        "clientId": COGNITO_CLIENT_ID,
+        "clientId": cognito_client_id(),
         "grantFlow": 3,
         "redirectHost": "localhost",
         "redirectPort": 7070,

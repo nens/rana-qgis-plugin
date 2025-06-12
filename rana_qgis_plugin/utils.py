@@ -9,19 +9,7 @@ from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 
 from .communication import UICommunication
-from .constant import RANA_TENANT_ENTRY
 from .utils_qgis import get_threedi_models_and_simulations_instance
-
-
-def set_tenant_id(tenant: str):
-    settings = QSettings()
-    settings.setValue(RANA_TENANT_ENTRY, tenant)
-
-
-def get_tenant_id() -> str:
-    settings = QSettings()
-    tenant = settings.value(RANA_TENANT_ENTRY)
-    return tenant
 
 
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
