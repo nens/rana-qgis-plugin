@@ -18,6 +18,7 @@ from rana_qgis_plugin.utils import (
     elide_text,
 )
 from rana_qgis_plugin.utils_api import (
+    get_tenant_file_descriptor,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
@@ -334,11 +335,12 @@ class RanaBrowser(uicls, basecls):
             + self.selected_file["user"]["family_name"]
         )
         data_type = self.selected_file["data_type"]
-        meta = (
-            self.selected_file["descriptor"]["meta"]
-            if self.selected_file["descriptor"]
-            else None
-        )
+        meta = None
+        if self.selected_file["descriptor"]:
+            descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+            QgsMessageLog.logMessage(str(descriptor), level=Qgis.Critical)
+            meta = descriptor["meta"] if descriptor else None
+
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
         size = (
             display_bytes(self.selected_file["size"])
