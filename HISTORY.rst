@@ -5,6 +5,7 @@ History
 ------------------
 
 - Adapt file details view due to backend change nens/rana#1691
+- Added progress bar when downloading schematisation via M&S plugin nens/rana#1745
 
 
 1.1.7 (2025-06-10)

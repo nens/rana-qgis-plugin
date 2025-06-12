@@ -105,9 +105,13 @@ def add_layer_to_qgis(
             f"Opening the schematisation in the 3Di Models and Simulations plugin..."
         )
         threedi_models_and_simulations.run()
-        threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(
-            schematisation, revision
+        pb = communication.progress_bar(
+            msg="Downloading remote schematisation...", clear_msg_bar=True
         )
+        threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(
+            schematisation, revision, pb
+        )
+        communication.clear_message_bar()
     else:
         communication.show_warn(f"Unsupported data type: {data_type}")
 
