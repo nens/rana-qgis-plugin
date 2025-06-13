@@ -12,7 +12,7 @@ from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.auth_3di import setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import PLUGIN_NAME
-from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon
+from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
 from rana_qgis_plugin.utils_settings import (
     get_tenant_id,
@@ -33,8 +33,7 @@ class RanaQgisPlugin:
         self.rana_browser = None
         self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
         self.toolbar.setObjectName(PLUGIN_NAME)
-        self.icon = rana_icon
-        self.action = QAction(self.icon, "Open browser", iface.mainWindow())
+        self.action = QAction(rana_icon, "Open browser", iface.mainWindow())
         self.action.triggered.connect(self.run)
         self.communication = UICommunication(self.iface, PLUGIN_NAME)
         initialize_settings()
@@ -77,7 +76,12 @@ class RanaQgisPlugin:
 
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.iface.mainWindow())
-        res = dialog.exec_()
+        if dialog.exec() == QDialog.Accepted:
+            if dialog.authenticationSettingsChanged():
+                self.logout()
+                self.login()
+                if self.rana_browser:
+                    self.rana_browser.refresh_projects()
 
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
@@ -138,7 +142,7 @@ class RanaQgisPlugin:
                 menu.addAction(login_action)
 
         menu.addSeparator()
-        settings_action = QAction(rana_icon, "Settings", self.iface.mainWindow())
+        settings_action = QAction(settings_icon, "Settings", self.iface.mainWindow())
         settings_action.triggered.connect(self.open_settings_dialog)
         menu.addAction(settings_action)
 

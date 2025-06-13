@@ -10,7 +10,7 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils_settings import (
-    api_url,
+    base_url,
     cognito_client_id,
     set_base_url,
     set_cognito_client_id,
@@ -21,6 +21,7 @@ class SettingsDialog(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle(PLUGIN_NAME)
+        self.setMinimumWidth(400)
         layout = QVBoxLayout(self)
         self.setLayout(layout)
 
@@ -29,7 +30,7 @@ class SettingsDialog(QDialog):
 
         # Set up GUI and populate with settings
         auth_group.layout().addWidget(QLabel("Backend URL"), 0, 0)
-        self.url_lineedit = QLineEdit(api_url(), auth_group)
+        self.url_lineedit = QLineEdit(base_url(), auth_group)
         auth_group.layout().addWidget(self.url_lineedit, 0, 1)
 
         # Set up GUI and populate with settings
@@ -44,7 +45,18 @@ class SettingsDialog(QDialog):
         buttonBox.rejected.connect(self.reject)
         layout.addWidget(buttonBox)
 
+        self._authenticationSettingsChanged = False
+
+    def authenticationSettingsChanged(self):
+        return self._authenticationSettingsChanged
+
     def accept(self) -> None:
-        set_cognito_client_id(self.cognito_client_id_lineedit.text())
-        set_base_url(self.url_lineedit.text())
+        if self.cognito_client_id_lineedit.text() != cognito_client_id():
+            self._authenticationSettingsChanged = True
+            set_cognito_client_id(self.cognito_client_id_lineedit.text())
+
+        if self.url_lineedit.text() != base_url():
+            self._authenticationSettingsChanged = True
+            set_base_url(self.url_lineedit.text())
+
         return super().accept()

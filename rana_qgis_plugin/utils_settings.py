@@ -8,11 +8,18 @@ from .constant import COGNITO_LOGOUT_ENDPOINT, RANA_SETTINGS_ENTRY, RANA_TENANT_
 def initialize_settings():
     """Sets up the settings with default values"""
     settings = QgsSettings()
+
     settings.setValue(
-        f"{RANA_SETTINGS_ENTRY}/cognito_client_id", "250mkcukj5tn6lblsd6ka42c0a"
+        f"{RANA_SETTINGS_ENTRY}/cognito_client_id",
+        settings.value(
+            f"{RANA_SETTINGS_ENTRY}/cognito_client_id", "250mkcukj5tn6lblsd6ka42c0a"
+        ),
     )
     settings.setValue(
-        f"{RANA_SETTINGS_ENTRY}/base_url", "https://www.ranawaterintelligence.com"
+        f"{RANA_SETTINGS_ENTRY}/base_url",
+        settings.value(
+            f"{RANA_SETTINGS_ENTRY}/base_url", "https://www.ranawaterintelligence.com"
+        ),
     )
 
 
