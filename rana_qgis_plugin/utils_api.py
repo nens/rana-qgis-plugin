@@ -2,11 +2,11 @@ from typing import Optional, TypedDict
 
 import requests
 
-from .auth import get_authcfg_id
-from .communication import UICommunication
-from .constant import API_URL, COGNITO_USER_INFO_ENDPOINT
-from .network_manager import NetworkManager
-from .utils import get_tenant_id
+from rana_qgis_plugin.auth import get_authcfg_id
+from rana_qgis_plugin.communication import UICommunication
+from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
+from rana_qgis_plugin.network_manager import NetworkManager
+from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
 
 
 class UserInfo(TypedDict):
@@ -33,7 +33,7 @@ def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
 
 def get_user_tenants(communication: UICommunication, user_id: str):
     authcfg_id = get_authcfg_id()
-    url = f"{API_URL}/tenants"
+    url = f"{api_url()}/tenants"
     params = {"user_id": user_id}
 
     network_manager = NetworkManager(url, authcfg_id)
@@ -51,7 +51,7 @@ def get_user_tenants(communication: UICommunication, user_id: str):
 def get_tenant_projects(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/projects"
+    url = f"{api_url()}/tenants/{tenant}/projects"
     params = {"limit": 1000}
 
     network_manager = NetworkManager(url, authcfg_id)
@@ -71,7 +71,7 @@ def get_tenant_project_files(
 ):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/ls"
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/ls"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
@@ -88,7 +88,7 @@ def get_tenant_project_files(
 def get_tenant_project_file(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/stat"
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
 
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.fetch(params)
@@ -103,7 +103,7 @@ def get_tenant_project_file(project_id: str, params: dict):
 def get_tenant_file_descriptor(descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}"
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.fetch()
 
@@ -117,7 +117,7 @@ def get_tenant_file_descriptor(descriptor_id: str):
 def start_file_upload(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/upload"
 
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.post(params=params)
@@ -132,7 +132,7 @@ def start_file_upload(project_id: str, params: dict):
 def finish_file_upload(project_id: str, payload: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/projects/{project_id}/files/upload"
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/upload"
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.put(payload=payload)
     if status:
@@ -144,7 +144,7 @@ def finish_file_upload(project_id: str, payload: dict):
 def get_vector_style_upload_urls(descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
 
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.put()
@@ -159,7 +159,7 @@ def get_vector_style_upload_urls(descriptor_id: str):
 def get_vector_style_file(descriptor_id: str, file_name: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style/{file_name}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style/{file_name}"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch()
@@ -178,7 +178,7 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
 def get_threedi_schematisation(communication: UICommunication, descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
     if status:
@@ -196,7 +196,7 @@ def get_threedi_personal_api_key(
     communication.bar_info("Getting 3Di personal API key ...")
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{API_URL}/tenants/{tenant}/users/{user_id}/3di-personal-api-keys"
+    url = f"{api_url()}/tenants/{tenant}/users/{user_id}/3di-personal-api-keys"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.post()

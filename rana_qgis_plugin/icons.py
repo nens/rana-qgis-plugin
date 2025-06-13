@@ -1,5 +1,6 @@
 import os.path
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QApplication, QStyle
 
@@ -11,6 +12,7 @@ login_icon = QIcon(os.path.join(ICONS_DIR, "login.svg"))
 logout_icon = QIcon(os.path.join(ICONS_DIR, "logout.svg"))
 refresh_icon = QIcon(os.path.join(ICONS_DIR, "refresh.svg"))
 rana_icon = QIcon(os.path.join(ICONS_DIR, "rana.svg"))
+settings_icon = QgsApplication.getThemeIcon("/processingAlgorithm.svg")
 
 # Exported PYQT5 icons
 style = QApplication.style()
