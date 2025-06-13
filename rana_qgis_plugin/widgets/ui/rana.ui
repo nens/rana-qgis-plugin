@@ -94,6 +94,13 @@
        <item row="0" column="0">
         <widget class="QTreeView" name="files_tv"/>
        </item>
+       <item row="1" column="0">
+        <widget class="QPushButton" name="btn_upload">
+         <property name="text">
+          <string>Upload Files to Rana</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="file_widget">
