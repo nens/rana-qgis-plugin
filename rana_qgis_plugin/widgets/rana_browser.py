@@ -4,7 +4,7 @@ import os
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
+from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
@@ -26,6 +26,7 @@ from rana_qgis_plugin.utils_api import (
 from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
+    NewFileUploadWorker,
     VectorStyleWorker,
 )
 
@@ -49,6 +50,7 @@ class RanaBrowser(uicls, basecls):
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
+        self.new_file_upload_worker: QThread = None
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
@@ -91,6 +93,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(self.upload_file_to_rana)
         self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
+        self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -472,6 +475,22 @@ class RanaBrowser(uicls, basecls):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
+
+    def upload_new_file_to_rana(self):
+        """Upload a local (new) file to Rana"""
+        # TODO: handle file conflict?
+        # TODO: remember last dit
+        # TODO: multiple files?
+        fileName, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open file",
+            "",
+            "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
+        )
+        self.communication.bar_info("Start uploading file to Rana...")
+        self.rana_widget.setEnabled(False)
+        self.new_file_upload_worker = NewFileUploadWorker(self.project, fileName)
+        self.new_file_upload_worker.start()
 
     def initialize_file_upload_worker(self):
         self.communication.bar_info("Start uploading file to Rana...")
