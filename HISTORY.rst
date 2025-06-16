@@ -1,7 +1,13 @@
 History
 =======
 
-1.1.8 (unreleased)
+1.1.9 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+1.1.8 (2025-06-16)
 ------------------
 
 - Adapt file details retrieval due to backend change. nens/rana#1691
