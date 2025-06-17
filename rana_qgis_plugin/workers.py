@@ -90,6 +90,7 @@ class FileUploadWorker(QThread):
         self.file_name = file_name
 
     def handle_file_conflict(self):
+        QgsMessageLog.logMessage(str("hadnle base"), level=Qgis.Critical)
         server_file = get_tenant_project_file(
             self.project["id"], {"path": self.file_name}
         )
@@ -159,6 +160,7 @@ class ExistingFileUploadWorker(FileUploadWorker):
         self.finished.connect(self._finish)
 
     def handle_file_conflict(self):
+        QgsMessageLog.logMessage(str("hadnle"), level=Qgis.Critical)
         local_last_modified = QSettings().value(self.last_modified_key)
         server_file = get_tenant_project_file(
             self.project["id"], {"path": self.file_name}
