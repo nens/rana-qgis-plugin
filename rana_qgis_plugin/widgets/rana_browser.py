@@ -1,8 +1,9 @@
 import math
 import os
+from pathlib import Path
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
+from qgis.PyQt.QtCore import QModelIndex, QObject, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
 
@@ -24,9 +25,9 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.workers import (
+    ExistingFileUploadWorker,
     FileDownloadWorker,
     FileUploadWorker,
-    NewFileUploadWorker,
     VectorStyleWorker,
 )
 
@@ -489,13 +490,19 @@ class RanaBrowser(uicls, basecls):
         )
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
-        self.new_file_upload_worker = NewFileUploadWorker(self.project, fileName)
+        self.new_file_upload_worker = FileUploadWorker(self.project, Path(fileName))
+        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
+        self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
+        self.new_file_upload_worker.progress.connect(self.on_file_upload_progress)
+        self.new_file_upload_worker.warning.connect(
+            lambda msg: self.communication.show_warn(msg)
+        )
         self.new_file_upload_worker.start()
 
     def initialize_file_upload_worker(self):
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
-        self.file_upload_worker = FileUploadWorker(
+        self.file_upload_worker = ExistingFileUploadWorker(
             self.project,
             self.selected_file,
         )
@@ -514,15 +521,18 @@ class RanaBrowser(uicls, basecls):
             "Do you want to overwrite the server copy with the local copy?"
         )
         file_overwrite = self.communication.ask(None, "File conflict", warn_and_ask_msg)
-        self.file_upload_worker.file_overwrite = file_overwrite
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.file_overwrite = file_overwrite
 
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        self.file_upload_worker.quit()
-        self.file_upload_worker.wait()
-        self.file_upload_worker = None
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.quit()
+        sender.wait()
 
     def on_file_upload_failed(self, error: str):
         self.rana_widget.setEnabled(True)

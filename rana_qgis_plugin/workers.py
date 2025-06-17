@@ -75,6 +75,80 @@ class FileDownloadWorker(QThread):
 
 
 class FileUploadWorker(QThread):
+    """Worker thread for uploading new (non-rana) files."""
+
+    progress = pyqtSignal(int)
+    finished = pyqtSignal()
+    conflict = pyqtSignal()
+    failed = pyqtSignal(str)
+    warning = pyqtSignal(str)
+
+    def __init__(
+        self,
+        project: dict,
+        file_path: Path,
+    ):
+        super().__init__()
+        self.project = project
+        self.file_path = file_path
+
+    def handle_file_conflict(self):
+        server_file = get_tenant_project_file(
+            self.project["id"], {"path": self.file_path.name}
+        )
+        if server_file:
+            self.failed.emit("File already exist on server.")
+            return False
+        return True  # Continue to upload
+
+    @pyqtSlot()
+    def run(self):
+        if not self.file_path or not self.project["id"]:
+            return
+        local_file_path = str(self.file_path)
+
+        # Check if file exists locally before uploading
+        if not os.path.exists(local_file_path):
+            self.failed.emit(f"File not found: {local_file_path}")
+            return
+
+        # Handle file conflict
+        continue_upload = self.handle_file_conflict()
+        if not continue_upload:
+            return
+
+        # Save file to Rana
+        try:
+            self.progress.emit(0)
+            # Step 1: POST request to initiate the upload
+            upload_response = start_file_upload(
+                self.project["id"], {"path": self.file_path.name}
+            )
+            if not upload_response:
+                self.failed.emit("Failed to initiate file upload.")
+                return
+            upload_url = upload_response["urls"][0]
+            # Step 2: Upload the file to the upload_url
+            self.progress.emit(20)
+            with open(local_file_path, "rb") as file:
+                response = requests.put(upload_url, data=file)
+                response.raise_for_status()
+            # Step 3: Complete the upload
+            self.progress.emit(80)
+            response = finish_file_upload(
+                self.project["id"],
+                upload_response,
+            )
+            if not response:
+                self.failed.emit("Failed to complete file upload.")
+                return
+            self.progress.emit(100)
+            self.finished.emit()
+        except Exception as e:
+            self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
+
+
+class ExistingFileUploadWorker(QThread):
     """Worker thread for uploading files."""
 
     progress = pyqtSignal(int)
@@ -139,84 +213,6 @@ class FileUploadWorker(QThread):
             self.progress.emit(0)
             # Step 1: POST request to initiate the upload
             upload_response = start_file_upload(self.project["id"], {"path": path})
-            if not upload_response:
-                self.failed.emit("Failed to initiate file upload.")
-                return
-            upload_url = upload_response["urls"][0]
-            # Step 2: Upload the file to the upload_url
-            self.progress.emit(20)
-            with open(local_file_path, "rb") as file:
-                response = requests.put(upload_url, data=file)
-                response.raise_for_status()
-            # Step 3: Complete the upload
-            self.progress.emit(80)
-            response = finish_file_upload(
-                self.project["id"],
-                upload_response,
-            )
-            if not response:
-                self.failed.emit("Failed to complete file upload.")
-                return
-            QSettings().setValue(self.last_modified_key, self.last_modified)
-            self.progress.emit(100)
-            self.finished.emit()
-        except Exception as e:
-            self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
-
-
-class NewFileUploadWorker(QThread):
-    """Worker thread for uploading new (non-rana) files."""
-
-    progress = pyqtSignal(int)
-    finished = pyqtSignal()
-    conflict = pyqtSignal()
-    failed = pyqtSignal(str)
-    warning = pyqtSignal(str)
-
-    def __init__(
-        self,
-        project: dict,
-        file: Path,
-    ):
-        super().__init__()
-        self.project = project
-        self.file = file
-
-    def handle_file_conflict(self):
-        # server_file = get_tenant_project_file(self.project["id"], {"path": file_path})
-        # if not server_file:
-        #     self.failed.emit(
-        #         "Failed to get file from server. Check if file has been moved or deleted."
-        #     )
-        #     return False
-        #     self.conflict.emit()
-
-        return True  # Continue to upload
-
-    @pyqtSlot()
-    def run(self):
-        if not self.file or not self.project["id"]:
-            return
-        project_slug = self.project["slug"]
-        _, local_file_path = get_local_file_path(project_slug, self.path)
-
-        # Check if file exists locally before uploading
-        if not os.path.exists(local_file_path):
-            self.failed.emit(f"File not found: {local_file_path}")
-            return
-
-        # Handle file conflict
-        continue_upload = self.handle_file_conflict()
-        if not continue_upload:
-            return
-
-        # Save file to Rana
-        try:
-            self.progress.emit(0)
-            # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(
-                self.project["id"], {"path": self.path.name()}
-            )
             if not upload_response:
                 self.failed.emit("Failed to initiate file upload.")
                 return
