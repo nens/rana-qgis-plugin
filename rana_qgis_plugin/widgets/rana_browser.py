@@ -479,9 +479,6 @@ class RanaBrowser(uicls, basecls):
 
     def upload_new_file_to_rana(self):
         """Upload a local (new) file to Rana"""
-        # TODO: handle file conflict?
-        # TODO: remember last dit
-        # TODO: multiple files?
         fileName, _ = QFileDialog.getOpenFileName(
             self,
             "Open file",
