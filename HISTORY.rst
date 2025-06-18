@@ -4,7 +4,7 @@ History
 1.1.9 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Added "Add File to Rana" button (nens/rana#1951)
 
 
 1.1.8 (2025-06-16)
