@@ -1,10 +1,11 @@
 import math
 import os
+from pathlib import Path
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
+from qgis.PyQt.QtCore import QModelIndex, QObject, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
+from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
@@ -24,6 +25,7 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.workers import (
+    ExistingFileUploadWorker,
     FileDownloadWorker,
     FileUploadWorker,
     VectorStyleWorker,
@@ -49,6 +51,7 @@ class RanaBrowser(uicls, basecls):
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
+        self.new_file_upload_worker: QThread = None
 
         # Breadcrumbs
         self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
@@ -91,6 +94,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_open.clicked.connect(self.open_file_in_qgis)
         self.btn_save.clicked.connect(self.upload_file_to_rana)
         self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
+        self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -473,10 +477,34 @@ class RanaBrowser(uicls, basecls):
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
 
+    def upload_new_file_to_rana(self):
+        """Upload a local (new) file to Rana"""
+        fileName, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open file",
+            "",
+            "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
+        )
+        self.communication.bar_info("Start uploading file to Rana...")
+        self.rana_widget.setEnabled(False)
+        assert self.selected_file["type"] == "directory"
+        self.new_file_upload_worker = FileUploadWorker(
+            self.project,
+            Path(fileName),
+            (self.selected_file["id"] + Path(fileName).name),
+        )
+        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
+        self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
+        self.new_file_upload_worker.progress.connect(self.on_file_upload_progress)
+        self.new_file_upload_worker.warning.connect(
+            lambda msg: self.communication.show_warn(msg)
+        )
+        self.new_file_upload_worker.start()
+
     def initialize_file_upload_worker(self):
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
-        self.file_upload_worker = FileUploadWorker(
+        self.file_upload_worker = ExistingFileUploadWorker(
             self.project,
             self.selected_file,
         )
@@ -495,15 +523,18 @@ class RanaBrowser(uicls, basecls):
             "Do you want to overwrite the server copy with the local copy?"
         )
         file_overwrite = self.communication.ask(None, "File conflict", warn_and_ask_msg)
-        self.file_upload_worker.file_overwrite = file_overwrite
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.file_overwrite = file_overwrite
 
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        self.file_upload_worker.quit()
-        self.file_upload_worker.wait()
-        self.file_upload_worker = None
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.quit()
+        sender.wait()
 
     def on_file_upload_failed(self, error: str):
         self.rana_widget.setEnabled(True)

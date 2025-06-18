@@ -2,10 +2,11 @@ import io
 import json
 import os
 import zipfile
+from pathlib import Path
 
 import requests
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
-from qgis.core import QgsProject
+from qgis.core import Qgis, QgsMessageLog, QgsProject
 
 from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path, image_to_bytes
@@ -74,7 +75,7 @@ class FileDownloadWorker(QThread):
 
 
 class FileUploadWorker(QThread):
-    """Worker thread for uploading files."""
+    """Worker thread for uploading new (non-rana) files."""
 
     progress = pyqtSignal(int)
     finished = pyqtSignal()
@@ -82,46 +83,26 @@ class FileUploadWorker(QThread):
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
 
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-    ):
+    def __init__(self, project: dict, local_path: Path, online_path: str):
         super().__init__()
         self.project = project
-        self.file = file
-        self.file_overwrite = (
-            None  # Set to True to overwrite file, False to abort upload
-        )
-        self.last_modified = None
-        self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
+        self.local_path = local_path
+        self.online_path = online_path
 
     def handle_file_conflict(self):
-        file_path = self.file["id"]
-        local_last_modified = QSettings().value(self.last_modified_key)
-        server_file = get_tenant_project_file(self.project["id"], {"path": file_path})
-        if not server_file:
-            self.failed.emit(
-                "Failed to get file from server. Check if file has been moved or deleted."
-            )
+        server_file = get_tenant_project_file(
+            self.project["id"], {"path": self.online_path}
+        )
+        if server_file:
+            self.failed.emit("File already exist on server.")
             return False
-        self.last_modified = server_file["last_modified"]
-        if self.last_modified != local_last_modified:
-            self.conflict.emit()
-            while self.file_overwrite is None:
-                self.msleep(100)
-            if self.file_overwrite is False:
-                self.failed.emit("File upload aborted.")
-                return False
         return True  # Continue to upload
 
     @pyqtSlot()
     def run(self):
-        if not self.file or not self.project["id"]:
+        if not self.local_path or not self.project["id"]:
             return
-        project_slug = self.project["slug"]
-        path = self.file["id"]
-        _, local_file_path = get_local_file_path(project_slug, path)
+        local_file_path = str(self.local_path)
 
         # Check if file exists locally before uploading
         if not os.path.exists(local_file_path):
@@ -137,7 +118,9 @@ class FileUploadWorker(QThread):
         try:
             self.progress.emit(0)
             # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(self.project["id"], {"path": path})
+            upload_response = start_file_upload(
+                self.project["id"], {"path": self.online_path}
+            )
             if not upload_response:
                 self.failed.emit("Failed to initiate file upload.")
                 return
@@ -156,11 +139,47 @@ class FileUploadWorker(QThread):
             if not response:
                 self.failed.emit("Failed to complete file upload.")
                 return
-            QSettings().setValue(self.last_modified_key, self.last_modified)
             self.progress.emit(100)
             self.finished.emit()
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
+
+
+class ExistingFileUploadWorker(FileUploadWorker):
+    """Worker thread for uploading files."""
+
+    def __init__(self, project: dict, file: dict):
+        super().__init__(
+            project, get_local_file_path(project["slug"], file["id"])[1], file["id"]
+        )
+
+        self.file_overwrite = False
+        self.last_modified = None
+        self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
+        self.finished.connect(self._finish)
+
+    def handle_file_conflict(self):
+        local_last_modified = QSettings().value(self.last_modified_key)
+        server_file = get_tenant_project_file(
+            self.project["id"], {"path": self.online_path}
+        )
+        if not server_file:
+            self.failed.emit(
+                "Failed to get file from server. Check if file has been moved or deleted."
+            )
+            return False
+        self.last_modified = server_file["last_modified"]
+        if self.last_modified != local_last_modified:
+            self.conflict.emit()
+            while self.file_overwrite is None:
+                self.msleep(100)
+            if self.file_overwrite is False:
+                self.failed.emit("File upload aborted.")
+                return False
+        return True  # Continue to upload
+
+    def _finish(self):
+        QSettings().setValue(self.last_modified_key, self.last_modified)
 
 
 class VectorStyleWorker(QThread):
