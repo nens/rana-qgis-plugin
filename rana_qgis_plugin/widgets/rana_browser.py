@@ -490,8 +490,11 @@ class RanaBrowser(uicls, basecls):
         )
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
+        assert self.selected_file["type"] == "directory"
         self.new_file_upload_worker = FileUploadWorker(
-            self.project, Path(fileName), Path(fileName).name
+            self.project,
+            Path(fileName),
+            (self.selected_file["id"] + Path(fileName).name),
         )
         self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)

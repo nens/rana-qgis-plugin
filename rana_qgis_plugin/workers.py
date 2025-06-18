@@ -83,16 +83,15 @@ class FileUploadWorker(QThread):
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
 
-    def __init__(self, project: dict, file_path: Path, file_name: str):
+    def __init__(self, project: dict, local_path: Path, online_path: str):
         super().__init__()
         self.project = project
-        self.file_path = file_path
-        self.file_name = file_name
+        self.local_path = local_path
+        self.online_path = online_path
 
     def handle_file_conflict(self):
-        QgsMessageLog.logMessage(str("hadnle base"), level=Qgis.Critical)
         server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.file_name}
+            self.project["id"], {"path": self.online_path}
         )
         if server_file:
             self.failed.emit("File already exist on server.")
@@ -101,9 +100,9 @@ class FileUploadWorker(QThread):
 
     @pyqtSlot()
     def run(self):
-        if not self.file_path or not self.project["id"]:
+        if not self.local_path or not self.project["id"]:
             return
-        local_file_path = str(self.file_path)
+        local_file_path = str(self.local_path)
 
         # Check if file exists locally before uploading
         if not os.path.exists(local_file_path):
@@ -120,7 +119,7 @@ class FileUploadWorker(QThread):
             self.progress.emit(0)
             # Step 1: POST request to initiate the upload
             upload_response = start_file_upload(
-                self.project["id"], {"path": self.file_name}
+                self.project["id"], {"path": self.online_path}
             )
             if not upload_response:
                 self.failed.emit("Failed to initiate file upload.")
@@ -160,10 +159,9 @@ class ExistingFileUploadWorker(FileUploadWorker):
         self.finished.connect(self._finish)
 
     def handle_file_conflict(self):
-        QgsMessageLog.logMessage(str("hadnle"), level=Qgis.Critical)
         local_last_modified = QSettings().value(self.last_modified_key)
         server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.file_name}
+            self.project["id"], {"path": self.online_path}
         )
         if not server_file:
             self.failed.emit(
@@ -181,7 +179,6 @@ class ExistingFileUploadWorker(FileUploadWorker):
         return True  # Continue to upload
 
     def _finish(self):
-        QgsMessageLog.logMessage(str("finish"), level=Qgis.Critical)
         QSettings().setValue(self.last_modified_key, self.last_modified)
 
 
