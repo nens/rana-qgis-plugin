@@ -554,7 +554,6 @@ class RanaBrowser(uicls, basecls):
             self.selected_file[i] = new_data[i]
         self.communication.bar_info("Local file references refreshed")
 
-
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
