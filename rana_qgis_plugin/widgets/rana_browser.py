@@ -483,12 +483,18 @@ class RanaBrowser(uicls, basecls):
 
     def upload_new_file_to_rana(self):
         """Upload a local (new) file to Rana"""
+        last_saved_dir = QSettings().value(
+            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
+        )
         fileName, _ = QFileDialog.getOpenFileName(
             self,
             "Open file",
-            "",
+            last_saved_dir,
             "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
         )
+        if not fileName:
+            return
+
         QSettings().setValue(
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder", str(Path(fileName).parent)
         )
