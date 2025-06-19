@@ -20,6 +20,7 @@ from rana_qgis_plugin.utils import (
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
+    get_tenant_project_file,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
@@ -527,10 +528,19 @@ class RanaBrowser(uicls, basecls):
         assert isinstance(sender, QThread)
         sender.file_overwrite = file_overwrite
 
+    def refresh_file_data(self):
+        self.communication.bar_info("Refreshing local file references")
+        new_data = get_tenant_project_file(self.project["id"], {"path": self.selected_file["id"]})
+        for i in ["descriptor_id", "etag", "last_modified", "size", "url"]:
+            self.selected_file[i] = new_data[i]
+        self.communication.bar_info("Local file references refreshed")
+
+
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
+        self.refresh_file_data()
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.quit()
