@@ -3,11 +3,12 @@ import os
 from pathlib import Path
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QObject, QSettings, Qt, QThread
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
+from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
@@ -126,6 +127,7 @@ class RanaBrowser(uicls, basecls):
         if index == 0:
             self.rana_widget.setCurrentIndex(0)
             self.update_breadcrumbs()
+            self.selected_file = None
         else:
             self.rana_widget.setEnabled(False)
             self.communication.progress_bar("Loading files...", clear_msg_bar=True)
@@ -136,6 +138,7 @@ class RanaBrowser(uicls, basecls):
                 path = "/".join(only_directory_paths) + (
                     "/" if only_directory_paths else ""
                 )
+                self.selected_file = {"id": path, "type": "directory"}
                 self.fetch_and_populate_files(path)
                 self.show_files_widget()
             finally:
@@ -244,6 +247,7 @@ class RanaBrowser(uicls, basecls):
                 return
             project_item = self.projects_model.itemFromIndex(index)
             self.project = project_item.data(Qt.UserRole)
+            self.selected_file = None
             self.paths.append(self.project["name"])
             self.paths = self.paths[:2]
             self.fetch_and_populate_files()
@@ -480,19 +484,32 @@ class RanaBrowser(uicls, basecls):
 
     def upload_new_file_to_rana(self):
         """Upload a local (new) file to Rana"""
+        last_saved_dir = QSettings().value(
+            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
+        )
         fileName, _ = QFileDialog.getOpenFileName(
             self,
             "Open file",
-            "",
+            last_saved_dir,
             "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
+        )
+        if not fileName:
+            return
+
+        QSettings().setValue(
+            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", str(Path(fileName).parent)
         )
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
-        assert self.selected_file["type"] == "directory"
+        online_dir = ""
+        if self.selected_file:
+            assert self.selected_file["type"] == "directory"
+            online_dir = self.selected_file["id"]
+
         self.new_file_upload_worker = FileUploadWorker(
             self.project,
             Path(fileName),
-            (self.selected_file["id"] + Path(fileName).name),
+            (online_dir + Path(fileName).name),
         )
         self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
