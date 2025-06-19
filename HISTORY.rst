@@ -5,6 +5,7 @@ History
 ------------------
 
 - Added "Add File to Rana" button (nens/rana#1951)
+- Reload local file url and other metadata after uploading to Rana.
 
 
 1.1.8 (2025-06-16)
