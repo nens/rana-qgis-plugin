@@ -547,11 +547,9 @@ class RanaBrowser(uicls, basecls):
 
     def refresh_file_data(self):
         self.communication.bar_info("Refreshing local file references")
-        new_data = get_tenant_project_file(
+        self.selected_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
-        for i in ["descriptor_id", "etag", "last_modified", "size", "url"]:
-            self.selected_file[i] = new_data[i]
         self.communication.bar_info("Local file references refreshed")
 
     def on_file_upload_finished(self):
