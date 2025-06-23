@@ -549,7 +549,9 @@ class RanaBrowser(uicls, basecls):
         self.selected_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
-        last_modified_key = f"{self.project['name']}/{self.selected_file['id']}/last_modified"
+        last_modified_key = (
+            f"{self.project['name']}/{self.selected_file['id']}/last_modified"
+        )
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
 
     def on_file_upload_finished(self):
