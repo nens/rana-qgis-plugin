@@ -1,5 +1,6 @@
 import math
 import os
+from functools import partial
 from pathlib import Path
 
 from qgis.PyQt import uic
@@ -21,6 +22,7 @@ from rana_qgis_plugin.utils import (
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
+    get_tenant_project_file,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
@@ -455,7 +457,6 @@ class RanaBrowser(uicls, basecls):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File downloaded to: {local_file_path}")
-        self.file_download_worker.quit()
         self.file_download_worker.wait()
         self.file_download_worker = None
         add_layer_to_qgis(
@@ -486,17 +487,17 @@ class RanaBrowser(uicls, basecls):
         last_saved_dir = QSettings().value(
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
         )
-        fileName, _ = QFileDialog.getOpenFileName(
+        local_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open file",
             last_saved_dir,
             "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
         )
-        if not fileName:
+        if not local_path:
             return
 
         QSettings().setValue(
-            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", str(Path(fileName).parent)
+            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", str(Path(local_path).parent)
         )
         self.communication.bar_info("Start uploading file to Rana...")
         self.rana_widget.setEnabled(False)
@@ -505,12 +506,15 @@ class RanaBrowser(uicls, basecls):
             assert self.selected_file["type"] == "directory"
             online_dir = self.selected_file["id"]
 
+        online_path = online_dir + Path(local_path).name
         self.new_file_upload_worker = FileUploadWorker(
             self.project,
-            Path(fileName),
-            (online_dir + Path(fileName).name),
+            Path(local_path),
+            online_path,
         )
-        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
+        self.new_file_upload_worker.finished.connect(
+            partial(self.on_new_file_upload_finished, online_path)
+        )
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
         self.new_file_upload_worker.progress.connect(self.on_file_upload_progress)
         self.new_file_upload_worker.warning.connect(
@@ -550,8 +554,19 @@ class RanaBrowser(uicls, basecls):
         self.communication.bar_info(f"File uploaded to Rana successfully!")
         sender = self.sender()
         assert isinstance(sender, QThread)
-        sender.quit()
         sender.wait()
+
+    def on_new_file_upload_finished(self, online_path: str):
+        self.on_file_upload_finished()
+        if self.communication.ask(
+            self, "Load", "Would you like to load the uploaded file from Rana?"
+        ):
+            self.communication.log_critical((online_path))
+            self.selected_file = get_tenant_project_file(
+                self.project["id"], {"path": online_path}
+            )
+            self.initialize_file_download_worker()
+            self.file_download_worker.start()
 
     def on_file_upload_failed(self, error: str):
         self.rana_widget.setEnabled(True)
