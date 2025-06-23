@@ -546,11 +546,11 @@ class RanaBrowser(uicls, basecls):
         sender.file_overwrite = file_overwrite
 
     def refresh_file_data(self):
-        self.communication.bar_info("Refreshing local file references")
         self.selected_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
-        self.communication.bar_info("Local file references refreshed")
+        last_modified_key = f"{self.project['name']}/{self.selected_file['id']}/last_modified"
+        QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
 
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
@@ -598,6 +598,7 @@ class RanaBrowser(uicls, basecls):
 
     def on_vector_style_finished(self, msg: str):
         self.rana_widget.setEnabled(True)
+        self.refresh_file_data()
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
 
