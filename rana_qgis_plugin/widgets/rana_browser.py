@@ -398,6 +398,10 @@ class RanaBrowser(uicls, basecls):
                 schematisation_details = [
                     ("Schematisation ID", schematisation["id"]),
                     ("Latest revision ID", revision["id"] if revision else None),
+                    (
+                        "Latest revision number",
+                        revision["number"] if revision else None,
+                    ),
                 ]
                 file_details.extend(schematisation_details)
             else:
