@@ -356,6 +356,7 @@ class RanaBrowser(uicls, basecls):
             if data_type != "threedi_schematisation"
             else "N/A"
         )
+        description = self.selected_file["description"]
         file_details = [
             ("Name", filename),
             ("Size", size),
@@ -363,6 +364,7 @@ class RanaBrowser(uicls, basecls):
             ("Data type", self.SUPPORTED_DATA_TYPES.get(data_type, data_type)),
             ("Added by", username),
             ("Last modified", last_modified),
+            ("Description", description),
         ]
         if data_type == "scenario" and meta:
             simulation = meta["simulation"]
