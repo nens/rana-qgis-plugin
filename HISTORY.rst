@@ -7,6 +7,7 @@ History
 - Added "Add File to Rana" button (nens/rana#1951)
 - Upload new file: set last used directory in settings (nens/rana#2058)
 - Reload local file url and other metadata after uploading to Rana.
+- Show "Latest revision number" field in 3Di schematisation file details. (nens/rana#1874)
 
 
 1.1.8 (2025-06-16)
