@@ -588,6 +588,19 @@ class RanaBrowser(uicls, basecls):
             "Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True
         )
 
+    def start_file_in_qgis(self, project_id: str, online_path: str):
+        for project in self.projects:
+            if project["id"] == project_id:
+                self.communication.log_warn(f"Selecting project {project_id}")
+                self.project = project
+
+        self.communication.log_warn(f"Opening project {str(project_id)}")
+        self.communication.log_warn(f"Opening path {str(online_path)}")
+        self.selected_file = get_tenant_project_file(project_id, {"path": online_path})
+        if self.selected_file:
+            self.communication.log_warn(f"Opening file {str(self.selected_file)}")
+            self.open_file_in_qgis()
+
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
         data_type = self.selected_file["data_type"]

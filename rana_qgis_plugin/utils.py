@@ -1,6 +1,8 @@
 import math
 import os
 from datetime import datetime, timezone
+from typing import Any, Dict, Tuple
+from urllib.parse import parse_qs, urlparse
 
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -164,3 +166,16 @@ def image_to_bytes(image: QImage) -> bytes:
 class NumericItem(QStandardItem):
     def __lt__(self, other):
         return self.data(Qt.UserRole) < other.data(Qt.UserRole)
+
+
+def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
+    """Returns dict with path params and dict with query params"""
+    parsed = urlparse(url)
+    # Remove leading slash and then split
+    path_parts = parsed.path.strip("/").split("/")
+    path_params = {
+        "tenant_id": path_parts[0],
+        "project_id": path_parts[2],
+    }
+    query_params = parse_qs(parsed.query)
+    return path_params, query_params
