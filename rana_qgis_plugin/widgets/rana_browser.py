@@ -349,6 +349,7 @@ class RanaBrowser(uicls, basecls):
         if self.selected_file["descriptor"]:
             descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
             meta = descriptor["meta"] if descriptor else None
+            description = descriptor["description"] if descriptor else None
 
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
         size = (
@@ -363,6 +364,7 @@ class RanaBrowser(uicls, basecls):
             ("Data type", self.SUPPORTED_DATA_TYPES.get(data_type, data_type)),
             ("Added by", username),
             ("Last modified", last_modified),
+            ("Description", description),
         ]
         if data_type == "scenario" and meta:
             simulation = meta["simulation"]
