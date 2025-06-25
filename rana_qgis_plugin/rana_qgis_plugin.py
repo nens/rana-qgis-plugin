@@ -42,11 +42,9 @@ class RanaQgisPlugin:
         self.communication = UICommunication(self.iface, PLUGIN_NAME)
         initialize_settings()
 
-    def initGui(self):
-        """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
-        self.add_rana_menu(False)
-        self.toolbar.addAction(self.action)
+        iface.initializationCompleted.connect(self.check_arguments)
 
+    def check_arguments(self):
         # sys.argv does not seem to be filled yet when starting the plugin
         # self.communication.show_info(str(sys.argv))
         for arg in QgsApplication.arguments():
@@ -54,6 +52,11 @@ class RanaQgisPlugin:
                 QTimer.singleShot(
                     0, partial(self.run, arg)
                 )  # Calls run() after the event loop starts
+
+    def initGui(self):
+        """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
+        self.add_rana_menu(False)
+        self.toolbar.addAction(self.action)
 
     def login(self, start_tenant_id: str = None) -> bool:
         setup_oauth2(self.communication)
