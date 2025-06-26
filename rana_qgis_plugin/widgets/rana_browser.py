@@ -434,7 +434,10 @@ class RanaBrowser(uicls, basecls):
             self.btn_open.hide()
             self.btn_save.hide()
             self.btn_save_vector_style.hide()
-            self.btn_wms.show()
+            if meta["simulation"]["software"]["id"] == "3Di":
+                self.btn_wms.show()
+            else:
+                self.btn_wms.hide()
         elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
