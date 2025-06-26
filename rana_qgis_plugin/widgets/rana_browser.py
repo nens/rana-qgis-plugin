@@ -78,7 +78,7 @@ class RanaBrowser(uicls, basecls):
         self.projects_tv.clicked.connect(self.select_project)
         self.projects_search.textChanged.connect(self.filter_projects)
         self.refresh_btn.setIcon(refresh_icon)
-        self.refresh_btn.clicked.connect(self.refresh_projects)
+        self.refresh_btn.clicked.connect(self.refresh)
         self.fetch_projects()
         self.populate_projects()
         self.projects_tv.header().setSortIndicator(1, Qt.AscendingOrder)
@@ -321,16 +321,18 @@ class RanaBrowser(uicls, basecls):
         self.selected_file = file_item.data(Qt.UserRole)
         self._update_file_UI()
 
-    def _update_file_UI(self):
+    def _update_file_UI(self, append_path: bool = True):
         file_path = self.selected_file["id"]
         if self.selected_file["type"] == "directory":
             directory_name = os.path.basename(file_path.rstrip("/"))
-            self.paths.append(directory_name)
+            if append_path:
+                self.paths.append(directory_name)
             self.fetch_and_populate_files(file_path)
             self.rana_widget.setCurrentIndex(1)
         else:
             file_name = os.path.basename(file_path.rstrip("/"))
-            self.paths.append(file_name)
+            if append_path:
+                self.paths.append(file_name)
             self.show_selected_file_details()
             self.rana_widget.setCurrentIndex(2)
 
@@ -565,7 +567,7 @@ class RanaBrowser(uicls, basecls):
             f"{self.project['name']}/{self.selected_file['id']}/last_modified"
         )
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
-        self._update_file_UI()
+        self._update_file_UI(append_path=False)
 
     def refresh(self):
         current_index = self.rana_widget.currentIndex()
