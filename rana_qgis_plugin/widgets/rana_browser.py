@@ -3,11 +3,13 @@ import os
 from functools import partial
 from pathlib import Path
 
+from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
 
+from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
@@ -98,6 +100,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_save.clicked.connect(self.upload_file_to_rana)
         self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
         self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
+        self.btn_wms.clicked.connect(self.open_wms)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -426,15 +429,23 @@ class RanaBrowser(uicls, basecls):
             self.btn_open.show()
             self.btn_save.hide()
             self.btn_save_vector_style.hide()
+            self.btn_wms.hide()
+        elif data_type == "scenario":
+            self.btn_open.hide()
+            self.btn_save.hide()
+            self.btn_save_vector_style.hide()
+            self.btn_wms.show()
         elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
             self.btn_save_vector_style.hide()
             if data_type == "vector":
                 self.btn_save_vector_style.show()
+            self.btn_wms.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
+            self.btn_wms.hide()
             self.btn_save_vector_style.hide()
 
     def open_file_in_qgis(self):
@@ -489,6 +500,29 @@ class RanaBrowser(uicls, basecls):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
+
+    def open_wms(self):
+        descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+        for link in descriptor["links"]:
+            if link["rel"] == "wms":
+                for layer in descriptor["meta"]["layers"]:
+                    quri = QgsDataSourceUri()
+                    quri.setParam("layers", layer["code"])
+                    quri.setParam("styles", "")
+                    quri.setParam("format", "image/png")
+                    quri.setParam("url", link["href"])
+                    # the wms provider will take care to expand authcfg URI parameter with credential
+                    # just before setting the HTTP connection.
+                    quri.setAuthConfigId(get_authcfg_id())
+                    rlayer = QgsRasterLayer(
+                        bytes(quri.encodedUri()).decode(),
+                        f"{layer['name']} ({layer['label']})",
+                        "wms",
+                    )
+                    QgsProject.instance().addMapLayer(rlayer)
+                return
+
+        self.communication.bar_error("No WMS layer for this file.")
 
     def upload_new_file_to_rana(self):
         """Upload a local (new) file to Rana"""
