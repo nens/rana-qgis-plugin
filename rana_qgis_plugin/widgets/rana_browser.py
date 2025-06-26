@@ -570,7 +570,7 @@ class RanaBrowser(uicls, basecls):
     def refresh(self):
         current_index = self.rana_widget.currentIndex()
         if current_index == 0:
-            self.populate_projects(clear=True)
+            self.refresh_projects()
         elif current_index == 1:
             self.fetch_and_populate_files()
         elif current_index == 2:
