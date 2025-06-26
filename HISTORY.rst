@@ -9,6 +9,8 @@ History
 - Reload local file url and other metadata after uploading to Rana.
 - Show "Latest revision number" field in 3Di schematisation file details. (nens/rana#1874)
 - Show description field.
+- Add option to pass Rana URL to QGIS. (nens/rana-qgis-plugin#61)
+- Add option to load WMS layers of 3Di scenarios (nens/rana-qgis-plugin#51)
 
 
 1.1.8 (2025-06-16)
