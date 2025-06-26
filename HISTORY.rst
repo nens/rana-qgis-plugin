@@ -9,6 +9,7 @@ History
 - Reload local file url and other metadata after uploading to Rana.
 - Show "Latest revision number" field in 3Di schematisation file details. (nens/rana#1874)
 - Show description field.
+- Reload file ui after uploading file. (nens/rana#41)
 
 
 1.1.8 (2025-06-16)
