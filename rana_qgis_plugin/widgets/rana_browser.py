@@ -101,6 +101,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
         self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
         self.btn_wms.clicked.connect(self.open_wms)
+        self.btn_download.clicked.connect(self.download_file)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -430,14 +431,17 @@ class RanaBrowser(uicls, basecls):
             self.btn_save.hide()
             self.btn_save_vector_style.hide()
             self.btn_wms.hide()
+            self.btn_download.hide()
         elif data_type == "scenario":
             self.btn_open.hide()
             self.btn_save.hide()
             self.btn_save_vector_style.hide()
             if meta["simulation"]["software"]["id"] == "3Di":
                 self.btn_wms.show()
+                self.btn_download.show()
             else:
                 self.btn_wms.hide()
+                self.btn_download.hide()
         elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
@@ -445,11 +449,13 @@ class RanaBrowser(uicls, basecls):
             if data_type == "vector":
                 self.btn_save_vector_style.show()
             self.btn_wms.hide()
+            self.btn_download.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
             self.btn_wms.hide()
             self.btn_save_vector_style.hide()
+            self.btn_download.hide()
 
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
@@ -481,13 +487,17 @@ class RanaBrowser(uicls, basecls):
         self.communication.bar_info(f"File downloaded to: {local_file_path}")
         self.file_download_worker.wait()
         self.file_download_worker = None
-        add_layer_to_qgis(
-            self.communication,
-            local_file_path,
-            self.project["name"],
-            self.selected_file,
-            self.schematisation,
-        )
+
+        if self.selected_file["data_type"] == "scenario":
+            pass
+        else:
+            add_layer_to_qgis(
+                self.communication,
+                local_file_path,
+                self.project["name"],
+                self.selected_file,
+                self.schematisation,
+            )
 
     def on_file_download_failed(self, error: str):
         self.rana_widget.setEnabled(True)
@@ -526,6 +536,12 @@ class RanaBrowser(uicls, basecls):
                 return
 
         self.communication.bar_error("No WMS layer for this file.")
+
+    def download_file(self):
+        assert self.selected_file["data_type"] == "scenario"
+
+        self.initialize_file_download_worker()
+        self.file_download_worker.start()
 
     def upload_new_file_to_rana(self):
         """Upload a local (new) file to Rana"""

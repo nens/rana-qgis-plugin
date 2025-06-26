@@ -11,6 +11,7 @@ History
 - Show description field.
 - Add option to pass Rana URL to QGIS. (nens/rana-qgis-plugin#61)
 - Add option to load WMS layers of 3Di scenarios (nens/rana-qgis-plugin#51)
+- Add option to download scenario zip (nens/rana-qgis-plugin#51)
 
 
 1.1.8 (2025-06-16)
