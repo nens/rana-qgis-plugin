@@ -557,6 +557,7 @@ class RanaBrowser(uicls, basecls):
         sender.file_overwrite = file_overwrite
 
     def refresh_file_data(self):
+        assert self.selected_file
         self.selected_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
@@ -566,15 +567,22 @@ class RanaBrowser(uicls, basecls):
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
         self.show_selected_file_details()
 
-    def on_file_upload_finished(self, refresh: bool = True):
+    def refresh(self):
+        current_index = self.rana_widget.currentIndex()
+        if current_index == 0:
+            self.populate_projects(clear=True)
+        elif current_index == 1:
+            self.fetch_and_populate_files()
+        elif current_index == 2:
+            self.refresh_file_data()
+        else:
+            raise Exception("cannot refresh; rana_widget index must be 1, 2, or 3")
+
+    def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        # show updated file data if file is selected, new list of files if not
-        if self.selected_file:
-            self.refresh_file_data()
-        else:
-            self.fetch_and_populate_files()
+        self.refresh()
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
@@ -642,11 +650,7 @@ class RanaBrowser(uicls, basecls):
 
     def on_vector_style_finished(self, msg: str):
         self.rana_widget.setEnabled(True)
-        # show updated file data if file is selected, new list of files if not
-        if self.selected_file:
-            self.refresh_file_data()
-        else:
-            self.fetch_and_populate_files()
+        self.refresh()
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
 
