@@ -2,13 +2,14 @@ import math
 import os
 from functools import partial
 from pathlib import Path
-from qgis.core import QgsProject, QgsRasterLayer
-import requests
+
+from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
 
+from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
@@ -502,14 +503,23 @@ class RanaBrowser(uicls, basecls):
 
     def open_wms(self):
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
-        links = descriptor["links"]
-        # find the WMS link
-        for link in links:
+        for link in descriptor["links"]:
             if link["rel"] == "wms":
-                # url = r"http://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
-                # uri = "type=xyz&url="+requests.utils.quote(url)
-                # tms_layer = QgsRasterLayer(uri, "Google Satelite", 'wms')
-                # QgsProject.instance().addMapLayer(tms_layer)
+                for layer in descriptor["meta"]["layers"]:
+                    quri = QgsDataSourceUri()
+                    quri.setParam("layers", layer["code"])
+                    quri.setParam("styles", "")
+                    quri.setParam("format", "image/png")
+                    quri.setParam("url", link["href"])
+                    # the wms provider will take care to expand authcfg URI parameter with credential
+                    # just before setting the HTTP connection.
+                    quri.setAuthConfigId(get_authcfg_id())
+                    rlayer = QgsRasterLayer(
+                        bytes(quri.encodedUri()).decode(),
+                        f"{layer['name']} ({layer['label']})",
+                        "wms",
+                    )
+                    QgsProject.instance().addMapLayer(rlayer)
                 return
 
         self.communication.bar_error("No WMS layer for this file.")
