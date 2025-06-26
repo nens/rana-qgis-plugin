@@ -314,27 +314,29 @@ class RanaBrowser(uicls, basecls):
     def select_file_or_directory(self, index: QModelIndex):
         self.rana_widget.setEnabled(False)
         self.communication.progress_bar("Loading files...", clear_msg_bar=True)
-        try:
-            # Only allow selection of the first column (filename)
-            if index.column() != 0:
-                return
-            file_item = self.files_model.itemFromIndex(index)
-            self.selected_file = file_item.data(Qt.UserRole)
-            file_path = self.selected_file["id"]
-            if self.selected_file["type"] == "directory":
-                directory_name = os.path.basename(file_path.rstrip("/"))
-                self.paths.append(directory_name)
-                self.fetch_and_populate_files(file_path)
-                self.rana_widget.setCurrentIndex(1)
-            else:
-                file_name = os.path.basename(file_path.rstrip("/"))
-                self.paths.append(file_name)
-                self.show_selected_file_details()
-                self.rana_widget.setCurrentIndex(2)
-        finally:
-            self.update_breadcrumbs()
-            self.communication.clear_message_bar()
-            self.rana_widget.setEnabled(True)
+        # Only allow selection of the first column (filename)
+        if index.column() != 0:
+            return
+        file_item = self.files_model.itemFromIndex(index)
+        self.selected_file = file_item.data(Qt.UserRole)
+        self._update_file_UI()
+
+    def _update_file_UI(self):
+        file_path = self.selected_file["id"]
+        if self.selected_file["type"] == "directory":
+            directory_name = os.path.basename(file_path.rstrip("/"))
+            self.paths.append(directory_name)
+            self.fetch_and_populate_files(file_path)
+            self.rana_widget.setCurrentIndex(1)
+        else:
+            file_name = os.path.basename(file_path.rstrip("/"))
+            self.paths.append(file_name)
+            self.show_selected_file_details()
+            self.rana_widget.setCurrentIndex(2)
+
+        self.update_breadcrumbs()
+        self.communication.clear_message_bar()
+        self.rana_widget.setEnabled(True)
 
     def show_selected_file_details(self):
         self.file_table_widget.clearContents()
@@ -563,21 +565,21 @@ class RanaBrowser(uicls, basecls):
         )
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
 
-    def on_file_upload_finished(self):
+    def on_file_upload_finished(self, refresh: bool = True):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        self.refresh_file_data()
+        if refresh:
+            self.refresh_file_data()
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
 
     def on_new_file_upload_finished(self, online_path: str):
-        self.on_file_upload_finished()
+        self.on_file_upload_finished(False)
         if self.communication.ask(
             self, "Load", "Would you like to load the uploaded file from Rana?"
         ):
-            self.communication.log_critical((online_path))
             self.selected_file = get_tenant_project_file(
                 self.project["id"], {"path": online_path}
             )
@@ -593,6 +595,22 @@ class RanaBrowser(uicls, basecls):
         self.communication.progress_bar(
             "Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True
         )
+
+    def start_file_in_qgis(self, project_id: str, online_path: str):
+        # Properly set members
+        for project in self.projects:
+            if project["id"] == project_id:
+                self.communication.log_warn(f"Selecting project {project_id}")
+                self.project = project
+        self.selected_file = get_tenant_project_file(project_id, {"path": online_path})
+        self.paths = ["Projects", self.project["name"]] + online_path.split("/")[:-1]
+        if self.selected_file:
+            self.communication.log_warn(f"Opening file {str(self.selected_file)}")
+            self.open_file_in_qgis()
+            self._update_file_UI()
+        else:
+            self.project = None
+            self.paths = ["Projects"]
 
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""

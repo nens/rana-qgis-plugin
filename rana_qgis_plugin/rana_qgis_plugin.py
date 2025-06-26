@@ -1,4 +1,7 @@
-from qgis.PyQt.QtCore import Qt
+from functools import partial
+
+from qgis.core import QgsApplication
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QAction,
     QButtonGroup,
@@ -13,6 +16,7 @@ from rana_qgis_plugin.auth_3di import setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
+from rana_qgis_plugin.utils import parse_url
 from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
 from rana_qgis_plugin.utils_settings import (
     get_tenant_id,
@@ -38,18 +42,32 @@ class RanaQgisPlugin:
         self.communication = UICommunication(self.iface, PLUGIN_NAME)
         initialize_settings()
 
+        iface.initializationCompleted.connect(self.check_arguments)
+
+    def check_arguments(self):
+        # sys.argv does not seem to be filled yet when starting the plugin
+        # self.communication.show_info(str(sys.argv))
+        for arg in QgsApplication.arguments():
+            if arg.startswith("rana://"):
+                QTimer.singleShot(
+                    0, partial(self.run, arg)
+                )  # Calls run() after the event loop starts
+
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
         self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
 
-    def login(self):
+    def login(self, start_tenant_id: str = None) -> bool:
         setup_oauth2(self.communication)
         self.add_rana_menu(True)
-        self.set_tenant()
+        if not self.set_tenant(start_tenant_id):
+            return False
         setup_3di_auth(self.communication)
         if self.dock_widget:
             self.dock_widget.show()
+
+        return True
 
     def logout(self):
         self.communication.clear_message_bar()
@@ -60,16 +78,31 @@ class RanaQgisPlugin:
         if self.dock_widget:
             self.dock_widget.close()
 
-    def set_tenant(self):
-        tenant_id = get_tenant_id()
-        if tenant_id:
-            return
-        if not self.tenants:
-            return
-        tenant = self.tenants[0]
-        set_tenant_id(tenant["id"])
+    def set_tenant(self, start_tenant_id: str = None):
+        if start_tenant_id is None:
+            tenant_id = get_tenant_id()
+            if tenant_id:
+                return True
+            if not self.tenants:
+                return False
+
+            tenant_id = self.tenants[0]["id"]
+        else:
+            # Extra check to see whether requested tenant is in list.
+            if any(t["id"] == start_tenant_id for t in self.tenants):
+                tenant_id = start_tenant_id
+            else:
+                self.communication.bar_error(
+                    f"Tenant {start_tenant_id} not in list available tenants, aborting load...",
+                    -1,
+                )
+                return False
+
+        set_tenant_id(tenant_id)
         self.communication.clear_message_bar()
-        self.communication.bar_info(f"Tenant set to: {tenant['id']}")
+        self.communication.bar_info(f"Tenant set to: {tenant_id}")
+
+        return True
 
     def open_about_rana_dialog(self):
         dialog = AboutRanaDialog(self.iface.mainWindow())
@@ -162,9 +195,14 @@ class RanaQgisPlugin:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
 
-    def run(self):
+    def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
-        self.login()
+        if start_url:
+            path_params, query_params = parse_url(start_url)
+            if not self.login(path_params["tenant_id"]):
+                return
+        else:
+            self.login()
         if not self.dock_widget:
             self.dock_widget = QDockWidget(PLUGIN_NAME, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(
@@ -181,3 +219,8 @@ class RanaQgisPlugin:
             Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True
         )
         self.dock_widget.show()
+
+        if start_url:
+            self.rana_browser.start_file_in_qgis(
+                path_params["project_id"], query_params["path"][0]
+            )
