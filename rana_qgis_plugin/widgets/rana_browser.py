@@ -2,7 +2,8 @@ import math
 import os
 from functools import partial
 from pathlib import Path
-
+from qgis.core import QgsProject, QgsRasterLayer
+import requests
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
@@ -98,6 +99,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_save.clicked.connect(self.upload_file_to_rana)
         self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
         self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
+        self.btn_wms.clicked.connect(self.open_wms)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -424,15 +426,23 @@ class RanaBrowser(uicls, basecls):
             self.btn_open.show()
             self.btn_save.hide()
             self.btn_save_vector_style.hide()
+            self.btn_wms.hide()
+        elif data_type == "scenario":
+            self.btn_open.hide()
+            self.btn_save.hide()
+            self.btn_save_vector_style.hide()
+            self.btn_wms.show()
         elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
             self.btn_save_vector_style.hide()
             if data_type == "vector":
                 self.btn_save_vector_style.show()
+            self.btn_wms.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
+            self.btn_wms.hide()
             self.btn_save_vector_style.hide()
 
     def open_file_in_qgis(self):
@@ -487,6 +497,20 @@ class RanaBrowser(uicls, basecls):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
+
+    def open_wms(self):
+        descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+        links = descriptor["links"]
+        # find the WMS link
+        for link in links:
+            if link["rel"] == "wms":
+                # url = r"http://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                # uri = "type=xyz&url="+requests.utils.quote(url)
+                # tms_layer = QgsRasterLayer(uri, "Google Satelite", 'wms')
+                # QgsProject.instance().addMapLayer(tms_layer)
+                return
+
+        self.communication.bar_error("No WMS layer for this file.")
 
     def upload_new_file_to_rana(self):
         """Upload a local (new) file to Rana"""
@@ -577,7 +601,6 @@ class RanaBrowser(uicls, basecls):
         if self.communication.ask(
             self, "Load", "Would you like to load the uploaded file from Rana?"
         ):
-            self.communication.log_critical((online_path))
             self.selected_file = get_tenant_project_file(
                 self.project["id"], {"path": online_path}
             )
