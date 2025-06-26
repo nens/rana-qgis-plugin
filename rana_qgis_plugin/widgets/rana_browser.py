@@ -565,7 +565,7 @@ class RanaBrowser(uicls, basecls):
             f"{self.project['name']}/{self.selected_file['id']}/last_modified"
         )
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
-        self.show_selected_file_details()
+        self._update_file_UI()
 
     def refresh(self):
         current_index = self.rana_widget.currentIndex()
