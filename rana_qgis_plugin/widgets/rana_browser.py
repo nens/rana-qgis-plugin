@@ -588,7 +588,7 @@ class RanaBrowser(uicls, basecls):
         sender.wait()
 
     def on_new_file_upload_finished(self, online_path: str):
-        self.on_file_upload_finished(False)
+        self.on_file_upload_finished()
         if self.communication.ask(
             self, "Load", "Would you like to load the uploaded file from Rana?"
         ):
