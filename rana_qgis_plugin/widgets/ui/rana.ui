@@ -73,7 +73,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="refresh_btn">
+          <widget class="QToolButton" name="overview_refresh_btn">
            <property name="toolTip">
             <string>Refresh</string>
            </property>
