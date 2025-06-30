@@ -10,6 +10,7 @@ History
 - Show "Latest revision number" field in 3Di schematisation file details. (nens/rana#1874)
 - Show description field.
 - Reload file ui after uploading file. (nens/rana#41)
+- Add refresh button to project and file overview to allow manual reloading.
 
 
 1.1.8 (2025-06-16)
