@@ -79,6 +79,7 @@ class RanaBrowser(uicls, basecls):
         self.projects_search.textChanged.connect(self.filter_projects)
         self.overview_refresh_btn.setIcon(refresh_icon)
         self.overview_refresh_btn.clicked.connect(self.refresh)
+        self.files_refresh_btn.setIcon(refresh_icon)
         self.fetch_projects()
         self.populate_projects()
         self.projects_tv.header().setSortIndicator(1, Qt.AscendingOrder)

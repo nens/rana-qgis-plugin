@@ -92,9 +92,26 @@
      <widget class="QWidget" name="files_widget">
       <layout class="QGridLayout" name="files_layout">
        <item row="0" column="0">
-        <widget class="QTreeView" name="files_tv"/>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QToolButton" name="files_refresh_btn">
+           <property name="toolTip">
+            <string>Refresh</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>18</width>
+             <height>18</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item row="1" column="0">
+        <widget class="QTreeView" name="files_tv"/>
+       </item>
+       <item row="2" column="0">
         <widget class="QPushButton" name="btn_upload">
          <property name="text">
           <string>Upload Files to Rana</string>
