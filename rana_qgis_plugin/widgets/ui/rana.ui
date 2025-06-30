@@ -205,6 +205,20 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="btn_wms">
+            <property name="text">
+             <string>Open WMS in QGIS</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btn_download">
+            <property name="text">
+             <string>Download</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
