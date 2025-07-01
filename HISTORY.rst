@@ -12,6 +12,8 @@ History
 - Add option to pass Rana URL to QGIS. (nens/rana-qgis-plugin#61)
 - Add option to load WMS layers of 3Di scenarios (nens/rana-qgis-plugin#51)
 - Add option to download scenario zip (nens/rana-qgis-plugin#51)
+- Reload file ui after uploading file. (nens/rana#41)
+- Add refresh button to project and file overview to allow manual reloading.
 - Remove GeoCat/bridgestyle from the plugin since it is now on PyPI. (nens/rana-qgis-plugin#71)
 
 
