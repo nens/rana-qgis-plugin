@@ -57,9 +57,7 @@ The workers are defined in `rana_qgis_plugin/workers.py`.
 
 Vector styles are stored in QGIS as `*.qml` files. We use a library to convert
 these QGIS styles to Maplibre styles for the Rana Web client that is called
-[GeoCat/bridge-style](https://github.com/GeoCat/bridge-style). The source code
-of this library is copied to `rana_qgis_plugin/libs/bridgestyle` for use in the
-RDC.
+[GeoCat/bridge-style](https://github.com/GeoCat/bridge-style).
 
 
 ## Isort & Black
@@ -69,8 +67,6 @@ commands to format the code:
 
 - `isort rana_qgis_plugin`
 - `black -l 120 rana_qgis_plugin`
-
-Note, the `libs/bridgestyle` is currently not formatted.
 
 
 ## Deployment of the Rana plugin
