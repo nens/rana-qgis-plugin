@@ -5,10 +5,10 @@ import zipfile
 from pathlib import Path
 
 import requests
+from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.core import Qgis, QgsMessageLog, QgsProject
 
-from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path, image_to_bytes
 from .utils_api import (
     finish_file_upload,
