@@ -28,6 +28,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
+    get_tenant_file_descriptor_view
 )
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -102,6 +103,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
         self.btn_wms.clicked.connect(self.open_wms)
         self.btn_download.clicked.connect(self.download_file)
+        self.btn_download_results.clicked.connect(self.download_results)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -432,6 +434,7 @@ class RanaBrowser(uicls, basecls):
             self.btn_save_vector_style.hide()
             self.btn_wms.hide()
             self.btn_download.hide()
+            self.btn_download_results.hide()
         elif data_type == "scenario":
             self.btn_open.hide()
             self.btn_save.hide()
@@ -439,9 +442,11 @@ class RanaBrowser(uicls, basecls):
             if meta["simulation"]["software"]["id"] == "3Di":
                 self.btn_wms.show()
                 self.btn_download.show()
+                self.btn_download_results.show()
             else:
                 self.btn_wms.hide()
                 self.btn_download.hide()
+                self.btn_download_results.hide()
         elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
@@ -450,12 +455,14 @@ class RanaBrowser(uicls, basecls):
                 self.btn_save_vector_style.show()
             self.btn_wms.hide()
             self.btn_download.hide()
+            self.btn_download_results.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
             self.btn_wms.hide()
             self.btn_save_vector_style.hide()
             self.btn_download.hide()
+            self.btn_download_results.hide()
 
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
@@ -513,6 +520,13 @@ class RanaBrowser(uicls, basecls):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
+
+    def download_results(self):
+        descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+        for link in descriptor["links"]:
+            if link["rel"] == "lizard-scenario-results":
+                result = get_tenant_file_descriptor_view(self.selected_file["descriptor_id"], "lizard-scenario-results")
+                self.communication.log_warn(str(result))
 
     def open_wms(self):
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])

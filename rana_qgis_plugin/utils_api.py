@@ -112,6 +112,19 @@ def get_tenant_file_descriptor(descriptor_id: str):
         return response
     else:
         return None
+    
+def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{view_type}"
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
 
 
 def start_file_upload(project_id: str, params: dict):
