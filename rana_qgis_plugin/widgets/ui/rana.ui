@@ -73,7 +73,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="refresh_btn">
+          <widget class="QToolButton" name="overview_refresh_btn">
            <property name="toolTip">
             <string>Refresh</string>
            </property>
@@ -92,9 +92,39 @@
      <widget class="QWidget" name="files_widget">
       <layout class="QGridLayout" name="files_layout">
        <item row="0" column="0">
-        <widget class="QTreeView" name="files_tv"/>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QToolButton" name="project_refresh_btn">
+           <property name="toolTip">
+            <string>Refresh</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>18</width>
+             <height>18</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item row="1" column="0">
+        <widget class="QTreeView" name="files_tv"/>
+       </item>
+       <item row="2" column="0">
         <widget class="QPushButton" name="btn_upload">
          <property name="text">
           <string>Upload Files to Rana</string>
@@ -105,7 +135,37 @@
      </widget>
      <widget class="QWidget" name="file_widget">
       <layout class="QGridLayout" name="file_layout">
-       <item row="0" column="0">
+      <item row="0" column="0">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QToolButton" name="file_refresh_btn">
+           <property name="toolTip">
+            <string>Refresh</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>18</width>
+             <height>18</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="1" column="0">
         <widget class="QTableWidget" name="file_table_widget">
          <property name="rowCount">
           <number>1</number>
@@ -121,7 +181,7 @@
          </attribute>
         </widget>
        </item>
-       <item row="1" column="0">
+       <item row="2" column="0">
         <widget class="QWidget" name="button_widget" native="true">
          <layout class="QVBoxLayout" name="verticalLayout">
           <item>
