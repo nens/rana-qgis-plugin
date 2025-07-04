@@ -256,7 +256,7 @@ class RanaBrowser(uicls, basecls):
                 return
             project_item = self.projects_model.itemFromIndex(index)
             self.project = project_item.data(Qt.UserRole)
-            self.selected_file = None
+            self.selected_file = {"id": "", "type": "directory"}
             self.paths.append(self.project["name"])
             self.paths = self.paths[:2]
             self.fetch_and_populate_files()
