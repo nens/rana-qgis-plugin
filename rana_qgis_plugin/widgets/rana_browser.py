@@ -8,6 +8,7 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QLabel, QTableWidgetItem
+from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
@@ -21,6 +22,8 @@ from rana_qgis_plugin.utils import (
     convert_to_timestamp,
     display_bytes,
     elide_text,
+    get_filename_from_attachment_url,
+    get_threedi_schematisation_folder,
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
@@ -537,6 +540,18 @@ class RanaBrowser(uicls, basecls):
             )
 
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+        schematisation_name = descriptor["meta"]["schematisation"]["name"]
+        schematisation_id = descriptor["meta"]["schematisation"]["id"]
+        schematisation_version = descriptor["meta"]["schematisation"]["version"]
+        assert descriptor["data_type"] == "scenario"
+
+        # Determine local target folder
+        target_folder = get_threedi_schematisation_folder(
+            QgsSettings().value("threedi/working_dir"),
+            schematisation_id,
+            schematisation_name,
+            schematisation_version,
+        )
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
                 results = get_tenant_file_descriptor_view(
@@ -544,12 +559,38 @@ class RanaBrowser(uicls, basecls):
                 )
                 result_browser = ResultBrowser(self, results)
                 if result_browser.exec() == QDialog.Accepted:
+                    # Check whether the files already exist locally
                     result_ids = result_browser.get_selected_results_id()
+                    filtered_result_ids = []
+                    for result_id in result_ids:
+                        result = [r for r in results if r["id"] == result_id][0]
+                        file_name = get_filename_from_attachment_url(
+                            result["attachment_url"]
+                        )
+                        target_file = bypass_max_path_limit(
+                            os.path.join(target_folder, file_name)
+                        )
+                        if os.path.exists(target_file):
+                            file_overwrite = self.communication.custom_ask(
+                                self,
+                                "File exists",
+                                f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                                "Cancel",
+                                "Download again",
+                                "Continue",
+                            )
+                            if file_overwrite == "Download again":
+                                filtered_result_ids.append(result_id)
+                            elif file_overwrite == "Cancel":
+                                return
+                        else:
+                            filtered_result_ids.append(result_id)
+
                     self.lizard_result_download_worker = LizardResultDownloadWorker(
                         self.project,
                         self.selected_file,
-                        result_ids,
-                        QgsSettings().value("threedi/working_dir"),
+                        filtered_result_ids,
+                        target_folder,
                     )
 
                     self.lizard_result_download_worker.finished.connect(
