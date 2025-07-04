@@ -3,11 +3,11 @@ import os
 from functools import partial
 from pathlib import Path
 
-from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer
+from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
+from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
@@ -22,19 +22,20 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
 )
-from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
+    get_tenant_file_descriptor_view,
     get_tenant_project_file,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
-    get_tenant_file_descriptor_view
 )
+from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
     FileDownloadWorker,
     FileUploadWorker,
+    LizardResultDownloadWorker,
     VectorStyleWorker,
 )
 
@@ -498,9 +499,10 @@ class RanaBrowser(uicls, basecls):
     def on_file_download_finished(self, local_file_path: str):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
-        self.communication.bar_info(f"File downloaded to: {local_file_path}")
-        self.file_download_worker.wait()
-        self.file_download_worker = None
+        self.communication.bar_info(f"File(s) downloaded to: {local_file_path}")
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.wait()
 
         if self.selected_file["data_type"] == "scenario":
             pass
@@ -518,9 +520,9 @@ class RanaBrowser(uicls, basecls):
         self.communication.clear_message_bar()
         self.communication.show_error(error)
 
-    def on_file_download_progress(self, progress: int):
+    def on_file_download_progress(self, progress: int, file_name: str = ""):
         self.communication.progress_bar(
-            "Downloading file...", 0, 100, progress, clear_msg_bar=True
+            f"Downloading file {file_name}...", 0, 100, progress, clear_msg_bar=True
         )
 
     def upload_file_to_rana(self):
@@ -529,13 +531,37 @@ class RanaBrowser(uicls, basecls):
         self.file_upload_worker.start()
 
     def download_results(self):
+        if not QgsSettings().contains("threedi/working_dir"):
+            self.communication.show_warn(
+                "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
+            )
+
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
-                results = get_tenant_file_descriptor_view(self.selected_file["descriptor_id"], "lizard-scenario-results")
-                self.communication.log_warn(str(results))
+                results = get_tenant_file_descriptor_view(
+                    self.selected_file["descriptor_id"], "lizard-scenario-results"
+                )
                 result_browser = ResultBrowser(self, results)
-                result_browser.exec()
+                if result_browser.exec() == QDialog.Accepted:
+                    result_ids = result_browser.get_selected_results_id()
+                    self.lizard_result_download_worker = LizardResultDownloadWorker(
+                        self.project,
+                        self.selected_file,
+                        result_ids,
+                        QgsSettings().value("threedi/working_dir"),
+                    )
+
+                    self.lizard_result_download_worker.finished.connect(
+                        self.on_file_download_finished
+                    )
+                    self.lizard_result_download_worker.failed.connect(
+                        self.on_file_download_failed
+                    )
+                    self.lizard_result_download_worker.progress.connect(
+                        self.on_file_download_progress
+                    )
+                    self.lizard_result_download_worker.start()
 
     def open_wms(self):
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
