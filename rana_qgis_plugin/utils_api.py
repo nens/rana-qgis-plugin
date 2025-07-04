@@ -112,7 +112,8 @@ def get_tenant_file_descriptor(descriptor_id: str):
         return response
     else:
         return None
-    
+
+
 def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
