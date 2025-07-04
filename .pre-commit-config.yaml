@@ -3,7 +3,7 @@ default_language_version:
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
 # I want to use the ruff-check hook but it isn't released yet, so using the commit from master
-  rev: 39f54b73c72a16ee873859353d1ef40552a22e4d
+  rev: v0.12.2
   hooks:
     - id: ruff-check  # isort
       args: ["--select", "I", "--fix"]

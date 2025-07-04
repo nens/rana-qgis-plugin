@@ -9,6 +9,11 @@ from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
+from threedi_mi_utils import (
+    LocalRevision,
+    LocalSchematisation,
+    list_local_schematisations,
+)
 
 from .communication import UICommunication
 from .utils_qgis import get_threedi_models_and_simulations_instance
@@ -23,6 +28,10 @@ def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     )
     local_file_path = os.path.join(local_dir_structure, file_name)
     return local_dir_structure, local_file_path
+
+
+def get_filename_from_attachment_url(attachment_url: str) -> str:
+    return attachment_url.rsplit("/", 1)[-1].split("?", 1)[0]
 
 
 def add_layer_to_qgis(
@@ -179,3 +188,26 @@ def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     }
     query_params = parse_qs(parsed.query)
     return path_params, query_params
+
+
+def get_threedi_schematisation_folder(
+    working_dir: str,
+    schematisation_id: int,
+    schematisation_name: str,
+    revision_number: int,
+) -> str:
+    local_schematisations = list_local_schematisations(working_dir)
+
+    if schematisation_id:
+        try:
+            local_schematisation = local_schematisations[schematisation_id]
+        except KeyError:
+            local_schematisation = LocalSchematisation(
+                working_dir, schematisation_id, schematisation_name, create=True
+            )
+        try:
+            local_revision = local_schematisation.revisions[revision_number]
+        except KeyError:
+            local_revision = LocalRevision(local_schematisation, revision_number)
+            local_revision.make_revision_structure()
+        return local_revision.results_dir
