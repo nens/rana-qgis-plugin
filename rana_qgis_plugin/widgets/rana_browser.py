@@ -33,6 +33,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_projects,
     get_threedi_schematisation,
 )
+from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -508,7 +509,17 @@ class RanaBrowser(uicls, basecls):
         sender.wait()
 
         if self.selected_file["data_type"] == "scenario":
-            pass
+            # if zip file, do nothing, else try to load in results analysis
+            if local_file_path.endswith(".zip"):
+                pass
+            elif os.path.isdir(local_file_path):
+                if self.communication.ask(
+                    self,
+                    "Rana",
+                    "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                ):
+                    ra_tool = get_threedi_results_analysis_tool_instance()
+                    ra_tool.load_result(local_file_path)
         else:
             add_layer_to_qgis(
                 self.communication,
@@ -559,8 +570,9 @@ class RanaBrowser(uicls, basecls):
                 )
                 result_browser = ResultBrowser(self, results)
                 if result_browser.exec() == QDialog.Accepted:
-                    # Check whether the files already exist locally
                     result_ids = result_browser.get_selected_results_id()
+                    if len(result_ids) == 0:
+                        return
                     filtered_result_ids = []
                     for result_id in result_ids:
                         result = [r for r in results if r["id"] == result_id][0]
@@ -570,6 +582,7 @@ class RanaBrowser(uicls, basecls):
                         target_file = bypass_max_path_limit(
                             os.path.join(target_folder, file_name)
                         )
+                        # Check whether the files already exist locally
                         if os.path.exists(target_file):
                             file_overwrite = self.communication.custom_ask(
                                 self,
