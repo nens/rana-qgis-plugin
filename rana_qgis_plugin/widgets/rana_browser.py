@@ -22,6 +22,7 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
 )
+from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_project_file,
@@ -531,8 +532,10 @@ class RanaBrowser(uicls, basecls):
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
-                result = get_tenant_file_descriptor_view(self.selected_file["descriptor_id"], "lizard-scenario-results")
-                self.communication.log_warn(str(result))
+                results = get_tenant_file_descriptor_view(self.selected_file["descriptor_id"], "lizard-scenario-results")
+                self.communication.log_warn(str(results))
+                result_browser = ResultBrowser(self, results)
+                result_browser.exec()
 
     def open_wms(self):
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])

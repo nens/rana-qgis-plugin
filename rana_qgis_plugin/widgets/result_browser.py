@@ -3,30 +3,21 @@ from qgis.PyQt.QtWidgets import (
     QDialogButtonBox,
     QGridLayout,
     QGroupBox,
-    QLabel,
-    QLineEdit,
     QVBoxLayout,
 )
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
-from rana_qgis_plugin.utils_settings import (
-    base_url,
-    cognito_client_id,
-    set_base_url,
-    set_cognito_client_id,
-)
-
 
 class ResultBrowser(QDialog):
-    def __init__(self, parent):
+    def __init__(self, parent, results):
         super().__init__(parent)
         self.setWindowTitle(PLUGIN_NAME)
         self.setMinimumWidth(400)
         layout = QVBoxLayout(self)
         self.setLayout(layout)
 
-        auth_group = QGroupBox("Results", self)
-        auth_group.setLayout(QGridLayout())
+        results_group = QGroupBox("Results", self)
+        results_group.setLayout(QGridLayout())
 
         # # Set up GUI and populate with settings
         # auth_group.layout().addWidget(QLabel("Backend URL"), 0, 0)
@@ -47,5 +38,4 @@ class ResultBrowser(QDialog):
 
 
     def accept(self) -> None:
-
         return super().accept()
