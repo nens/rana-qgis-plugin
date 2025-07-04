@@ -513,13 +513,14 @@ class RanaBrowser(uicls, basecls):
             if local_file_path.endswith(".zip"):
                 pass
             elif os.path.isdir(local_file_path):
-                if self.communication.ask(
-                    self,
-                    "Rana",
-                    "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
-                ):
-                    ra_tool = get_threedi_results_analysis_tool_instance()
-                    ra_tool.load_result(local_file_path)
+                ra_tool = get_threedi_results_analysis_tool_instance()
+                if hasattr(ra_tool, "load_result"):
+                    if self.communication.ask(
+                        self,
+                        "Rana",
+                        "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                    ):
+                        ra_tool.load_result(local_file_path)
         else:
             add_layer_to_qgis(
                 self.communication,
