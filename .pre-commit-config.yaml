@@ -6,6 +6,4 @@ repos:
   hooks:
     - id: ruff-check  # isort
       args: ["--select", "I", "--fix"]
-      exclude: rana_qgis_plugin/libs/.
     - id: ruff-format
-      exclude: rana_qgis_plugin/libs/.

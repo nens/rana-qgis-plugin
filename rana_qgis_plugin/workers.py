@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import List
 
 import requests
+from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.core import QgsProject
 from threedi_mi_utils import bypass_max_path_limit
 
-from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path, image_to_bytes
 from .utils_api import (
     finish_file_upload,

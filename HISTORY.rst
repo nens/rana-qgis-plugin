@@ -16,6 +16,7 @@ History
 - Add refresh button to project and file overview to allow manual reloading.
 - Add option to download individual scenario results and store in 3Di working directory (#51)
 - Add feature that downloaded scenario result can be loaded in 3Di Results Analysis Tool (#51)
+- Remove GeoCat/bridgestyle from the plugin since it is now on PyPI. (nens/rana-qgis-plugin#71)
 
 
 1.1.8 (2025-06-16)
