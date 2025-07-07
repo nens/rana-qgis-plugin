@@ -256,7 +256,7 @@ class RanaBrowser(uicls, basecls):
                 return
             project_item = self.projects_model.itemFromIndex(index)
             self.project = project_item.data(Qt.UserRole)
-            self.selected_file = None
+            self.selected_file = {"id": "", "type": "directory"}
             self.paths.append(self.project["name"])
             self.paths = self.paths[:2]
             self.fetch_and_populate_files()
@@ -631,11 +631,11 @@ class RanaBrowser(uicls, basecls):
         if current_index == 0:
             self.refresh_projects()
         elif current_index == 1:
-            self.fetch_and_populate_files()
+            self._update_file_UI(append_path=False)
         elif current_index == 2:
             self.refresh_file_data()
         else:
-            raise Exception("cannot refresh; rana_widget index must be 1, 2, or 3")
+            raise Exception("cannot refresh; rana_widget index must be 0, 1, or 2")
 
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
