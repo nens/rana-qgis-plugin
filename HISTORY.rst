@@ -14,6 +14,8 @@ History
 - Add option to download scenario zip (nens/rana-qgis-plugin#51)
 - Reload file ui after uploading file. (nens/rana#41)
 - Add refresh button to project and file overview to allow manual reloading.
+- Add option to download individual scenario results and store in 3Di working directory (#51)
+- Add feature that downloaded scenario result can be loaded in 3Di Results Analysis Tool (#51)
 - Remove GeoCat/bridgestyle from the plugin since it is now on PyPI. (nens/rana-qgis-plugin#71)
 
 

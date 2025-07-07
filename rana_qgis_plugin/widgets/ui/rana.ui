@@ -219,6 +219,13 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="btn_download_results">
+            <property name="text">
+             <string>Download Selected Results</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>

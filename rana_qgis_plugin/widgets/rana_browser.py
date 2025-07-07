@@ -3,11 +3,12 @@ import os
 from functools import partial
 from pathlib import Path
 
-from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer
+from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QFileDialog, QLabel, QTableWidgetItem
+from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QLabel, QTableWidgetItem
+from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
@@ -21,18 +22,24 @@ from rana_qgis_plugin.utils import (
     convert_to_timestamp,
     display_bytes,
     elide_text,
+    get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
+    get_tenant_file_descriptor_view,
     get_tenant_project_file,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
+    map_result_to_file_name,
 )
+from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
     FileDownloadWorker,
     FileUploadWorker,
+    LizardResultDownloadWorker,
     VectorStyleWorker,
 )
 
@@ -106,6 +113,7 @@ class RanaBrowser(uicls, basecls):
         self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
         self.btn_wms.clicked.connect(self.open_wms)
         self.btn_download.clicked.connect(self.download_file)
+        self.btn_download_results.clicked.connect(self.download_results)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -256,7 +264,7 @@ class RanaBrowser(uicls, basecls):
                 return
             project_item = self.projects_model.itemFromIndex(index)
             self.project = project_item.data(Qt.UserRole)
-            self.selected_file = None
+            self.selected_file = {"id": "", "type": "directory"}
             self.paths.append(self.project["name"])
             self.paths = self.paths[:2]
             self.fetch_and_populate_files()
@@ -438,6 +446,7 @@ class RanaBrowser(uicls, basecls):
             self.btn_save_vector_style.hide()
             self.btn_wms.hide()
             self.btn_download.hide()
+            self.btn_download_results.hide()
         elif data_type == "scenario":
             self.btn_open.hide()
             self.btn_save.hide()
@@ -445,9 +454,11 @@ class RanaBrowser(uicls, basecls):
             if meta["simulation"]["software"]["id"] == "3Di":
                 self.btn_wms.show()
                 self.btn_download.show()
+                self.btn_download_results.show()
             else:
                 self.btn_wms.hide()
                 self.btn_download.hide()
+                self.btn_download_results.hide()
         elif data_type in self.SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
@@ -456,12 +467,14 @@ class RanaBrowser(uicls, basecls):
                 self.btn_save_vector_style.show()
             self.btn_wms.hide()
             self.btn_download.hide()
+            self.btn_download_results.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
             self.btn_wms.hide()
             self.btn_save_vector_style.hide()
             self.btn_download.hide()
+            self.btn_download_results.hide()
 
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
@@ -490,12 +503,28 @@ class RanaBrowser(uicls, basecls):
     def on_file_download_finished(self, local_file_path: str):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
-        self.communication.bar_info(f"File downloaded to: {local_file_path}")
-        self.file_download_worker.wait()
-        self.file_download_worker = None
+        self.communication.bar_info(f"File(s) downloaded to: {local_file_path}")
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.wait()
 
         if self.selected_file["data_type"] == "scenario":
-            pass
+            # if zip file, do nothing, else try to load in results analysis
+            if local_file_path.endswith(".zip"):
+                pass
+            elif os.path.isdir(local_file_path):
+                ra_tool = get_threedi_results_analysis_tool_instance()
+                # Check whether result and gridadmin exist in the target folder
+                result_path = os.path.join(local_file_path, "results_3di.nc")
+                admin_path = os.path.join(local_file_path, "gridadmin.h5")
+                if os.path.exists(result_path) and os.path.exists(admin_path):
+                    if hasattr(ra_tool, "load_result"):
+                        if self.communication.ask(
+                            self,
+                            "Rana",
+                            "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                        ):
+                            ra_tool.load_result(result_path, admin_path)
         else:
             add_layer_to_qgis(
                 self.communication,
@@ -510,15 +539,89 @@ class RanaBrowser(uicls, basecls):
         self.communication.clear_message_bar()
         self.communication.show_error(error)
 
-    def on_file_download_progress(self, progress: int):
+    def on_file_download_progress(self, progress: int, file_name: str = ""):
         self.communication.progress_bar(
-            "Downloading file...", 0, 100, progress, clear_msg_bar=True
+            f"Downloading file {file_name}...", 0, 100, progress, clear_msg_bar=True
         )
 
     def upload_file_to_rana(self):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker()
         self.file_upload_worker.start()
+
+    def download_results(self):
+        if not QgsSettings().contains("threedi/working_dir"):
+            self.communication.show_warn(
+                "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
+            )
+
+        descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+        schematisation_name = descriptor["meta"]["schematisation"]["name"]
+        schematisation_id = descriptor["meta"]["schematisation"]["id"]
+        schematisation_version = descriptor["meta"]["schematisation"]["version"]
+        assert descriptor["data_type"] == "scenario"
+
+        # Determine local target folder for simulatuon
+        target_folder = get_threedi_schematisation_simulation_results_folder(
+            QgsSettings().value("threedi/working_dir"),
+            schematisation_id,
+            schematisation_name,
+            schematisation_version,
+            descriptor["meta"]["simulation"]["name"],
+        )
+        os.makedirs(target_folder, exist_ok=True)
+
+        for link in descriptor["links"]:
+            if link["rel"] == "lizard-scenario-results":
+                results = get_tenant_file_descriptor_view(
+                    self.selected_file["descriptor_id"], "lizard-scenario-results"
+                )
+                result_browser = ResultBrowser(self, results)
+                if result_browser.exec() == QDialog.Accepted:
+                    result_ids = result_browser.get_selected_results_id()
+                    if len(result_ids) == 0:
+                        return
+                    filtered_result_ids = []
+                    for result_id in result_ids:
+                        result = [r for r in results if r["id"] == result_id][0]
+                        file_name = map_result_to_file_name(result)
+                        target_file = bypass_max_path_limit(
+                            os.path.join(target_folder, file_name)
+                        )
+                        # Check whether the files already exist locally
+                        if os.path.exists(target_file):
+                            file_overwrite = self.communication.custom_ask(
+                                self,
+                                "File exists",
+                                f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                                "Cancel",
+                                "Download again",
+                                "Continue",
+                            )
+                            if file_overwrite == "Download again":
+                                filtered_result_ids.append(result_id)
+                            elif file_overwrite == "Cancel":
+                                return
+                        else:
+                            filtered_result_ids.append(result_id)
+
+                    self.lizard_result_download_worker = LizardResultDownloadWorker(
+                        self.project,
+                        self.selected_file,
+                        filtered_result_ids,
+                        target_folder,
+                    )
+
+                    self.lizard_result_download_worker.finished.connect(
+                        self.on_file_download_finished
+                    )
+                    self.lizard_result_download_worker.failed.connect(
+                        self.on_file_download_failed
+                    )
+                    self.lizard_result_download_worker.progress.connect(
+                        self.on_file_download_progress
+                    )
+                    self.lizard_result_download_worker.start()
 
     def open_wms(self):
         descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
@@ -631,11 +734,11 @@ class RanaBrowser(uicls, basecls):
         if current_index == 0:
             self.refresh_projects()
         elif current_index == 1:
-            self.fetch_and_populate_files()
+            self._update_file_UI(append_path=False)
         elif current_index == 2:
             self.refresh_file_data()
         else:
-            raise Exception("cannot refresh; rana_widget index must be 1, 2, or 3")
+            raise Exception("cannot refresh; rana_widget index must be 0, 1, or 2")
 
     def on_file_upload_finished(self):
         self.rana_widget.setEnabled(True)
