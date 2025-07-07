@@ -190,11 +190,12 @@ def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     return path_params, query_params
 
 
-def get_threedi_schematisation_folder(
+def get_threedi_schematisation_simulation_results_folder(
     working_dir: str,
     schematisation_id: int,
     schematisation_name: str,
     revision_number: int,
+    simulation_name: str,
 ) -> str:
     local_schematisations = list_local_schematisations(working_dir)
 
@@ -210,4 +211,6 @@ def get_threedi_schematisation_folder(
         except KeyError:
             local_revision = LocalRevision(local_schematisation, revision_number)
             local_revision.make_revision_structure()
-        return local_revision.results_dir
+        result = os.path.join(local_revision.results_dir, simulation_name)
+        # replace colons, invalid for Windows paths (don't replace drive colon)
+        return result[:3] + result[3:].replace(":", "_")

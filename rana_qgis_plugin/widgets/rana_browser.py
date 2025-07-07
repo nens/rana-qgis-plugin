@@ -22,8 +22,7 @@ from rana_qgis_plugin.utils import (
     convert_to_timestamp,
     display_bytes,
     elide_text,
-    get_filename_from_attachment_url,
-    get_threedi_schematisation_folder,
+    get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
@@ -32,6 +31,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
+    map_result_to_file_name,
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
@@ -514,13 +514,17 @@ class RanaBrowser(uicls, basecls):
                 pass
             elif os.path.isdir(local_file_path):
                 ra_tool = get_threedi_results_analysis_tool_instance()
-                if hasattr(ra_tool, "load_result"):
-                    if self.communication.ask(
-                        self,
-                        "Rana",
-                        "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
-                    ):
-                        ra_tool.load_result(local_file_path)
+                # Check whether result and gridadmin exist in the target folder
+                result_path = os.path.join(local_file_path, "results_3di.nc")
+                admin_path = os.path.join(local_file_path, "gridadmin.h5")
+                if os.path.exists(result_path) and os.path.exists(admin_path):
+                    if hasattr(ra_tool, "load_result"):
+                        if self.communication.ask(
+                            self,
+                            "Rana",
+                            "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                        ):
+                            ra_tool.load_result(result_path, admin_path)
         else:
             add_layer_to_qgis(
                 self.communication,
@@ -557,13 +561,16 @@ class RanaBrowser(uicls, basecls):
         schematisation_version = descriptor["meta"]["schematisation"]["version"]
         assert descriptor["data_type"] == "scenario"
 
-        # Determine local target folder
-        target_folder = get_threedi_schematisation_folder(
+        # Determine local target folder for simulatuon
+        target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
             schematisation_name,
             schematisation_version,
+            descriptor["meta"]["simulation"]["name"],
         )
+        os.makedirs(target_folder, exist_ok=True)
+
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
                 results = get_tenant_file_descriptor_view(
@@ -577,9 +584,7 @@ class RanaBrowser(uicls, basecls):
                     filtered_result_ids = []
                     for result_id in result_ids:
                         result = [r for r in results if r["id"] == result_id][0]
-                        file_name = get_filename_from_attachment_url(
-                            result["attachment_url"]
-                        )
+                        file_name = map_result_to_file_name(result)
                         target_file = bypass_max_path_limit(
                             os.path.join(target_folder, file_name)
                         )

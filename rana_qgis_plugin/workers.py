@@ -11,13 +11,14 @@ from qgis.core import QgsProject
 from threedi_mi_utils import bypass_max_path_limit
 
 from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
-from .utils import get_filename_from_attachment_url, get_local_file_path, image_to_bytes
+from .utils import get_local_file_path, image_to_bytes
 from .utils_api import (
     finish_file_upload,
     get_tenant_file_descriptor_view,
     get_tenant_project_file,
     get_vector_style_file,
     get_vector_style_upload_urls,
+    map_result_to_file_name,
     start_file_upload,
 )
 
@@ -331,7 +332,7 @@ class LizardResultDownloadWorker(QThread):
                 descriptor_id, "lizard-scenario-results"
             )
             result = [r for r in results if r["id"] == result_id][0]
-            file_name = get_filename_from_attachment_url(result["attachment_url"])
+            file_name = map_result_to_file_name(result)
             target_file = bypass_max_path_limit(
                 os.path.join(self.target_folder, file_name)
             )
