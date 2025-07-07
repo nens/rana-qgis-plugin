@@ -3,18 +3,22 @@ import json
 import os
 import zipfile
 from pathlib import Path
+from typing import List
 
 import requests
 from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
-from qgis.core import Qgis, QgsMessageLog, QgsProject
+from qgis.core import QgsProject
+from threedi_mi_utils import bypass_max_path_limit
 
 from .libs.bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from .utils import get_local_file_path, image_to_bytes
 from .utils_api import (
     finish_file_upload,
+    get_tenant_file_descriptor_view,
     get_tenant_project_file,
     get_vector_style_file,
     get_vector_style_upload_urls,
+    map_result_to_file_name,
     start_file_upload,
 )
 
@@ -24,7 +28,7 @@ CHUNK_SIZE = 1024 * 1024  # 1 MB
 class FileDownloadWorker(QThread):
     """Worker thread for downloading files."""
 
-    progress = pyqtSignal(int)
+    progress = pyqtSignal(int, str)
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
 
@@ -57,7 +61,7 @@ class FileDownloadWorker(QThread):
                         downloaded_size += len(chunk)
                         progress = int((downloaded_size / total_size) * 100)
                         if progress > previous_progress:
-                            self.progress.emit(progress)
+                            self.progress.emit(progress, "")
                             previous_progress = progress
             # Fetch and extract the QML zip for vector files
             if self.file["data_type"] == "vector":
@@ -77,7 +81,7 @@ class FileDownloadWorker(QThread):
 class FileUploadWorker(QThread):
     """Worker thread for uploading new (non-rana) files."""
 
-    progress = pyqtSignal(int)
+    progress = pyqtSignal(int, str)
     finished = pyqtSignal()
     conflict = pyqtSignal()
     failed = pyqtSignal(str)
@@ -116,7 +120,7 @@ class FileUploadWorker(QThread):
 
         # Save file to Rana
         try:
-            self.progress.emit(0)
+            self.progress.emit(0, "")
             # Step 1: POST request to initiate the upload
             upload_response = start_file_upload(
                 self.project["id"], {"path": self.online_path}
@@ -126,12 +130,12 @@ class FileUploadWorker(QThread):
                 return
             upload_url = upload_response["urls"][0]
             # Step 2: Upload the file to the upload_url
-            self.progress.emit(20)
+            self.progress.emit(20, "")
             with open(local_file_path, "rb") as file:
                 response = requests.put(upload_url, data=file)
                 response.raise_for_status()
             # Step 3: Complete the upload
-            self.progress.emit(80)
+            self.progress.emit(80, "")
             response = finish_file_upload(
                 self.project["id"],
                 upload_response,
@@ -139,7 +143,7 @@ class FileUploadWorker(QThread):
             if not response:
                 self.failed.emit("Failed to complete file upload.")
                 return
-            self.progress.emit(100)
+            self.progress.emit(100, "")
             self.finished.emit()
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
@@ -301,3 +305,56 @@ class VectorStyleWorker(QThread):
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+
+
+class LizardResultDownloadWorker(QThread):
+    """Worker thread for downloading files from ."""
+
+    progress = pyqtSignal(int, str)
+    finished = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(
+        self, project: dict, file: dict, result_ids: List[int], target_folder: str
+    ):
+        super().__init__()
+        self.project = project
+        self.file = file
+        self.result_ids = result_ids
+        self.target_folder = target_folder
+
+    @pyqtSlot()
+    def run(self):
+        descriptor_id = self.file["descriptor_id"]
+        for result_id in self.result_ids:
+            # Retrieve URLS from file descriptors (again), presigned url might be expired
+            results = get_tenant_file_descriptor_view(
+                descriptor_id, "lizard-scenario-results"
+            )
+            result = [r for r in results if r["id"] == result_id][0]
+            file_name = map_result_to_file_name(result)
+            target_file = bypass_max_path_limit(
+                os.path.join(self.target_folder, file_name)
+            )
+
+            try:
+                with requests.get(result["attachment_url"], stream=True) as response:
+                    response.raise_for_status()
+                    total_size = int(response.headers.get("content-length", 0))
+                    downloaded_size = 0
+                    previous_progress = -1
+                    with open(target_file, "wb") as file:
+                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                            file.write(chunk)
+                            downloaded_size += len(chunk)
+                            progress = int((downloaded_size / total_size) * 100)
+                            if progress > previous_progress:
+                                self.progress.emit(progress, file_name)
+                                previous_progress = progress
+
+            except requests.exceptions.RequestException as e:
+                self.failed.emit(f"Failed to download file: {str(e)}")
+            except Exception as e:
+                self.failed.emit(f"An error occurred: {str(e)}")
+
+        self.finished.emit(self.target_folder)

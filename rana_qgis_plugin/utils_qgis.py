@@ -13,3 +13,7 @@ def get_plugin_instance(plugin_name):
 def get_threedi_models_and_simulations_instance():
     """Return ThreeDi Models and Simulations plugin instance."""
     return get_plugin_instance("threedi_models_and_simulations")
+
+
+def get_threedi_results_analysis_tool_instance():
+    return get_plugin_instance("threedi_results_analysis")
