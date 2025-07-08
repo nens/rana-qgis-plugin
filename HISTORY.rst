@@ -17,6 +17,7 @@ History
 - Add option to download individual scenario results and store in 3Di working directory (#51)
 - Add feature that downloaded scenario result can be loaded in 3Di Results Analysis Tool (#51)
 - Remove GeoCat/bridgestyle from the plugin since it is now on PyPI. (nens/rana-qgis-plugin#71)
+- Fix update_breadcrumbs; refresh file details after loading file from Rana. (nens/rana-qgis-plugin#80)
 
 
 1.1.8 (2025-06-16)

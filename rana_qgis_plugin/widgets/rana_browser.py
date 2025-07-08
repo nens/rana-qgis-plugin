@@ -124,7 +124,8 @@ class RanaBrowser(uicls, basecls):
         for i in reversed(range(self.breadcrumbs_layout.count())):
             widget = self.breadcrumbs_layout.itemAt(i).widget()
             if widget:
-                widget.deleteLater()
+                self.breadcrumbs_layout.removeWidget(widget)
+                del widget
 
         # Add the breadcrumbs
         for i, path in enumerate(self.paths):
@@ -744,10 +745,10 @@ class RanaBrowser(uicls, basecls):
         self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        self.refresh()
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
+        self.refresh()
 
     def on_new_file_upload_finished(self, online_path: str):
         self.on_file_upload_finished()
@@ -758,6 +759,7 @@ class RanaBrowser(uicls, basecls):
                 self.project["id"], {"path": online_path}
             )
             self.initialize_file_download_worker()
+            self.file_download_worker.finished.connect(self.refresh)
             self.file_download_worker.start()
 
     def on_file_upload_failed(self, error: str):
