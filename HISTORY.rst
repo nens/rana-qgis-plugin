@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.9 (unreleased)
+1.1.9 (2025-07-08)
 ------------------
 
 - Added "Add File to Rana" button (nens/rana#1951)
