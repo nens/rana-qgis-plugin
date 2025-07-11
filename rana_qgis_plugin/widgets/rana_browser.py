@@ -6,14 +6,14 @@ from pathlib import Path
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
-from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel, QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QLabel, QTableWidgetItem
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
-from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon
+from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon, ICONS_DIR
 from rana_qgis_plugin.utils import (
     NumericItem,
     add_layer_to_qgis,
@@ -74,6 +74,10 @@ class RanaBrowser(uicls, basecls):
         self.current_page = 1
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
+
+        banner = QPixmap(os.path.join(ICONS_DIR, "banner.svg"))
+        # banner = banner.scaledToHeight(20)
+        self.logo_label.setPixmap(banner)
 
         # Projects widget
         self.projects = []

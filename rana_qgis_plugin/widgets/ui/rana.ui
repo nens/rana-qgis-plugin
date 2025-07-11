@@ -3,16 +3,72 @@
  <class>RanaBrowser</class>
  <widget class="QWidget" name="RanaBrowser">
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <layout class="QHBoxLayout" name="breadcrumbs_layout"/>
-   </item>
    <item row="1" column="0">
+    <widget class="QWidget" name="widget" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="breadcrumbs_layout"/>
+      </item>
+      <item>
+       <widget class="QLabel" name="logo_label">
+        <property name="text">
+         <string>LOGO</string>
+        </property>
+        <property name="scaledContents">
+         <bool>false</bool>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
     <widget class="QStackedWidget" name="rana_widget">
      <property name="currentIndex">
       <number>0</number>
      </property>
      <widget class="QWidget" name="projects_widget">
       <layout class="QGridLayout" name="projects_layout">
+       <item row="2" column="0">
+        <widget class="QTreeView" name="projects_tv">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>1</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QLineEdit" name="projects_search">
+           <property name="placeholderText">
+            <string>🔍 Search for project by name</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="overview_refresh_btn">
+           <property name="toolTip">
+            <string>Refresh</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>18</width>
+             <height>18</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item row="3" column="0">
         <layout class="QHBoxLayout" name="pagination_layout">
          <item>
@@ -48,40 +104,6 @@
            </property>
            <property name="text">
             <string>&gt;</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item row="2" column="0">
-        <widget class="QTreeView" name="projects_tv">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-           <horstretch>1</horstretch>
-           <verstretch>1</verstretch>
-          </sizepolicy>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <item>
-          <widget class="QLineEdit" name="projects_search">
-           <property name="placeholderText">
-            <string>🔍 Search for project by name</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="overview_refresh_btn">
-           <property name="toolTip">
-            <string>Refresh</string>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>18</width>
-             <height>18</height>
-            </size>
            </property>
           </widget>
          </item>
@@ -135,7 +157,7 @@
      </widget>
      <widget class="QWidget" name="file_widget">
       <layout class="QGridLayout" name="file_layout">
-      <item row="0" column="0">
+       <item row="0" column="0">
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
           <spacer name="horizontalSpacer">
