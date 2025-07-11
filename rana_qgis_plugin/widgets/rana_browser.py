@@ -6,14 +6,14 @@ from pathlib import Path
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
-from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel, QPixmap
+from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QLabel, QTableWidgetItem
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
-from rana_qgis_plugin.icons import dir_icon, file_icon, refresh_icon, ICONS_DIR
+from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
     add_layer_to_qgis,
