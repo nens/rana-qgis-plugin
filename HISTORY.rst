@@ -4,7 +4,7 @@ History
 1.1.10 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Next to SSO login, allow username-password option (#82)
 
 
 1.1.9 (2025-07-08)
