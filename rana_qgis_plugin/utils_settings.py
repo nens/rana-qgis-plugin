@@ -16,6 +16,13 @@ def initialize_settings():
         ),
     )
     settings.setValue(
+        f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native",
+        settings.value(
+            f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native",
+            "2epleb6bkli509b0a6fmddcrj6",
+        ),
+    )
+    settings.setValue(
         f"{RANA_SETTINGS_ENTRY}/base_url",
         settings.value(
             f"{RANA_SETTINGS_ENTRY}/base_url", "https://www.ranawaterintelligence.com"
@@ -35,12 +42,20 @@ def set_cognito_client_id(id: str):
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cognito_client_id", id)
 
 
-def set_base_url(url: str):
-    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/base_url", url)
-
-
 def cognito_client_id() -> str:
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cognito_client_id")
+
+
+def set_cognito_client_id_native(id: str):
+    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native", id)
+
+
+def cognito_client_id_native() -> str:
+    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native")
+
+
+def set_base_url(url: str):
+    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/base_url", url)
 
 
 def base_url():

@@ -59,7 +59,8 @@ class RanaQgisPlugin:
         self.toolbar.addAction(self.action)
 
     def login(self, start_tenant_id: str = None) -> bool:
-        setup_oauth2(self.communication)
+        if not setup_oauth2(self.communication):
+            return False
         self.add_rana_menu(True)
         if not self.set_tenant(start_tenant_id):
             return False
