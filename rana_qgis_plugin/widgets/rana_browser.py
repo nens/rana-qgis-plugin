@@ -537,6 +537,7 @@ class RanaBrowser(uicls, basecls):
                 local_file_path,
                 self.project["name"],
                 self.selected_file,
+                get_tenant_file_descriptor(self.selected_file["descriptor_id"]),
                 self.schematisation,
             )
 
