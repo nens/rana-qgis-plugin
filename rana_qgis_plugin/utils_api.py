@@ -101,6 +101,21 @@ def get_tenant_project_file(project_id: str, params: dict):
         return None
 
 
+def get_tenant_file_url(project_id: str, params: dict):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/download"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.fetch(params)
+
+    if status:
+        response = network_manager.content
+        return response.get("url")
+    else:
+        return None
+
+
 def get_tenant_file_descriptor(descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
