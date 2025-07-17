@@ -17,6 +17,7 @@ from threedi_mi_utils import (
 
 from .communication import UICommunication
 from .utils_qgis import get_threedi_models_and_simulations_instance
+from .utils_api import get_tenant_file_descriptor
 
 
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
@@ -43,7 +44,8 @@ def add_layer_to_qgis(
 ):
     path = file["id"]
     file_name = os.path.basename(path.rstrip("/"))
-    data_type = file["descriptor"]["data_type"]
+    descriptor_id = file["descriptor_id"]
+    data_type = get_tenant_file_descriptor(descriptor_id)["data_type"]
 
     # Save the last modified date of the downloaded file in QSettings
     last_modified_key = f"{project_name}/{path}/last_modified"
@@ -60,12 +62,13 @@ def add_layer_to_qgis(
                 f"Failed to add {data_type} layer: {local_file_path}"
             )
     elif data_type == "vector":
-        if file["descriptor"]["meta"] is None:
+        metadata = get_tenant_file_descriptor(descriptor_id)["meta"]
+        if metadata is None:
             communication.show_warn(
                 f"No metadata found for {file_name}, processing probably has not finished yet."
             )
             return
-        layers = file["descriptor"]["meta"].get("layers", [])
+        layers = metadata.get("layers", [])
         if not layers:
             communication.show_warn(f"No layers found for {file_name}.")
             return

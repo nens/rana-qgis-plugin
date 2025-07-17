@@ -371,10 +371,9 @@ class RanaBrowser(uicls, basecls):
         )
         data_type = self.selected_file["data_type"]
         meta = None
-        if self.selected_file["descriptor"]:
-            descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
-            meta = descriptor["meta"] if descriptor else None
-            description = descriptor["description"] if descriptor else None
+        descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
+        meta = descriptor["meta"] if descriptor else None
+        description = descriptor["description"] if descriptor else None
 
         last_modified = convert_to_local_time(self.selected_file["last_modified"])
         size = (
@@ -484,13 +483,15 @@ class RanaBrowser(uicls, basecls):
     def open_file_in_qgis(self):
         """Start the worker to download and open files in QGIS"""
         file = self.selected_file
-        if file and file["descriptor"] and file["descriptor"]["data_type"]:
-            data_type = file["descriptor"]["data_type"]
-            if data_type not in self.SUPPORTED_DATA_TYPES:
-                self.communication.show_warn(f"Unsupported data type: {data_type}")
-                return
-            self.initialize_file_download_worker()
-            self.file_download_worker.start()
+        if file:
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+            if descriptor:
+                data_type = descriptor["data_type"]
+                if data_type not in self.SUPPORTED_DATA_TYPES:
+                    self.communication.show_warn(f"Unsupported data type: {data_type}")
+                    return
+                self.initialize_file_download_worker()
+                self.file_download_worker.start()
         else:
             self.communication.show_warn(f"Unsupported data type: {file['media_type']}")
 
