@@ -15,6 +15,7 @@ from .utils import get_local_file_path, image_to_bytes
 from .utils_api import (
     finish_file_upload,
     get_tenant_file_descriptor_view,
+    get_tenant_file_url,
     get_tenant_project_file,
     get_vector_style_file,
     get_vector_style_upload_urls,
@@ -44,9 +45,9 @@ class FileDownloadWorker(QThread):
     @pyqtSlot()
     def run(self):
         project_slug = self.project["slug"]
-        url = self.file["url"]
         path = self.file["id"]
         descriptor_id = self.file["descriptor_id"]
+        url = get_tenant_file_url(self.project["id"], {"path": path})
         local_dir_structure, local_file_path = get_local_file_path(project_slug, path)
         os.makedirs(local_dir_structure, exist_ok=True)
         try:
