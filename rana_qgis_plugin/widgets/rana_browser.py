@@ -3,14 +3,13 @@ import os
 from functools import partial
 from pathlib import Path
 
-from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
+from qgis.core import QgsSettings
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QThread, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QLabel, QTableWidgetItem
 from threedi_mi_utils import bypass_max_path_limit
 
-from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
@@ -48,6 +47,8 @@ uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
 
 class RanaBrowser(uicls, basecls):
+    open_wms_selected = pyqtSignal(str)
+
     SUPPORTED_DATA_TYPES = {
         "vector": "vector",
         "raster": "raster",
@@ -115,7 +116,11 @@ class RanaBrowser(uicls, basecls):
         self.btn_save.clicked.connect(self.upload_file_to_rana)
         self.btn_save_vector_style.clicked.connect(self.save_vector_styling_files)
         self.btn_upload.clicked.connect(self.upload_new_file_to_rana)
-        self.btn_wms.clicked.connect(self.open_wms)
+        # self.btn_wms.clicked.connect(partial(self.open_wms_selected, self.selected_file["descriptor_id"]))
+        self.btn_wms.clicked.connect(
+            lambda _,: self.open_wms_selected.emit(self.selected_file["descriptor_id"])
+        )
+        # lambda state, x=idx: self.button_pushed(x)
         self.btn_download.clicked.connect(self.download_file)
         self.btn_download_results.clicked.connect(self.download_results)
 
@@ -629,29 +634,6 @@ class RanaBrowser(uicls, basecls):
                         self.on_file_download_progress
                     )
                     self.lizard_result_download_worker.start()
-
-    def open_wms(self):
-        descriptor = get_tenant_file_descriptor(self.selected_file["descriptor_id"])
-        for link in descriptor["links"]:
-            if link["rel"] == "wms":
-                for layer in descriptor["meta"]["layers"]:
-                    quri = QgsDataSourceUri()
-                    quri.setParam("layers", layer["code"])
-                    quri.setParam("styles", "")
-                    quri.setParam("format", "image/png")
-                    quri.setParam("url", link["href"])
-                    # the wms provider will take care to expand authcfg URI parameter with credential
-                    # just before setting the HTTP connection.
-                    quri.setAuthConfigId(get_authcfg_id())
-                    rlayer = QgsRasterLayer(
-                        bytes(quri.encodedUri()).decode(),
-                        f"{layer['name']} ({layer['label']})",
-                        "wms",
-                    )
-                    QgsProject.instance().addMapLayer(rlayer)
-                return
-
-        self.communication.bar_error("No WMS layer for this file.")
 
     def download_file(self):
         assert self.selected_file["data_type"] == "scenario"

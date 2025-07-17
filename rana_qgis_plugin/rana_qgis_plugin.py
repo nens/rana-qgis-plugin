@@ -16,6 +16,7 @@ from rana_qgis_plugin.auth_3di import setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
+from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils import parse_url
 from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
 from rana_qgis_plugin.utils_settings import (
@@ -205,6 +206,7 @@ class RanaQgisPlugin:
         else:
             self.login()
         if not self.dock_widget:
+            # Setup GUI
             self.dock_widget = QDockWidget(PLUGIN_NAME, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(
                 Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
@@ -216,6 +218,11 @@ class RanaQgisPlugin:
             self.dock_widget.setObjectName(PLUGIN_NAME)
             self.rana_browser = RanaBrowser(self.communication)
             self.dock_widget.setWidget(self.rana_browser)
+            self.loader = Loader(self.rana_browser)
+
+            # Connect signals
+            self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
+
         self.iface.addTabifiedDockWidget(
             Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True
         )
