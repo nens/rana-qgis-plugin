@@ -264,7 +264,6 @@ class RanaBrowser(uicls, basecls):
     @pyqtSlot()
     def enable(self):
         self.rana_widget.setEnabled(True)
-        self.refresh()
 
     @pyqtSlot()
     def disable(self):
@@ -500,6 +499,7 @@ class RanaBrowser(uicls, basecls):
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
         self._update_file_UI(append_path=False)
 
+    @pyqtSlot()
     def refresh(self):
         current_index = self.rana_widget.currentIndex()
         if current_index == 0:

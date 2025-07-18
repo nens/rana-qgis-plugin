@@ -104,7 +104,7 @@ class Loader(QObject):
                 if os.path.exists(result_path) and os.path.exists(admin_path):
                     if hasattr(ra_tool, "load_result"):
                         if self.communication.ask(
-                            None,
+                            self.parent(),
                             "Rana",
                             "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
                         ):
@@ -195,7 +195,7 @@ class Loader(QObject):
                         # Check whether the files already exist locally
                         if os.path.exists(target_file):
                             file_overwrite = self.communication.custom_ask(
-                                None,
+                                self.parent(),
                                 "File exists",
                                 f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
                                 "Cancel",
@@ -294,7 +294,9 @@ class Loader(QObject):
             "The file has been modified on the server since it was last downloaded.\n"
             "Do you want to overwrite the server copy with the local copy?"
         )
-        file_overwrite = self.communication.ask(None, "File conflict", warn_and_ask_msg)
+        file_overwrite = self.communication.ask(
+            self.parent(), "File conflict", warn_and_ask_msg
+        )
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.file_overwrite = file_overwrite
@@ -311,7 +313,7 @@ class Loader(QObject):
     def on_new_file_upload_finished(self, online_path: str, project):
         self.on_file_upload_finished()
         if self.communication.ask(
-            None, "Load", "Would you like to load the uploaded file from Rana?"
+            self.parent(), "Load", "Would you like to load the uploaded file from Rana?"
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
             self.initialize_file_download_worker(project, file)

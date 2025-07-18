@@ -252,10 +252,13 @@ class RanaQgisPlugin:
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
+            self.loader.file_upload_finished.connect(self.rana_browser.refresh)
             self.loader.file_upload_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_conflict.connect(self.rana_browser.enable)
             self.loader.new_file_upload_finished.connect(self.rana_browser.enable)
+            self.loader.new_file_upload_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_finished.connect(self.rana_browser.enable)
+            self.loader.vector_style_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
