@@ -30,7 +30,7 @@ class FileDownloadWorker(QThread):
     """Worker thread for downloading files."""
 
     progress = pyqtSignal(int, str)
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(dict, dict, str)
     failed = pyqtSignal(str)
 
     def __init__(
@@ -72,7 +72,7 @@ class FileDownloadWorker(QThread):
                     if zipfile.is_zipfile(stream):
                         with zipfile.ZipFile(stream, "r") as zip_file:
                             zip_file.extractall(local_dir_structure)
-            self.finished.emit(local_file_path)
+            self.finished.emit(self.project, self.file, local_file_path)
         except requests.exceptions.RequestException as e:
             self.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
@@ -83,7 +83,7 @@ class FileUploadWorker(QThread):
     """Worker thread for uploading new (non-rana) files."""
 
     progress = pyqtSignal(int, str)
-    finished = pyqtSignal()
+    finished = pyqtSignal(dict)
     conflict = pyqtSignal()
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
@@ -145,7 +145,7 @@ class FileUploadWorker(QThread):
                 self.failed.emit("Failed to complete file upload.")
                 return
             self.progress.emit(100, "")
-            self.finished.emit()
+            self.finished.emit(self.project)
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
 
@@ -312,7 +312,7 @@ class LizardResultDownloadWorker(QThread):
     """Worker thread for downloading files from ."""
 
     progress = pyqtSignal(int, str)
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(dict, dict, str)
     failed = pyqtSignal(str)
 
     def __init__(
@@ -358,4 +358,4 @@ class LizardResultDownloadWorker(QThread):
             except Exception as e:
                 self.failed.emit(f"An error occurred: {str(e)}")
 
-        self.finished.emit(self.target_folder)
+        self.finished.emit(self.project, self.file, self.target_folder)
