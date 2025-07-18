@@ -218,7 +218,7 @@ class RanaQgisPlugin:
             self.dock_widget.setObjectName(PLUGIN_NAME)
             self.rana_browser = RanaBrowser(self.communication)
             self.dock_widget.setWidget(self.rana_browser)
-            self.loader = Loader(self.rana_browser)
+            self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
