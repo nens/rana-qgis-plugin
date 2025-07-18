@@ -16,7 +16,7 @@ from rana_qgis_plugin.utils import (
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
-    get_tenant_project_file,
+    get_threedi_schematisation,
     map_result_to_file_name,
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
@@ -85,7 +85,6 @@ class Loader(QObject):
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
     def on_file_download_finished(self, project, file, local_file_path: str):
-        # self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File(s) downloaded to: {local_file_path}")
         sender = self.sender()
@@ -104,24 +103,28 @@ class Loader(QObject):
                 if os.path.exists(result_path) and os.path.exists(admin_path):
                     if hasattr(ra_tool, "load_result"):
                         if self.communication.ask(
-                            self,
+                            None,
                             "Rana",
                             "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
                         ):
                             ra_tool.load_result(result_path, admin_path)
         else:
+            schematisation = None
+            if file["data_type"] == "threedi_schematisation":
+                schematisation = get_threedi_schematisation(
+                    self.communication, file["descriptor_id"]
+                )
             add_layer_to_qgis(
                 self.communication,
                 local_file_path,
                 project["name"],
                 file,
                 get_tenant_file_descriptor(file["descriptor_id"]),
-                None,  # self.schematisation,
+                schematisation,
             )
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
-        # self.rana_widget.setEnabled(True) # TODO
         self.communication.clear_message_bar()
         self.communication.show_error(error)
         self.file_download_failed.emit(error)
@@ -134,7 +137,6 @@ class Loader(QObject):
 
     def initialize_file_download_worker(self, project, file):
         self.communication.bar_info("Start downloading file...")
-        # self.rana_widget.setEnabled(False) # TODO
         self.file_download_worker = FileDownloadWorker(
             project,
             file,
@@ -177,7 +179,7 @@ class Loader(QObject):
                 results = get_tenant_file_descriptor_view(
                     file["descriptor_id"], "lizard-scenario-results"
                 )
-                result_browser = ResultBrowser(self, results)
+                result_browser = ResultBrowser(None, results)
                 if result_browser.exec() == QDialog.Accepted:
                     result_ids = result_browser.get_selected_results_id()
                     if len(result_ids) == 0:
@@ -192,7 +194,7 @@ class Loader(QObject):
                         # Check whether the files already exist locally
                         if os.path.exists(target_file):
                             file_overwrite = self.communication.custom_ask(
-                                self,
+                                None,
                                 "File exists",
                                 f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
                                 "Cancel",
@@ -207,8 +209,8 @@ class Loader(QObject):
                             filtered_result_ids.append(result_id)
 
                     self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        self.project,
-                        self.selected_file,
+                        project,
+                        file,
                         filtered_result_ids,
                         target_folder,
                     )
@@ -238,7 +240,7 @@ class Loader(QObject):
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
         )
         local_path, _ = QFileDialog.getOpenFileName(
-            self,
+            None,
             "Open file",
             last_saved_dir,
             "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
@@ -250,7 +252,6 @@ class Loader(QObject):
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder", str(Path(local_path).parent)
         )
         self.communication.bar_info("Start uploading file to Rana...")
-        # self.rana_widget.setEnabled(False)  # TODO
         online_dir = ""
         if file:
             assert file["type"] == "directory"
@@ -258,7 +259,7 @@ class Loader(QObject):
 
         online_path = online_dir + Path(local_path).name
         self.new_file_upload_worker = FileUploadWorker(
-            self.project,
+            project,
             Path(local_path),
             online_path,
         )
@@ -274,7 +275,6 @@ class Loader(QObject):
 
     def initialize_file_upload_worker(self, project, file):
         self.communication.bar_info("Start uploading file to Rana...")
-        # self.rana_widget.setEnabled(False) # TODO
         self.file_upload_worker = ExistingFileUploadWorker(
             project,
             file,
@@ -305,30 +305,22 @@ class Loader(QObject):
         assert isinstance(sender, QThread)
         sender.wait()
 
-        # self.rana_widget.setEnabled(True)  # TODO
-        # self.refresh()  # TODO
         self.file_upload_finished.emit()
 
-    def on_new_file_upload_finished(self, online_path: str):
-        pass
-        # TODO
-        # self.on_file_upload_finished()
-        # if self.communication.ask(
-        #     self, "Load", "Would you like to load the uploaded file from Rana?"
-        # ):
-        #     self.selected_file = get_tenant_project_file(
-        #         self.project["id"], {"path": online_path}
-        #     )
-        #     self.initialize_file_download_worker()
-        #     self.file_download_worker.finished.connect(self.refresh)
-        #     self.file_download_worker.start()
-        self.new_file_uploaded_finished.emit(online_path)
+    def on_new_file_upload_finished(self, online_path: str, project, file):
+        self.on_file_upload_finished()
+        if self.communication.ask(
+            None, "Load", "Would you like to load the uploaded file from Rana?"
+        ):
+            self.initialize_file_download_worker(project, file)
+            self.file_download_worker.finished.connect(self.on_file_download_finished)
+            self.file_download_worker.start()
+        self.new_file_upload_finished.emit(online_path)
 
     def on_file_upload_failed(self, error: str):
         self.communication.clear_message_bar()
         self.communication.show_error(error)
         self.file_upload_failed.emit(error)
-        # self.rana_widget.setEnabled(True)  # TODO
 
     def on_file_upload_progress(self, progress: int):
         self.communication.progress_bar(
@@ -371,14 +363,11 @@ class Loader(QObject):
         self.vector_style_worker.start()
 
     def on_vector_style_finished(self, msg: str):
-        # self.rana_widget.setEnabled(True) # TODO
-        # self.refresh() # TODO
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
         self.vector_style_finished.emit()
 
     def on_vector_style_failed(self, msg: str):
-        # self.rana_widget.setEnabled(True) # TODO
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)

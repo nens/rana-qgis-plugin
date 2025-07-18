@@ -90,7 +90,6 @@ class RanaBrowser(uicls, basecls):
 
         # File details widget
         self.selected_file = None
-        self.schematisation = None
         self.btn_open.clicked.connect(
             lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_file)
         )
@@ -265,6 +264,11 @@ class RanaBrowser(uicls, basecls):
     @pyqtSlot()
     def enable(self):
         self.rana_widget.setEnabled(True)
+        self.refresh()
+
+    @pyqtSlot()
+    def disable(self):
+        self.rana_widget.setEnabled(False)
 
     def select_project(self, index: QModelIndex):
         self.rana_widget.setEnabled(False)
@@ -421,14 +425,13 @@ class RanaBrowser(uicls, basecls):
             ]
             file_details.extend(scenario_details)
         if data_type == "threedi_schematisation":
-            self.schematisation = get_threedi_schematisation(
+            schematisation = get_threedi_schematisation(
                 self.communication, self.selected_file["descriptor_id"]
             )
-            if self.schematisation:
-                schematisation = self.schematisation["schematisation"]
-                revision = self.schematisation["latest_revision"]
+            if schematisation:
+                revision = schematisation["latest_revision"]
                 schematisation_details = [
-                    ("Schematisation ID", schematisation["id"]),
+                    ("Schematisation ID", schematisation["schematisation"]["id"]),
                     ("Latest revision ID", revision["id"] if revision else None),
                     (
                         "Latest revision number",
