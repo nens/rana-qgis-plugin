@@ -330,28 +330,9 @@ class Loader(QObject):
         )
         self.file_upload_progress.emit(progress)
 
-    def start_file_in_qgis(self, project_id: str, online_path: str):
-        pass
-        # TODO
-        # # Properly set members
-        # for project in self.projects:
-        #     if project["id"] == project_id:
-        #         self.communication.log_warn(f"Selecting project {project_id}")
-        #         self.project = project
-        # self.selected_file = get_tenant_project_file(project_id, {"path": online_path})
-        # self.paths = ["Projects", self.project["name"]] + online_path.split("/")[:-1]
-        # if self.selected_file:
-        #     self.communication.log_warn(f"Opening file {str(self.selected_file)}")
-        #     self.open_file_in_qgis()
-        #     self._update_file_UI()
-        # else:
-        #     self.project = None
-        #     self.paths = ["Projects"]
-
     @pyqtSlot(dict, dict)
     def save_vector_style(self, project, file):
         """Start the worker for saving vector styling files"""
-        # self.rana_widget.setEnabled(False) # TODO
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )

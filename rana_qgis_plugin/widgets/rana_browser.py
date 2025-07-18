@@ -510,3 +510,18 @@ class RanaBrowser(uicls, basecls):
             self.refresh_file_data()
         else:
             raise Exception("cannot refresh; rana_widget index must be 0, 1, or 2")
+
+    def start_file_in_qgis(self, project_id: str, online_path: str):
+        for project in self.projects:
+            if project["id"] == project_id:
+                self.communication.log_warn(f"Selecting project {project_id}")
+                self.project = project
+        self.selected_file = get_tenant_project_file(project_id, {"path": online_path})
+        self.paths = ["Projects", self.project["name"]] + online_path.split("/")[:-1]
+        if self.selected_file:
+            self.communication.log_info(f"Opening file {str(self.selected_file)}")
+            self.open_in_qgis_selected.emit(self.project, self.selected_file)
+            self._update_file_UI()
+        else:
+            self.project = None
+            self.paths = ["Projects"]
