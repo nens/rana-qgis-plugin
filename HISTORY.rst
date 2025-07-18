@@ -5,6 +5,8 @@ History
 -------------------
 
 - Fetch file download url and descriptor from dedicated endpoints instead of File object (#53)
+- Added UML diagram (#72)
+- Separate browsing (RanaBrowser) and loading (Loader) (#70)
 
 
 1.1.11 (2025-07-16)
