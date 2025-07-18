@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.12 (unreleased)
+1.1.12 (2025-07-18)
 -------------------
 
 - Fetch file download url and descriptor from dedicated endpoints instead of File object (#53)
