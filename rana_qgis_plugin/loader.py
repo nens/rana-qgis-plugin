@@ -16,6 +16,7 @@ from rana_qgis_plugin.utils import (
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
+    get_tenant_project_file,
     get_threedi_schematisation,
     map_result_to_file_name,
 )
@@ -307,11 +308,12 @@ class Loader(QObject):
 
         self.file_upload_finished.emit()
 
-    def on_new_file_upload_finished(self, online_path: str, project, file):
+    def on_new_file_upload_finished(self, online_path: str, project):
         self.on_file_upload_finished()
         if self.communication.ask(
             None, "Load", "Would you like to load the uploaded file from Rana?"
         ):
+            file = get_tenant_project_file(project["id"], {"path": online_path})
             self.initialize_file_download_worker(project, file)
             self.file_download_worker.finished.connect(self.on_file_download_finished)
             self.file_download_worker.start()

@@ -83,7 +83,7 @@ class FileUploadWorker(QThread):
     """Worker thread for uploading new (non-rana) files."""
 
     progress = pyqtSignal(int, str)
-    finished = pyqtSignal()
+    finished = pyqtSignal(dict)
     conflict = pyqtSignal()
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
@@ -145,7 +145,7 @@ class FileUploadWorker(QThread):
                 self.failed.emit("Failed to complete file upload.")
                 return
             self.progress.emit(100, "")
-            self.finished.emit()
+            self.finished.emit(self.project)
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
 
