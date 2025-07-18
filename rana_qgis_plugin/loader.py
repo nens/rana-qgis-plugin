@@ -3,7 +3,7 @@ from functools import partial
 from pathlib import Path
 
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
-from qgis.PyQt.QtCore import QObject, QSettings, QThread, pyqtSlot
+from qgis.PyQt.QtCore import QObject, QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog
 from threedi_mi_utils import bypass_max_path_limit
 
@@ -31,6 +31,17 @@ from rana_qgis_plugin.workers import (
 
 
 class Loader(QObject):
+    file_download_finished = pyqtSignal(str)
+    file_download_failed = pyqtSignal(str)
+    file_download_progress = pyqtSignal(int, str)
+    file_upload_finished = pyqtSignal()
+    file_upload_failed = pyqtSignal(str)
+    file_upload_progress = pyqtSignal(int)
+    file_upload_conflict = pyqtSignal()
+    new_file_upload_finished = pyqtSignal(str)
+    vector_style_finished = pyqtSignal()
+    vector_style_failed = pyqtSignal(str)
+
     def __init__(self, communication, parent=None):
         super().__init__(parent)
         self.file_download_worker: QThread = None
@@ -40,7 +51,8 @@ class Loader(QObject):
         self.communication = communication
 
     @pyqtSlot(dict, dict)
-    def open_wms(self, _: dict, descriptor: dict) -> bool:
+    def open_wms(self, _: dict, file: dict) -> bool:
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         for link in descriptor["links"]:
             if link["rel"] == "wms":
                 for layer in descriptor["meta"]["layers"]:
@@ -72,7 +84,7 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
-    def on_file_download_finished(self, local_file_path: str):
+    def on_file_download_finished(self, project, file, local_file_path: str):
         # self.rana_widget.setEnabled(True)
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File(s) downloaded to: {local_file_path}")
@@ -80,7 +92,7 @@ class Loader(QObject):
         assert isinstance(sender, QThread)
         sender.wait()
 
-        if self.selected_file["data_type"] == "scenario":
+        if file["data_type"] == "scenario":
             # if zip file, do nothing, else try to load in results analysis
             if local_file_path.endswith(".zip"):
                 pass
@@ -98,26 +110,27 @@ class Loader(QObject):
                         ):
                             ra_tool.load_result(result_path, admin_path)
         else:
-            pass
-            # TODO
-            # add_layer_to_qgis(
-            #     self.communication,
-            #     local_file_path,
-            #     self.project["name"],
-            #     self.selected_file,
-            #     get_tenant_file_descriptor(self.selected_file["descriptor_id"]),
-            #     self.schematisation,
-            # )
+            add_layer_to_qgis(
+                self.communication,
+                local_file_path,
+                project["name"],
+                file,
+                get_tenant_file_descriptor(file["descriptor_id"]),
+                None,  # self.schematisation,
+            )
+        self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
         # self.rana_widget.setEnabled(True) # TODO
         self.communication.clear_message_bar()
         self.communication.show_error(error)
+        self.file_download_failed.emit(error)
 
     def on_file_download_progress(self, progress: int, file_name: str = ""):
         self.communication.progress_bar(
             f"Downloading file {file_name}...", 0, 100, progress, clear_msg_bar=True
         )
+        self.file_download_progress.emit(progress, file_name)
 
     def initialize_file_download_worker(self, project, file):
         self.communication.bar_info("Start downloading file...")
@@ -286,14 +299,15 @@ class Loader(QObject):
         sender.file_overwrite = file_overwrite
 
     def on_file_upload_finished(self):
-        # self.rana_widget.setEnabled(True)  # TODO
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
 
+        # self.rana_widget.setEnabled(True)  # TODO
         # self.refresh()  # TODO
+        self.file_upload_finished.emit()
 
     def on_new_file_upload_finished(self, online_path: str):
         pass
@@ -308,16 +322,19 @@ class Loader(QObject):
         #     self.initialize_file_download_worker()
         #     self.file_download_worker.finished.connect(self.refresh)
         #     self.file_download_worker.start()
+        self.new_file_uploaded_finished.emit(online_path)
 
     def on_file_upload_failed(self, error: str):
-        # self.rana_widget.setEnabled(True)  # TODO
         self.communication.clear_message_bar()
         self.communication.show_error(error)
+        self.file_upload_failed.emit(error)
+        # self.rana_widget.setEnabled(True)  # TODO
 
     def on_file_upload_progress(self, progress: int):
         self.communication.progress_bar(
             "Uploading file to Rana...", 0, 100, progress, clear_msg_bar=True
         )
+        self.file_upload_progress.emit(progress)
 
     def start_file_in_qgis(self, project_id: str, online_path: str):
         pass
@@ -358,8 +375,10 @@ class Loader(QObject):
         # self.refresh() # TODO
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
+        self.vector_style_finished.emit()
 
     def on_vector_style_failed(self, msg: str):
         # self.rana_widget.setEnabled(True) # TODO
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
+        self.vector_style_failed.emit(msg)

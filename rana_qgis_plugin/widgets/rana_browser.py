@@ -2,7 +2,7 @@ import math
 import os
 
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
@@ -261,6 +261,10 @@ class RanaBrowser(uicls, basecls):
             self.filter_projects(search_text)
             return
         self.populate_projects()
+
+    @pyqtSlot()
+    def enable(self):
+        self.rana_widget.setEnabled(True)
 
     def select_project(self, index: QModelIndex):
         self.rana_widget.setEnabled(False)

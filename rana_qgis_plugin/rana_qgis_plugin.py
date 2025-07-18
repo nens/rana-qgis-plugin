@@ -222,6 +222,31 @@ class RanaQgisPlugin:
 
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
+            self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
+            self.rana_browser.upload_file_selected.connect(
+                self.loader.upload_file_to_rana
+            )
+            self.rana_browser.save_vector_styling_selected.connect(
+                self.loader.save_vector_style
+            )
+            self.rana_browser.upload_new_file_selected.connect(
+                self.loader.upload_new_file_to_rana
+            )
+            self.rana_browser.download_file_selected.connect(self.loader.download_file)
+            self.rana_browser.download_results_selected.connect(
+                self.loader.download_results
+            )
+
+            self.loader.file_download_finished.connect(self.rana_browser.enable)
+            self.loader.file_download_failed.connect(self.rana_browser.enable)
+            self.loader.file_download_progress.connect(self.rana_browser.enable)
+            self.loader.file_upload_finished.connect(self.rana_browser.enable)
+            self.loader.file_upload_failed.connect(self.rana_browser.enable)
+            self.loader.file_upload_progress.connect(self.rana_browser.enable)
+            self.loader.file_upload_conflict.connect(self.rana_browser.enable)
+            self.loader.new_file_upload_finished.connect(self.rana_browser.enable)
+            self.loader.vector_style_finished.connect(self.rana_browser.enable)
+            self.loader.vector_style_failed.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
             Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True
