@@ -4,7 +4,7 @@ History
 1.1.13 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Fix broken layout in settings dialog.
 
 
 1.1.12 (2025-07-18)
