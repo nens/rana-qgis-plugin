@@ -42,7 +42,7 @@ class SettingsDialog(QDialog):
         auth_group.layout().addWidget(self.cognito_client_id_lineedit, 1, 1)
 
         auth_group.layout().addWidget(
-            QLabel("Cognito client ID native (for login using username-password)"), 1, 0
+            QLabel("Cognito client ID native (for login using username-password)"), 2, 0
         )
         self.cognito_client_id_native_lineedit = QLineEdit(
             cognito_client_id_native(), auth_group
