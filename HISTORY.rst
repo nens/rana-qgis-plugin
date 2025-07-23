@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.13 (unreleased)
+1.1.13 (2025-07-23)
 -------------------
 
 - Fix broken layout in settings dialog.
