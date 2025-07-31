@@ -71,7 +71,7 @@ def add_layer_to_qgis(
             communication.show_warn(f"No layers found for {file_name}.")
             return
         for layer in layers:
-            layer_name = layer["id"]
+            layer_name = layer["name"]
             layer_uri = f"{local_file_path}|layername={layer_name}"
             layer = QgsVectorLayer(layer_uri, layer_name, "ogr")
             if layer.isValid():
