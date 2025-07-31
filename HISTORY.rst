@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.14 (unreleased)
+1.1.14 (2025-07-31)
 -------------------
 
 - Fix loading of layers in QGIS.
