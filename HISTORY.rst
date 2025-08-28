@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.15 (unreleased)
+1.1.15 (2025-08-28)
 -------------------
 
 - Prevent N&S Dependency Loader from getting disabled (nens/nens-dependency-loader#19)
