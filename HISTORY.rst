@@ -4,7 +4,7 @@ History
 1.1.15 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Prevent N&S Dependency Loader from getting disabled (nens/nens-dependency-loader#19)
 
 
 1.1.14 (2025-07-31)
