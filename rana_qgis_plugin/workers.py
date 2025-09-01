@@ -269,9 +269,19 @@ class VectorStyleWorker(QThread):
                 self.failed.emit("Failed to get vector style upload URLs from the API.")
                 return
 
+            # Some fixes here (until these are fixed in bridge-style)
+            for layer in mb_style["layers"]:
+                if "paint" in layer:
+                    if "text-halo-width" in layer["paint"]:
+                        layer["paint"]["text-halo-width"] = float(
+                            layer["paint"]["text-halo-width"]
+                        )
+
             # Upload style.json
             self.upload_to_s3(
-                upload_urls["style.json"], json.dumps(mb_style), "application/json"
+                upload_urls["style.json"],
+                json.dumps(mb_style).replace(r"\\n", r"\n").replace(r"\\t", r"\t"),
+                "application/json",
             )
 
             # Upload sprite images if available
