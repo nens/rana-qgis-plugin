@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.16 (unreleased)
+1.1.16 (2025-09-01)
 -------------------
 
 - Workaround for proper conversion of text-halo-width and newlines (until this is fixed in bridge-style) (nens/rana#2323)
