@@ -42,6 +42,7 @@ class Loader(QObject):
     new_file_upload_finished = pyqtSignal(str)
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
+    loading_cancelled = pyqtSignal()
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -247,6 +248,7 @@ class Loader(QObject):
             "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
         )
         if not local_path:
+            self.loading_cancelled.emit()
             return
 
         QSettings().setValue(

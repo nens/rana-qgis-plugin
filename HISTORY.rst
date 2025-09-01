@@ -5,6 +5,7 @@ History
 -------------------
 
 - Workaround for proper conversion of text-halo-width and newlines (until this is fixed in bridge-style) (nens/rana#2323)
+- Rana plugin hangs when aborting an upload (#89)
 
 
 1.1.15 (2025-08-28)

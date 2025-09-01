@@ -230,8 +230,12 @@ class RanaQgisPlugin:
                 self.loader.save_vector_style
             )
             self.rana_browser.upload_new_file_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.upload_new_file_selected.connect(
                 self.loader.upload_new_file_to_rana
             )
+            self.loader.loading_cancelled.connect(self.rana_browser.enable)
             self.rana_browser.download_file_selected.connect(self.loader.download_file)
             self.rana_browser.download_results_selected.connect(
                 self.loader.download_results
@@ -239,9 +243,6 @@ class RanaQgisPlugin:
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_vector_styling_selected.connect(
-                self.rana_browser.disable
-            )
-            self.rana_browser.upload_new_file_selected.connect(
                 self.rana_browser.disable
             )
             self.rana_browser.download_file_selected.connect(self.rana_browser.disable)
