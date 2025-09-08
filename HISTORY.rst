@@ -4,7 +4,7 @@ History
 1.1.17 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Bumped dependency loader.
 
 
 1.1.16 (2025-09-01)
