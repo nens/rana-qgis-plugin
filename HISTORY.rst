@@ -1,7 +1,7 @@
 History
 =======
 
-1.1.17 (unreleased)
+1.1.17 (2025-09-08)
 -------------------
 
 - Bumped dependency loader.
