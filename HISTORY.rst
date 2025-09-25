@@ -4,7 +4,7 @@ History
 1.1.18 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Workaround for proper sprite naming (until this is fixed in frontend (nens/rana#2621))
 
 
 1.1.17 (2025-09-08)

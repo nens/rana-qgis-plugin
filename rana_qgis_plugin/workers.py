@@ -269,12 +269,13 @@ class VectorStyleWorker(QThread):
                 self.failed.emit("Failed to get vector style upload URLs from the API.")
                 return
 
-            # Some fixes here (until these are fixed in bridge-style)
+            # This is a temp fix until it is fixed in the frontend
             for layer in mb_style["layers"]:
                 if "paint" in layer:
-                    if "text-halo-width" in layer["paint"]:
-                        layer["paint"]["text-halo-width"] = float(
-                            layer["paint"]["text-halo-width"]
+                    if "fill-pattern" in layer["paint"]:
+                        layer["paint"]["fill-pattern"] = (
+                            f"sprite_id_{str(descriptor_id)}:"
+                            + layer["paint"]["fill-pattern"]
                         )
 
             # Upload style.json
