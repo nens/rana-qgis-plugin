@@ -7,7 +7,7 @@ from typing import List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
-from PyQt5.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.core import QgsProject
 from threedi_mi_utils import bypass_max_path_limit
 
@@ -260,7 +260,7 @@ class VectorStyleWorker(QThread):
                 group, qgis_layers, base_url, workspace="workspace", name="default"
             )
             if warnings:
-                self.warning.emit(", ".join(warnings))
+                self.warning.emit(", ".join(set(warnings)))
 
             # Get upload URLs to S3
             upload_urls = get_vector_style_upload_urls(descriptor_id)
@@ -268,15 +268,6 @@ class VectorStyleWorker(QThread):
             if not upload_urls:
                 self.failed.emit("Failed to get vector style upload URLs from the API.")
                 return
-
-            # This is a temp fix until it is fixed in the frontend
-            for layer in mb_style["layers"]:
-                if "paint" in layer:
-                    if "fill-pattern" in layer["paint"]:
-                        layer["paint"]["fill-pattern"] = (
-                            f"sprite_id_{str(descriptor_id)}:"
-                            + layer["paint"]["fill-pattern"]
-                        )
 
             # Upload style.json
             self.upload_to_s3(

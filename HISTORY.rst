@@ -4,8 +4,8 @@ History
 1.1.18 (unreleased)
 -------------------
 
-- Workaround for proper sprite naming (until this is fixed in frontend (nens/rana#2621))
-
+- Added and removed workaround for proper sprite naming (until this is fixed in frontend (nens/rana#2621))
+- Remove duplicates from bridgestyle warnings about non-supported styling options (#93)
 
 1.1.17 (2025-09-08)
 -------------------
