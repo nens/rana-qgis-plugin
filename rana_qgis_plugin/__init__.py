@@ -13,7 +13,7 @@ def check_dependency_loader():
                 "N&S Dependency Loader",
                 "N&S Dependency Loader is required, but not loaded. Would you like to load it?",
             )
-            == QMessageBox.Yes
+            == QMessageBox.StandardButton.Yes
         ):
             try:  # This is basically what qgis.utils.loadPlugin() does, but that also shows errors, so we need to do it explicitly
                 __import__(required_plugin)

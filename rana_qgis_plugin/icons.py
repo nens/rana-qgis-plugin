@@ -16,5 +16,5 @@ settings_icon = QgsApplication.getThemeIcon("/processingAlgorithm.svg")
 
 # Exported PYQT5 icons
 style = QApplication.style()
-dir_icon = style.standardIcon(QStyle.SP_DirIcon)
-file_icon = style.standardIcon(QStyle.SP_FileIcon)
+dir_icon = style.standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+file_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileIcon)

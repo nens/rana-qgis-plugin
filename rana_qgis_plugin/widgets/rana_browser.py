@@ -46,7 +46,7 @@ class RanaBrowser(uicls, basecls):
         self.paths = ["Projects"]
 
         # Breadcrumbs
-        self.breadcrumbs_layout.setAlignment(Qt.AlignLeft)
+        self.breadcrumbs_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.update_breadcrumbs()
 
         # Pagination
@@ -78,7 +78,7 @@ class RanaBrowser(uicls, basecls):
         self.file_refresh_btn.clicked.connect(self.refresh)
         self.fetch_projects()
         self.populate_projects()
-        self.projects_tv.header().setSortIndicator(1, Qt.AscendingOrder)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
 
         # Files widget
         self.files = []
@@ -137,8 +137,8 @@ class RanaBrowser(uicls, basecls):
             label_text = elide_text(self.font(), path, 100)
             link = f"<a href='{i}'>{label_text}</a>"
             label = QLabel(label_text if i == len(self.paths) - 1 else link)
-            label.setTextFormat(Qt.RichText)
-            label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            label.setTextFormat(Qt.TextFormat.RichText)
+            label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
             label.linkActivated.connect(lambda _, i=i: self.on_breadcrumb_click(i))
             self.breadcrumbs_layout.addWidget(label)
             if i != len(self.paths) - 1:
@@ -196,7 +196,7 @@ class RanaBrowser(uicls, basecls):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
-        self.projects_tv.header().setSortIndicator(1, Qt.AscendingOrder)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.paths = ["Projects"]
         self.update_breadcrumbs()
         self.rana_widget.setCurrentIndex(0)
@@ -220,13 +220,15 @@ class RanaBrowser(uicls, basecls):
             project_name = project["name"]
             name_item = QStandardItem(project_name)
             name_item.setToolTip(project_name)
-            name_item.setData(project, role=Qt.UserRole)
+            name_item.setData(project, role=Qt.ItemDataRole.UserRole)
             last_activity = project["last_activity"]
             last_activity_timestamp = convert_to_timestamp(last_activity)
             last_activity_localtime = convert_to_local_time(last_activity)
             last_activity_relative = convert_to_relative_time(last_activity)
             last_activity_item = NumericItem(last_activity_relative)
-            last_activity_item.setData(last_activity_timestamp, role=Qt.UserRole)
+            last_activity_item.setData(
+                last_activity_timestamp, role=Qt.ItemDataRole.UserRole
+            )
             last_activity_item.setToolTip(last_activity_localtime)
             # Add items to the model
             self.projects_model.appendRow([name_item, last_activity_item])
@@ -254,7 +256,9 @@ class RanaBrowser(uicls, basecls):
             lambda project: -convert_to_timestamp(project["last_activity"]),
         ]
         key_func = key_funcs[column_index]
-        self.projects.sort(key=key_func, reverse=(order == Qt.DescendingOrder))
+        self.projects.sort(
+            key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
+        )
         search_text = self.projects_search.text()
         if search_text:
             self.filter_projects(search_text)
@@ -277,7 +281,7 @@ class RanaBrowser(uicls, basecls):
             if index.column() != 0:
                 return
             project_item = self.projects_model.itemFromIndex(index)
-            self.project = project_item.data(Qt.UserRole)
+            self.project = project_item.data(Qt.ItemDataRole.UserRole)
             self.selected_file = {"id": "", "type": "directory"}
             self.paths.append(self.project["name"])
             self.paths = self.paths[:2]
@@ -305,7 +309,7 @@ class RanaBrowser(uicls, basecls):
             dir_name = os.path.basename(directory["id"].rstrip("/"))
             name_item = QStandardItem(dir_icon, dir_name)
             name_item.setToolTip(dir_name)
-            name_item.setData(directory, role=Qt.UserRole)
+            name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
             self.files_model.appendRow([name_item])
 
         # Add files second
@@ -313,7 +317,7 @@ class RanaBrowser(uicls, basecls):
             file_name = os.path.basename(file["id"].rstrip("/"))
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
-            name_item.setData(file, role=Qt.UserRole)
+            name_item.setData(file, role=Qt.ItemDataRole.UserRole)
             data_type = file["data_type"]
             data_type_item = QStandardItem(
                 SUPPORTED_DATA_TYPES.get(data_type, data_type)
@@ -326,12 +330,14 @@ class RanaBrowser(uicls, basecls):
             size_item = NumericItem(size_display)
             size_item.setData(
                 file["size"] if data_type != "threedi_schematisation" else -1,
-                role=Qt.UserRole,
+                role=Qt.ItemDataRole.UserRole,
             )
             last_modified = convert_to_local_time(file["last_modified"])
             last_modified_timestamp = convert_to_timestamp(file["last_modified"])
             last_modified_item = NumericItem(last_modified)
-            last_modified_item.setData(last_modified_timestamp, role=Qt.UserRole)
+            last_modified_item.setData(
+                last_modified_timestamp, role=Qt.ItemDataRole.UserRole
+            )
             # Add items to the model
             self.files_model.appendRow(
                 [name_item, data_type_item, size_item, last_modified_item]
@@ -348,7 +354,7 @@ class RanaBrowser(uicls, basecls):
         if index.column() != 0:
             return
         file_item = self.files_model.itemFromIndex(index)
-        self.selected_file = file_item.data(Qt.UserRole)
+        self.selected_file = file_item.data(Qt.ItemDataRole.UserRole)
         self._update_file_UI()
 
     def _update_file_UI(self, append_path: bool = True):
@@ -444,9 +450,13 @@ class RanaBrowser(uicls, basecls):
         self.file_table_widget.horizontalHeader().setStretchLastSection(True)
         for i, (label, value) in enumerate(file_details):
             label_item = QTableWidgetItem(label)
-            label_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            label_item.setFlags(
+                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+            )
             value_item = QTableWidgetItem(str(value))
-            value_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            value_item.setFlags(
+                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+            )
             self.file_table_widget.setItem(i, 0, label_item)
             self.file_table_widget.setItem(i, 1, value_item)
         self.file_table_widget.resizeColumnsToContents()

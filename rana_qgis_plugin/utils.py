@@ -129,7 +129,7 @@ def display_bytes(bytes: int) -> str:
 def elide_text(font: QFont, text: str, max_width: int) -> str:
     # Calculate elided text based on font and max width
     font_metrics = QFontMetrics(font)
-    return font_metrics.elidedText(text, Qt.ElideRight, max_width)
+    return font_metrics.elidedText(text, Qt.TextElideMode.ElideRight, max_width)
 
 
 def convert_to_timestamp(timestamp: str) -> float:
@@ -168,14 +168,16 @@ def image_to_bytes(image: QImage) -> bytes:
     """Convert QImage to bytes."""
     byte_array = QByteArray()
     buffer = QBuffer(byte_array)
-    buffer.open(QIODevice.WriteOnly)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     image.save(buffer, "PNG")
     return bytes(byte_array.data())
 
 
 class NumericItem(QStandardItem):
     def __lt__(self, other):
-        return self.data(Qt.UserRole) < other.data(Qt.UserRole)
+        return self.data(Qt.ItemDataRole.UserRole) < other.data(
+            Qt.ItemDataRole.UserRole
+        )
 
 
 def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:

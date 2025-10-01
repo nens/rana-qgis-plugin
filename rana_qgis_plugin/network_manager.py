@@ -67,7 +67,9 @@ class NetworkManager(object):
         encoded_params = urllib.parse.urlencode(params) if params else None
         url = f"{self._url}?{encoded_params}" if encoded_params else self._url
         self._request = QNetworkRequest(QUrl(url))
-        self._request.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
+        self._request.setHeader(
+            QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json"
+        )
 
         if self._auth_cfg:
             self._auth_manager.updateNetworkRequest(self._request, self._auth_cfg)
@@ -80,12 +82,15 @@ class NetworkManager(object):
             QCoreApplication.processEvents()
 
         description = None
-        if self._reply.error() != QNetworkReply.NoError:
+        if self._reply.error() != QNetworkReply.NetworkError.NoError:
             status = False
             description = self._reply.errorString()
         else:
             status = True
-            if self._reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) == 307:
+            if (
+                self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+                == 307
+            ):
                 # For HTTP status code 307 (Temporary Redirect),
                 # look for the 'Location' header to get the new redirect URL
                 location = self._reply.rawHeader(b"Location")

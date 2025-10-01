@@ -6,6 +6,7 @@ History
 
 - Added and removed workaround for proper sprite naming (until this is fixed in frontend (nens/rana#2621))
 - Remove duplicates from bridgestyle warnings about non-supported styling options (#93)
+- Preparation for Qt/QGIS4.0
 
 1.1.17 (2025-09-08)
 -------------------

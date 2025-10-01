@@ -38,20 +38,24 @@ class ResultBrowser(QDialog):
         for i, result in enumerate([r for r in results if r["attachment_url"]]):
             self.table.insertRow(self.table.rowCount())
             type_item = QTableWidgetItem(result["name"])
-            type_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
-            type_item.setCheckState(Qt.Unchecked)
-            type_item.setData(Qt.UserRole, int(result["id"]))
+            type_item.setFlags(
+                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
+            )
+            type_item.setCheckState(Qt.CheckState.Unchecked)
+            type_item.setData(Qt.ItemDataRole.UserRole, int(result["id"]))
 
             file_name = get_filename_from_attachment_url(result["attachment_url"])
             file_name_item = QTableWidgetItem(file_name)
-            file_name_item.setFlags(Qt.ItemIsEnabled)
+            file_name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.table.setItem(i, 0, type_item)
             self.table.setItem(i, 1, file_name_item)
 
         self.table.resizeColumnsToContents()
         layout.addWidget(results_group)
 
-        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttonBox = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
         layout.addWidget(buttonBox)
@@ -63,8 +67,8 @@ class ResultBrowser(QDialog):
         self.selected_results = []
         for r in range(self.table.rowCount()):
             name_item = self.table.item(r, 0)
-            if name_item.checkState() == Qt.Checked:
-                id = int(name_item.data(Qt.UserRole))
+            if name_item.checkState() == Qt.CheckState.Checked:
+                id = int(name_item.data(Qt.ItemDataRole.UserRole))
                 self.selected_results.append(id)
 
         return super().accept()

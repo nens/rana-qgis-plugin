@@ -182,7 +182,7 @@ class Loader(QObject):
                     file["descriptor_id"], "lizard-scenario-results"
                 )
                 result_browser = ResultBrowser(None, results)
-                if result_browser.exec() == QDialog.Accepted:
+                if result_browser.exec() == QDialog.DialogCode.Accepted:
                     result_ids = result_browser.get_selected_results_id()
                     if len(result_ids) == 0:
                         return

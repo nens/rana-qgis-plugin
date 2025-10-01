@@ -108,11 +108,11 @@ class RanaQgisPlugin:
 
     def open_about_rana_dialog(self):
         dialog = AboutRanaDialog(self.iface.mainWindow())
-        dialog.exec_()
+        dialog.exec()
 
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.iface.mainWindow())
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             if dialog.authenticationSettingsChanged():
                 self.logout()
                 self.login()
@@ -133,7 +133,7 @@ class RanaQgisPlugin:
             if tenant_id == current_tenant_id:
                 radio_button.setChecked(True)
         dialog.adjustSize()
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_button = button_group.checkedButton()
             selected_tenant_id = selected_button.objectName()
             if selected_tenant_id != current_tenant_id:
@@ -209,12 +209,16 @@ class RanaQgisPlugin:
             # Setup GUI
             self.dock_widget = QDockWidget(PLUGIN_NAME, self.iface.mainWindow())
             self.dock_widget.setAllowedAreas(
-                Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+                Qt.DockWidgetArea.LeftDockWidgetArea
+                | Qt.DockWidgetArea.RightDockWidgetArea
             )
             self.dock_widget.setFeatures(
-                QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable
+                QDockWidget.DockWidgetFeature.DockWidgetMovable
+                | QDockWidget.DockWidgetFeature.DockWidgetClosable
             )
-            self.dock_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.dock_widget.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             self.dock_widget.setObjectName(PLUGIN_NAME)
             self.rana_browser = RanaBrowser(self.communication)
             self.dock_widget.setWidget(self.rana_browser)
@@ -263,7 +267,7 @@ class RanaQgisPlugin:
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
-            Qt.RightDockWidgetArea, self.dock_widget, raiseTab=True
+            Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
         )
         self.dock_widget.show()
 
