@@ -1,5 +1,7 @@
 from typing import Optional, TypedDict
 
+from time import sleep
+
 import requests
 import math
 
@@ -205,7 +207,7 @@ def test(scenario_instance, resolution, max_pixel_count):
 
 def create_raster_tasks(descriptor_id: str, raster_id: str, spatial_bounds, projection: str, no_data: int = None):
     """
-    Create Lizard raster task.
+    Create Lizard raster tasks for a raster.
     Reimplemented code from https://github.com/nens/lizard-qgis-plugin
     """
     authcfg_id = get_authcfg_id()
@@ -246,23 +248,30 @@ def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict):
         raise Exception(network_manager.description())
 
 
-def get_raster_file(descriptor_id: str, raster_id: str, task_id: str):
+def get_raster_file_link(descriptor_id: str, task_id: str):
+    #TODO handle failed tasks better
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/{raster_id}/task/{task_id}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/"+"{raster_id}"+f"/task/{task_id}"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, redirect_url = network_manager.fetch()
-
-    if status and redirect_url:
-        try:
-            headers = {"Content-Type": "application/zip"}
-            response = requests.get(redirect_url, headers=headers, timeout=10)
-            return response.content
-        except requests.RequestException as e:
-            return None
-    else:
-        return None
+    job_complete = False
+    while not job_complete:
+        status, error = network_manager.fetch()
+        if status:
+            response = network_manager.content
+            if response["status"] == "failure":
+                job_complete == True
+                raise Exception("Raster generation failed")
+            elif response["status"] == "success":
+                job_complete == True
+                return response["result"]
+            else:
+                # wait 5 seconds before polling raster generate task again
+                sleep(5)
+        else:
+            job_complete = True
+            raise Exception(f"Failed to retrieve raster: {error}")
 
 
 def start_file_upload(project_id: str, params: dict):
