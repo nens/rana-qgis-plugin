@@ -117,7 +117,7 @@ class RanaQgisPlugin:
                 self.logout()
                 self.login()
                 if self.rana_browser:
-                    self.rana_browser.refresh_projects()
+                    self.rana_browser.refresh()
 
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
@@ -141,7 +141,7 @@ class RanaQgisPlugin:
                 self.communication.clear_message_bar()
                 self.communication.bar_info(f"Tenant set to: {selected_tenant_id}")
                 if self.rana_browser:
-                    self.rana_browser.refresh_projects()
+                    self.rana_browser.refresh()
 
     def add_rana_menu(self, show_authentication: bool):
         """Add Rana menu to the main menu bar."""
