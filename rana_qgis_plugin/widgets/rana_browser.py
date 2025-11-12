@@ -1,10 +1,23 @@
 import math
 import os
 
+from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
+from qgis.PyQt.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolButton,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
@@ -25,11 +38,8 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 
-base_dir = os.path.dirname(__file__)
-uicls, basecls = uic.loadUiType(os.path.join(base_dir, "ui", "rana.ui"))
 
-
-class RanaBrowser(uicls, basecls):
+class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
     upload_file_selected = pyqtSignal(dict, dict)
@@ -38,58 +48,141 @@ class RanaBrowser(uicls, basecls):
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
 
-    def __init__(self, communication: UICommunication, parent=None):
-        super().__init__(parent)
-        self.setupUi(self)
+    def __init__(self, communication: UICommunication):
+        super().__init__()
         self.communication = communication
-        self.settings = QSettings()
-        self.paths = ["Projects"]
-
-        # Breadcrumbs
-        self.breadcrumbs_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.update_breadcrumbs()
-
-        # Pagination
+        self.settings = None
+        self.paths = []
         self.items_per_page = 25
         self.current_page = 1
-        self.btn_previous.clicked.connect(self.to_previous_page)
-        self.btn_next.clicked.connect(self.to_next_page)
-
-        banner = QPixmap(os.path.join(ICONS_DIR, "banner.svg"))
-        # banner = banner.scaledToHeight(20)
-        self.logo_label.setPixmap(banner)
-
-        # Projects widget
+        self.paths = ["Projects"]
         self.projects = []
         self.filtered_projects = []
+        self.files = []
         self.project = None
+        self.selected_file = None
+
+        # Setup UI
+        self.setupUi(self)
+
+        # Initialize other attributes and fetch data
+        self.settings = QSettings()
+
+        # update data
+        self.fetch_projects()
+        self.populate_projects()
+        self.update_breadcrumbs()
+
+    def setupUi(self, parent):
+        # Create main layout for the whole widget
+        layout = QVBoxLayout(self)
+
+        # Create top section with breadcrumbs and logo
+        top_widget = QWidget()
+        top_layout = QHBoxLayout(top_widget)
+
+        # Create breadcrumbs container and layout - store both as instance variables
+        self.breadcrumbs_container = QWidget()
+        self.breadcrumbs_layout = QHBoxLayout(self.breadcrumbs_container)
+        self.breadcrumbs_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.breadcrumbs_layout.setContentsMargins(
+            0, 0, 0, 0
+        )  # Reduce margins if needed
+
+        # Setup logo
+        self.logo_label = QLabel("LOGO")
+        banner = QPixmap(os.path.join(ICONS_DIR, "banner.svg"))
+        self.logo_label.setPixmap(banner)
+
+        # Add widgets to top layout
+        top_layout.addWidget(self.breadcrumbs_container)
+        top_layout.addWidget(self.logo_label)
+
+        # Create stacked widget
+        self.rana_widget = QStackedWidget()
+
+        # Add both main components to the layout
+        layout.addWidget(top_widget)
+        layout.addWidget(self.rana_widget)
+        self.setLayout(layout)
+
+        # project widget
+        project_widget = QWidget()
+        self.projects_search = QLineEdit()
+        self.projects_search.setPlaceholderText("🔍 Search for project by name")
+        self.projects_search.textChanged.connect(self.filter_projects)
+        self.overview_refresh_btn = QToolButton()
+        self.overview_refresh_btn.setToolTip("Refresh")
+        self.overview_refresh_btn.setIcon(refresh_icon)
+        self.overview_refresh_btn.clicked.connect(self.refresh)
+        self.projects_tv = QTreeView()
         self.projects_model = QStandardItemModel()
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
-        self.projects_tv.header().sortIndicatorChanged.connect(self.sort_projects)
         self.projects_tv.clicked.connect(self.select_project)
-        self.projects_search.textChanged.connect(self.filter_projects)
-        self.overview_refresh_btn.setIcon(refresh_icon)
-        self.overview_refresh_btn.clicked.connect(self.refresh)
+        self.btn_previous = QPushButton("<")
+        self.label_page_number = QLabel("Page 1/1")
+        self.btn_next = QPushButton(">")
+        self.btn_previous.clicked.connect(self.to_previous_page)
+        self.btn_next.clicked.connect(self.to_next_page)
+        project_layout = QVBoxLayout(project_widget)
+        project_top_layout = QHBoxLayout()
+        project_top_layout.addWidget(self.projects_search)
+        project_top_layout.addWidget(self.overview_refresh_btn)
+        pagination_layout = QHBoxLayout()
+        pagination_layout.addWidget(self.btn_previous)
+        pagination_layout.addWidget(self.label_page_number)
+        pagination_layout.addWidget(self.btn_next)
+        project_layout.addLayout(project_top_layout)
+        project_layout.addWidget(self.projects_tv)
+        project_layout.addLayout(pagination_layout)
+
+        # files widget
+        files_widget = QWidget()
+        self.project_refresh_btn = QToolButton()
+        self.project_refresh_btn.setToolTip("Refresh")
         self.project_refresh_btn.setIcon(refresh_icon)
         self.project_refresh_btn.clicked.connect(self.refresh)
-        self.file_refresh_btn.setIcon(refresh_icon)
-        self.file_refresh_btn.clicked.connect(self.refresh)
-        self.fetch_projects()
-        self.populate_projects()
-        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
-
-        # Files widget
-        self.files = []
+        self.files_tv = QTreeView()
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
 
-        # File details widget
-        self.selected_file = None
+        self.btn_upload = QPushButton("Upload Files to Rana")
+        files_layout = QVBoxLayout(files_widget)
+        # todo: move refresh to far right
+        files_layout.addWidget(self.project_refresh_btn)
+        files_layout.addWidget(self.files_tv)
+        files_layout.addWidget(self.btn_upload)
+
+        # file widget
+        file_widget = QWidget()
+        self.file_refresh_btn = QToolButton()
+        self.file_refresh_btn.setToolTip("Refresh")
+
+        self.file_table_widget = QTableWidget(1, 2)
+        # self.file_table_widget.setHorizontalHeaderVisible(False)
+        # self.file_table_widget.setVerticalHeaderVisible(False)
+        button_layout = QVBoxLayout()
+        self.btn_open = QPushButton("Open in QGIS")
+        self.btn_save_vector_style = QPushButton("Save Style to Rana")
+        self.btn_save = QPushButton("Save Data to Rana")
+        self.btn_wms = QPushButton("Open WMS in QGIS")
+        self.btn_download = QPushButton("Download")
+        self.btn_download_results = QPushButton("Download Selected Results")
+        for btn in [
+            self.btn_open,
+            self.btn_save_vector_style,
+            self.btn_save,
+            self.btn_wms,
+            self.btn_download,
+            self.btn_download_results,
+        ]:
+            button_layout.addWidget(btn)
         self.btn_open.clicked.connect(
             lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_file)
         )
@@ -119,6 +212,17 @@ class RanaBrowser(uicls, basecls):
                 self.project, self.selected_file
             )
         )
+
+        file_layout = QVBoxLayout(file_widget)
+        file_layout.addWidget(self.file_refresh_btn)
+        file_layout.addWidget(self.file_table_widget)
+        file_layout.addLayout(button_layout)
+
+        # stack widgets that show the different 'pages
+        # self.rana_widget = QStackedWidget()
+        self.rana_widget.addWidget(project_widget)
+        self.rana_widget.addWidget(files_widget)
+        self.rana_widget.addWidget(file_widget)
 
     def show_files_widget(self):
         self.rana_widget.setCurrentIndex(1)
@@ -186,6 +290,7 @@ class RanaBrowser(uicls, basecls):
         self.populate_projects()
 
     def fetch_projects(self):
+        # TODO: it make zero sense to pass the communication to the network manager!!
         self.projects = get_tenant_projects(self.communication)
 
     def refresh_projects(self):
@@ -210,10 +315,14 @@ class RanaBrowser(uicls, basecls):
 
         # Paginate projects
         search_text = self.projects_search.text()
+        QgsMessageLog.logMessage(f"{search_text=}", "DEBUG", Qgis.Info)
         projects = self.filtered_projects if search_text else self.projects
+        QgsMessageLog.logMessage(f"{len(projects)=}", "DEBUG", Qgis.Info)
         start_index = (self.current_page - 1) * self.items_per_page
         end_index = start_index + self.items_per_page
+        QgsMessageLog.logMessage(f"{start_index=}; {end_index=}", "DEBUG", Qgis.Info)
         paginated_projects = projects[start_index:end_index]
+        QgsMessageLog.logMessage(f"{paginated_projects=}", "DEBUG", Qgis.Info)
 
         # Add paginated projects to the project model
         for project in paginated_projects:
