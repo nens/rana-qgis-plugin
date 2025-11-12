@@ -7,8 +7,8 @@ from typing import List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
-from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.core import QgsProject
+from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
 from .utils import get_local_file_path, image_to_bytes

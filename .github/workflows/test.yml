@@ -1,0 +1,26 @@
+name: pytest
+
+# Run on pull requests and on the master branch itself.
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "*"
+  pull_request:
+
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      # Checkout the code.
+      - uses: actions/checkout@v2
+
+      - name: build
+        run: |
+          docker compose build qgis
+
+      - name: test
+        run: |
+          docker compose run qgis pytest
