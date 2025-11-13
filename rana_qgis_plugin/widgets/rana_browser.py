@@ -600,126 +600,111 @@ class RanaBrowser(QWidget):
     def __init__(self, communication: UICommunication):
         super().__init__()
         self.communication = communication
-        self.settings = None
-        self.paths = []
-        self.items_per_page = 25
-        self.current_page = 1
         self.paths = ["Projects"]
         self.projects = []
-        self.filtered_projects = []
-        self.files = []
         self.project = None
         self.selected_file = None
-
         # Setup UI
         self.setup_ui()
 
-        # Initialize other attributes and fetch data
-        self.settings = QSettings()
-
     def setup_ui(self):
-        # Create stacked widget
         self.rana_widget = QStackedWidget()
-
-        # Create main layout for the whole widget
-        layout = QVBoxLayout(self)
-
-        # Create top section with breadcrumbs and logo
-        top_widget = QWidget()
-        top_layout = QHBoxLayout(top_widget)
-
-        # Create breadcrumbs container and layout - store both as instance variables
-        breadcrumbs = BreadCrumbs(
-            rana_widget=self.rana_widget,
-            communication=self.communication,
+        # Set up breadcrumbs, browser and file view widgets
+        self.breadcrumbs = BreadCrumbs(
+            rana_widget=self.rana_widget, communication=self.communication, parent=self
         )
-
-        # Setup logo
+        # Setup widgets that populate the rana widget
+        self.projects_browser = ProjectsBrowser(
+            communication=self.communication, breadcrumbs=self.breadcrumbs, parent=self
+        )
+        self.files_browser = FilesBrowser(
+            communication=self.communication, breadcrumbs=self.breadcrumbs, parent=self
+        )
+        self.file_view = FileView(
+            communication=self.communication, breadcrumbs=self.breadcrumbs, parent=self
+        )
+        # Setup top layout with logo and breadcrumbs
+        top_layout = QHBoxLayout()
         logo_label = QLabel("LOGO")
         logo_label.setPixmap(QPixmap(os.path.join(ICONS_DIR, "banner.svg")))
-
-        # Add widgets to top layout
-        top_layout.addWidget(breadcrumbs)
+        top_layout.addWidget(self.breadcrumbs)
         top_layout.addWidget(logo_label)
-
-        # Add both main components to the layout
-        layout.addWidget(top_widget)
+        # Add browsers and file view to rana widget
+        self.rana_widget.addWidget(self.projects_browser)
+        self.rana_widget.addWidget(self.files_browser)
+        self.rana_widget.addWidget(self.file_view)
+        # Add components to the layout
+        layout = QVBoxLayout(self)
+        layout.addLayout(top_layout)
         layout.addWidget(self.rana_widget)
         self.setLayout(layout)
 
-        # Setup widgets that populate the rana widget
-        projects_browser = ProjectsBrowser(
-            communication=self.communication, breadcrumbs=breadcrumbs, parent=self
-        )
-        files_browser = FilesBrowser(
-            communication=self.communication, breadcrumbs=breadcrumbs, parent=self
-        )
-        file_view = FileView(
-            communication=self.communication, breadcrumbs=breadcrumbs, parent=self
-        )
         # Link properties to this class for easy access
-        self.project = projects_browser.project
-        self.selected_file = breadcrumbs.selected_file
-
+        self.project = self.projects_browser.project
+        self.selected_file = self.breadcrumbs.selected_file
+        self.paths = self.breadcrumbs.paths
         # Update project in file browser and vies
-        projects_browser.project_selected.connect(files_browser.update_project)
-        projects_browser.project_selected.connect(file_view.update_project)
-        # conect showing file
-        files_browser.file_selected.connect(file_view.show_selected_file_details)
-        files_browser.busy.connect(lambda: self.enable)
-        files_browser.ready.connect(lambda: self.disable)
+        self.projects_browser.project_selected.connect(
+            self.files_browser.update_project
+        )
+        self.projects_browser.project_selected.connect(self.file_view.update_project)
+        # connect showing file
+        self.files_browser.file_selected.connect(
+            self.file_view.show_selected_file_details
+        )
+        self.files_browser.busy.connect(lambda: self.enable)
+        self.files_browser.ready.connect(lambda: self.disable)
         # connect updating folder from breadcrumb
-        breadcrumbs.folder_selected.connect(
-            lambda path: files_browser.fetch_and_populate(self.project, path)
+        self.breadcrumbs.folder_selected.connect(
+            lambda path: self.files_browser.fetch_and_populate(self.project, path)
         )
         # connect upload button
-        files_browser.btn_upload.clicked.connect(
+        self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
                 self.project, self.selected_file
             )
         )
         # connect file view buttons
-        file_view.btn_open.clicked.connect(
+        self.file_view.btn_open.clicked.connect(
             lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_file)
         )
-        file_view.btn_save.clicked.connect(
+        self.file_view.btn_save.clicked.connect(
             lambda _,: self.upload_file_selected.emit(self.project, self.selected_file)
         )
-        file_view.btn_save_vector_style.clicked.connect(
+        self.file_view.btn_save_vector_style.clicked.connect(
             lambda _,: self.save_vector_styling_selected.emit(
                 self.project, self.selected_file
             )
         )
-        file_view.btn_wms.clicked.connect(
+        self.file_view.btn_wms.clicked.connect(
             lambda _,: self.open_wms_selected.emit(self.project, self.selected_file)
         )
-        file_view.btn_download.clicked.connect(
+        self.file_view.btn_download.clicked.connect(
             lambda _,: self.download_file_selected.emit(
                 self.project, self.selected_file
             )
         )
-        file_view.btn_download_results.clicked.connect(
+        self.file_view.btn_download_results.clicked.connect(
             lambda _,: self.download_results_selected.emit(
                 self.project, self.selected_file
             )
         )
         # connect signals to select the correct page of the widget
-        projects_browser.projects_refreshed.connect(
+        self.projects_browser.projects_refreshed.connect(
             lambda: self.rana_widget.setCurrentIndex(0)
         )
-        projects_browser.project_selected.connect(
+        self.projects_browser.project_selected.connect(
             lambda _: self.rana_widget.setCurrentIndex(1)
         )
-        files_browser.folder_selected.connect(
+        self.files_browser.folder_selected.connect(
             lambda: self.rana_widget.setCurrentIndex(1)
         )
-        files_browser.file_selected.connect(lambda _: self.rana_widget.setCurrentIndex(2))
-        breadcrumbs.folder_selected.connect(lambda: self.rana_widget.setCurrentIndex(1))
-
-        # stack widgets that show the different 'pages
-        self.rana_widget.addWidget(projects_browser)
-        self.rana_widget.addWidget(files_browser)
-        self.rana_widget.addWidget(file_view)
+        self.files_browser.file_selected.connect(
+            lambda _: self.rana_widget.setCurrentIndex(2)
+        )
+        self.breadcrumbs.folder_selected.connect(
+            lambda: self.rana_widget.setCurrentIndex(1)
+        )
 
     @pyqtSlot()
     def enable(self):
