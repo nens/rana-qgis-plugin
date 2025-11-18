@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
@@ -215,6 +216,7 @@ class Loader(QObject):
                         file,
                         filtered_result_ids,
                         target_folder,
+                        deepcopy(descriptor["meta"]["grid"]),
                     )
 
                     self.lizard_result_download_worker.finished.connect(
