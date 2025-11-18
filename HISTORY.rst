@@ -4,7 +4,7 @@ History
 1.1.19 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Bump dependency loader to 1.2.5.
 
 
 1.1.18 (2025-10-01)
