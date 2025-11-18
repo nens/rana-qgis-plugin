@@ -35,7 +35,7 @@ class ResultBrowser(QDialog):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setHorizontalHeaderLabels(["Type", "File name"])
 
-        for i, result in enumerate([r for r in results if r["attachment_url"]]):
+        for i, result in enumerate([r for r in results if r["attachment_url"] or r["raster_id"]]):
             self.table.insertRow(self.table.rowCount())
             type_item = QTableWidgetItem(result["name"])
             type_item.setFlags(
@@ -44,7 +44,10 @@ class ResultBrowser(QDialog):
             type_item.setCheckState(Qt.CheckState.Unchecked)
             type_item.setData(Qt.ItemDataRole.UserRole, int(result["id"]))
 
-            file_name = get_filename_from_attachment_url(result["attachment_url"])
+            if result["attachment_url"]:
+                file_name = get_filename_from_attachment_url(result["attachment_url"])
+            else:
+                file_name = result["code"]
             file_name_item = QTableWidgetItem(file_name)
             file_name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.table.setItem(i, 0, type_item)
