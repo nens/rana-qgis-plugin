@@ -223,6 +223,7 @@ def get_threedi_schematisation_simulation_results_folder(
 
 def build_vrt(output_filepath, raster_filepaths, **vrt_options):
     """Build VRT for the list of rasters."""
+    gdal.UseExceptions()
     options = gdal.BuildVRTOptions(**vrt_options)
     vrt_ds = gdal.BuildVRT(output_filepath, raster_filepaths, options=options)
     vrt_ds = None
