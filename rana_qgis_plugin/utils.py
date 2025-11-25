@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 
+from osgeo import gdal
+
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
@@ -217,3 +219,10 @@ def get_threedi_schematisation_simulation_results_folder(
         result = os.path.join(local_revision.results_dir, simulation_name)
         # replace colons, invalid for Windows paths (don't replace drive colon)
         return result[:3] + result[3:].replace(":", "_")
+
+
+def build_vrt(output_filepath, raster_filepaths, **vrt_options):
+    """Build VRT for the list of rasters."""
+    options = gdal.BuildVRTOptions(**vrt_options)
+    vrt_ds = gdal.BuildVRT(output_filepath, raster_filepaths, options=options)
+    vrt_ds = None
