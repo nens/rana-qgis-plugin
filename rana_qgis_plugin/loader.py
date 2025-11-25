@@ -5,6 +5,7 @@ from pathlib import Path
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt.QtCore import QObject, QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog
+from rana_qgis_plugin.auth_3di import get_3di_auth
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
@@ -13,6 +14,11 @@ from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_threedi_schematisation_simulation_results_folder,
 )
+from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
+from rana_qgis_plugin.simulation.simulation_init import SimulationInit
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls, get_api_client_with_personal_api_token
+from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
+from rana_qgis_plugin.simulation.utils import extract_error_message
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -29,6 +35,7 @@ from rana_qgis_plugin.workers import (
     LizardResultDownloadWorker,
     VectorStyleWorker,
 )
+from threedi_api_client.openapi import ApiException
 
 
 class Loader(QObject):
@@ -43,8 +50,9 @@ class Loader(QObject):
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
+    simulation_started = pyqtSignal()
 
-    def __init__(self, communication, parent=None):
+    def __init__(self, communication, parent):
         super().__init__(parent)
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
@@ -152,6 +160,107 @@ class Loader(QObject):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker(project, file)
         self.file_upload_worker.start()
+
+    @pyqtSlot(dict, dict)
+    def start_simulation(self, project, file):
+        if not QgsSettings().contains("threedi/working_dir"):
+            self.communication.show_warn(
+                "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
+            )
+            return
+        
+        working_dir = QgsSettings().value("threedi/working_dir", "")
+
+        _, personal_api_token = get_3di_auth()
+        # TODO: add threedi working dir and URL to settings
+        api_url = "https://api.3di.live"
+        threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
+        tc = ThreediCalls(threedi_api)
+        organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        user_profile = tc.fetch_current_user()
+        current_user = user_profile.username
+        self.communication.log_warn("+++++++++++++++")
+        self.communication.log_warn(str(file))
+        self.communication.log_warn("--------------")
+
+        # retrieve schematisation info
+        schematisation = get_threedi_schematisation(self.communication, file["descriptor_id"])
+        self.communication.log_warn(str(schematisation))
+        if not schematisation["latest_revision"]["has_threedimodel"]:
+            self.communication.show_warn(
+                "Generate a model first"
+            )
+            return
+
+        # retrieve templates
+        model_pk = int(schematisation["latest_revision"]["threedimodel"]["id"])
+        current_model = tc.fetch_3di_model(model_pk)
+        templates, _ = tc.fetch_simulation_templates_with_count(
+            model_pk, limit=50, offset=0
+        )
+        self.communication.log_warn(str(templates))
+        # TODO: allow to choose templates and organisations
+        simulation_template = templates[0]
+        organisation = organisations[0]
+   
+        (
+            simulation,
+            settings_overview,
+            events,
+            lizard_post_processing_overview,
+        ) = self.get_simulation_data_from_template(tc, simulation_template)
+
+        self.simulation_init_wizard = SimulationInit(
+            current_model,
+            simulation_template,
+            settings_overview,
+            events,
+            lizard_post_processing_overview,
+            organisation,
+            api=tc,
+            parent=self.parent(),
+        )
+        self.simulation_init_wizard.exec()
+        #     if self.simulation_init_wizard.open_wizard:
+                    # self.communication.log_warn("++++++++++++++++++")
+                    # self.communication.log_warn(str(project))
+                    # self.communication.log_warn(str(file))
+                    # """Opening a wizard which allows defining and running new simulations."""
+
+                    # # Pick latest template and latest revision
+                    # self.simulation_wizard = SimulationWizard(
+                    #     # self.plugin_dock, self.model_selection_dlg, self.simulation_init_wizard
+                    #     None, None, None
+                    # )
+                    # if simulation:
+                    #     self.simulation_wizard.load_template_parameters(
+                    #         simulation, settings_overview, events, lizard_post_processing_overview
+                    #     )
+                    # self.close()
+                    # self.simulation_wizard.exec_()
+
+    def get_simulation_data_from_template(self, tc, template):
+        """Fetching simulation, settings and events data from the simulation template."""
+        simulation, settings_overview, events, lizard_post_processing_overview = None, None, None, None
+        try:
+            simulation = template.simulation
+            sim_id = simulation.id
+            settings_overview = tc.fetch_simulation_settings_overview(str(sim_id))
+            events = tc.fetch_simulation_events(sim_id)
+            cloned_from_url = simulation.cloned_from
+            if cloned_from_url:
+                source_sim_id = cloned_from_url.strip("/").split("/")[-1]
+                lizard_post_processing_overview = tc.fetch_simulation_lizard_postprocessing_overview(source_sim_id)
+        except ApiException as e:
+            error_msg = extract_error_message(e)
+            if "No basic post-processing resource found" not in error_msg:
+                self.plugin_dock.communication.bar_error(error_msg)
+        except Exception as e:
+            error_msg = f"Error: {e}"
+            self.plugin_dock.communication.bar_error(error_msg)
+        return simulation, settings_overview, events, lizard_post_processing_overview
+
+
 
     @pyqtSlot(dict, dict)
     def download_results(self, project, file):

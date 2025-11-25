@@ -37,6 +37,7 @@ class RanaBrowser(uicls, basecls):
     upload_new_file_selected = pyqtSignal(dict, dict)
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
+    start_simulation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication, parent=None):
         super().__init__(parent)
@@ -116,6 +117,11 @@ class RanaBrowser(uicls, basecls):
         )
         self.btn_download_results.clicked.connect(
             lambda _,: self.download_results_selected.emit(
+                self.project, self.selected_file
+            )
+        )
+        self.btn_start_simulation.clicked.connect(
+            lambda _,: self.start_simulation_selected.emit(
                 self.project, self.selected_file
             )
         )
@@ -469,6 +475,7 @@ class RanaBrowser(uicls, basecls):
             self.btn_wms.hide()
             self.btn_download.hide()
             self.btn_download_results.hide()
+            self.btn_start_simulation.show()
         elif data_type == "scenario":
             self.btn_open.hide()
             self.btn_save.hide()
@@ -481,6 +488,7 @@ class RanaBrowser(uicls, basecls):
                 self.btn_wms.hide()
                 self.btn_download.hide()
                 self.btn_download_results.hide()
+            self.btn_start_simulation.hide()
         elif data_type in SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
@@ -490,6 +498,7 @@ class RanaBrowser(uicls, basecls):
             self.btn_wms.hide()
             self.btn_download.hide()
             self.btn_download_results.hide()
+            self.btn_start_simulation.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
@@ -497,6 +506,7 @@ class RanaBrowser(uicls, basecls):
             self.btn_save_vector_style.hide()
             self.btn_download.hide()
             self.btn_download_results.hide()
+            self.btn_start_simulation.hide()
 
     def refresh_file_data(self):
         assert self.selected_file

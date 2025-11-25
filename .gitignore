@@ -1,1 +1,13 @@
 *.zip
+profiletool
+quick_map_services
+OSMDownloader
+nens_dependency_loader
+Serval
+threedi_*
+ThreeDi*
+valuetool
+__pycache__
+crayfish
+lizard_qgis_plugin
+plugin_reloader
