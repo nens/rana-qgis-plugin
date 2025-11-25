@@ -12,11 +12,25 @@ from typing import List, Optional
 
 import pyqtgraph as pg
 from dateutil.relativedelta import relativedelta
-from qgis.core import QgsMapLayerProxyModel
+from qgis.core import QgsMapLayer, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
 from qgis.gui import QgsMapToolIdentifyFeature
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QDateTime, QLocale, QSettings, QSize, Qt, QTimeZone, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QDoubleValidator, QFont, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtCore import (
+    QDateTime,
+    QLocale,
+    QSettings,
+    QSize,
+    Qt,
+    QTimeZone,
+    pyqtSignal,
+)
+from qgis.PyQt.QtGui import (
+    QColor,
+    QDoubleValidator,
+    QFont,
+    QStandardItem,
+    QStandardItemModel,
+)
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -37,10 +51,18 @@ from qgis.PyQt.QtWidgets import (
     QWizardPage,
 )
 from threedi_api_client.openapi import ApiException, Threshold
+from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 
-from .threedi_calls import ThreediCalls
+from .custom_items import FilteredComboBox
 from .data_models import simulation_data_models as dm
+from .initial_concentrations import (
+    Initial1DConcentrationsWidget,
+    Initial2DConcentrationsWidget,
+)
+from .substance_concentrations import SubstanceConcentrationsWidget
+from .threedi_calls import ThreediCalls
 from .utils import (
+    CACHE_PATH,
     TEMPDIR,
     BreachSourceType,
     RainEventTypes,
@@ -49,6 +71,7 @@ from .utils import (
     constains_only_ascii,
     convert_timeseries_to_seconds,
     extract_error_message,
+    file_cached,
     get_download_file,
     handle_csv_header,
     intervals_are_even,
@@ -66,15 +89,16 @@ from .utils_ui import (
     read_3di_settings,
     save_3di_settings,
     scan_widgets_parameters,
+    set_named_style,
     set_widget_background_color,
     set_widgets_parameters,
 )
-from .custom_items import FilteredComboBox
-from .initial_concentrations import Initial1DConcentrationsWidget, Initial2DConcentrationsWidget
-from .substance_concentrations import SubstanceConcentrationsWidget
+from .workers import SimulationRunner
 
 base_dir = os.path.dirname(os.path.dirname(__file__))
-uicls_name_page, basecls_name_page = uic.loadUiType(os.path.join(base_dir, "simulation", "simulation_wizard", "page_name.ui"))
+uicls_name_page, basecls_name_page = uic.loadUiType(
+    os.path.join(base_dir, "simulation", "simulation_wizard", "page_name.ui")
+)
 uicls_duration_page, basecls_duration_page = uic.loadUiType(
     os.path.join(base_dir, "simulation", "simulation_wizard", "page_duration.ui")
 )
@@ -82,26 +106,42 @@ uicls_substances, basecls_substances = uic.loadUiType(
     os.path.join(base_dir, "simulation", "simulation_wizard", "page_substances.ui")
 )
 uicls_boundary_conditions, basecls_boundary_conditions = uic.loadUiType(
-    os.path.join(base_dir, "simulation", "simulation_wizard", "page_boundary_conditions.ui")
+    os.path.join(
+        base_dir, "simulation", "simulation_wizard", "page_boundary_conditions.ui"
+    )
 )
 uicls_structure_controls, basecls_structure_controls = uic.loadUiType(
-    os.path.join(base_dir, "simulation", "simulation_wizard", "page_structure_controls.ui")
+    os.path.join(
+        base_dir, "simulation", "simulation_wizard", "page_structure_controls.ui"
+    )
 )
 uicls_initial_conds, basecls_initial_conds = uic.loadUiType(
-    os.path.join(base_dir, "simulation", "simulation_wizard", "page_initial_conditions.ui")
+    os.path.join(
+        base_dir, "simulation", "simulation_wizard", "page_initial_conditions.ui"
+    )
 )
-uicls_laterals, basecls_laterals = uic.loadUiType(os.path.join(base_dir, "simulation", "simulation_wizard", "page_laterals.ui"))
-uicls_dwf, basecls_dwf = uic.loadUiType(os.path.join(base_dir, "simulation", "simulation_wizard", "page_dwf.ui"))
-uicls_breaches, basecls_breaches = uic.loadUiType(os.path.join(base_dir, "simulation", "simulation_wizard", "page_breaches.ui"))
+uicls_laterals, basecls_laterals = uic.loadUiType(
+    os.path.join(base_dir, "simulation", "simulation_wizard", "page_laterals.ui")
+)
+uicls_dwf, basecls_dwf = uic.loadUiType(
+    os.path.join(base_dir, "simulation", "simulation_wizard", "page_dwf.ui")
+)
+uicls_breaches, basecls_breaches = uic.loadUiType(
+    os.path.join(base_dir, "simulation", "simulation_wizard", "page_breaches.ui")
+)
 uicls_precipitation_page, basecls_precipitation_page = uic.loadUiType(
     os.path.join(base_dir, "simulation", "simulation_wizard", "page_precipitation.ui")
 )
-uicls_wind_page, basecls_wind_page = uic.loadUiType(os.path.join(base_dir, "simulation", "simulation_wizard", "page_wind.ui"))
+uicls_wind_page, basecls_wind_page = uic.loadUiType(
+    os.path.join(base_dir, "simulation", "simulation_wizard", "page_wind.ui")
+)
 uicls_settings_page, basecls_settings_page = uic.loadUiType(
     os.path.join(base_dir, "simulation", "simulation_wizard", "page_settings.ui")
 )
 uicls_lizard_post_processing_page, basecls_lizard_post_processing_page = uic.loadUiType(
-    os.path.join(base_dir, "simulation", "simulation_wizard", "page_lizard_post_processing.ui")
+    os.path.join(
+        base_dir, "simulation", "simulation_wizard", "page_lizard_post_processing.ui"
+    )
 )
 
 uicls_saved_state_page, basecls_saved_state_page = uic.loadUiType(
@@ -146,7 +186,9 @@ class SimulationDurationWidget(uicls_duration_page, basecls_duration_page):
 
     def setup_timezones(self):
         """Populate timezones."""
-        default_timezone = self.settings.value("threedi/timezone", self.UTC_DISPLAY_NAME)
+        default_timezone = self.settings.value(
+            "threedi/timezone", self.UTC_DISPLAY_NAME
+        )
         for timezone_id in QTimeZone.availableTimeZoneIds():
             timezone_text = timezone_id.data().decode()
             timezone = QTimeZone(timezone_id)
@@ -176,7 +218,10 @@ class SimulationDurationWidget(uicls_duration_page, basecls_duration_page):
         time_from = self.time_from.time()
         date_to = self.date_to.date()
         time_to = self.time_to.time()
-        if self.grp_timezone.isChecked() and self.cbo_timezone.currentText() != self.UTC_DISPLAY_NAME:
+        if (
+            self.grp_timezone.isChecked()
+            and self.cbo_timezone.currentText() != self.UTC_DISPLAY_NAME
+        ):
             current_timezone = self.cbo_timezone.currentData()
             datetime_from = QDateTime(date_from, time_from, current_timezone)
             datetime_to = QDateTime(date_to, time_to, current_timezone)
@@ -213,8 +258,16 @@ class SimulationDurationWidget(uicls_duration_page, basecls_duration_page):
             if start > end:
                 start = end
             rel_delta = relativedelta(end, start)
-            duration = (rel_delta.years, rel_delta.months, rel_delta.days, rel_delta.hours, rel_delta.minutes)
-            self.label_total_time.setText("{} years, {} months, {} days, {} hours, {} minutes".format(*duration))
+            duration = (
+                rel_delta.years,
+                rel_delta.months,
+                rel_delta.days,
+                rel_delta.hours,
+                rel_delta.minutes,
+            )
+            self.label_total_time.setText(
+                "{} years, {} months, {} days, {} hours, {} minutes".format(*duration)
+            )
             self.label_utc_info.setText(self.timezone_template.format(start, end))
         except ValueError:
             self.label_total_time.setText("Invalid datetime format!")
@@ -249,12 +302,20 @@ class SubstancesWidget(uicls_substances, basecls_substances):
 
         # Set minimum width for the columns
         self.tw_substances.setColumnWidth(NAME_COLUMN, self.MINIMUM_WIDTH)  # Name
-        self.tw_substances.setColumnWidth(DECAY_COEFFICIENT_COLUMN, 160)  # Decay coefficient
-        self.tw_substances.setColumnWidth(DIFFUSION_COEFFICIENT_COLUMN, 160)  # Diffusion coefficient
+        self.tw_substances.setColumnWidth(
+            DECAY_COEFFICIENT_COLUMN, 160
+        )  # Decay coefficient
+        self.tw_substances.setColumnWidth(
+            DIFFUSION_COEFFICIENT_COLUMN, 160
+        )  # Diffusion coefficient
         # Set the numeric delegate for the decay coefficient column
         numeric_delegate = NumericDelegate(self.tw_substances)
-        self.tw_substances.setItemDelegateForColumn(DECAY_COEFFICIENT_COLUMN, numeric_delegate)
-        self.tw_substances.setItemDelegateForColumn(DIFFUSION_COEFFICIENT_COLUMN, numeric_delegate)
+        self.tw_substances.setItemDelegateForColumn(
+            DECAY_COEFFICIENT_COLUMN, numeric_delegate
+        )
+        self.tw_substances.setItemDelegateForColumn(
+            DIFFUSION_COEFFICIENT_COLUMN, numeric_delegate
+        )
 
     def prepopulate_substances_table(self, substances):
         self.tw_substances.setRowCount(0)
@@ -269,7 +330,9 @@ class SubstancesWidget(uicls_substances, basecls_substances):
                 name_item = QTableWidgetItem(name)
                 units_item = QTableWidgetItem(units)
                 decay_coefficient_item = QTableWidgetItem(str(decay_coefficient))
-                diffusion_coefficient_item = QTableWidgetItem(str(diffusion_coefficient))
+                diffusion_coefficient_item = QTableWidgetItem(
+                    str(diffusion_coefficient)
+                )
                 self.tw_substances.setItem(row, 0, name_item)
                 self.tw_substances.setItem(row, 1, units_item)
                 self.tw_substances.setItem(row, 2, decay_coefficient_item)
@@ -348,7 +411,12 @@ class SubstancesWidget(uicls_substances, basecls_substances):
             decay_coefficient_item = self.tw_substances.item(row, 2)
             diffusion_coefficient_item = self.tw_substances.item(row, 3)
 
-            if name_item and units_item and decay_coefficient_item and diffusion_coefficient_item:
+            if (
+                name_item
+                and units_item
+                and decay_coefficient_item
+                and diffusion_coefficient_item
+            ):
                 name = name_item.text()
                 units = units_item.text()
                 decay_coefficient = decay_coefficient_item.text()
@@ -360,7 +428,9 @@ class SubstancesWidget(uicls_substances, basecls_substances):
                     if decay_coefficient:
                         substance["decay_coefficient"] = decay_coefficient
                     if diffusion_coefficient:
-                        substance["diffusion_coefficient"] = float(diffusion_coefficient)
+                        substance["diffusion_coefficient"] = float(
+                            diffusion_coefficient
+                        )
                     self.substances.append(substance)
 
     def update_substances(self):
@@ -407,20 +477,34 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
         self.rb_upload_file.toggled.connect(self.change_boundary_conditions_source)
         self.pb_upload_file_bc_1d.clicked.connect(partial(self.load_csv, self.TYPE_1D))
         self.pb_upload_file_bc_2d.clicked.connect(partial(self.load_csv, self.TYPE_2D))
-        self.cb_interpolate_bc_1d.stateChanged.connect(partial(self.interpolate_changed, self.TYPE_1D))
-        self.cb_interpolate_bc_2d.stateChanged.connect(partial(self.interpolate_changed, self.TYPE_2D))
+        self.cb_interpolate_bc_1d.stateChanged.connect(
+            partial(self.interpolate_changed, self.TYPE_1D)
+        )
+        self.cb_interpolate_bc_2d.stateChanged.connect(
+            partial(self.interpolate_changed, self.TYPE_2D)
+        )
 
     def setup_substance_concentrations(self):
         if hasattr(self, "groupbox"):
             self.groupbox.setParent(None)
         if not self.substances:
             return
-        substance_concentration_widget = SubstanceConcentrationsWidget(self, "boundary condition")
+        substance_concentration_widget = SubstanceConcentrationsWidget(
+            self, "boundary condition"
+        )
         self.groupbox = substance_concentration_widget.groupbox
-        self.substance_constants_1d = substance_concentration_widget.substance_constants_1d
-        self.substance_constants_2d = substance_concentration_widget.substance_constants_2d
-        self.substance_concentrations_1d = substance_concentration_widget.substance_concentrations_1d
-        self.substance_concentrations_2d = substance_concentration_widget.substance_concentrations_2d
+        self.substance_constants_1d = (
+            substance_concentration_widget.substance_constants_1d
+        )
+        self.substance_constants_2d = (
+            substance_concentration_widget.substance_constants_2d
+        )
+        self.substance_concentrations_1d = (
+            substance_concentration_widget.substance_concentrations_1d
+        )
+        self.substance_concentrations_2d = (
+            substance_concentration_widget.substance_concentrations_2d
+        )
         parent_layout = self.layout()
         parent_layout.addWidget(self.groupbox, 6, 2)
 
@@ -465,19 +549,21 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
             for substance in substance_list:
                 bc_id = int(substance.get("id"))
                 timeseries = substance.get("timeseries")
-                boundary_condition = next((bc for bc in bc_timeseries if bc["id"] == bc_id), None)
+                boundary_condition = next(
+                    (bc for bc in bc_timeseries if bc["id"] == bc_id), None
+                )
                 if boundary_condition is None:
                     error_message = f"Boundary condition with ID {bc_id} not found!"
                     break
                 bc_values = boundary_condition["values"]
                 bc_timesteps = [t for (t, _) in bc_values]
                 concentrations = parse_timeseries(timeseries)
-                converted_concentrations = convert_timeseries_to_seconds(concentrations, time_units)
+                converted_concentrations = convert_timeseries_to_seconds(
+                    concentrations, time_units
+                )
                 concentrations_timesteps = [t for (t, _) in converted_concentrations]
                 if bc_timesteps != concentrations_timesteps:
-                    error_message = (
-                        "Substance concentrations timesteps do not match boundary condition values timesteps!"
-                    )
+                    error_message = "Substance concentrations timesteps do not match boundary condition values timesteps!"
                     break
         if error_message is not None:
             self.parent_page.parent_wizard.communication.show_warn(error_message)
@@ -520,9 +606,13 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
 
     def open_upload_dialog(self, boundary_conditions_type):
         """Open dialog for selecting CSV file with boundary conditions."""
-        last_folder = read_3di_settings("last_boundary_conditions_folder", os.path.expanduser("~"))
+        last_folder = read_3di_settings(
+            "last_boundary_conditions_folder", os.path.expanduser("~")
+        )
         file_filter = "CSV (*.csv );;All Files (*)"
-        filename, __ = QFileDialog.getOpenFileName(self, "Boundary Conditions Time Series", last_folder, file_filter)
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Boundary Conditions Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return None, None
         save_3di_settings("last_boundary_conditions_folder", os.path.dirname(filename))
@@ -633,7 +723,9 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
             if bc_id not in substance_concentrations:
                 substance_concentrations[bc_id] = substance
             else:
-                existing_substance = {sub["substance"]: sub for sub in substance_concentrations[bc_id]}
+                existing_substance = {
+                    sub["substance"]: sub for sub in substance_concentrations[bc_id]
+                }
                 for sub in substance:
                     name = sub.get("substance")
                     existing_substance.setdefault(name, sub)
@@ -649,10 +741,14 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
         for bc_substances in substances_data.values():
             for substance in bc_substances:
                 units = substance["time_units"]
-                substance["concentrations"] = convert_timeseries_to_seconds(substance["concentrations"], units)
+                substance["concentrations"] = convert_timeseries_to_seconds(
+                    substance["concentrations"], units
+                )
         return substances_data
 
-    def update_boundary_conditions_with_substances(self, boundary_conditions_data, substances):
+    def update_boundary_conditions_with_substances(
+        self, boundary_conditions_data, substances
+    ):
         """ "Update boundary conditions with substances."""
         for bc in boundary_conditions_data:
             bc_id = str(bc["id"])
@@ -662,17 +758,27 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
     def get_boundary_conditions_data(self):
         """Get boundary conditions data."""
 
-        boundary_conditions_data_1d = self.recalculate_boundary_conditions_timeseries(self.TYPE_1D)
+        boundary_conditions_data_1d = self.recalculate_boundary_conditions_timeseries(
+            self.TYPE_1D
+        )
         if self.substance_concentrations_1d or self.substance_constants_1d:
             substances = self.recalculate_substances_timeseries(self.TYPE_1D)
-            self.update_boundary_conditions_with_substances(boundary_conditions_data_1d, substances)
+            self.update_boundary_conditions_with_substances(
+                boundary_conditions_data_1d, substances
+            )
 
-        boundary_conditions_data_2d = self.recalculate_boundary_conditions_timeseries(self.TYPE_2D)
+        boundary_conditions_data_2d = self.recalculate_boundary_conditions_timeseries(
+            self.TYPE_2D
+        )
         if self.substance_concentrations_2d or self.substance_constants_2d:
             substances = self.recalculate_substances_timeseries(self.TYPE_2D)
-            self.update_boundary_conditions_with_substances(boundary_conditions_data_2d, substances)
+            self.update_boundary_conditions_with_substances(
+                boundary_conditions_data_2d, substances
+            )
 
-        boundary_conditions_data = boundary_conditions_data_1d + boundary_conditions_data_2d
+        boundary_conditions_data = (
+            boundary_conditions_data_1d + boundary_conditions_data_2d
+        )
 
         return boundary_conditions_data
 
@@ -751,11 +857,19 @@ class StructureControlsWidget(uicls_structure_controls, basecls_structure_contro
     def set_control_structure_file(self):
         """Selecting and setting up structure control file in JSON format."""
         file_filter = "JSON (*.json);;All Files (*)"
-        last_folder = QSettings().value("threedi/last_control_structure_file_folder", os.path.expanduser("~"), type=str)
-        filename, __ = QFileDialog.getOpenFileName(self, "Select structure control file", last_folder, file_filter)
+        last_folder = QSettings().value(
+            "threedi/last_control_structure_file_folder",
+            os.path.expanduser("~"),
+            type=str,
+        )
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Select structure control file", last_folder, file_filter
+        )
         if len(filename) == 0:
             return
-        QSettings().setValue("threedi/last_control_structure_file_folder", os.path.dirname(filename))
+        QSettings().setValue(
+            "threedi/last_control_structure_file_folder", os.path.dirname(filename)
+        )
         self.file_sc_upload.setText(filename)
 
     def get_structure_control_data(self):
@@ -801,8 +915,12 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
         self.gb_groundwater.setChecked(False)
         self.cbo_2d_local_raster.setFilters(QgsMapLayerProxyModel.RasterLayer)
         self.cbo_gw_local_raster.setFilters(QgsMapLayerProxyModel.RasterLayer)
-        self.btn_browse_2d_local_raster.clicked.connect(partial(self.browse_for_local_raster, self.cbo_2d_local_raster))
-        self.btn_browse_gw_local_raster.clicked.connect(partial(self.browse_for_local_raster, self.cbo_gw_local_raster))
+        self.btn_browse_2d_local_raster.clicked.connect(
+            partial(self.browse_for_local_raster, self.cbo_2d_local_raster)
+        )
+        self.btn_browse_gw_local_raster.clicked.connect(
+            partial(self.browse_for_local_raster, self.cbo_gw_local_raster)
+        )
         self.btn_1d_upload_csv.clicked.connect(self.load_1d_initial_waterlevel_csv)
         self.setup_initial_conditions()
         self.setup_2d_initial_concentrations()
@@ -823,7 +941,9 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
             self.initial_concentrations_2d_label.hide()
             return
         self.initial_concentrations_2d_label.show()
-        initial_concentrations_widget = Initial2DConcentrationsWidget(self.substances, self.parent_page)
+        initial_concentrations_widget = Initial2DConcentrationsWidget(
+            self.substances, self.parent_page
+        )
         self.initial_concentrations_widget = initial_concentrations_widget.widget
         self.rasters = initial_concentrations_widget.rasters
         parent_layout = self.layout()
@@ -836,7 +956,9 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
             self.initial_concentrations_1d_label.hide()
             return
         self.initial_concentrations_1d_label.show()
-        initial_concentrations_widget_1D = Initial1DConcentrationsWidget(self.substances, self.parent_page)
+        initial_concentrations_widget_1D = Initial1DConcentrationsWidget(
+            self.substances, self.parent_page
+        )
         self.local_data = initial_concentrations_widget_1D.local_data
         self.online_files = initial_concentrations_widget_1D.online_files
         self.initial_concentrations_widget_1D = initial_concentrations_widget_1D.widget
@@ -918,14 +1040,20 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
                     self.saved_states[state_name] = state
                     self.cbo_saved_states.addItem(state_name)
             if self.initial_saved_state:
-                initial_saved_state_idx = self.cbo_saved_states.findText(self.initial_saved_state.saved_state.name)
+                initial_saved_state_idx = self.cbo_saved_states.findText(
+                    self.initial_saved_state.saved_state.name
+                )
                 if initial_saved_state_idx >= 0:
                     self.cbo_saved_states.setCurrentIndex(initial_saved_state_idx)
             initial_waterlevels = tc.fetch_3di_model_initial_waterlevels(model_id) or []
             for initial_waterlevel in initial_waterlevels:
                 print(initial_waterlevel.to_dict())
-            initial_waterlevels_2d = [iw for iw in initial_waterlevels if iw.dimension == "two_d"]
-            initial_waterlevels_1d = [iw for iw in initial_waterlevels if iw.dimension == "one_d"]
+            initial_waterlevels_2d = [
+                iw for iw in initial_waterlevels if iw.dimension == "two_d"
+            ]
+            initial_waterlevels_1d = [
+                iw for iw in initial_waterlevels if iw.dimension == "one_d"
+            ]
             if initial_waterlevels_1d:
                 self.rb_1d_online_file.setChecked(True)
                 logger.info("Retrieved 1d initial waterlevel from model")
@@ -934,7 +1062,9 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
                     self.initial_waterlevels_files[iw.file.filename] = iw
                     self.cbo_1d_online_file.addItem(iw.file.filename)
                 else:
-                    logger.info(f"Water level instance {iw.id} does not have a file, skipping.")
+                    logger.info(
+                        f"Water level instance {iw.id} does not have a file, skipping."
+                    )
             for iw in sorted(initial_waterlevels_2d, key=attrgetter("id")):
                 raster = tc.fetch_3di_model_raster(model_id, iw.source_raster_id)
                 raster_filename = raster.file.filename
@@ -952,10 +1082,14 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
                     continue
         except ApiException as e:
             error_msg = extract_error_message(e)
-            self.parent_page.parent_wizard.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.parent_page.parent_wizard.communication.bar_error(
+                error_msg, log_text_color=QColor(Qt.red)
+            )
         except Exception as e:
             error_msg = f"Error: {e}"
-            self.parent_page.parent_wizard.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.parent_page.parent_wizard.communication.bar_error(
+                error_msg, log_text_color=QColor(Qt.red)
+            )
 
     def load_1d_initial_waterlevel_csv(self):
         """Load 1D initial water level from the CSV file."""
@@ -982,9 +1116,13 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
 
     def open_upload_1d_initial_waterlevel_dialog(self):
         """Open dialog for selecting CSV file with 1D initial waterlevels."""
-        last_folder = read_3di_settings("last_1d_initial_waterlevels", os.path.expanduser("~"))
+        last_folder = read_3di_settings(
+            "last_1d_initial_waterlevels", os.path.expanduser("~")
+        )
         file_filter = "CSV (*.csv );;All Files (*)"
-        filename, __ = QFileDialog.getOpenFileName(self, "1D Initial Waterlevels Time Series", last_folder, file_filter)
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "1D Initial Waterlevels Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return None, None
         save_3di_settings("last_1d_initial_waterlevels", os.path.dirname(filename))
@@ -1025,7 +1163,9 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
         """Allow user to browse for a raster layer and insert it to the layers_widget."""
         name_filter = "GeoTIFF (*.tif *.TIF *.tiff *.TIFF)"
         title = "Select raster file"
-        raster_file = get_filepath(None, extension_filter=name_filter, dialog_title=title)
+        raster_file = get_filepath(
+            None, extension_filter=name_filter, dialog_title=title
+        )
         if not raster_file:
             return
         items = layers_widget.additionalItems()
@@ -1096,12 +1236,16 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         # 1D laterals
         self.cb_upload_1d_laterals.toggled.connect(self.toggle_1d_laterals_upload)
         self.pb_upload_1d_laterals.clicked.connect(partial(self.load_csv, self.TYPE_1D))
-        self.cb_1d_interpolate.stateChanged.connect(partial(self.interpolate_changed, self.TYPE_1D))
+        self.cb_1d_interpolate.stateChanged.connect(
+            partial(self.interpolate_changed, self.TYPE_1D)
+        )
 
         # 2D laterals
         self.cb_upload_2d_laterals.toggled.connect(self.toggle_2d_laterals_upload)
         self.pb_upload_2d_laterals.clicked.connect(partial(self.load_csv, self.TYPE_2D))
-        self.cb_2d_interpolate.stateChanged.connect(partial(self.interpolate_changed, self.TYPE_2D))
+        self.cb_2d_interpolate.stateChanged.connect(
+            partial(self.interpolate_changed, self.TYPE_2D)
+        )
 
     def setup_substance_concentrations(self):
         if hasattr(self, "groupbox"):
@@ -1110,10 +1254,18 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
             return
         substance_concentration_widget = SubstanceConcentrationsWidget(self, "lateral")
         self.groupbox = substance_concentration_widget.groupbox
-        self.substance_constants_1d = substance_concentration_widget.substance_constants_1d
-        self.substance_constants_2d = substance_concentration_widget.substance_constants_2d
-        self.substance_concentrations_1d = substance_concentration_widget.substance_concentrations_1d
-        self.substance_concentrations_2d = substance_concentration_widget.substance_concentrations_2d
+        self.substance_constants_1d = (
+            substance_concentration_widget.substance_constants_1d
+        )
+        self.substance_constants_2d = (
+            substance_concentration_widget.substance_constants_2d
+        )
+        self.substance_concentrations_1d = (
+            substance_concentration_widget.substance_concentrations_1d
+        )
+        self.substance_concentrations_2d = (
+            substance_concentration_widget.substance_concentrations_2d
+        )
         parent_layout = self.layout()
         parent_layout.addWidget(self.groupbox, 3, 2)
 
@@ -1136,14 +1288,18 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
             self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
-    def handle_substance_csv_errors(self, header, substance_list, laterals_type, time_units):
+    def handle_substance_csv_errors(
+        self, header, substance_list, laterals_type, time_units
+    ):
         """
         First, check if lateral values are uploaded.
         Second, check if substance concentrations timesteps match exactly the lateral values timesteps.
         Return None if they match or error message if not.
         """
         error_message = handle_csv_header(header)
-        laterals_timeseries, warning_message = self.recalculate_laterals_timeseries(laterals_type=laterals_type)
+        laterals_timeseries, warning_message = self.recalculate_laterals_timeseries(
+            laterals_type=laterals_type
+        )
         if warning_message is not None:
             self.parent_page.parent_wizard.communication.show_warn(warning_message)
 
@@ -1162,7 +1318,9 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
                 lateral_values = lateral["values"]
                 laterals_timesteps = [t for (t, _) in lateral_values]
                 concentrations = parse_timeseries(timeseries)
-                converted_concentrations = convert_timeseries_to_seconds(concentrations, time_units)
+                converted_concentrations = convert_timeseries_to_seconds(
+                    concentrations, time_units
+                )
                 concentrations_timesteps = [t for (t, _) in converted_concentrations]
                 if laterals_timesteps != concentrations_timesteps:
                     error_message = "Substance concentrations timesteps do not match lateral values timesteps!"
@@ -1188,10 +1346,14 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
     def interpolate_changed(self, laterals_type):
         """Handle interpolate checkbox."""
         laterals_timeseries = (
-            self.laterals_1d_timeseries if laterals_type == self.TYPE_1D else self.laterals_2d_timeseries
+            self.laterals_1d_timeseries
+            if laterals_type == self.TYPE_1D
+            else self.laterals_2d_timeseries
         )
         interpolate = (
-            self.cb_1d_interpolate.isChecked() if laterals_type == self.TYPE_1D else self.cb_2d_interpolate.isChecked()
+            self.cb_1d_interpolate.isChecked()
+            if laterals_type == self.TYPE_1D
+            else self.cb_2d_interpolate.isChecked()
         )
         for val in laterals_timeseries.values():
             val["interpolate"] = interpolate
@@ -1223,7 +1385,9 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         if laterals_type == self.TYPE_1D:
             units = self.cbo_1d_units.currentText()
             if self.cb_use_1d_laterals.isChecked():
-                laterals_timeseries.update(deepcopy(self.laterals_1d_timeseries_template))
+                laterals_timeseries.update(
+                    deepcopy(self.laterals_1d_timeseries_template)
+                )
             if self.cb_upload_1d_laterals.isChecked():
                 laterals_data = deepcopy(self.laterals_1d_timeseries)
                 for val in laterals_data.values():
@@ -1241,7 +1405,9 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         else:
             units = self.cbo_2d_units.currentText()
             if self.cb_use_2d_laterals.isChecked():
-                laterals_timeseries.update(deepcopy(self.laterals_2d_timeseries_template))
+                laterals_timeseries.update(
+                    deepcopy(self.laterals_2d_timeseries_template)
+                )
             if self.cb_upload_2d_laterals.isChecked():
                 laterals_data = deepcopy(self.laterals_2d_timeseries)
                 for val in laterals_data.values():
@@ -1295,7 +1461,9 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
             if lat_id not in substance_concentrations:
                 substance_concentrations[lat_id] = substance
             else:
-                existing_substance = {sub["substance"]: sub for sub in substance_concentrations[lat_id]}
+                existing_substance = {
+                    sub["substance"]: sub for sub in substance_concentrations[lat_id]
+                }
                 for sub in substance:
                     name = sub.get("substance")
                     existing_substance.setdefault(name, sub)
@@ -1310,7 +1478,9 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         for lateral_substances in substances_data.values():
             for substance in lateral_substances:
                 units = substance["time_units"]
-                substance["concentrations"] = convert_timeseries_to_seconds(substance["concentrations"], units)
+                substance["concentrations"] = convert_timeseries_to_seconds(
+                    substance["concentrations"], units
+                )
         return substances_data
 
     def update_laterals_with_substances(self, file_laterals, substances):
@@ -1329,20 +1499,26 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         if self.groupbox_1d_laterals.isChecked():
             if self.cb_use_1d_laterals.isChecked():
                 constant_laterals.extend(self.laterals_1d)
-            file_laterals_1d.update(self.recalculate_laterals_timeseries(self.TYPE_1D)[0])
+            file_laterals_1d.update(
+                self.recalculate_laterals_timeseries(self.TYPE_1D)[0]
+            )
             if self.substance_concentrations_1d or self.substance_constants_1d:
                 substances = self.recalculate_substances_timeseries(self.TYPE_1D)
                 self.update_laterals_with_substances(file_laterals_1d, substances)
         if self.groupbox_2d_laterals.isChecked():
             if self.cb_use_2d_laterals.isChecked():
                 constant_laterals.extend(self.laterals_2d)
-            file_laterals_2d.update(self.recalculate_laterals_timeseries(self.TYPE_2D)[0])
+            file_laterals_2d.update(
+                self.recalculate_laterals_timeseries(self.TYPE_2D)[0]
+            )
             if self.substance_concentrations_2d or self.substance_constants_2d:
                 substances = self.recalculate_substances_timeseries(self.TYPE_2D)
                 self.update_laterals_with_substances(file_laterals_2d, substances)
         return constant_laterals, file_laterals_1d, file_laterals_2d
 
-    def handle_laterals_header(self, header: List[str], laterals_type: str, log_error=True):
+    def handle_laterals_header(
+        self, header: List[str], laterals_type: str, log_error=True
+    ):
         """
         Handle laterals potential header.
         Return None if fetch successful or error message if file is empty or have invalid structure.
@@ -1371,7 +1547,9 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         """Open dialog for selecting CSV file with laterals."""
         last_folder = read_3di_settings("last_laterals_folder", os.path.expanduser("~"))
         file_filter = "CSV (*.csv );;All Files (*)"
-        filename, __ = QFileDialog.getOpenFileName(self, "Laterals Time Series", last_folder, file_filter)
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Laterals Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return None, None
         save_3di_settings("last_laterals_folder", os.path.dirname(filename))
@@ -1457,11 +1635,15 @@ class DWFWidget(uicls_dwf, basecls_dwf):
         if timeseries24 and self.cb_24h.isChecked():
             seconds_in_day = 86400
             dwf_data = deepcopy(self.dwf_timeseries)
-            start, end = self.parent_page.parent_wizard.duration_page.main_widget.to_datetime()
+            start, end = (
+                self.parent_page.parent_wizard.duration_page.main_widget.to_datetime()
+            )
             for val in dwf_data.values():
                 current_values = val["values"]
                 if current_values[-1][0] < seconds_in_day:
-                    raise ValueError("Last timestep does not match 24 hour Dry Weather Timeseries format.")
+                    raise ValueError(
+                        "Last timestep does not match 24 hour Dry Weather Timeseries format."
+                    )
                 new_values = apply_24h_timeseries(start, end, current_values)
                 val["values"] = new_values
             return dwf_data
@@ -1498,7 +1680,9 @@ class DWFWidget(uicls_dwf, basecls_dwf):
         """Open dialog for selecting CSV file with Dry Weather Flow."""
         last_folder = read_3di_settings("last_dwf_folder", os.path.expanduser("~"))
         file_filter = "CSV (*.csv );;All Files (*)"
-        filename, __ = QFileDialog.getOpenFileName(self, "Dry Weather Flow Time Series", last_folder, file_filter)
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Dry Weather Flow Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return None, None
         save_3di_settings("last_dwf_folder", os.path.dirname(filename))
@@ -1547,18 +1731,25 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         self.added_breaches = defaultdict(dict)
         self.breaches_model = QStandardItemModel()
         self.breaches_tv.setModel(self.breaches_model)
-        self.potential_breaches_layer = parent_page.parent_wizard.model_selection_dlg.potential_breaches_layer
-        self.flowlines_layer = parent_page.parent_wizard.model_selection_dlg.flowlines_layer
+        self.potential_breaches_layer = (
+            parent_page.parent_wizard.potential_breaches_layer
+        )
+        self.flowlines_layer = parent_page.parent_wizard.flowlines_layer
         self.dd_breach_id = FilteredComboBox(self)
         self.breach_lout.addWidget(self.dd_breach_id)
         self.dd_simulation.currentIndexChanged.connect(self.simulation_changed)
         self.potential_breach_selection_tool = None
         self.flowline_selection_tool = None
-        self.pb_add_breach_from_list.clicked.connect(self.select_potential_breach_from_list)
+        self.pb_add_breach_from_list.clicked.connect(
+            self.select_potential_breach_from_list
+        )
         self.pb_select_potential_breach.clicked.connect(self.select_potential_breach)
         self.pb_select_flowline.clicked.connect(self.select_flowline)
         self.pb_remove_breach.clicked.connect(self.remove_breach)
-        if initial_conditions.multiple_simulations and initial_conditions.simulations_difference == "breaches":
+        if (
+            initial_conditions.multiple_simulations
+            and initial_conditions.simulations_difference == "breaches"
+        ):
             self.simulation_widget.show()
         else:
             self.simulation_widget.hide()
@@ -1592,10 +1783,12 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         """Setup breaches data with corresponding vector layer."""
         if self.potential_breaches_layer is not None:
             breach_ids_map = {
-                f'{f["content_pk"]} | {f["code"]} | {f["display_name"]}': f.id()
+                f"{f['content_pk']} | {f['code']} | {f['display_name']}": f.id()
                 for f in self.potential_breaches_layer.getFeatures()
             }
-            for breach_id, breach_fid in sorted(breach_ids_map.items(), key=lambda i: i[1]):
+            for breach_id, breach_fid in sorted(
+                breach_ids_map.items(), key=lambda i: i[1]
+            ):
                 self.dd_breach_id.addItem(breach_id, breach_fid)
         self.breaches_model.setHorizontalHeaderLabels(self.breach_parameters.values())
 
@@ -1617,10 +1810,18 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
                 "Potential breaches are not available!", self
             )
             return
-        self.potential_breach_selection_tool = QgsMapToolIdentifyFeature(self.map_canvas, self.potential_breaches_layer)
-        self.potential_breach_selection_tool.activated.connect(self.parent_page.parent_wizard.hide)
-        self.potential_breach_selection_tool.deactivated.connect(self.parent_page.parent_wizard.show)
-        self.potential_breach_selection_tool.featureIdentified.connect(self.on_potential_breach_feature_identified)
+        self.potential_breach_selection_tool = QgsMapToolIdentifyFeature(
+            self.map_canvas, self.potential_breaches_layer
+        )
+        self.potential_breach_selection_tool.activated.connect(
+            self.parent_page.parent_wizard.hide
+        )
+        self.potential_breach_selection_tool.deactivated.connect(
+            self.parent_page.parent_wizard.show
+        )
+        self.potential_breach_selection_tool.featureIdentified.connect(
+            self.on_potential_breach_feature_identified
+        )
         self.map_canvas.setMapTool(self.potential_breach_selection_tool)
 
     def select_flowline(self):
@@ -1630,10 +1831,18 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
                 "1D2D flowlines are not available!", self
             )
             return
-        self.flowline_selection_tool = QgsMapToolIdentifyFeature(self.map_canvas, self.flowlines_layer)
-        self.flowline_selection_tool.activated.connect(self.parent_page.parent_wizard.hide)
-        self.flowline_selection_tool.deactivated.connect(self.parent_page.parent_wizard.show)
-        self.flowline_selection_tool.featureIdentified.connect(self.on_flowline_feature_identified)
+        self.flowline_selection_tool = QgsMapToolIdentifyFeature(
+            self.map_canvas, self.flowlines_layer
+        )
+        self.flowline_selection_tool.activated.connect(
+            self.parent_page.parent_wizard.hide
+        )
+        self.flowline_selection_tool.deactivated.connect(
+            self.parent_page.parent_wizard.show
+        )
+        self.flowline_selection_tool.featureIdentified.connect(
+            self.on_flowline_feature_identified
+        )
         self.map_canvas.setMapTool(self.flowline_selection_tool)
 
     def on_potential_breach_feature_identified(self, potential_breach_feat):
@@ -1657,7 +1866,9 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         self.flowlines_layer.selectByIds([flowline_fid])
         breach_key = (BreachSourceType.FLOWLINES, flowline_fid)
         if breach_key in self.added_breaches[self.current_simulation_number]:
-            self.parent_page.parent_wizard.communication.show_warn("1D2D flowline already selected!", self)
+            self.parent_page.parent_wizard.communication.show_warn(
+                "1D2D flowline already selected!", self
+            )
             return
         self.add_breach(BreachSourceType.FLOWLINES, flowline_feat)
 
@@ -1718,21 +1929,27 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
 
         max_breach_depth_spinbox = QDoubleSpinBox()
         max_breach_depth_spinbox.setFont(segoe_ui_font)
-        max_breach_depth_spinbox.setStyleSheet("QDoubleSpinBox {background-color: white;}")
+        max_breach_depth_spinbox.setStyleSheet(
+            "QDoubleSpinBox {background-color: white;}"
+        )
         max_breach_depth_spinbox.setDecimals(3)
         max_breach_depth_spinbox.setMinimum(0.0)
         max_breach_depth_spinbox.setMaximum(maxsize)
 
         discharge_coefficient_positive_spinbox = QDoubleSpinBox()
         discharge_coefficient_positive_spinbox.setFont(segoe_ui_font)
-        discharge_coefficient_positive_spinbox.setStyleSheet("QDoubleSpinBox {background-color: white;}")
+        discharge_coefficient_positive_spinbox.setStyleSheet(
+            "QDoubleSpinBox {background-color: white;}"
+        )
         discharge_coefficient_positive_spinbox.setDecimals(3)
         discharge_coefficient_positive_spinbox.setMinimum(0.0)
         discharge_coefficient_positive_spinbox.setMaximum(maxsize)
 
         discharge_coefficient_negative_spinbox = QDoubleSpinBox()
         discharge_coefficient_negative_spinbox.setFont(segoe_ui_font)
-        discharge_coefficient_negative_spinbox.setStyleSheet("QDoubleSpinBox {background-color: white;}")
+        discharge_coefficient_negative_spinbox.setStyleSheet(
+            "QDoubleSpinBox {background-color: white;}"
+        )
         discharge_coefficient_negative_spinbox.setDecimals(3)
         discharge_coefficient_negative_spinbox.setMinimum(0.0)
         discharge_coefficient_negative_spinbox.setMaximum(maxsize)
@@ -1775,13 +1992,17 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
     def add_breach(self, breach_source_type, breach_feature):
         """Add breach widgets to the breaches list."""
         breach_fid = breach_feature.id()
-        breach_widgets = self.breach_widgets_for_feature(breach_source_type, breach_feature)
+        breach_widgets = self.breach_widgets_for_feature(
+            breach_source_type, breach_feature
+        )
         breach_rows_count = self.breaches_model.rowCount()
         row_number = breach_rows_count
         row_items = [QStandardItem("") for _ in breach_widgets]
         self.breaches_model.appendRow(row_items)
         for column_idx, breach_widget in enumerate(breach_widgets.values()):
-            self.breaches_tv.setIndexWidget(self.breaches_model.index(row_number, column_idx), breach_widget)
+            self.breaches_tv.setIndexWidget(
+                self.breaches_model.index(row_number, column_idx), breach_widget
+            )
         for i in range(len(breach_widgets)):
             self.breaches_tv.resizeColumnToContents(i)
         breach_key = (breach_source_type, breach_fid)
@@ -1811,23 +2032,34 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
             breach_id_item = self.breaches_model.item(row, 0)
             breach_id_index = breach_id_item.index()
             breach_id_widget = self.breaches_tv.indexWidget(breach_id_index)
-            hide_row = breach_id_widget.simulation_number != self.current_simulation_number
+            hide_row = (
+                breach_id_widget.simulation_number != self.current_simulation_number
+            )
             self.breaches_tv.setRowHidden(row, root_model_index, hide_row)
 
     def get_breaches_data(self):
         """Getting all needed data for adding breaches to the simulation."""
         potential_breaches, flowlines = [], []
         simulation_breaches = self.added_breaches[self.current_simulation_number]
-        for (breach_source_type, breach_fid), breach_widgets in simulation_breaches.items():
+        for (
+            breach_source_type,
+            breach_fid,
+        ), breach_widgets in simulation_breaches.items():
             duration_units = breach_widgets["duration_units"].currentText()
             offset_units = breach_widgets["offset_units"].currentText()
             breach_obj = dm.Breach(
                 breach_id=int(breach_widgets["breach_id"].text()),
                 width=breach_widgets["initial_width"].value(),
-                duration_till_max_depth=breach_widgets["duration"].value() * self.SECONDS_MULTIPLIERS[duration_units],
-                offset=breach_widgets["offset"].value() * self.SECONDS_MULTIPLIERS[offset_units],
-                discharge_coefficient_positive=breach_widgets["discharge_coefficient_positive"].value(),
-                discharge_coefficient_negative=breach_widgets["discharge_coefficient_negative"].value(),
+                duration_till_max_depth=breach_widgets["duration"].value()
+                * self.SECONDS_MULTIPLIERS[duration_units],
+                offset=breach_widgets["offset"].value()
+                * self.SECONDS_MULTIPLIERS[offset_units],
+                discharge_coefficient_positive=breach_widgets[
+                    "discharge_coefficient_positive"
+                ].value(),
+                discharge_coefficient_negative=breach_widgets[
+                    "discharge_coefficient_negative"
+                ].value(),
                 levee_material=breach_widgets["levee_material"].currentText(),
                 max_breach_depth=breach_widgets["max_breach_depth"].value(),
             )
@@ -1849,10 +2081,74 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         "0": [0.0],
         "1": [0.0],
         "2": [0.0],
-        "3": [0.30, 0.60, 0.90, 1.50, 2.10, 2.10, 1.50, 1.20, 1.05, 0.90, 0.75, 0.60, 0.45, 0.30, 0.15],
-        "4": [0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05, 1.20, 1.50, 2.10, 2.10, 1.50, 0.90, 0.60, 0.30],
-        "5": [0.30, 0.60, 1.50, 2.70, 2.70, 2.10, 1.50, 1.20, 1.05, 0.90, 0.75, 0.60, 0.45, 0.30, 0.15],
-        "6": [0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05, 1.20, 1.50, 2.10, 2.70, 2.70, 1.50, 0.60, 0.30],
+        "3": [
+            0.30,
+            0.60,
+            0.90,
+            1.50,
+            2.10,
+            2.10,
+            1.50,
+            1.20,
+            1.05,
+            0.90,
+            0.75,
+            0.60,
+            0.45,
+            0.30,
+            0.15,
+        ],
+        "4": [
+            0.15,
+            0.30,
+            0.45,
+            0.60,
+            0.75,
+            0.90,
+            1.05,
+            1.20,
+            1.50,
+            2.10,
+            2.10,
+            1.50,
+            0.90,
+            0.60,
+            0.30,
+        ],
+        "5": [
+            0.30,
+            0.60,
+            1.50,
+            2.70,
+            2.70,
+            2.10,
+            1.50,
+            1.20,
+            1.05,
+            0.90,
+            0.75,
+            0.60,
+            0.45,
+            0.30,
+            0.15,
+        ],
+        "6": [
+            0.15,
+            0.30,
+            0.45,
+            0.60,
+            0.75,
+            0.90,
+            1.05,
+            1.20,
+            1.50,
+            2.10,
+            2.70,
+            2.70,
+            1.50,
+            0.60,
+            0.30,
+        ],
         "7": [0.6, 1.2, 2.1, 3.3, 3.3, 2.7, 2.1, 1.5, 1.2, 0.9, 0.6, 0.3],
         "8": [0.3, 0.6, 0.9, 1.2, 1.5, 2.1, 2.7, 3.3, 3.3, 2.1, 1.2, 0.6],
         "9": [1.5, 2.7, 4.8, 4.8, 4.2, 3.3, 2.7, 2.1, 1.5, 0.9, 0.6, 0.3],
@@ -1910,7 +2206,10 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         self.connect_signals()
         # Primarily used for switching simulations
         self.values = dict()
-        if initial_conditions.multiple_simulations and initial_conditions.simulations_difference == "precipitation":
+        if (
+            initial_conditions.multiple_simulations
+            and initial_conditions.simulations_difference == "precipitation"
+        ):
             self.simulation_widget.show()
         else:
             self.simulation_widget.hide()
@@ -1960,13 +2259,20 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
 
         # iterate over the substance values and retrieve the values
         substance_concentrations = []
-        if not ((precipitation_type == RainEventTypes.FROM_NETCDF.value) or (precipitation_type == RainEventTypes.RADAR.value)):
+        if not (
+            (precipitation_type == RainEventTypes.FROM_NETCDF.value)
+            or (precipitation_type == RainEventTypes.RADAR.value)
+        ):
             for substance in self.substances:
                 substance_name = substance["name"]
                 assert substance_name in self.substance_widgets
                 value = self.substance_widgets[substance_name].get_value()
                 substance_concentrations.append(
-                    {"name": substance_name, "unit": substance.get("unit", ""), "concentration": value}
+                    {
+                        "name": substance_name,
+                        "unit": substance.get("unit", ""),
+                        "concentration": value,
+                    }
                 )
 
         if precipitation_type == RainEventTypes.CONSTANT.value:
@@ -2063,10 +2369,14 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         for substance in self.substances:
             substance_name = substance["name"]
             substance_concentration = next(
-                (x for x in substance_concentrations if x["name"] == substance["name"]), None
+                (x for x in substance_concentrations if x["name"] == substance["name"]),
+                None,
             )
             if not substance_concentration:  # substance has been added
-                substance_concentration = {"name": substance_name, "concentration": None}
+                substance_concentration = {
+                    "name": substance_name,
+                    "concentration": None,
+                }
             substance_concentration["unit"] = substance.get("unit", "")
             wid = PrecipitationWidget.PrecipationSubstanceWidget(
                 substance_name,
@@ -2075,16 +2385,22 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
                 self.substance_widget,
             )
             wid.value_changed.connect(self.store_cache)
-            self.substance_widgets[substance_name] = wid  # name is enforced to be unique in UI
+            self.substance_widgets[substance_name] = (
+                wid  # name is enforced to be unique in UI
+            )
             self.substance_widget.layout().addWidget(wid)
             new_substance_concentrations.append(substance_concentration)
 
         # Update the cached values
-        self.values[simulation]["substance_concentration"] = new_substance_concentrations
+        self.values[simulation]["substance_concentration"] = (
+            new_substance_concentrations
+        )
 
         precipitation_type = vals.get("precipitation_type")
         if precipitation_type == RainEventTypes.CONSTANT.value:
-            self.cbo_prec_type.setCurrentIndex(self.cbo_prec_type.findText(vals.get("precipitation_type")))
+            self.cbo_prec_type.setCurrentIndex(
+                self.cbo_prec_type.findText(vals.get("precipitation_type"))
+            )
             self.sp_start_after_constant.setValue(vals.get("start_after"))
             self.start_after_constant_u.setCurrentIndex(
                 self.start_after_constant_u.findText(vals.get("start_after_units"))
@@ -2096,10 +2412,16 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.sp_intensity.setValue(vals.get("intensity"))
         elif precipitation_type == RainEventTypes.FROM_CSV.value:
             # Get simulation values
-            self.cbo_prec_type.setCurrentIndex(self.cbo_prec_type.findText(vals.get("precipitation_type")))
+            self.cbo_prec_type.setCurrentIndex(
+                self.cbo_prec_type.findText(vals.get("precipitation_type"))
+            )
             self.sp_start_after_csv.setValue(vals.get("start_after"))
-            self.start_after_csv_u.setCurrentIndex(self.start_after_csv_u.findText(vals.get("start_after_units")))
-            self.cbo_units_csv.setCurrentIndex(self.cbo_units_csv.findText(vals.get("units")))
+            self.start_after_csv_u.setCurrentIndex(
+                self.start_after_csv_u.findText(vals.get("start_after_units"))
+            )
+            self.cbo_units_csv.setCurrentIndex(
+                self.cbo_units_csv.findText(vals.get("units"))
+            )
             self.le_upload_csv.setText(vals.get("csv_path", ""))
             self.custom_time_series[simulation] = vals.get("time_series", [])
             self.cb_interpolate_rain.setChecked(vals.get("interpolate", False))
@@ -2108,18 +2430,28 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.rb_raster_netcdf.setChecked(vals.get("raster_netcdf", False))
             self.le_upload_netcdf.setText(vals.get("netcdf_path", ""))
         elif precipitation_type == RainEventTypes.DESIGN.value:
-            self.cbo_prec_type.setCurrentIndex(self.cbo_prec_type.findText(vals.get("precipitation_type")))
+            self.cbo_prec_type.setCurrentIndex(
+                self.cbo_prec_type.findText(vals.get("precipitation_type"))
+            )
             self.sp_start_after_design.setValue(vals.get("start_after"))
-            self.start_after_design_u.setCurrentIndex(self.start_after_design_u.findText(vals.get("start_after_units")))
+            self.start_after_design_u.setCurrentIndex(
+                self.start_after_design_u.findText(vals.get("start_after_units"))
+            )
             design_number = vals.get("design_number")
             self.cbo_design.setCurrentIndex(self.cbo_design.findText(design_number))
             self.design_time_series[simulation] = vals.get("time_series", [])
         elif precipitation_type == RainEventTypes.RADAR.value:
-            self.cbo_prec_type.setCurrentIndex(self.cbo_prec_type.findText(vals.get("precipitation_type")))
+            self.cbo_prec_type.setCurrentIndex(
+                self.cbo_prec_type.findText(vals.get("precipitation_type"))
+            )
             self.sp_start_after_radar.setValue(vals.get("start_after"))
-            self.start_after_radar_u.setCurrentIndex(self.start_after_radar_u.findText(vals.get("start_after_units")))
+            self.start_after_radar_u.setCurrentIndex(
+                self.start_after_radar_u.findText(vals.get("start_after_units"))
+            )
             self.sp_stop_after_radar.setValue(vals.get("stop_after"))
-            self.stop_after_radar_u.setCurrentIndex(self.stop_after_radar_u.findText(vals.get("stop_after_units")))
+            self.stop_after_radar_u.setCurrentIndex(
+                self.stop_after_radar_u.findText(vals.get("stop_after_units"))
+            )
         self.plot_precipitation()
 
     def precipitation_changed(self):
@@ -2217,8 +2549,12 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
     def set_csv_time_series(self):
         """Selecting and setting up rain time series from CSV format."""
         file_filter = "CSV (*.csv);;All Files (*)"
-        last_folder = read_3di_settings("last_precipitation_folder", os.path.expanduser("~"))
-        filename, __ = QFileDialog.getOpenFileName(self, "Precipitation Time Series", last_folder, file_filter)
+        last_folder = read_3di_settings(
+            "last_precipitation_folder", os.path.expanduser("~")
+        )
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Precipitation Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return
         save_3di_settings("last_precipitation_folder", os.path.dirname(filename))
@@ -2247,11 +2583,17 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
     def set_netcdf_time_series(self):
         """Selecting and setting up rain time series from NetCDF format."""
         file_filter = "NetCDF (*.nc);;All Files (*)"
-        last_folder = QSettings().value("threedi/last_precipitation_folder", os.path.expanduser("~"), type=str)
-        filename, __ = QFileDialog.getOpenFileName(self, "Precipitation Time Series", last_folder, file_filter)
+        last_folder = QSettings().value(
+            "threedi/last_precipitation_folder", os.path.expanduser("~"), type=str
+        )
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Precipitation Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return
-        QSettings().setValue("threedi/last_precipitation_folder", os.path.dirname(filename))
+        QSettings().setValue(
+            "threedi/last_precipitation_folder", os.path.dirname(filename)
+        )
         simulation = self.dd_simulation.currentText()
         self.le_upload_netcdf.setText(filename)
         self.custom_time_series[simulation] = []
@@ -2276,7 +2618,11 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         self.return_period_lbl.setText(period_txt)
         self.type_lbl.setText(type_full_text)
         # Design precipitation timestep is 5 minutes (300 seconds) or 1 hour (3600 seconds).
-        timestep = self.DESIGN_5_MINUTES_TIMESTEP if int(design_id) < 14 else self.DESIGN_HOUR_TIMESTEP
+        timestep = (
+            self.DESIGN_5_MINUTES_TIMESTEP
+            if int(design_id) < 14
+            else self.DESIGN_HOUR_TIMESTEP
+        )
         self.design_time_series[simulation] = [
             [t, v] for t, v in zip(range(0, len(series) * timestep, timestep), series)
         ]
@@ -2308,7 +2654,10 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         """Calculating precipitation duration in seconds."""
         simulation = self.dd_simulation.currentText()
         current_text = self.cbo_prec_type.currentText()
-        if current_text == RainEventTypes.CONSTANT.value or current_text == RainEventTypes.RADAR.value:
+        if (
+            current_text == RainEventTypes.CONSTANT.value
+            or current_text == RainEventTypes.RADAR.value
+        ):
             to_seconds_multiplier = self.SECONDS_MULTIPLIERS[self.current_units]
             if current_text == RainEventTypes.CONSTANT.value:
                 start = self.sp_start_after_constant.value()
@@ -2318,9 +2667,7 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
                 end = self.sp_stop_after_radar.value()
             start_in_seconds = start * to_seconds_multiplier
             end_in_seconds = end * to_seconds_multiplier
-            simulation_duration = (
-                self.parent_page.parent_wizard.duration_page.main_widget.calculate_simulation_duration()
-            )
+            simulation_duration = self.parent_page.parent_wizard.duration_page.main_widget.calculate_simulation_duration()
             if start_in_seconds > simulation_duration:
                 start_in_seconds = simulation_duration
             if end_in_seconds == 0 or end_in_seconds > simulation_duration:
@@ -2329,10 +2676,18 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             if precipitation_duration < 0:
                 precipitation_duration = 0
         elif current_text == RainEventTypes.FROM_CSV.value:
-            end_in_seconds = self.custom_time_series[simulation][-1][0] if self.custom_time_series[simulation] else 0
+            end_in_seconds = (
+                self.custom_time_series[simulation][-1][0]
+                if self.custom_time_series[simulation]
+                else 0
+            )
             precipitation_duration = end_in_seconds
         elif current_text == RainEventTypes.DESIGN.value:
-            end_in_seconds = self.design_time_series[simulation][-1][0] if self.design_time_series[simulation] else 0
+            end_in_seconds = (
+                self.design_time_series[simulation][-1][0]
+                if self.design_time_series[simulation]
+                else 0
+            )
             precipitation_duration = end_in_seconds
         else:
             precipitation_duration = 0
@@ -2372,7 +2727,9 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         duration = self.get_precipitation_duration()
         units = "m/s"
         values = self.get_precipitation_values()
-        start, end = self.parent_page.parent_wizard.duration_page.main_widget.to_datetime()
+        start, end = (
+            self.parent_page.parent_wizard.duration_page.main_widget.to_datetime()
+        )
         interpolate = self.cb_interpolate_rain.isChecked()
         csv_filepath = self.le_upload_csv.text()
         netcdf_filepath = self.le_upload_netcdf.text()
@@ -2449,7 +2806,6 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         return x_values, y_values
 
     class PrecipationSubstanceWidget(QWidget):
-
         value_changed = pyqtSignal()
 
         def __init__(self, name: str, value: float, unit: str, parent):
@@ -2484,7 +2840,6 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.line_edit.setText(str(value))
 
     def update_substance_widgets(self):
-
         # For NetCDF or radar rain, we do not apply substance concentrations
         precipitation_type_str = self.cbo_prec_type.currentText()
         if (
@@ -2518,14 +2873,21 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             substance_name = substance["name"]
             if substance_name not in self.substance_widgets:
                 wid = PrecipitationWidget.PrecipationSubstanceWidget(
-                    substance_name, "", substance.get("units", ""), self.substance_widget
+                    substance_name,
+                    "",
+                    substance.get("units", ""),
+                    self.substance_widget,
                 )
                 wid.value_changed.connect(self.store_cache)
-                self.substance_widgets[substance_name] = wid  # name is enforce to be unique in UI
+                self.substance_widgets[substance_name] = (
+                    wid  # name is enforce to be unique in UI
+                )
                 self.substance_widget.layout().addWidget(wid)
             else:
                 # Set the units, these might have been changed
-                self.substance_widgets[substance_name].set_unit_label(substance.get("units", ""))
+                self.substance_widgets[substance_name].set_unit_label(
+                    substance.get("units", "")
+                )
 
     def plot_precipitation(self):
         """Setting up precipitation plot."""
@@ -2543,7 +2905,10 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             x_values, y_values = self.from_csv_values()
         elif current_text == RainEventTypes.DESIGN.value:
             x_values, y_values = self.design_values()
-        elif current_text in {RainEventTypes.FROM_NETCDF.value, RainEventTypes.RADAR.value}:
+        elif current_text in {
+            RainEventTypes.FROM_NETCDF.value,
+            RainEventTypes.RADAR.value,
+        }:
             x_values, y_values = [], []
             self.plot_widget.hide()
             self.plot_label.hide()
@@ -2566,17 +2931,26 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
         self.plot_ticks = [[dx[0], dx[-1]]]
         ax = self.plot_widget.getAxis("bottom")
         ax.setTicks(self.plot_ticks)
-        self.plot_bar_graph = pg.BarGraphItem(x=x_values, height=y_values, width=timestep, brush=QColor("#1883D7"))
+        self.plot_bar_graph = pg.BarGraphItem(
+            x=x_values, height=y_values, width=timestep, brush=QColor("#1883D7")
+        )
         self.plot_widget.addItem(self.plot_bar_graph)
         if current_text == RainEventTypes.CONSTANT.value:
             precipitation_values = y_values[:-1]
         else:
             precipitation_values = y_values
         if current_text == RainEventTypes.CONSTANT.value:
-            self.total_precipitation = sum(mmh_to_mmtimestep(v, 1, self.current_units) for v in precipitation_values)
-        elif current_text == RainEventTypes.FROM_CSV.value and self.cbo_units_csv.currentText() == "mm/h":
             self.total_precipitation = sum(
-                mmh_to_mmtimestep(v, timestep, self.current_units) for v in precipitation_values
+                mmh_to_mmtimestep(v, 1, self.current_units)
+                for v in precipitation_values
+            )
+        elif (
+            current_text == RainEventTypes.FROM_CSV.value
+            and self.cbo_units_csv.currentText() == "mm/h"
+        ):
+            self.total_precipitation = sum(
+                mmh_to_mmtimestep(v, timestep, self.current_units)
+                for v in precipitation_values
             )
         else:
             # This is for 'mm/timestep'
@@ -2662,7 +3036,9 @@ class WindWidget(uicls_wind_page, basecls_wind_page):
         """Selecting and setting up wind time series from CSV format."""
         file_filter = "CSV (*.csv);;All Files (*)"
         last_folder = read_3di_settings("last_wind_folder", os.path.expanduser("~"))
-        filename, __ = QFileDialog.getOpenFileName(self, "Wind Time Series", last_folder, file_filter)
+        filename, __ = QFileDialog.getOpenFileName(
+            self, "Wind Time Series", last_folder, file_filter
+        )
         if len(filename) == 0:
             return
         save_3di_settings("last_wind_folder", os.path.dirname(filename))
@@ -2673,7 +3049,13 @@ class WindWidget(uicls_wind_page, basecls_wind_page):
             for timestep, windspeed, direction in wind_reader:
                 # We are assuming that timestep is in minutes, so we are converting it to seconds on the fly.
                 try:
-                    time_series.append([float(timestep) * units_multiplier, float(windspeed), float(direction)])
+                    time_series.append(
+                        [
+                            float(timestep) * units_multiplier,
+                            float(windspeed),
+                            float(direction),
+                        ]
+                    )
                 except ValueError:
                     continue
         self.le_upload_wind.setText(filename)
@@ -2701,9 +3083,7 @@ class WindWidget(uicls_wind_page, basecls_wind_page):
             end = self.sp_stop_wind_constant.value()
             start_in_seconds = start * to_seconds_multiplier
             end_in_seconds = end * to_seconds_multiplier
-            simulation_duration = (
-                self.parent_page.parent_wizard.duration_page.main_widget.calculate_simulation_duration()
-            )
+            simulation_duration = self.parent_page.parent_wizard.duration_page.main_widget.calculate_simulation_duration()
             if start_in_seconds > simulation_duration:
                 start_in_seconds = simulation_duration
             if end_in_seconds == 0 or end_in_seconds > simulation_duration:
@@ -2754,7 +3134,18 @@ class WindWidget(uicls_wind_page, basecls_wind_page):
         drag_coeff = self.get_drag_coefficient()
         inter_speed, inter_direction = self.get_interpolate_flags()
         values = self.custom_wind
-        return wind_type, offset, duration, speed, direction, units, drag_coeff, inter_speed, inter_direction, values
+        return (
+            wind_type,
+            offset,
+            duration,
+            speed,
+            direction,
+            units,
+            drag_coeff,
+            inter_speed,
+            inter_direction,
+            values,
+        )
 
 
 class SettingsWidget(uicls_settings_page, basecls_settings_page):
@@ -2767,7 +3158,12 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
         set_widget_background_color(self)
         self.aggregation_model = QStandardItemModel()
         self.aggregation_tv.setModel(self.aggregation_model)
-        self.aggregation_settings_header = ["Flow variable", "Method", "Interval", "Name"]
+        self.aggregation_settings_header = [
+            "Flow variable",
+            "Method",
+            "Interval",
+            "Name",
+        ]
         self.flow_variables = [
             "water_level",
             "flow_velocity",
@@ -2783,7 +3179,16 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
             "interception",
             "surface_source_sink_discharge",
         ]
-        self.flow_methods = ["min", "max", "avg", "cum", "cum_positive", "cum_negative", "current", "sum"]
+        self.flow_methods = [
+            "min",
+            "max",
+            "avg",
+            "cum",
+            "cum_positive",
+            "cum_negative",
+            "current",
+            "sum",
+        ]
 
         wq_validator = QDoubleValidator(0.0, 100.0, 14, self)
         wq_validator.setNotation(QDoubleValidator.ScientificNotation)
@@ -2804,14 +3209,20 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
     def connect_signals(self):
         """Connecting widgets signals."""
         self.add_aggregation_entry.clicked.connect(self.add_aggregation_settings_row)
-        self.remove_aggregation_entry.clicked.connect(self.remove_aggregation_settings_row)
+        self.remove_aggregation_entry.clicked.connect(
+            self.remove_aggregation_settings_row
+        )
 
     def populate_aggregation_settings(self, aggregation_settings_list=None):
         """Populate aggregation settings inside QTreeView."""
         if aggregation_settings_list is not None:
             self.aggregation_model.clear()
-        self.aggregation_model.setHorizontalHeaderLabels(self.aggregation_settings_header)
-        for i, aggregation_settings in enumerate(aggregation_settings_list or [], start=0):
+        self.aggregation_model.setHorizontalHeaderLabels(
+            self.aggregation_settings_header
+        )
+        for i, aggregation_settings in enumerate(
+            aggregation_settings_list or [], start=0
+        ):
             row_items = [QStandardItem("") for _ in self.aggregation_settings_header]
             self.aggregation_model.appendRow(row_items)
             self.add_aggregation_settings_widgets(i, aggregation_settings)
@@ -2846,10 +3257,18 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
             interval_spinbox.setValue(aggregation_settings["interval"])
             name_line_edit.setText(aggregation_settings["name"] or "")
 
-        self.aggregation_tv.setIndexWidget(self.aggregation_model.index(row_number, 0), flow_variable_combo)
-        self.aggregation_tv.setIndexWidget(self.aggregation_model.index(row_number, 1), flow_method_combo)
-        self.aggregation_tv.setIndexWidget(self.aggregation_model.index(row_number, 2), interval_spinbox)
-        self.aggregation_tv.setIndexWidget(self.aggregation_model.index(row_number, 3), name_line_edit)
+        self.aggregation_tv.setIndexWidget(
+            self.aggregation_model.index(row_number, 0), flow_variable_combo
+        )
+        self.aggregation_tv.setIndexWidget(
+            self.aggregation_model.index(row_number, 1), flow_method_combo
+        )
+        self.aggregation_tv.setIndexWidget(
+            self.aggregation_model.index(row_number, 2), interval_spinbox
+        )
+        self.aggregation_tv.setIndexWidget(
+            self.aggregation_model.index(row_number, 3), name_line_edit
+        )
 
     def add_aggregation_settings_row(self):
         """Add aggregation settings row into QTreeView."""
@@ -2868,18 +3287,35 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
     def collect_single_settings(self):
         """Get data from the single settings groupboxes."""
         physical_settings = scan_widgets_parameters(
-            self.group_physical, get_combobox_text=False, remove_postfix=False, lineedits_as_float_or_none=False
+            self.group_physical,
+            get_combobox_text=False,
+            remove_postfix=False,
+            lineedits_as_float_or_none=False,
         )
         numerical_settings = scan_widgets_parameters(
-            self.group_numerical, get_combobox_text=False, remove_postfix=False, lineedits_as_float_or_none=False
+            self.group_numerical,
+            get_combobox_text=False,
+            remove_postfix=False,
+            lineedits_as_float_or_none=False,
         )
         time_step_settings = scan_widgets_parameters(
-            self.group_timestep, get_combobox_text=False, remove_postfix=False, lineedits_as_float_or_none=False
+            self.group_timestep,
+            get_combobox_text=False,
+            remove_postfix=False,
+            lineedits_as_float_or_none=False,
         )
         water_quality_settings = scan_widgets_parameters(
-            self.group_water_quality, get_combobox_text=False, remove_postfix=True, lineedits_as_float_or_none=True
+            self.group_water_quality,
+            get_combobox_text=False,
+            remove_postfix=True,
+            lineedits_as_float_or_none=True,
         )
-        return physical_settings, numerical_settings, time_step_settings, water_quality_settings
+        return (
+            physical_settings,
+            numerical_settings,
+            time_step_settings,
+            water_quality_settings,
+        )
 
     def collect_aggregation_settings(self):
         """Get data from the aggregation settings rows."""
@@ -2961,13 +3397,16 @@ class SavedStateWidget(uicls_saved_state_page, basecls_saved_state_page):
             after_time = self.sp_time.value() * seconds_per_unit
         elif self.rb_stable_flow.isChecked():
             threshold = Threshold(
-                variable="s1" if self.rb_water_level.isChecked() else "u1", value=self.sp_threshold.value()
+                variable="s1" if self.rb_water_level.isChecked() else "u1",
+                value=self.sp_threshold.value(),
             )
             thresholds.append(threshold)
         return name, tags, after_time, thresholds
 
 
-class LizardPostprocessingWidget(uicls_lizard_post_processing_page, basecls_lizard_post_processing_page):
+class LizardPostprocessingWidget(
+    uicls_lizard_post_processing_page, basecls_lizard_post_processing_page
+):
     """Widget for the Post-processing in Lizard page."""
 
     COST_TYPES = ["min", "avg", "max"]
@@ -3039,7 +3478,9 @@ class LizardPostprocessingWidget(uicls_lizard_post_processing_page, basecls_liza
         cost_type = self.cbo_cost_type.currentText()
         flood_month = self.MONTHS[self.cbo_flood_month.currentText()]
         inundation_period = self.sb_period.value()
-        repair_time_infrastructure = self.REPAIR_TIME[self.cbo_repair_infrastructure.currentText()]
+        repair_time_infrastructure = self.REPAIR_TIME[
+            self.cbo_repair_infrastructure.currentText()
+        ]
         repair_time_buildings = self.REPAIR_TIME[self.cbo_repair_building.currentText()]
         return (
             arrival_time_map,
@@ -3105,10 +3546,16 @@ class SummaryWidget(uicls_summary_page, basecls_summary_page):
         self.plot_label.show()
         self.plot_widget.show()
         current_sim_idx = self.dd_simulation.currentIndex()
-        self.parent_page.parent_wizard.precipitation_page.main_widget.dd_simulation.setCurrentIndex(current_sim_idx)
+        self.parent_page.parent_wizard.precipitation_page.main_widget.dd_simulation.setCurrentIndex(
+            current_sim_idx
+        )
         self.parent_page.parent_wizard.precipitation_page.main_widget.plot_precipitation()
-        plot_bar_graph = self.parent_page.parent_wizard.precipitation_page.main_widget.plot_bar_graph
-        plot_ticks = self.parent_page.parent_wizard.precipitation_page.main_widget.plot_ticks
+        plot_bar_graph = (
+            self.parent_page.parent_wizard.precipitation_page.main_widget.plot_bar_graph
+        )
+        plot_ticks = (
+            self.parent_page.parent_wizard.precipitation_page.main_widget.plot_ticks
+        )
         if plot_bar_graph is None:
             self.plot_widget.hide()
             self.plot_label.hide()
@@ -3215,11 +3662,17 @@ class BoundaryConditionsPage(QWizardPage):
                 self.parent_wizard.communication.show_warn(warn)
                 return False
             else:
-                if self.main_widget.gb_upload_1d.isChecked() and not self.main_widget.file_bc_1d_upload.text():
+                if (
+                    self.main_widget.gb_upload_1d.isChecked()
+                    and not self.main_widget.file_bc_1d_upload.text()
+                ):
                     warn = "There is no 1D boundary conditions file specified. Please select it before proceeding."
                     self.parent_wizard.communication.show_warn(warn)
                     return False
-                if self.main_widget.gb_upload_2d.isChecked() and not self.main_widget.file_bc_2d_upload.text():
+                if (
+                    self.main_widget.gb_upload_2d.isChecked()
+                    and not self.main_widget.file_bc_2d_upload.text()
+                ):
                     warn = "There is no 2D boundary conditions file specified. Please select it before proceeding."
                     self.parent_wizard.communication.show_warn(warn)
                     return False
@@ -3250,7 +3703,9 @@ class InitialConditionsPage(QWizardPage):
     def __init__(self, parent=None, initial_conditions=None):
         super().__init__(parent)
         self.parent_wizard = parent
-        self.main_widget = InitialConditionsWidget(self, initial_conditions=initial_conditions)
+        self.main_widget = InitialConditionsWidget(
+            self, initial_conditions=initial_conditions
+        )
         # Create a scroll area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -3320,7 +3775,9 @@ class PrecipitationPage(QWizardPage):
     def __init__(self, parent=None, initial_conditions=None):
         super().__init__(parent)
         self.parent_wizard = parent
-        self.main_widget = PrecipitationWidget(self, initial_conditions=initial_conditions)
+        self.main_widget = PrecipitationWidget(
+            self, initial_conditions=initial_conditions
+        )
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
@@ -3412,15 +3869,43 @@ class SummaryPage(QWizardPage):
 class SimulationWizard(QWizard):
     """New simulation wizard."""
 
-    def __init__(self, organisation, current_model, threedi_api, communication, init_conditions_dlg, parent=None):
+    simulation_started = pyqtSignal()
+    simulation_started_failed = pyqtSignal()
+
+    def __init__(
+        self,
+        simulation_runner_pool,
+        working_dir,
+        simulation_template,
+        organisation,
+        current_model,
+        threedi_api,
+        communication,
+        init_conditions_dlg,
+        parent,
+    ):
         super().__init__(parent)
         self.settings = QSettings()
         self.setWizardStyle(QWizard.ClassicStyle)
         self.threedi_api = threedi_api
         self.communication = communication
         self.current_model = current_model
+        self.simulation_runner_pool = simulation_runner_pool
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
+        self.working_dir = working_dir
+        self.local_schematisations = list_local_schematisations(
+            self.working_dir, use_config_for_revisions=False
+        )
+        self.unload_breach_layers()
+        self.current_model_gridadmin_gpkg = self.get_gridadmin_gpkg_path(
+            current_model.schematisation_id,
+            current_model.schematisation_name,
+            current_model.revision_number,
+        )
+        self.current_model_geojson_breaches = self.get_breach_geojson_path("breaches")
+        self.current_simulation_template = simulation_template
+
         init_conditions = self.init_conditions_dlg.initial_conditions
         self.name_page = NamePage(self)
         self.addPage(self.name_page)
@@ -3436,7 +3921,9 @@ class SimulationWizard(QWizard):
             self.structure_controls_page = StructureControlsPage(self)
             self.addPage(self.structure_controls_page)
         if init_conditions.include_initial_conditions:
-            self.init_conditions_page = InitialConditionsPage(self, initial_conditions=init_conditions)
+            self.init_conditions_page = InitialConditionsPage(
+                self, initial_conditions=init_conditions
+            )
             self.addPage(self.init_conditions_page)
         if init_conditions.include_laterals:
             self.laterals_page = LateralsPage(self)
@@ -3445,11 +3932,13 @@ class SimulationWizard(QWizard):
             self.dwf_page = DWFPage(self)
             self.addPage(self.dwf_page)
         if init_conditions.include_breaches:
-            self.model_selection_dlg.load_breach_layers()
+            self.load_breach_layers()
             self.breaches_page = BreachesPage(self, initial_conditions=init_conditions)
             self.addPage(self.breaches_page)
         if init_conditions.include_precipitations:
-            self.precipitation_page = PrecipitationPage(self, initial_conditions=init_conditions)
+            self.precipitation_page = PrecipitationPage(
+                self, initial_conditions=init_conditions
+            )
             self.addPage(self.precipitation_page)
         if init_conditions.include_wind:
             self.wind_page = WindPage(self)
@@ -3481,7 +3970,9 @@ class SimulationWizard(QWizard):
     @property
     def wizard_pages_mapping(self):
         """Mapping of the page ids with their associated page objects."""
-        pages_mapping = OrderedDict((page_id, self.page(page_id)) for page_id in self.pageIds())
+        pages_mapping = OrderedDict(
+            (page_id, self.page(page_id)) for page_id in self.pageIds()
+        )
         return pages_mapping
 
     def setup_step_labels(self):
@@ -3524,8 +4015,12 @@ class SimulationWizard(QWizard):
                 self.set_overview_precipitation()
         elif isinstance(current_page, LateralsPage):
             laterals_widget = self.laterals_page.main_widget
-            laterals_widget.il_1d_upload.setText(laterals_widget.last_upload_1d_filepath)
-            laterals_widget.il_2d_upload.setText(laterals_widget.last_upload_2d_filepath)
+            laterals_widget.il_1d_upload.setText(
+                laterals_widget.last_upload_1d_filepath
+            )
+            laterals_widget.il_2d_upload.setText(
+                laterals_widget.last_upload_2d_filepath
+            )
         elif isinstance(current_page, DWFPage):
             dwf_widget = self.dwf_page.main_widget
             dwf_widget.dwf_upload.setText(dwf_widget.last_upload_filepath)
@@ -3550,18 +4045,24 @@ class SimulationWizard(QWizard):
         """Setting up precipitation labels in the summary page."""
         if self.precipitation_page.main_widget.values.get(self.first_simulation):
             self.summary_page.main_widget.precipitation_widget.show()
-            precipitation_type = self.precipitation_page.main_widget.values.get(self.first_simulation).get(
-                "precipitation_type"
+            precipitation_type = self.precipitation_page.main_widget.values.get(
+                self.first_simulation
+            ).get("precipitation_type")
+            total_precipitation = (
+                self.precipitation_page.main_widget.total_precipitation
             )
-            total_precipitation = self.precipitation_page.main_widget.total_precipitation
             self.summary_page.main_widget.sim_prec_type.setText(precipitation_type)
             if precipitation_type != RainEventTypes.RADAR.value:
                 total_precipitation_text = f"{total_precipitation:.0f} mm"
             else:
                 total_precipitation_text = "N/A"
-            self.summary_page.main_widget.sim_prec_total.setText(total_precipitation_text)
+            self.summary_page.main_widget.sim_prec_total.setText(
+                total_precipitation_text
+            )
 
-    def load_template_parameters(self, simulation, settings_overview, events, lizard_post_processing_overview):
+    def load_template_parameters(
+        self, simulation, settings_overview, events, lizard_post_processing_overview
+    ):
         """Loading simulation parameters from the simulation template data."""
         # Simulation attributes
         from_template_placeholder = "<FROM TEMPLATE>"
@@ -3572,25 +4073,40 @@ class SimulationWizard(QWizard):
             else:
                 tags_list.append(tag)
         tags = ", ".join(tags_list)
-        name_params = {"le_sim_name": simulation.name, "le_tags": tags, "le_project": project_name}
+        name_params = {
+            "le_sim_name": simulation.name,
+            "le_tags": tags,
+            "le_project": project_name,
+        }
         set_widgets_parameters(self.name_page.main_widget, **name_params)
         temp_simulation_id = simulation.id
         start_datetime = simulation.start_datetime.strftime("%Y-%m-%dT%H:%M")
         end_datetime = simulation.end_datetime.strftime("%Y-%m-%dT%H:%M")
         start_date, start_time = start_datetime.split("T")
         end_date, end_time = end_datetime.split("T")
-        duration_params = {"date_from": start_date, "time_from": start_time, "date_to": end_date, "time_to": end_time}
+        duration_params = {
+            "date_from": start_date,
+            "time_from": start_time,
+            "date_to": end_date,
+            "time_to": end_time,
+        }
         set_widgets_parameters(self.duration_page.main_widget, **duration_params)
         # Simulation settings
         ignore_entries = {"id", "simulation_id"}
         physical_settings = {
-            k: v for k, v in settings_overview.physical_settings.to_dict().items() if k not in ignore_entries
+            k: v
+            for k, v in settings_overview.physical_settings.to_dict().items()
+            if k not in ignore_entries
         }
         numerical_settings = {
-            k: v for k, v in settings_overview.numerical_settings.to_dict().items() if k not in ignore_entries
+            k: v
+            for k, v in settings_overview.numerical_settings.to_dict().items()
+            if k not in ignore_entries
         }
         time_step_settings = {
-            k: v for k, v in settings_overview.time_step_settings.to_dict().items() if k not in ignore_entries
+            k: v
+            for k, v in settings_overview.time_step_settings.to_dict().items()
+            if k not in ignore_entries
         }
         set_widgets_parameters(
             self.settings_page.main_widget,
@@ -3607,14 +4123,20 @@ class SimulationWizard(QWizard):
             )
             if settings_overview.water_quality_settings.min_time_step:
                 self.settings_page.main_widget.min_time_step_2.setText(
-                    QLocale().toString(settings_overview.water_quality_settings.min_time_step)
+                    QLocale().toString(
+                        settings_overview.water_quality_settings.min_time_step
+                    )
                 )
             if settings_overview.water_quality_settings.max_time_step:
                 self.settings_page.main_widget.max_time_step_2.setText(
-                    QLocale().toString(settings_overview.water_quality_settings.max_time_step)
+                    QLocale().toString(
+                        settings_overview.water_quality_settings.max_time_step
+                    )
                 )
             self.settings_page.main_widget.general_numerical_threshold_2.setText(
-                QLocale().toString(settings_overview.water_quality_settings.general_numerical_threshold)
+                QLocale().toString(
+                    settings_overview.water_quality_settings.general_numerical_threshold
+                )
             )
             self.settings_page.main_widget.max_number_of_multi_step.setValue(
                 settings_overview.water_quality_settings.max_number_of_multi_step
@@ -3623,16 +4145,23 @@ class SimulationWizard(QWizard):
                 settings_overview.water_quality_settings.max_gs_sweep_iterations
             )
             self.settings_page.main_widget.convergence_eps_2.setText(
-                QLocale().toString(settings_overview.water_quality_settings.convergence_eps)
+                QLocale().toString(
+                    settings_overview.water_quality_settings.convergence_eps
+                )
             )
 
-        aggregation_settings_list = [settings.to_dict() for settings in settings_overview.aggregation_settings]
-        self.settings_page.main_widget.populate_aggregation_settings(aggregation_settings_list)
+        aggregation_settings_list = [
+            settings.to_dict() for settings in settings_overview.aggregation_settings
+        ]
+        self.settings_page.main_widget.populate_aggregation_settings(
+            aggregation_settings_list
+        )
         # Simulation events
-        simulation_duration = self.duration_page.main_widget.calculate_simulation_duration()
+        simulation_duration = (
+            self.duration_page.main_widget.calculate_simulation_duration()
+        )
         init_conditions = self.init_conditions_dlg.initial_conditions
         if init_conditions.include_substances:
-
             substances = [
                 {
                     "name": item.name,
@@ -3643,16 +4172,24 @@ class SimulationWizard(QWizard):
                 for item in events.substances
             ]
             if substances:
-                self.substances_page.main_widget.prepopulate_substances_table(substances)
+                self.substances_page.main_widget.prepopulate_substances_table(
+                    substances
+                )
         if init_conditions.include_boundary_conditions:
             bc_widget = self.boundary_conditions_page.main_widget
-            bc_file = events.fileboundaryconditions if events.fileboundaryconditions else None
-            self.boundary_conditions_page.main_widget.set_template_boundary_conditions(bc_file)
+            bc_file = (
+                events.fileboundaryconditions if events.fileboundaryconditions else None
+            )
+            self.boundary_conditions_page.main_widget.set_template_boundary_conditions(
+                bc_file
+            )
             # Download file and set template boundary conditions timeseries
             if bc_file:
                 tc = ThreediCalls(self.threedi_api)
                 bc_file_name = bc_file.file.filename
-                bc_file_download = tc.fetch_boundarycondition_file_download(temp_simulation_id, bc_file.id)
+                bc_file_download = tc.fetch_boundarycondition_file_download(
+                    temp_simulation_id, bc_file.id
+                )
                 bc_temp_filepath = os.path.join(TEMPDIR, bc_file_name)
                 get_download_file(bc_file_download, bc_temp_filepath)
                 bc_timeseries = read_json_data(bc_temp_filepath)
@@ -3661,10 +4198,26 @@ class SimulationWizard(QWizard):
                 bc_widget.template_boundary_conditions_1d_timeseries = bc_timeseries_1d
                 bc_widget.template_boundary_conditions_2d_timeseries = bc_timeseries_2d
         if init_conditions.include_structure_controls:
-            temp_file_sc = events.filestructurecontrols[0] if events.filestructurecontrols else None
-            temp_memory_sc = events.memorystructurecontrols[0] if events.memorystructurecontrols else None
-            temp_table_sc = events.tablestructurecontrols[0] if events.tablestructurecontrols else None
-            temp_timed_sc = events.timedstructurecontrols[0] if events.timedstructurecontrols else None
+            temp_file_sc = (
+                events.filestructurecontrols[0]
+                if events.filestructurecontrols
+                else None
+            )
+            temp_memory_sc = (
+                events.memorystructurecontrols[0]
+                if events.memorystructurecontrols
+                else None
+            )
+            temp_table_sc = (
+                events.tablestructurecontrols[0]
+                if events.tablestructurecontrols
+                else None
+            )
+            temp_timed_sc = (
+                events.timedstructurecontrols[0]
+                if events.timedstructurecontrols
+                else None
+            )
             self.structure_controls_page.main_widget.set_template_structure_controls(
                 temp_file_sc, temp_memory_sc, temp_table_sc, temp_timed_sc
             )
@@ -3680,7 +4233,9 @@ class SimulationWizard(QWizard):
                 init_conditions_widget.gb_1d.setChecked(True)
                 if events.initial_onedwaterlevel:
                     init_conditions_widget.rb_d1_gv.setChecked(True)
-                    init_conditions_widget.sp_1d_global_value.setValue(events.initial_onedwaterlevel.value)
+                    init_conditions_widget.sp_1d_global_value.setValue(
+                        events.initial_onedwaterlevel.value
+                    )
                 ## As the backend does not support creating templates from simulations with user-generated water
                 ## level files, we do not need this case and keep it this way for backwards compatibility.
                 # elif events.initial_onedwaterlevelfile:
@@ -3696,11 +4251,18 @@ class SimulationWizard(QWizard):
             if any([events.initial_twodwaterlevel, events.initial_twodwaterraster]):
                 init_conditions_widget.gb_2d.setChecked(True)
                 if events.initial_twodwaterlevel:
-                    init_conditions_widget.sp_2d_global_value.setValue(events.initial_twodwaterlevel.value)
+                    init_conditions_widget.sp_2d_global_value.setValue(
+                        events.initial_twodwaterlevel.value
+                    )
                 elif events.initial_twodwaterraster:
-                    for raster_filename, iw in init_conditions_widget.initial_waterlevels.items():
+                    for (
+                        raster_filename,
+                        iw,
+                    ) in init_conditions_widget.initial_waterlevels.items():
                         if iw.url == events.initial_twodwaterraster.initial_waterlevel:
-                            init_conditions_widget.cbo_2d_online_raster.setCurrentText(raster_filename)
+                            init_conditions_widget.cbo_2d_online_raster.setCurrentText(
+                                raster_filename
+                            )
                             init_conditions_widget.cb_2d_aggregation.setCurrentText(
                                 events.initial_twodwaterraster.aggregation_method
                             )
@@ -3708,11 +4270,21 @@ class SimulationWizard(QWizard):
             if any([events.initial_groundwaterlevel, events.initial_groundwaterraster]):
                 init_conditions_widget.gb_groundwater.setChecked(True)
                 if events.initial_groundwaterlevel:
-                    init_conditions_widget.sp_gwater_global_value.setValue(events.initial_groundwaterlevel.value)
+                    init_conditions_widget.sp_gwater_global_value.setValue(
+                        events.initial_groundwaterlevel.value
+                    )
                 elif events.initial_groundwaterraster:
-                    for raster_filename, iw in init_conditions_widget.initial_waterlevels.items():
-                        if iw.url == events.initial_groundwaterraster.initial_waterlevel:
-                            init_conditions_widget.cbo_gw_online_raster.setCurrentText(raster_filename)
+                    for (
+                        raster_filename,
+                        iw,
+                    ) in init_conditions_widget.initial_waterlevels.items():
+                        if (
+                            iw.url
+                            == events.initial_groundwaterraster.initial_waterlevel
+                        ):
+                            init_conditions_widget.cbo_gw_online_raster.setCurrentText(
+                                raster_filename
+                            )
                             init_conditions_widget.cb_gwater_aggregation.setCurrentText(
                                 events.initial_groundwaterraster.aggregation_method
                             )
@@ -3720,7 +4292,11 @@ class SimulationWizard(QWizard):
         if init_conditions.include_laterals:
             laterals_widget = self.laterals_page.main_widget
             laterals = events.laterals
-            file_laterals = [filelateral for filelateral in events.filelaterals if filelateral.periodic != "daily"]
+            file_laterals = [
+                filelateral
+                for filelateral in events.filelaterals
+                if filelateral.periodic != "daily"
+            ]
             if laterals:
                 laterals_1d = []
                 laterals_2d = []
@@ -3741,7 +4317,9 @@ class SimulationWizard(QWizard):
                 tc = ThreediCalls(self.threedi_api)
                 lateral_file = file_laterals[0]
                 lateral_file_name = lateral_file.file.filename
-                lateral_file_download = tc.fetch_lateral_file_download(temp_simulation_id, lateral_file.id)
+                lateral_file_download = tc.fetch_lateral_file_download(
+                    temp_simulation_id, lateral_file.id
+                )
                 lateral_temp_filepath = os.path.join(TEMPDIR, lateral_file_name)
                 get_download_file(lateral_file_download, lateral_temp_filepath)
                 laterals_timeseries = read_json_data(lateral_temp_filepath)
@@ -3763,7 +4341,8 @@ class SimulationWizard(QWizard):
                         }
                     except KeyError:
                         laterals_widget.laterals_1d_timeseries_template = {
-                            str(i): lat for i, lat in enumerate(laterals_1d_timeseries, 1)
+                            str(i): lat
+                            for i, lat in enumerate(laterals_1d_timeseries, 1)
                         }
                 if laterals_2d_timeseries:
                     laterals_widget.cb_use_2d_laterals.setChecked(True)
@@ -3774,20 +4353,27 @@ class SimulationWizard(QWizard):
                         }
                     except KeyError:
                         laterals_widget.laterals_2d_timeseries_template = {
-                            str(i): lat for i, lat in enumerate(laterals_2d_timeseries, 1)
+                            str(i): lat
+                            for i, lat in enumerate(laterals_2d_timeseries, 1)
                         }
                 os.remove(lateral_temp_filepath)
             if not laterals and not file_laterals:
                 laterals_widget.cb_use_1d_laterals.setEnabled(False)
                 laterals_widget.cb_use_2d_laterals.setEnabled(False)
         if init_conditions.include_dwf:
-            dwf_events = [filelateral for filelateral in events.filelaterals if filelateral.periodic == "daily"]
+            dwf_events = [
+                filelateral
+                for filelateral in events.filelaterals
+                if filelateral.periodic == "daily"
+            ]
             if dwf_events:
                 dwf_widget = self.dwf_page.main_widget
                 tc = ThreediCalls(self.threedi_api)
                 dwf_file = dwf_events[0]
                 dwf_file_name = dwf_file.file.filename
-                dwf_file_download = tc.fetch_lateral_file_download(temp_simulation_id, dwf_file.id)
+                dwf_file_download = tc.fetch_lateral_file_download(
+                    temp_simulation_id, dwf_file.id
+                )
                 dwf_temp_filepath = os.path.join(TEMPDIR, dwf_file_name)
                 get_download_file(dwf_file_download, dwf_temp_filepath)
                 dwf_timeseries = read_json_data(dwf_temp_filepath)
@@ -3796,9 +4382,13 @@ class SimulationWizard(QWizard):
                 dwf_widget.last_upload_filepath = from_template_placeholder
                 dwf_widget.cb_interpolate_dwf.setChecked(last_dwf["interpolate"])
                 try:
-                    dwf_widget.dwf_timeseries = {str(dwf["id"]): dwf for dwf in dwf_timeseries}
+                    dwf_widget.dwf_timeseries = {
+                        str(dwf["id"]): dwf for dwf in dwf_timeseries
+                    }
                 except KeyError:
-                    dwf_widget.dwf_timeseries = {str(i): dwf for i, dwf in enumerate(dwf_timeseries)}
+                    dwf_widget.dwf_timeseries = {
+                        str(i): dwf for i, dwf in enumerate(dwf_timeseries)
+                    }
                 dwf_widget.last_uploaded_dwf = dwf_timeseries[-1]
                 os.remove(dwf_temp_filepath)
         if init_conditions.include_breaches:
@@ -3810,12 +4400,14 @@ class SimulationWizard(QWizard):
                 for breach in events.breach:
                     potential_breach_url = breach.potential_breach.rstrip("/")
                     potential_breach_id = int(potential_breach_url.split("/")[-1])
-                    potential_breach = tc.fetch_3di_model_potential_breach(threedimodel_id_str, potential_breach_id)
+                    potential_breach = tc.fetch_3di_model_potential_breach(
+                        threedimodel_id_str, potential_breach_id
+                    )
                     content_pks.add(str(potential_breach.connected_pnt_id))
                 content_pks_str = ",".join(content_pks)
                 exp = f'"content_pk" in ({content_pks_str})'
-                self.model_selection_dlg.potential_breaches_layer.selectByExpression(exp)
-                for breach_feat in self.model_selection_dlg.potential_breaches_layer.selectedFeatures():
+                self.potential_breaches_layer.selectByExpression(exp)
+                for breach_feat in self.potential_breaches_layer.selectedFeatures():
                     breaches_widget.on_potential_breach_feature_identified(breach_feat)
         if init_conditions.include_precipitations:
             precipitation_widget = self.precipitation_page.main_widget
@@ -3830,13 +4422,21 @@ class SimulationWizard(QWizard):
 
             if events.timeseriesrain:
                 if rain.constant:
-                    precipitation_widget.cbo_prec_type.setCurrentText(RainEventTypes.CONSTANT.value)
+                    precipitation_widget.cbo_prec_type.setCurrentText(
+                        RainEventTypes.CONSTANT.value
+                    )
                     rain_constant_start_after = rain.offset // 3600
                     rain_constant_duration = rain.duration // 3600
-                    rain_constant_stop_after = rain_constant_start_after + rain_constant_duration
-                    precipitation_widget.sp_start_after_constant.setValue(rain_constant_start_after)
+                    rain_constant_stop_after = (
+                        rain_constant_start_after + rain_constant_duration
+                    )
+                    precipitation_widget.sp_start_after_constant.setValue(
+                        rain_constant_start_after
+                    )
                     if rain.duration <= simulation_duration:
-                        precipitation_widget.sp_stop_after_constant.setValue(rain_constant_stop_after)
+                        precipitation_widget.sp_stop_after_constant.setValue(
+                            rain_constant_stop_after
+                        )
                     intensity_ms = rain.values[0][-1]
                     intensity_mmh = ms_to_mmh(intensity_ms)
                     precipitation_widget.sp_intensity.setValue(intensity_mmh)
@@ -3844,32 +4444,49 @@ class SimulationWizard(QWizard):
                     precipitation_widget.update_substance_widgets()
                 else:
                     simulation = precipitation_widget.dd_simulation.currentText()
-                    precipitation_widget.cbo_prec_type.setCurrentText(RainEventTypes.FROM_CSV.value)
-                    precipitation_widget.le_upload_csv.setText(from_template_placeholder)
-                    precipitation_widget.sp_start_after_csv.setValue(rain.offset // 3600)
-                    precipitation_widget.cb_interpolate_rain.setChecked(rain.interpolate)
+                    precipitation_widget.cbo_prec_type.setCurrentText(
+                        RainEventTypes.FROM_CSV.value
+                    )
+                    precipitation_widget.le_upload_csv.setText(
+                        from_template_placeholder
+                    )
+                    precipitation_widget.sp_start_after_csv.setValue(
+                        rain.offset // 3600
+                    )
+                    precipitation_widget.cb_interpolate_rain.setChecked(
+                        rain.interpolate
+                    )
                     rain_values = rain.values
                     timestep = rain_values[1][0] - rain_values[0][0]
-                    mm_timestep = [[t, mmh_to_mmtimestep(ms_to_mmh(v), timestep)] for t, v in rain_values]
+                    mm_timestep = [
+                        [t, mmh_to_mmtimestep(ms_to_mmh(v), timestep)]
+                        for t, v in rain_values
+                    ]
                     precipitation_widget.custom_time_series[simulation] = mm_timestep
                     precipitation_widget.update_substance_widgets()
                     precipitation_widget.plot_precipitation()
 
                 # We now know all substance widgets are in place, we can set the template value
                 for substance in rain.substances:
-                    precipitation_widget.substance_widgets[substance.substance_name].set_value(
-                        substance.concentrations[0][1]
-                    )
+                    precipitation_widget.substance_widgets[
+                        substance.substance_name
+                    ].set_value(substance.concentrations[0][1])
 
             if events.lizardrasterrain:
                 rain = events.lizardrasterrain[0]
-                precipitation_widget.cbo_prec_type.setCurrentText(RainEventTypes.RADAR.value)
+                precipitation_widget.cbo_prec_type.setCurrentText(
+                    RainEventTypes.RADAR.value
+                )
                 rain_radar_start_after = rain.offset // 3600
                 rain_radar_duration = rain.duration // 3600
                 rain_radar_stop_after = rain_radar_start_after + rain_radar_duration
-                precipitation_widget.sp_start_after_radar.setValue(rain_radar_start_after)
+                precipitation_widget.sp_start_after_radar.setValue(
+                    rain_radar_start_after
+                )
                 if rain.duration <= simulation_duration:
-                    precipitation_widget.sp_stop_after_radar.setValue(rain_radar_stop_after)
+                    precipitation_widget.sp_stop_after_radar.setValue(
+                        rain_radar_stop_after
+                    )
                 precipitation_widget.update_substance_widgets()
 
         if init_conditions.include_wind:
@@ -3878,28 +4495,42 @@ class SimulationWizard(QWizard):
                 wind = events.wind[0]
                 initial_winddragcoefficient = events.initial_winddragcoefficient
                 if wind.speed_constant and wind.direction_constant:
-                    wind_widget.cbo_wind_type.setCurrentText(WindEventTypes.CONSTANT.value)
+                    wind_widget.cbo_wind_type.setCurrentText(
+                        WindEventTypes.CONSTANT.value
+                    )
                     wind_widget.sp_start_wind_constant.setValue(wind.offset // 3600)
                     wind_widget.cbo_windspeed_u.setCurrentText(wind.units)
                     timestep, speed, direction = wind.values[0]
                     wind_widget.sp_windspeed.setValue(speed)
                     wind_widget.sp_direction.setValue(direction)
                     if initial_winddragcoefficient:
-                        wind_widget.sp_dc_constant.setValue(initial_winddragcoefficient.value)
+                        wind_widget.sp_dc_constant.setValue(
+                            initial_winddragcoefficient.value
+                        )
                 else:
-                    wind_widget.cbo_wind_type.setCurrentText(WindEventTypes.CUSTOM.value)
+                    wind_widget.cbo_wind_type.setCurrentText(
+                        WindEventTypes.CUSTOM.value
+                    )
                     wind_widget.le_upload_wind.setText(from_template_placeholder)
                     wind_widget.sp_start_wind_custom.setValue(wind.offset // 3600)
                     wind_widget.cb_interpolate_speed.setChecked(wind.speed_interpolate)
-                    wind_widget.cb_interpolate_direction.setChecked(wind.direction_interpolate)
+                    wind_widget.cb_interpolate_direction.setChecked(
+                        wind.direction_interpolate
+                    )
                     wind_timeseries = wind.values
                     wind_timeseries_minutes = [
-                        [timestep // 60, speed, direction] for timestep, speed, direction in wind_timeseries
+                        [timestep // 60, speed, direction]
+                        for timestep, speed, direction in wind_timeseries
                     ]
                     wind_widget.custom_wind = wind_timeseries_minutes
                     if initial_winddragcoefficient:
-                        wind_widget.sp_dc_custom.setValue(initial_winddragcoefficient.value)
-        if init_conditions.include_lizard_post_processing and lizard_post_processing_overview:
+                        wind_widget.sp_dc_custom.setValue(
+                            initial_winddragcoefficient.value
+                        )
+        if (
+            init_conditions.include_lizard_post_processing
+            and lizard_post_processing_overview
+        ):
             post_processing_widget = self.lizard_post_processing_page.main_widget
             post_processing_results = lizard_post_processing_overview.results
             post_processing_settings = lizard_post_processing_overview.settings
@@ -3909,17 +4540,24 @@ class SimulationWizard(QWizard):
                 post_processing_widget.cb_arrival_time_map.setChecked(True)
             if damage_estimation:
                 damage_estimation_settings = post_processing_settings.damage_estimation
-                repair_time_seconds_map = {int(v * 3600): k for k, v in post_processing_widget.REPAIR_TIME.items()}
+                repair_time_seconds_map = {
+                    int(v * 3600): k
+                    for k, v in post_processing_widget.REPAIR_TIME.items()
+                }
                 post_processing_widget.cb_damage_estimation.setChecked(True)
                 cost_type = damage_estimation_settings.cost_type
                 flood_month = damage_estimation_settings.flood_month
                 inundation_period = damage_estimation_settings.inundation_period
-                repair_time_infrastructure = damage_estimation_settings.repair_time_infrastructure
+                repair_time_infrastructure = (
+                    damage_estimation_settings.repair_time_infrastructure
+                )
                 repair_time_buildings = damage_estimation_settings.repair_time_buildings
                 if cost_type:
                     post_processing_widget.cbo_cost_type.setCurrentIndex(cost_type - 1)
                 if flood_month:
-                    post_processing_widget.cbo_flood_month.setCurrentIndex(flood_month - 1)
+                    post_processing_widget.cbo_flood_month.setCurrentIndex(
+                        flood_month - 1
+                    )
                 if inundation_period:
                     post_processing_widget.sb_period.setValue(inundation_period / 3600)
                 if repair_time_infrastructure in repair_time_seconds_map:
@@ -3940,7 +4578,10 @@ class SimulationWizard(QWizard):
         if not self.name_page.main_widget.le_tags.text():
             tags = []
         else:
-            tags = [tag.strip() for tag in self.name_page.main_widget.le_tags.text().split(",")]
+            tags = [
+                tag.strip()
+                for tag in self.name_page.main_widget.le_tags.text().split(",")
+            ]
         if project_name:
             project_name_tag = f"project: {project_name}"
             tags.append(project_name_tag)
@@ -3965,15 +4606,25 @@ class SimulationWizard(QWizard):
         if self.init_conditions.include_sources_sinks:
             sources_sinks = dm.SourcesSinks()
             if events.lizardrastersourcessinks:
-                sources_sinks.lizard_raster_sources_sinks = events.lizardrastersourcessinks[0]
+                sources_sinks.lizard_raster_sources_sinks = (
+                    events.lizardrastersourcessinks[0]
+                )
             if events.lizardtimeseriessourcessinks:
-                sources_sinks.lizard_timeseries_sources_sinks = events.lizardtimeseriessourcessinks[0]
+                sources_sinks.lizard_timeseries_sources_sinks = (
+                    events.lizardtimeseriessourcessinks[0]
+                )
             if events.filerastersourcessinks:
-                sources_sinks.file_raster_sources_sinks = events.filerastersourcessinks[0]
+                sources_sinks.file_raster_sources_sinks = events.filerastersourcessinks[
+                    0
+                ]
             if events.filetimeseriessourcessinks:
-                sources_sinks.file_timeseries_sources_sinks = events.filetimeseriessourcessinks[0]
+                sources_sinks.file_timeseries_sources_sinks = (
+                    events.filetimeseriessourcessinks[0]
+                )
             if events.timeseriessourcessinks:
-                sources_sinks.timeseries_sources_sinks = events.timeseriessourcessinks[0]
+                sources_sinks.timeseries_sources_sinks = events.timeseriessourcessinks[
+                    0
+                ]
             init_options.sources_sinks = sources_sinks
         if self.init_conditions.include_local_ts_rain:
             local_ts_rain = dm.LocalTimeseriesRain()
@@ -3989,7 +4640,9 @@ class SimulationWizard(QWizard):
         # Boundary conditions page attributes
         boundary_conditions = dm.BoundaryConditions()
         if self.init_conditions.include_boundary_conditions:
-            boundary_conditions.data = self.boundary_conditions_page.main_widget.get_boundary_conditions_data()
+            boundary_conditions.data = (
+                self.boundary_conditions_page.main_widget.get_boundary_conditions_data()
+            )
         # Structure controls page attributes
         structure_controls = dm.StructureControls()
         if self.init_conditions.include_structure_controls:
@@ -4002,15 +4655,25 @@ class SimulationWizard(QWizard):
             ) = self.structure_controls_page.main_widget.get_structure_control_data()
             if self.structure_controls_page.main_widget.gb_from_template.isChecked():
                 if self.structure_controls_page.main_widget.cb_file_sc.isChecked():
-                    structure_controls.file_structure_controls = temp_file_structure_controls
+                    structure_controls.file_structure_controls = (
+                        temp_file_structure_controls
+                    )
                 if self.structure_controls_page.main_widget.cb_memory_sc.isChecked():
-                    structure_controls.memory_structure_controls = temp_memory_structure_controls
+                    structure_controls.memory_structure_controls = (
+                        temp_memory_structure_controls
+                    )
                 if self.structure_controls_page.main_widget.cb_table_sc.isChecked():
-                    structure_controls.table_structure_controls = temp_table_structure_controls
+                    structure_controls.table_structure_controls = (
+                        temp_table_structure_controls
+                    )
                 if self.structure_controls_page.main_widget.cb_timed_sc.isChecked():
-                    structure_controls.timed_structure_controls = temp_timed_structure_controls
+                    structure_controls.timed_structure_controls = (
+                        temp_timed_structure_controls
+                    )
             if self.structure_controls_page.main_widget.gb_upload_file.isChecked():
-                structure_controls.local_file_structure_controls = local_file_structure_controls
+                structure_controls.local_file_structure_controls = (
+                    local_file_structure_controls
+                )
 
         # Initial conditions page attributes
         initial_conditions = dm.InitialConditions()
@@ -4025,12 +4688,12 @@ class SimulationWizard(QWizard):
                     initial_conditions.initial_waterlevels_1d = (
                         self.init_conditions_page.main_widget.initial_waterlevels_1d
                     )
-                elif self.init_conditions_page.main_widget.rb_1d_online_file.isChecked():
-                    initial_conditions.online_waterlevels_1d = (
-                        self.init_conditions_page.main_widget.initial_waterlevels_files[
-                            self.init_conditions_page.main_widget.cbo_1d_online_file.currentText()
-                        ]
-                    )
+                elif (
+                    self.init_conditions_page.main_widget.rb_1d_online_file.isChecked()
+                ):
+                    initial_conditions.online_waterlevels_1d = self.init_conditions_page.main_widget.initial_waterlevels_files[
+                        self.init_conditions_page.main_widget.cbo_1d_online_file.currentText()
+                    ]
                 else:
                     initial_conditions.from_geopackage_1d = True
             # 2D
@@ -4047,28 +4710,22 @@ class SimulationWizard(QWizard):
                     initial_conditions.local_raster_2d = qgis_layers_cbo_get_layer_uri(
                         self.init_conditions_page.main_widget.cbo_2d_local_raster
                     )
-                initial_conditions.aggregation_method_2d = (
-                    self.init_conditions_page.main_widget.cb_2d_aggregation.currentText()
-                )
+                initial_conditions.aggregation_method_2d = self.init_conditions_page.main_widget.cb_2d_aggregation.currentText()
             # Groundwater
             if self.init_conditions_page.main_widget.gb_groundwater.isChecked():
                 if self.init_conditions_page.main_widget.rb_gw_global_value.isChecked():
-                    initial_conditions.global_value_groundwater = (
-                        self.init_conditions_page.main_widget.sp_gwater_global_value.value()
-                    )
+                    initial_conditions.global_value_groundwater = self.init_conditions_page.main_widget.sp_gwater_global_value.value()
                 elif self.init_conditions_page.main_widget.rb_gw_online_raster.isChecked():
-                    initial_conditions.online_raster_groundwater = (
-                        self.init_conditions_page.main_widget.initial_waterlevels.get(
-                            self.init_conditions_page.main_widget.cbo_gw_online_raster.currentText()
-                        )
+                    initial_conditions.online_raster_groundwater = self.init_conditions_page.main_widget.initial_waterlevels.get(
+                        self.init_conditions_page.main_widget.cbo_gw_online_raster.currentText()
                     )
                 else:
-                    initial_conditions.local_raster_groundwater = qgis_layers_cbo_get_layer_uri(
-                        self.init_conditions_page.main_widget.cbo_gw_local_raster
+                    initial_conditions.local_raster_groundwater = (
+                        qgis_layers_cbo_get_layer_uri(
+                            self.init_conditions_page.main_widget.cbo_gw_local_raster
+                        )
                     )
-                initial_conditions.aggregation_method_groundwater = (
-                    self.init_conditions_page.main_widget.cb_gwater_aggregation.currentText()
-                )
+                initial_conditions.aggregation_method_groundwater = self.init_conditions_page.main_widget.cb_gwater_aggregation.currentText()
 
             # Saved state
             if self.init_conditions_page.main_widget.gb_saved_state.isChecked():
@@ -4083,22 +4740,44 @@ class SimulationWizard(QWizard):
             initial_concentrations_2d = {}
             for substance in substances:
                 substance_name = substance.get("name")
-                aggregation_method = widget.findChild(QComboBox, f"cbo_aggregation_{substance_name}").currentText()
-                groupbox_ic = widget.findChild(QGroupBox, f"gb_initial_concentrations_2d_{substance_name}")
-                rb_local_raster = widget.findChild(QRadioButton, f"rb_local_raster_{substance_name}")
-                rb_online_raster = widget.findChild(QRadioButton, f"rb_online_raster_{substance_name}")
-                cbo_local_raster = widget.findChild(QComboBox, f"cbo_local_raster_{substance_name}")
-                cbo_online_raster = widget.findChild(QComboBox, f"cbo_online_raster_{substance_name}").currentText()
+                aggregation_method = widget.findChild(
+                    QComboBox, f"cbo_aggregation_{substance_name}"
+                ).currentText()
+                groupbox_ic = widget.findChild(
+                    QGroupBox, f"gb_initial_concentrations_2d_{substance_name}"
+                )
+                rb_local_raster = widget.findChild(
+                    QRadioButton, f"rb_local_raster_{substance_name}"
+                )
+                rb_online_raster = widget.findChild(
+                    QRadioButton, f"rb_online_raster_{substance_name}"
+                )
+                cbo_local_raster = widget.findChild(
+                    QComboBox, f"cbo_local_raster_{substance_name}"
+                )
+                cbo_online_raster = widget.findChild(
+                    QComboBox, f"cbo_online_raster_{substance_name}"
+                ).currentText()
                 if groupbox_ic and groupbox_ic.isChecked():
-                    if rb_local_raster and rb_local_raster.isChecked() and cbo_local_raster:
+                    if (
+                        rb_local_raster
+                        and rb_local_raster.isChecked()
+                        and cbo_local_raster
+                    ):
                         layer_uri = qgis_layers_cbo_get_layer_uri(cbo_local_raster)
                         initial_concentrations = {
                             "local_raster_path": layer_uri,
                             "online_raster": None,
                             "aggregation_method": aggregation_method,
                         }
-                        initial_concentrations_2d[substance_name] = initial_concentrations
-                    if rb_online_raster and rb_online_raster.isChecked() and cbo_online_raster:
+                        initial_concentrations_2d[substance_name] = (
+                            initial_concentrations
+                        )
+                    if (
+                        rb_online_raster
+                        and rb_online_raster.isChecked()
+                        and cbo_online_raster
+                    ):
                         for raster in rasters:
                             if raster.name == cbo_online_raster:
                                 initial_concentrations = {
@@ -4106,29 +4785,43 @@ class SimulationWizard(QWizard):
                                     "online_raster": raster.id,
                                     "aggregation_method": aggregation_method,
                                 }
-                                initial_concentrations_2d[substance_name] = initial_concentrations
+                                initial_concentrations_2d[substance_name] = (
+                                    initial_concentrations
+                                )
                                 break
             if initial_concentrations_2d:
                 initial_conditions.initial_concentrations_2d = initial_concentrations_2d
 
-            widget = self.init_conditions_page.main_widget.initial_concentrations_widget_1D
+            widget = (
+                self.init_conditions_page.main_widget.initial_concentrations_widget_1D
+            )
             online_files = self.init_conditions_page.main_widget.online_files
             local_data = self.init_conditions_page.main_widget.local_data
 
             initial_concentrations_1d = {}
             for substance in substances:
                 substance_name = substance.get("name")
-                groupbox_ic_1d = widget.findChild(QGroupBox, f"gb_initial_concentrations_1d_{substance_name}")
-                rb_local_file = widget.findChild(QRadioButton, f"rb_local_file_{substance_name}")
-                rb_online_file = widget.findChild(QRadioButton, f"rb_online_file_1d_{substance_name}")
-                cbo_online_file = widget.findChild(QComboBox, f"cbo_online_file_1d_{substance_name}")
+                groupbox_ic_1d = widget.findChild(
+                    QGroupBox, f"gb_initial_concentrations_1d_{substance_name}"
+                )
+                rb_local_file = widget.findChild(
+                    QRadioButton, f"rb_local_file_{substance_name}"
+                )
+                rb_online_file = widget.findChild(
+                    QRadioButton, f"rb_online_file_1d_{substance_name}"
+                )
+                cbo_online_file = widget.findChild(
+                    QComboBox, f"cbo_online_file_1d_{substance_name}"
+                )
                 if groupbox_ic_1d.isChecked():
                     if rb_local_file.isChecked():
                         initial_concentrations = {
                             "local_data": local_data[substance_name],
                             "online_file": None,
                         }
-                        initial_concentrations_1d[substance_name] = initial_concentrations
+                        initial_concentrations_1d[substance_name] = (
+                            initial_concentrations
+                        )
                     elif rb_online_file.isChecked():
                         for file in online_files:
                             if file.filename == cbo_online_file.currentText():
@@ -4136,7 +4829,9 @@ class SimulationWizard(QWizard):
                                     "local_data": None,
                                     "online_file": file,
                                 }
-                                initial_concentrations_1d[substance_name] = initial_concentrations
+                                initial_concentrations_1d[substance_name] = (
+                                    initial_concentrations
+                                )
                                 break
                     assert initial_concentrations_1d[substance_name]
             if initial_concentrations_1d:
@@ -4144,8 +4839,12 @@ class SimulationWizard(QWizard):
 
         # Laterals
         if self.init_conditions.include_laterals:
-            constant_laterals, file_laterals_1d, file_laterals_2d = self.laterals_page.main_widget.get_laterals_data()
-            laterals = dm.Laterals(constant_laterals, file_laterals_1d, file_laterals_2d)
+            constant_laterals, file_laterals_1d, file_laterals_2d = (
+                self.laterals_page.main_widget.get_laterals_data()
+            )
+            laterals = dm.Laterals(
+                constant_laterals, file_laterals_1d, file_laterals_2d
+            )
         else:
             laterals = dm.Laterals()
         # DWF
@@ -4168,10 +4867,21 @@ class SimulationWizard(QWizard):
 
         # Settings page attributes
         main_settings = self.settings_page.main_widget.collect_single_settings()
-        physical_settings, numerical_settings, time_step_settings, water_quality_settings = main_settings
-        aggregation_settings_list = self.settings_page.main_widget.collect_aggregation_settings()
+        (
+            physical_settings,
+            numerical_settings,
+            time_step_settings,
+            water_quality_settings,
+        ) = main_settings
+        aggregation_settings_list = (
+            self.settings_page.main_widget.collect_aggregation_settings()
+        )
         settings = dm.Settings(
-            physical_settings, numerical_settings, time_step_settings, aggregation_settings_list, water_quality_settings
+            physical_settings,
+            numerical_settings,
+            time_step_settings,
+            aggregation_settings_list,
+            water_quality_settings,
         )
         # Post-processing in Lizard
         lizard_post_processing = dm.LizardPostProcessing()
@@ -4199,7 +4909,9 @@ class SimulationWizard(QWizard):
                 lizard_post_processing.damage_estimation = damage_estimation
         # Generate saved state
         if self.init_conditions.generate_saved_state:
-            new_saved_state_data = self.generate_saved_state_page.main_widget.get_saved_state_data()
+            new_saved_state_data = (
+                self.generate_saved_state_page.main_widget.get_saved_state_data()
+            )
             new_saved_state = dm.SavedState(*new_saved_state_data)
         else:
             new_saved_state = dm.SavedState()
@@ -4207,9 +4919,20 @@ class SimulationWizard(QWizard):
         sim_temp_id = simulation_template.simulation.id
         simulation_difference = self.init_conditions.simulations_difference
         for i, simulation in enumerate(self.init_conditions.simulations_list, start=1):
-            sim_name = f"{name}_{i}" if self.init_conditions.multiple_simulations is True else name
+            sim_name = (
+                f"{name}_{i}"
+                if self.init_conditions.multiple_simulations is True
+                else name
+            )
             new_simulation = dm.NewSimulation(
-                sim_temp_id, sim_name, tags, threedimodel_id, organisation_uuid, start_datetime, end_datetime, duration
+                sim_temp_id,
+                sim_name,
+                tags,
+                threedimodel_id,
+                organisation_uuid,
+                start_datetime,
+                end_datetime,
+                duration,
             )
             new_simulation.init_options = init_options
             new_simulation.substances = substances
@@ -4226,8 +4949,12 @@ class SimulationWizard(QWizard):
                 else:
                     new_simulation.breaches = dm.Breaches()
             if self.init_conditions.include_precipitations:
-                self.precipitation_page.main_widget.dd_simulation.setCurrentText(simulation)
-                precipitation_data = self.precipitation_page.main_widget.get_precipitation_data()
+                self.precipitation_page.main_widget.dd_simulation.setCurrentText(
+                    simulation
+                )
+                precipitation_data = (
+                    self.precipitation_page.main_widget.get_precipitation_data()
+                )
                 if simulation_difference == "precipitation" or i == 1:
                     new_simulation.precipitation = dm.Precipitation(*precipitation_data)
                 else:
@@ -4242,13 +4969,187 @@ class SimulationWizard(QWizard):
                     new_simulation.template_name = template_name + f"_{i}"
                 else:
                     new_simulation.template_name = template_name
-            new_simulation.start_simulation = self.summary_page.main_widget.cb_start_simulation.isChecked()
+            new_simulation.start_simulation = (
+                self.summary_page.main_widget.cb_start_simulation.isChecked()
+            )
             self.new_simulations.append(new_simulation)
-        self.model_selection_dlg.unload_breach_layers()
-        self.plugin_dock.simulation_overview_dlg.start_simulations(self.new_simulations)
+        self.unload_breach_layers()
+        self.start_simulations(self.new_simulations)
 
     def cancel_wizard(self):
         """Handling canceling wizard action."""
         self.settings.setValue("threedi/wizard_size", self.size())
-        self.model_selection_dlg.unload_breach_layers()
+        self.unload_breach_layers()
         self.reject()
+
+    def load_breach_layers(self):
+        """Loading breach layers into the map canvas."""
+        if self.current_model_geojson_breaches is not None:
+            potential_breaches_layer = QgsVectorLayer(
+                self.current_model_geojson_breaches, "Potential breaches", "ogr"
+            )
+            if (
+                potential_breaches_layer.isValid()
+                and potential_breaches_layer.featureCount() > 0
+            ):
+                self.potential_breaches_layer = potential_breaches_layer
+                set_named_style(self.potential_breaches_layer, "Potential breach.qml")
+                self.potential_breaches_layer.setFlags(
+                    QgsMapLayer.Searchable | QgsMapLayer.Identifiable
+                )
+                QgsProject.instance().addMapLayer(self.potential_breaches_layer, False)
+                QgsProject.instance().layerTreeRoot().insertLayer(
+                    0, self.potential_breaches_layer
+                )
+        if self.current_model_gridadmin_gpkg is not None:
+            flowlines_uri = f"{self.current_model_gridadmin_gpkg}|layername=flowline"
+            flowlines_layer = QgsVectorLayer(flowlines_uri, "1D2D flowlines", "ogr")
+            flowlines_layer.setSubsetString('"line_type" IN (51, 52, 53, 54)')
+            if flowlines_layer.isValid() and flowlines_layer.featureCount() > 0:
+                self.flowlines_layer = flowlines_layer
+                set_named_style(self.flowlines_layer, "1D2D flowline.qml")
+                self.flowlines_layer.setFlags(
+                    QgsMapLayer.Searchable | QgsMapLayer.Identifiable
+                )
+                QgsProject.instance().addMapLayer(self.flowlines_layer, False)
+                QgsProject.instance().layerTreeRoot().insertLayer(
+                    0, self.flowlines_layer
+                )
+
+    def unload_breach_layers(self):
+        """Removing model related vector layers from map canvas."""
+        try:
+            if self.potential_breaches_layer is not None:
+                QgsProject.instance().removeMapLayer(self.potential_breaches_layer)
+                self.potential_breaches_layer = None
+            if self.flowlines_layer is not None:
+                QgsProject.instance().removeMapLayer(self.flowlines_layer)
+                self.flowlines_layer = None
+            # TODO
+            # self.plugin_dock.iface.mapCanvas().refresh()
+        except (AttributeError, RuntimeError):
+            pass
+
+    def get_breach_geojson_path(self, geojson_name):
+        """Get breach geojson data (should be cached)."""
+        breach_geojson_cached_file_path = None
+        try:
+            tc = ThreediCalls(self.threedi_api)
+            model_id = self.current_model.id
+            if geojson_name == "breaches":
+                download = tc.fetch_3di_model_geojson_breaches_download(model_id)
+            else:
+                return breach_geojson_cached_file_path
+            filename = f"{geojson_name}_{model_id}_{download.etag}.json"
+            file_path = os.path.join(CACHE_PATH, filename)
+            if not file_cached(file_path):
+                get_download_file(download, file_path)
+            breach_geojson_cached_file_path = file_path
+            self.communication.bar_info(f"Model {geojson_name} cached.")
+        except ApiException as e:
+            error_msg = extract_error_message(e)
+            if "geojson file not found" in error_msg:
+                pass
+            else:
+                self.communication.bar_error(error_msg)
+        except Exception as e:
+            logger.exception("Error when getting to-be-cached data")
+            error_msg = f"Error: {e}"
+            self.communication.bar_error(error_msg)
+        return breach_geojson_cached_file_path
+
+    def get_gridadmin_gpkg_path(
+        self, schematisation_id, schematisation_name, schematisation_revision
+    ):
+        """Get model gridadmin.gpkg file."""
+        try:
+            local_schematisation = self.local_schematisations[schematisation_id]
+        except KeyError:
+            local_schematisation = None
+        if local_schematisation is None:
+            local_schematisation = LocalSchematisation(
+                self.working_dir, schematisation_id, schematisation_name, create=True
+            )
+            self.local_schematisations[schematisation_id] = local_schematisation
+            local_revision = local_schematisation.add_revision(schematisation_revision)
+        else:
+            try:
+                local_revision = local_schematisation.revisions[schematisation_revision]
+            except KeyError:
+                local_revision = local_schematisation.add_revision(
+                    schematisation_revision
+                )
+        available_gridadming_gpkg_path = None
+        expected_gridadming_gpkg_path = os.path.join(
+            local_revision.grid_dir, "gridadmin.gpkg"
+        )
+        if not os.path.exists(expected_gridadming_gpkg_path):
+            try:
+                tc = ThreediCalls(self.threedi_api)
+                model_id = self.current_model.id
+                gridadmin_file_gpkg, gridadmin_download_gpkg = (
+                    tc.fetch_3di_model_geopackage_download(model_id)
+                )
+                get_download_file(
+                    gridadmin_download_gpkg, expected_gridadming_gpkg_path
+                )
+                available_gridadming_gpkg_path = expected_gridadming_gpkg_path
+                self.communication.bar_info(f"Gridadmin GeoPackage downloaded.")
+            except ApiException as e:
+                error_msg = extract_error_message(e)
+                if "Geopackage file not found" in error_msg:
+                    pass
+                else:
+                    self.communication.bar_error(error_msg)
+            except Exception as e:
+                logger.exception("Error when getting gridadmin GeoPackage")
+                error_msg = f"Error: {e}"
+                self.communication.bar_error(error_msg)
+        else:
+            available_gridadming_gpkg_path = expected_gridadming_gpkg_path
+        return available_gridadming_gpkg_path
+
+    def start_simulations(self, simulations_to_run):
+        """Start the simulations."""
+        upload_timeout = QSettings().value("threedi/timeout", 900, type=int)
+        simulations_runner = SimulationRunner(
+            self.threedi_api, simulations_to_run, upload_timeout=upload_timeout
+        )
+        simulations_runner.signals.initializing_simulations_progress.connect(
+            self.on_initializing_progress
+        )
+        simulations_runner.signals.initializing_simulations_failed.connect(
+            self.on_initializing_failed
+        )
+        simulations_runner.signals.initializing_simulations_finished.connect(
+            self.on_initializing_finished
+        )
+        self.simulation_runner_pool.start(simulations_runner)
+
+    def on_initializing_progress(
+        self,
+        new_simulation,
+        new_simulation_initialized,
+        current_progress,
+        total_progress,
+    ):
+        """Feedback on new simulation(s) initialization progress signal."""
+        msg = f'Initializing simulation "{new_simulation.name}"...'
+        self.communication.progress_bar(
+            msg, 0, total_progress, current_progress, clear_msg_bar=True
+        )
+        if new_simulation_initialized:
+            info_msg = f"Simulation {new_simulation.name} added to queue!"
+            self.communication.bar_info(info_msg)
+
+    def on_initializing_failed(self, error_message):
+        """Feedback on new simulation(s) initialization failure signal."""
+        self.communication.clear_message_bar()
+        self.communication.bar_error(error_message, log_text_color=QColor(Qt.red))
+        self.simulation_started_failed.emit()
+
+    def on_initializing_finished(self, message):
+        """Feedback on new simulation(s) initialization finished signal."""
+        self.communication.clear_message_bar()
+        self.communication.bar_info(message)
+        self.simulation_started.emit()
