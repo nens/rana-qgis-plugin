@@ -11,7 +11,7 @@ from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from qgis.core import QgsProject
 from threedi_mi_utils import bypass_max_path_limit
 
-from .utils import get_local_file_path, image_to_bytes
+from .utils import get_local_file_path, image_to_bytes, build_vrt
 from .utils_api import (
     finish_file_upload,
     get_tenant_file_descriptor_view,
@@ -377,11 +377,13 @@ class LizardResultDownloadWorker(QThread):
                 # multi-tile raster download
                 if len(raster_tasks) > 1:
                     previous_progress = -1
+                    raster_filepaths = []
                     for raster_task_id, task_counter in enumerate(raster_tasks, 0):
                         raster_filename = f"{file_name}{task_counter:02d}.tif"
                         target_file = bypass_max_path_limit(
                             os.path.join(self.target_folder, raster_filename)
                         )
+                        raster_filepaths.append(target_file)
                         # get tile download link from each task as it completes
                         file_link = get_raster_file_link(descriptor_id=descriptor_id, task_id=raster_task_id)
                         # reserve last 10% of progress for raster merging
@@ -399,16 +401,22 @@ class LizardResultDownloadWorker(QThread):
                                     for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                                         file.write(chunk)
                                         downloaded_size += len(chunk)
-                                        progress = int(10 + (downloaded_size / total_size) * 90)
-                                        if progress > previous_progress:
-                                            self.progress.emit(progress, file_name)
-                                            previous_progress = progress
 
                         except requests.exceptions.RequestException as e:
                             self.failed.emit(f"Failed to download file: {str(e)}")
                         except Exception as e:
                             self.failed.emit(f"An error occurred: {str(e)}")
-                        # TODO download and merge
+
+                    raster_filepaths.sort()
+                    first_raster_filepath = raster_filepaths[0]
+                    vrt_filepath = first_raster_filepath.replace("_01", "").replace(".tif", ".vrt")
+                    vrt_filename = os.path.basename(vrt_filepath)
+                    progress_msg = f"Building VRT: '{vrt_filepath}'..."
+                    self.report_progress(progress_msg, increase_current_step=False)
+
+                    vrt_options = {"resolution": "average", "resampleAlg": "nearest", "srcNodata": self.nodata}
+                    build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
+                    self.file = vrt_filepath
                 # single-tile raster download
                 else:
                     target_file = bypass_max_path_limit(
