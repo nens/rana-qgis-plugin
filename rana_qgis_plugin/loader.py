@@ -212,11 +212,12 @@ class Loader(QObject):
                             filtered_result_ids.append(result_id)
 
                     self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        project,
-                        file,
-                        filtered_result_ids,
-                        target_folder,
-                        deepcopy(descriptor["meta"]["grid"]),
+                        project=project,
+                        file=file,
+                        result_ids=filtered_result_ids,
+                        target_folder=target_folder,
+                        grid=deepcopy(descriptor["meta"]["grid"]),
+                        nodata=-9999,
                     )
 
                     self.lizard_result_download_worker.finished.connect(
