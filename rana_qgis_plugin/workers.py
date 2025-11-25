@@ -410,12 +410,10 @@ class LizardResultDownloadWorker(QThread):
                     raster_filepaths.sort()
                     first_raster_filepath = raster_filepaths[0]
                     vrt_filepath = first_raster_filepath.replace("_01", "").replace(".tif", ".vrt")
-                    vrt_filename = os.path.basename(vrt_filepath)
-                    progress_msg = f"Building VRT: '{vrt_filepath}'..."
-                    self.report_progress(progress_msg, increase_current_step=False)
 
                     vrt_options = {"resolution": "average", "resampleAlg": "nearest", "srcNodata": self.nodata}
                     build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
+                    self.progress.emit(100, file_name)
                     self.file = vrt_filepath
                 # single-tile raster download
                 else:
