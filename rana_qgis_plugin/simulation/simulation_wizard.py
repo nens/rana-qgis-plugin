@@ -305,7 +305,7 @@ class SubstancesWidget(uicls_substances, basecls_substances):
                     continue
                 name_item = self.tw_substances.item(row, 0)
                 if name_item and name_item.text() and name_item.text() == item.text():
-                    self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+                    self.parent_page.parent_wizard.communication.show_warn(
                         "Substance with the same name already exists!"
                     )
                     item.setText("")
@@ -314,12 +314,12 @@ class SubstancesWidget(uicls_substances, basecls_substances):
         if item.column() == 1:
             if len(item.text()) > units_length:
                 item.setText(item.text()[:units_length])
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+                self.parent_page.parent_wizard.communication.show_warn(
                     "Units length should be less than 16 characters!"
                 )
 
             if not constains_only_ascii(item.text()):
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+                self.parent_page.parent_wizard.communication.show_warn(
                     "Non-ASCII characters not allowed in units"
                 )
                 item.setText("")
@@ -327,7 +327,7 @@ class SubstancesWidget(uicls_substances, basecls_substances):
         if item.column() == 3:
             if item.text():
                 if float(item.text()) < 0 or float(item.text()) > 1:
-                    self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+                    self.parent_page.parent_wizard.communication.show_warn(
                         "Diffusion coefficient should be between 0 and 1"
                     )
                     item.setText("")
@@ -383,7 +383,7 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
         super().__init__()
         self.setupUi(self)
         self.parent_page = parent_page
-        self.current_model = parent_page.parent_wizard.model_selection_dlg.current_model
+        self.current_model = parent_page.parent_wizard.current_model
         self.substances = (
             parent_page.parent_wizard.substances_page.main_widget.substances
             if hasattr(parent_page.parent_wizard, "substances_page")
@@ -443,7 +443,7 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
                 error_message = "No boundary conditions found in template file!"
             else:
                 error_message = "No boundary conditions uploaded yet!"
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+            self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
     def handle_substance_csv_errors(self, header, substance_list, bc_type, time_units):
@@ -480,7 +480,7 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
                     )
                     break
         if error_message is not None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+            self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
     def set_template_boundary_conditions(self, template_boundary_conditions=None):
@@ -533,7 +533,7 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
             boundary_conditions_list = list(reader)
         error_msg = handle_csv_header(header)
         if error_msg is not None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_msg)
+            self.parent_page.parent_wizard.communication.show_warn(error_msg)
             return None, None
         interpolate = (
             self.cb_interpolate_bc_1d.isChecked()
@@ -778,7 +778,7 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
         super().__init__()
         self.setupUi(self)
         self.parent_page = parent_page
-        self.current_model = parent_page.parent_wizard.model_selection_dlg.current_model
+        self.current_model = parent_page.parent_wizard.current_model
         self.substances = (
             parent_page.parent_wizard.substances_page.main_widget.substances
             if hasattr(parent_page.parent_wizard, "substances_page")
@@ -907,8 +907,8 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
     def setup_initial_conditions(self):
         """Setup initial conditions widget."""
         try:
-            tc = ThreediCalls(self.parent_page.parent_wizard.plugin_dock.threedi_api)
-            model_id = self.parent_page.parent_wizard.model_selection_dlg.current_model.id
+            tc = ThreediCalls(self.parent_page.parent_wizard.threedi_api)
+            model_id = self.parent_page.parent_wizard.current_model.id
             states = tc.fetch_3di_model_saved_states(model_id)
             if not states:
                 self.gb_saved_state.setDisabled(True)
@@ -952,10 +952,10 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
                     continue
         except ApiException as e:
             error_msg = extract_error_message(e)
-            self.parent_page.parent_wizard.plugin_dock.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.parent_page.parent_wizard.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
         except Exception as e:
             error_msg = f"Error: {e}"
-            self.parent_page.parent_wizard.plugin_dock.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.parent_page.parent_wizard.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
 
     def load_1d_initial_waterlevel_csv(self):
         """Load 1D initial water level from the CSV file."""
@@ -996,14 +996,14 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
             waterlevels_list = list(reader)
         error_msg = self.handle_1D_initial_waterlevels_header(header)
         if error_msg is not None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_msg)
+            self.parent_page.parent_wizard.communication.show_warn(error_msg)
             return None, None
         for row in waterlevels_list:
             node_id_str = row.get("id").strip()
             value_str = row.get("value").strip()
             if not node_id_str or not value_str:
                 error_msg = "Missing values in CSV file. Please remove these lines or fill in a value and try again."
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_msg)
+                self.parent_page.parent_wizard.communication.show_warn(error_msg)
                 return None, None
             try:
                 node_id = int(node_id_str)
@@ -1012,7 +1012,7 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
                 values.append(value)
             except ValueError:
                 error_msg = f"Invalid data format in CSV: id='{node_id_str}', value='{value_str}'"
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_msg)
+                self.parent_page.parent_wizard.communication.show_warn(error_msg)
                 return None, None
         waterlevels = {
             "node_ids": node_ids,
@@ -1044,7 +1044,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         super().__init__()
         self.setupUi(self)
         self.parent_page = parent_page
-        self.current_model = parent_page.parent_wizard.model_selection_dlg.current_model
+        self.current_model = parent_page.parent_wizard.current_model
         self.substances = (
             parent_page.parent_wizard.substances_page.main_widget.substances
             if hasattr(parent_page.parent_wizard, "substances_page")
@@ -1133,7 +1133,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
                 laterals_timeseries.update(self.laterals_2d_timeseries)
         if not laterals_timeseries:
             error_message = "No laterals uploaded yet!"
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+            self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
     def handle_substance_csv_errors(self, header, substance_list, laterals_type, time_units):
@@ -1145,7 +1145,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         error_message = handle_csv_header(header)
         laterals_timeseries, warning_message = self.recalculate_laterals_timeseries(laterals_type=laterals_type)
         if warning_message is not None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(warning_message)
+            self.parent_page.parent_wizard.communication.show_warn(warning_message)
 
         if not laterals_timeseries:
             error_message = "No laterals uploaded yet!"
@@ -1168,7 +1168,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
                     error_message = "Substance concentrations timesteps do not match lateral values timesteps!"
                     break
         if error_message is not None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+            self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
     def toggle_1d_laterals_upload(self, checked):
@@ -1214,7 +1214,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
 
         _, warning_message = self.recalculate_laterals_timeseries(laterals_type)
         if warning_message:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(warning_message)
+            self.parent_page.parent_wizard.communication.show_warn(warning_message)
 
     def recalculate_laterals_timeseries(self, laterals_type):
         """Recalculate laterals timeseries (timesteps in seconds)."""
@@ -1351,7 +1351,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
         if not header:
             error_message = "CSV file is empty!"
             if log_error:
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+                self.parent_page.parent_wizard.communication.show_warn(error_message)
             return error_message
         if laterals_type == "1D":
             if any(k not in header for k in ["id", "connection_node_id", "timeseries"]):
@@ -1364,7 +1364,7 @@ class LateralsWidget(uicls_laterals, basecls_laterals):
             ):
                 error_message = "Wrong timeseries format for 2D laterals!"
         if log_error and error_message:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+            self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
     def open_upload_dialog(self, laterals_type):
@@ -1486,12 +1486,12 @@ class DWFWidget(uicls_dwf, basecls_dwf):
         if not header:
             error_message = "CSV file is empty!"
             if log_error:
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+                self.parent_page.parent_wizard.communication.show_warn(error_message)
             return error_message
         if len(header) != 3:
             error_message = "Wrong timeseries format for Dry Weather Flow!"
             if log_error:
-                self.parent_page.parent_wizard.plugin_dock.communication.show_warn(error_message)
+                self.parent_page.parent_wizard.communication.show_warn(error_message)
         return error_message
 
     def open_upload_dialog(self):
@@ -1542,7 +1542,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         super().__init__()
         self.setupUi(self)
         self.parent_page = parent_page
-        self.map_canvas = self.parent_page.parent_wizard.plugin_dock.iface.mapCanvas()
+        self.map_canvas = iface.mapCanvas()
         set_widget_background_color(self)
         self.added_breaches = defaultdict(dict)
         self.breaches_model = QStandardItemModel()
@@ -1602,7 +1602,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
     def select_potential_breach_from_list(self):
         """Add potential breach from the dropdown menu to the selected breaches list."""
         if self.potential_breaches_layer is None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+            self.parent_page.parent_wizard.communication.show_warn(
                 "Potential breaches are not available!", self
             )
             return
@@ -1613,7 +1613,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
     def select_potential_breach(self):
         """Add potential breach from the map canvas to the selected breaches list."""
         if self.potential_breaches_layer is None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+            self.parent_page.parent_wizard.communication.show_warn(
                 "Potential breaches are not available!", self
             )
             return
@@ -1626,7 +1626,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
     def select_flowline(self):
         """Add flowline from the map canvas to the selected breaches list."""
         if self.flowlines_layer is None:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+            self.parent_page.parent_wizard.communication.show_warn(
                 "1D2D flowlines are not available!", self
             )
             return
@@ -1643,7 +1643,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         self.potential_breaches_layer.selectByIds([potential_breach_fid])
         breach_key = (BreachSourceType.POTENTIAL_BREACHES, potential_breach_fid)
         if breach_key in self.added_breaches[self.current_simulation_number]:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+            self.parent_page.parent_wizard.communication.show_warn(
                 "Potential breach already selected!", self
             )
             return
@@ -1657,7 +1657,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         self.flowlines_layer.selectByIds([flowline_fid])
         breach_key = (BreachSourceType.FLOWLINES, flowline_fid)
         if breach_key in self.added_breaches[self.current_simulation_number]:
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn("1D2D flowline already selected!", self)
+            self.parent_page.parent_wizard.communication.show_warn("1D2D flowline already selected!", self)
             return
         self.add_breach(BreachSourceType.FLOWLINES, flowline_feat)
 
@@ -1791,7 +1791,7 @@ class BreachesWidget(uicls_breaches, basecls_breaches):
         """Remove breach widgets from the breaches list."""
         index = self.breaches_tv.currentIndex()
         if not index.isValid():
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(
+            self.parent_page.parent_wizard.communication.show_warn(
                 "No breach row selected - nothing to remove!", self
             )
             return
@@ -2238,7 +2238,7 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
                 "Time steps in the selected CSV file are not even. "
                 "Please adjust your data to fulfill even time steps requirement."
             )
-            self.parent_page.parent_wizard.plugin_dock.communication.show_warn(warn_message)
+            self.parent_page.parent_wizard.communication.show_warn(warn_message)
             return
         self.le_upload_csv.setText(filename)
         self.custom_time_series[simulation] = time_series
@@ -3212,16 +3212,16 @@ class BoundaryConditionsPage(QWizardPage):
                     "There are no any boundary conditions selected for the upload. "
                     "Please select at least one 1D/2D boundary conditions file."
                 )
-                self.parent_wizard.plugin_dock.communication.show_warn(warn)
+                self.parent_wizard.communication.show_warn(warn)
                 return False
             else:
                 if self.main_widget.gb_upload_1d.isChecked() and not self.main_widget.file_bc_1d_upload.text():
                     warn = "There is no 1D boundary conditions file specified. Please select it before proceeding."
-                    self.parent_wizard.plugin_dock.communication.show_warn(warn)
+                    self.parent_wizard.communication.show_warn(warn)
                     return False
                 if self.main_widget.gb_upload_2d.isChecked() and not self.main_widget.file_bc_2d_upload.text():
                     warn = "There is no 2D boundary conditions file specified. Please select it before proceeding."
-                    self.parent_wizard.plugin_dock.communication.show_warn(warn)
+                    self.parent_wizard.communication.show_warn(warn)
                     return False
         return True
 
@@ -3412,14 +3412,16 @@ class SummaryPage(QWizardPage):
 class SimulationWizard(QWizard):
     """New simulation wizard."""
 
-    def __init__(self, plugin_dock, model_selection_dlg, init_conditions_dlg, parent=None):
+    def __init__(self, organisation, current_model, threedi_api, communication, init_conditions_dlg, parent=None):
         super().__init__(parent)
         self.settings = QSettings()
         self.setWizardStyle(QWizard.ClassicStyle)
-        self.model_selection_dlg = model_selection_dlg
+        self.threedi_api = threedi_api
+        self.communication = communication
+        self.current_model = current_model
+        self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
         init_conditions = self.init_conditions_dlg.initial_conditions
-        self.plugin_dock = plugin_dock
         self.name_page = NamePage(self)
         self.addPage(self.name_page)
         self.duration_page = SimulationDurationPage(self)
@@ -3536,7 +3538,7 @@ class SimulationWizard(QWizard):
 
     def set_overview_database(self):
         """Setting up database name label in the summary page."""
-        database = self.model_selection_dlg.current_model.name
+        database = self.current_model.name
         self.summary_page.main_widget.sim_database.setText(database)
 
     def set_overview_duration(self):
@@ -3648,7 +3650,7 @@ class SimulationWizard(QWizard):
             self.boundary_conditions_page.main_widget.set_template_boundary_conditions(bc_file)
             # Download file and set template boundary conditions timeseries
             if bc_file:
-                tc = ThreediCalls(self.plugin_dock.threedi_api)
+                tc = ThreediCalls(self.threedi_api)
                 bc_file_name = bc_file.file.filename
                 bc_file_download = tc.fetch_boundarycondition_file_download(temp_simulation_id, bc_file.id)
                 bc_temp_filepath = os.path.join(TEMPDIR, bc_file_name)
@@ -3736,7 +3738,7 @@ class SimulationWizard(QWizard):
                     laterals_widget.cb_upload_2d_laterals.setChecked(False)
                     laterals_widget.laterals_2d = laterals_2d
             if file_laterals:
-                tc = ThreediCalls(self.plugin_dock.threedi_api)
+                tc = ThreediCalls(self.threedi_api)
                 lateral_file = file_laterals[0]
                 lateral_file_name = lateral_file.file.filename
                 lateral_file_download = tc.fetch_lateral_file_download(temp_simulation_id, lateral_file.id)
@@ -3782,7 +3784,7 @@ class SimulationWizard(QWizard):
             dwf_events = [filelateral for filelateral in events.filelaterals if filelateral.periodic == "daily"]
             if dwf_events:
                 dwf_widget = self.dwf_page.main_widget
-                tc = ThreediCalls(self.plugin_dock.threedi_api)
+                tc = ThreediCalls(self.threedi_api)
                 dwf_file = dwf_events[0]
                 dwf_file_name = dwf_file.file.filename
                 dwf_file_download = tc.fetch_lateral_file_download(temp_simulation_id, dwf_file.id)
@@ -3802,8 +3804,8 @@ class SimulationWizard(QWizard):
         if init_conditions.include_breaches:
             breaches_widget = self.breaches_page.main_widget
             if events.breach:
-                tc = ThreediCalls(self.plugin_dock.threedi_api)
-                threedimodel_id_str = str(self.model_selection_dlg.current_model.id)
+                tc = ThreediCalls(self.threedi_api)
+                threedimodel_id_str = str(self.current_model.id)
                 content_pks = set()
                 for breach in events.breach:
                     potential_breach_url = breach.potential_breach.rstrip("/")
@@ -3942,8 +3944,8 @@ class SimulationWizard(QWizard):
         if project_name:
             project_name_tag = f"project: {project_name}"
             tags.append(project_name_tag)
-        threedimodel_id = self.model_selection_dlg.current_model.id
-        organisation_uuid = self.model_selection_dlg.organisation.unique_id
+        threedimodel_id = self.current_model.id
+        organisation_uuid = self.organisation.unique_id
         start_datetime, end_datetime = self.duration_page.main_widget.to_datetime()
         duration = self.duration_page.main_widget.calculate_simulation_duration()
         # Initialization options

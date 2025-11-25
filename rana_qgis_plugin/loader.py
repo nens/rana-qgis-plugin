@@ -177,11 +177,14 @@ class Loader(QObject):
         threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
         tc = ThreediCalls(threedi_api)
         organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        self.communication.log_warn("++++++++++++++++++++")
+        self.communication.log_warn(str(organisations))
+
         user_profile = tc.fetch_current_user()
         current_user = user_profile.username
-        self.communication.log_warn("+++++++++++++++")
-        self.communication.log_warn(str(file))
-        self.communication.log_warn("--------------")
+        # self.communication.log_warn("+++++++++++++++")
+        # self.communication.log_warn(str(file))
+        # self.communication.log_warn("--------------")
 
         # retrieve schematisation info
         schematisation = get_threedi_schematisation(self.communication, file["descriptor_id"])
@@ -201,7 +204,7 @@ class Loader(QObject):
         self.communication.log_warn(str(templates))
         # TODO: allow to choose templates and organisations
         simulation_template = templates[0]
-        organisation = organisations[0]
+        organisation = list(organisations.items())[0][1]
    
         (
             simulation,
@@ -210,7 +213,7 @@ class Loader(QObject):
             lizard_post_processing_overview,
         ) = self.get_simulation_data_from_template(tc, simulation_template)
 
-        self.simulation_init_wizard = SimulationInit(
+        simulation_init_wizard = SimulationInit(
             current_model,
             simulation_template,
             settings_overview,
@@ -220,24 +223,18 @@ class Loader(QObject):
             api=tc,
             parent=self.parent(),
         )
-        self.simulation_init_wizard.exec()
-        #     if self.simulation_init_wizard.open_wizard:
-                    # self.communication.log_warn("++++++++++++++++++")
-                    # self.communication.log_warn(str(project))
-                    # self.communication.log_warn(str(file))
-                    # """Opening a wizard which allows defining and running new simulations."""
-
-                    # # Pick latest template and latest revision
-                    # self.simulation_wizard = SimulationWizard(
-                    #     # self.plugin_dock, self.model_selection_dlg, self.simulation_init_wizard
-                    #     None, None, None
-                    # )
-                    # if simulation:
-                    #     self.simulation_wizard.load_template_parameters(
-                    #         simulation, settings_overview, events, lizard_post_processing_overview
-                    #     )
-                    # self.close()
-                    # self.simulation_wizard.exec_()
+        simulation_init_wizard.exec()
+        if simulation_init_wizard.open_wizard:
+            # Pick latest template and latest revision
+            self.simulation_wizard = SimulationWizard(
+                organisation, current_model, threedi_api, self.communication, simulation_init_wizard
+            )
+            if simulation:
+                self.simulation_wizard.load_template_parameters(
+                    simulation, settings_overview, events, lizard_post_processing_overview
+                )
+            # self.close()
+            self.simulation_wizard.exec()
 
     def get_simulation_data_from_template(self, tc, template):
         """Fetching simulation, settings and events data from the simulation template."""
