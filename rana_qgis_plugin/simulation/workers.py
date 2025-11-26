@@ -618,7 +618,7 @@ class SimulationRunnerSignals(QObject):
     # error message
     initializing_simulations_failed = pyqtSignal(str)
     # message
-    initializing_simulations_finished = pyqtSignal(str)
+    initializing_simulations_finished = pyqtSignal(str, list)
 
 
 class SimulationRunner(QRunnable):
@@ -1710,4 +1710,6 @@ class SimulationRunner(QRunnable):
 
     def report_finished(self, message):
         """Report worker finished message."""
-        self.signals.initializing_simulations_finished.emit(message)
+        self.signals.initializing_simulations_finished.emit(
+            message, self.simulations_to_run
+        )

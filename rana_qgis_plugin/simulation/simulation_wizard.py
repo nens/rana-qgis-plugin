@@ -3869,8 +3869,8 @@ class SummaryPage(QWizardPage):
 class SimulationWizard(QWizard):
     """New simulation wizard."""
 
-    simulation_started = pyqtSignal()
-    simulation_started_failed = pyqtSignal()
+    simulation_created = pyqtSignal(list)
+    simulation_created_failed = pyqtSignal()
 
     def __init__(
         self,
@@ -5145,11 +5145,11 @@ class SimulationWizard(QWizard):
     def on_initializing_failed(self, error_message):
         """Feedback on new simulation(s) initialization failure signal."""
         self.communication.clear_message_bar()
-        self.communication.bar_error(error_message, log_text_color=QColor(Qt.red))
-        self.simulation_started_failed.emit()
+        self.communication.bar_error(error_message)
+        self.simulation_created_failed.emit()
 
-    def on_initializing_finished(self, message):
+    def on_initializing_finished(self, message, simulations):
         """Feedback on new simulation(s) initialization finished signal."""
         self.communication.clear_message_bar()
         self.communication.bar_info(message)
-        self.simulation_started.emit()
+        self.simulation_created.emit(simulations)

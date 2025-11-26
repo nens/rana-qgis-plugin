@@ -25,7 +25,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
 )
-from rana_qgis_plugin.simulation.utils import extract_error_message, CACHE_PATH
+from rana_qgis_plugin.simulation.utils import CACHE_PATH, extract_error_message
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_threedi_schematisation_simulation_results_folder,
@@ -33,9 +33,11 @@ from rana_qgis_plugin.utils import (
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
+    get_tenant_processes,
     get_tenant_project_file,
     get_threedi_schematisation,
     map_result_to_file_name,
+    start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
@@ -178,7 +180,6 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def start_simulation(self, project, file):
-        
         os.makedirs(CACHE_PATH, exist_ok=True)
         if not QgsSettings().contains("threedi/working_dir"):
             self.communication.show_warn(
@@ -256,15 +257,41 @@ class Loader(QObject):
                     events,
                     lizard_post_processing_overview,
                 )
-            # self.close()
-            simulation_wizard.simulation_started.connect(self.simulation_started)
-            simulation_wizard.simulation_started_failed.connect(
+            simulation_wizard.simulation_created.connect(
+                partial(self.start_process, project)
+            )
+            simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
             )
             simulation_wizard.exec()
 
+    def start_process(self, project, simulations):
+        # Find the simulation tracker processes
+        processes = get_tenant_processes(self.communication)
+        track_process = None
+        for process in processes:
+            if "simulation_tracker" in process["tags"]:
+                track_process = process["id"]
+                break
+
+        if track_process is None:
+            self.communication.log_err("No simulation tracker available")
+            return
+
+        for sim in simulations:
+            params = {
+                "project_id": project["id"],
+                "inputs": {"simulation_id": sim.simulation.id},
+                "outputs": {"results": {"id": "results.zip"}},
+                "name": f"simulation_tracker_{sim.simulation.name}",
+            }
+            self.communication.log_warn(str(params))
+            result = start_tenant_process(self.communication, track_process, params)
+            self.communication.log_warn(str(result))
+
+        self.simulation_started.emit()
+
     def get_simulation_data_from_template(self, tc, template):
-        """Fetching simulation, settings and events data from the simulation template."""
         simulation, settings_overview, events, lizard_post_processing_overview = (
             None,
             None,
@@ -285,10 +312,10 @@ class Loader(QObject):
         except ApiException as e:
             error_msg = extract_error_message(e)
             if "No basic post-processing resource found" not in error_msg:
-                self.plugin_dock.communication.bar_error(error_msg)
+                self.communication.bar_error(error_msg)
         except Exception as e:
             error_msg = f"Error: {e}"
-            self.plugin_dock.communication.bar_error(error_msg)
+            self.communication.bar_error(error_msg)
         return simulation, settings_overview, events, lizard_post_processing_overview
 
     @pyqtSlot(dict, dict)
