@@ -525,7 +525,7 @@ class ProjectsBrowser(QWidget):
             self.setEnabled(True)
 
 
-class BreadCrumbs(QWidget):
+class BreadCrumbsWidget(QWidget):
     folder_selected = pyqtSignal(str)
 
     def __init__(self, rana_widget, communication, parent=None):
@@ -645,7 +645,7 @@ class RanaBrowser(QWidget):
     def setup_ui(self):
         self.rana_widget = QStackedWidget()
         # Set up breadcrumbs, browser and file view widgets
-        self.breadcrumbs = BreadCrumbs(
+        self.breadcrumbs = BreadCrumbsWidget(
             rana_widget=self.rana_widget, communication=self.communication, parent=self
         )
         # Setup widgets that populate the rana widget
