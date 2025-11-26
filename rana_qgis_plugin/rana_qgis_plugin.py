@@ -270,8 +270,15 @@ class RanaQgisPlugin:
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
         )
         self.dock_widget.show()
+        # start_url = True
         if start_url:
+            project_id = "QDWWqKCX"
+            path = "raster/dem_centrum.tif"
             self.rana_browser.start_file_in_qgis(
-                project_id=path_params["project_id"],
-                online_path=query_params["path"][0],
+                project_id=project_id,
+                online_path=path,
             )
+            # self.rana_browser.start_file_in_qgis(
+            #     project_id=path_params["project_id"],
+            #     online_path=query_params["path"][0],
+            # )
