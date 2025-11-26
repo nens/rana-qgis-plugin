@@ -270,8 +270,8 @@ class RanaQgisPlugin:
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
         )
         self.dock_widget.show()
-
         if start_url:
             self.rana_browser.start_file_in_qgis(
-                path_params["project_id"], query_params["path"][0]
+                project_id=path_params["project_id"],
+                online_path=query_params["path"][0],
             )

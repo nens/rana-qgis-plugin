@@ -240,7 +240,7 @@ class FilesBrowser(QWidget):
         project_refresh_btn = QToolButton()
         project_refresh_btn.setToolTip("Refresh")
         project_refresh_btn.setIcon(refresh_icon)
-        project_refresh_btn.clicked.connect(self._update_file_UI)
+        project_refresh_btn.clicked.connect(self.update)
         self.files_tv = QTreeView()
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
@@ -256,9 +256,9 @@ class FilesBrowser(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
-        self._update_file_UI(append_path=False)
+        self.update(append_path=False)
 
-    def _update_file_UI(self, append_path: bool = True):
+    def update(self, append_path: bool = True):
         file_path = self.selected_file["id"]
         if self.selected_file["type"] == "directory":
             directory_name = os.path.basename(file_path.rstrip("/"))
@@ -282,7 +282,7 @@ class FilesBrowser(QWidget):
             return
         file_item = self.files_model.itemFromIndex(index)
         self.selected_file = file_item.data(Qt.ItemDataRole.UserRole)
-        self._update_file_UI()
+        self.update()
         self.ready.emit()
 
     def fetch_and_populate(self, project: dict, path: str = None):
@@ -346,6 +346,8 @@ class FilesBrowser(QWidget):
 class ProjectsBrowser(QWidget):
     projects_refreshed = pyqtSignal()
     project_selected = pyqtSignal(dict)
+    busy = pyqtSignal()
+    ready = pyqtSignal()
 
     def __init__(self, communication, breadcrumbs, parent=None):
         super().__init__(parent)
@@ -360,6 +362,12 @@ class ProjectsBrowser(QWidget):
         self.setup_ui()
         self.fetch_projects()
         self.populate_projects()
+
+    def set_project_from_id(self, project_id: str):
+        for project in self.projects:
+            if project["id"] == project_id:
+                self.project = project
+                return
 
     def setup_ui(self):
         # Create search box
@@ -400,7 +408,6 @@ class ProjectsBrowser(QWidget):
         self.setLayout(layout)
 
     def fetch_projects(self):
-        # TODO: it make zero sense to pass the communication to the network manager!!
         self.projects = get_tenant_projects(self.communication)
 
     def refresh(self):
@@ -500,19 +507,21 @@ class ProjectsBrowser(QWidget):
         self.change_page(1)
 
     def select_project(self, index: QModelIndex):
-        self.setEnabled(False)
+        self.busy.emit()
         self.communication.progress_bar("Loading project...", clear_msg_bar=True)
         try:
             # Only allow selection of the first column (project name)
             if index.column() != 0:
                 return
             project_item = self.projects_model.itemFromIndex(index)
-            self.project = project_item.data(Qt.ItemDataRole.UserRole)
-            self.breadcrumbs.add_path(self.project["name"])
+            new_project = project_item.data(Qt.ItemDataRole.UserRole)
+            self.project = new_project
+            self.breadcrumbs.set_paths(["Projects", self.project["name"]])
             self.selected_file = {"id": "", "type": "directory"}
             self.project_selected.emit(self.project)
         finally:
             self.communication.clear_message_bar()
+            self.ready.emit()
             self.setEnabled(True)
 
 
@@ -526,6 +535,15 @@ class BreadCrumbs(QWidget):
         self.paths = ["Projects"]
         self.selected_file = None
         self.setup_ui()
+        self.update()
+
+    def set_selected_file_from_path(self, project_id: str, online_path: str):
+        self.update_selected_file(
+            get_tenant_project_file(project_id, {"path": online_path})
+        )
+
+    def update_selected_file(self, file: dict):
+        self.selected_file = file
         self.update()
 
     def add_path(self, path: str, update: bool = True):
@@ -606,11 +624,23 @@ class RanaBrowser(QWidget):
     def __init__(self, communication: UICommunication):
         super().__init__()
         self.communication = communication
-        self.projects = []
-        self.project = None
-        self.selected_file = None
-        # Setup UI
         self.setup_ui()
+
+    @property
+    def project(self):
+        return self.projects_browser.project
+
+    @project.setter
+    def project(self, project):
+        self.projects_browser.project = project
+
+    @property
+    def selected_file(self):
+        return self.breadcrumbs.selected_file
+
+    @selected_file.setter
+    def selected_file(self, selected_file):
+        self.breadcrumbs.update_selected_file(selected_file)
 
     def setup_ui(self):
         self.rana_widget = QStackedWidget()
@@ -645,9 +675,6 @@ class RanaBrowser(QWidget):
         self.setLayout(layout)
 
         # Link properties to this class for easy access
-        self.project = self.projects_browser.project
-        self.selected_file = self.breadcrumbs.selected_file
-        # Update project in file browser and vies
         self.projects_browser.project_selected.connect(
             self.files_browser.update_project
         )
@@ -656,8 +683,10 @@ class RanaBrowser(QWidget):
         self.files_browser.file_selected.connect(
             self.file_view.show_selected_file_details
         )
-        self.files_browser.busy.connect(lambda: self.enable)
-        self.files_browser.ready.connect(lambda: self.disable)
+        self.projects_browser.busy.connect(lambda: self.disable)
+        self.projects_browser.ready.connect(lambda: self.enable)
+        self.files_browser.busy.connect(lambda: self.disable)
+        self.files_browser.ready.connect(lambda: self.enable)
         # connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.fetch_and_populate(self.project, path)
@@ -726,17 +755,24 @@ class RanaBrowser(QWidget):
             raise Exception("Attempted refresh on widget without refresh support")
 
     def start_file_in_qgis(self, project_id: str, online_path: str):
-        for project in self.projects:
-            if project["id"] == project_id:
-                self.communication.log_warn(f"Selecting project {project_id}")
-                self.project = project
-        self.selected_file = get_tenant_project_file(project_id, {"path": online_path})
-        paths = ["Projects", self.project["name"]] + online_path.split("/")[:-1]
-        self.breadcrumbs.set_paths(paths, update=False)
-        if self.selected_file:
+        self.projects_browser.set_project_from_id(project_id)
+        if self.project is not None:
+            self.communication.log_warn(f"Selecting project {project_id}")
+            paths = [
+                "Projects",
+                self.projects_browser.project["name"],
+            ] + online_path.split("/")[:-1]
+            self.selected_file = get_tenant_project_file(
+                project_id, {"path": online_path}
+            )
+            self.breadcrumbs.set_paths(paths, update=True)
+        if self.breadcrumbs.selected_file:
             self.communication.log_info(f"Opening file {str(self.selected_file)}")
-            self.open_in_qgis_selected.emit(self.project, self.selected_file)
-            self._update_file_UI()
+            self.open_in_qgis_selected.emit(
+                self.projects_browser.project, self.selected_file
+            )
+            self.files_browser.selected_file = self.selected_file
+            self.files_browser.update()
         else:
             self.project = None
             self.breadcrumbs.set_paths(["Projects"], update=False)
