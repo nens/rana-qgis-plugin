@@ -4,10 +4,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from osgeo import gdal
-
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
+from osgeo import gdal
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem

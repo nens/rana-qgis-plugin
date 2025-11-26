@@ -1,9 +1,8 @@
+import math
+from time import sleep
 from typing import Optional, TypedDict
 
-from time import sleep
-
 import requests
-import math
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
@@ -147,9 +146,7 @@ def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
         return None
 
 
-def split_scenario_extent(
-    grid, resolution=None, max_pixel_count=1 * 10**8
-):
+def split_scenario_extent(grid, resolution=None, max_pixel_count=1 * 10**8):
     """
     Split raster task spatial bounds to fit in to maximum pixel count limit.
     Reimplemented code from https://github.com/nens/threedi-scenario-downloader
@@ -197,7 +194,13 @@ def split_scenario_extent(
     return spatial_bounds
 
 
-def create_raster_tasks(descriptor_id: str, raster_id: str, spatial_bounds, projection: str, no_data: int = None):
+def create_raster_tasks(
+    descriptor_id: str,
+    raster_id: str,
+    spatial_bounds,
+    projection: str,
+    no_data: int = None,
+):
     """
     Create Lizard raster tasks for a raster.
     Reimplemented code from https://github.com/nens/lizard-qgis-plugin
@@ -216,10 +219,13 @@ def create_raster_tasks(descriptor_id: str, raster_id: str, spatial_bounds, proj
         }
         if no_data is not None:
             payload["nodata"] = no_data
-        r = request_raster_generate(descriptor_id=descriptor_id, raster_id=raster_id, payload=payload)
+        r = request_raster_generate(
+            descriptor_id=descriptor_id, raster_id=raster_id, payload=payload
+        )
         raster_tasks.append(r)
 
     return raster_tasks
+
 
 def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict):
     authcfg_id = get_authcfg_id()
@@ -237,10 +243,14 @@ def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict):
 
 
 def get_raster_file_link(descriptor_id: str, task_id: str):
-    #TODO handle failed tasks better
+    # TODO handle failed tasks better
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/"+"{raster_id}"+f"/task/{task_id}"
+    url = (
+        f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/"
+        + "{raster_id}"
+        + f"/task/{task_id}"
+    )
 
     network_manager = NetworkManager(url, authcfg_id)
     job_complete = False

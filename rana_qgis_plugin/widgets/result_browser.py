@@ -28,7 +28,9 @@ class ResultBrowser(QDialog):
         results_group = QGroupBox("Results", self)
         results_group.setLayout(QGridLayout())
 
-        postprocessed_rasters_group = QGroupBox("Postprocess raster results (slow)", self)
+        postprocessed_rasters_group = QGroupBox(
+            "Postprocess raster results (slow)", self
+        )
         postprocessed_rasters_group.setLayout(QGridLayout())
 
         self.results_table = QTableWidget(self)
@@ -43,7 +45,9 @@ class ResultBrowser(QDialog):
         self.postprocessed_rasters_table.setColumnCount(2)
         self.postprocessed_rasters_table.verticalHeader().setVisible(False)
         self.postprocessed_rasters_table.horizontalHeader().setStretchLastSection(True)
-        self.postprocessed_rasters_table.setHorizontalHeaderLabels(["Type", "File name"])
+        self.postprocessed_rasters_table.setHorizontalHeaderLabels(
+            ["Type", "File name"]
+        )
 
         for i, result in enumerate([r for r in results if r["attachment_url"]]):
             self.results_table.insertRow(self.results_table.rowCount())
@@ -64,8 +68,12 @@ class ResultBrowser(QDialog):
         # timeseries rasters
         excluded_rasters = ["depth-dtri", "rain-quad", "s1-dtri"]
 
-        for i, result in enumerate([r for r in results if r["raster_id"] and r["code"] not in excluded_rasters]):
-            self.postprocessed_rasters_table.insertRow(self.postprocessed_rasters_table.rowCount())
+        for i, result in enumerate(
+            [r for r in results if r["raster_id"] and r["code"] not in excluded_rasters]
+        ):
+            self.postprocessed_rasters_table.insertRow(
+                self.postprocessed_rasters_table.rowCount()
+            )
             type_item = QTableWidgetItem(result["name"])
             type_item.setFlags(
                 Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
