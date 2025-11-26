@@ -4,6 +4,7 @@ import os
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import QLabel, QTableWidgetItem
 
 from rana_qgis_plugin.communication import UICommunication
@@ -55,9 +56,16 @@ class RanaBrowser(uicls, basecls):
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
 
-        banner = QPixmap(os.path.join(ICONS_DIR, "banner.svg"))
-        # banner = banner.scaledToHeight(20)
-        self.logo_label.setPixmap(banner)
+        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
+        renderer = banner.renderer()
+        original_size = renderer.defaultSize()  # QSize
+        width = 150
+        height = int(original_size.height() / original_size.width() * width)
+        banner.setFixedWidth(width)
+        banner.setFixedHeight(height)
+        self.top_widget.layout().removeWidget(self.logo_label)
+        self.logo_label = banner
+        self.top_widget.layout().addWidget(self.logo_label)
 
         # Projects widget
         self.projects = []
