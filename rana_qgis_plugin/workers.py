@@ -328,6 +328,8 @@ class LizardResultDownloadWorker(QThread):
         target_folder: str,
         grid: dict,
         nodata: int,
+        pixelsize: float,
+        crs: str,
     ):
         super().__init__()
         self.project = project
@@ -336,6 +338,8 @@ class LizardResultDownloadWorker(QThread):
         self.target_folder = target_folder
         self.grid = grid
         self.nodata = nodata
+        self.pixelsize = pixelsize
+        self.crs = crs
 
     @pyqtSlot()
     def run(self):
@@ -377,7 +381,7 @@ class LizardResultDownloadWorker(QThread):
             else:
                 previous_progress = -1
                 spatial_bounds = split_scenario_extent(
-                    grid=self.grid, max_pixel_count=1 * 10**8
+                    grid=self.grid, resolution=self.pixelsize, max_pixel_count=1 * 10**8
                 )
                 # start generate task for each tile of the raster to be downloaded
                 bboxes, width, height = spatial_bounds
@@ -389,7 +393,7 @@ class LizardResultDownloadWorker(QThread):
                         "width": width,
                         "height": height,
                         "bbox": bbox,
-                        "projection": self.grid["crs"],
+                        "projection": self.crs,
                         "format": "geotiff",
                         "async": "true",
                     }
