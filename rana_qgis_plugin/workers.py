@@ -22,7 +22,7 @@ from .utils_api import (
     map_result_to_file_name,
     start_file_upload,
     split_scenario_extent,
-    create_raster_tasks,
+    request_raster_generate,
     get_raster_file_link,
 )
 
@@ -367,18 +367,37 @@ class LizardResultDownloadWorker(QThread):
                     self.failed.emit(f"An error occurred: {str(e)}")
             # if raster first needs to be generated
             else:
-                spatial_bounds = split_scenario_extent(grid=self.grid)
-                raster_tasks = create_raster_tasks(
-                    descriptor_id=descriptor_id,
-                    raster_id=result["raster_id"],
-                    spatial_bounds=spatial_bounds,
-                    projection=self.grid["crs"]
-                )
+                previous_progress = -1
+                spatial_bounds = split_scenario_extent(grid=self.grid, max_pixel_count=1 * 10**8)
+                # start generate task for each tile of the raster to be downloaded
+                bboxes, width, height = spatial_bounds
+                raster_tasks = []
+                counter = 0
+                for x1, y1, x2, y2 in bboxes:
+                    bbox = f"{x1},{y1},{x2},{y2}"
+                    payload = {
+                        "width": width,
+                        "height": height,
+                        "bbox": bbox,
+                        "projection": self.grid["crs"],
+                        "format": "geotiff",
+                        "async": "true",
+                    }
+                    if self.nodata is not None:
+                        payload["nodata"] = self.nodata
+                    r = request_raster_generate(descriptor_id=descriptor_id, raster_id=result["raster_id"], payload=payload)
+                    raster_tasks.append(r)
+                    counter += 1
+                    progress = int((counter / len(bboxes)) * 10)
+                    if progress > previous_progress:
+                        self.progress.emit(progress, file_name)
+                        previous_progress = progress
+
                 # multi-tile raster download
+                #TODO: fix path formatting with / creating nested dirs
                 if len(raster_tasks) > 1:
-                    previous_progress = -1
                     raster_filepaths = []
-                    for raster_task_id, task_counter in enumerate(raster_tasks, 0):
+                    for task_counter, raster_task_id in enumerate(raster_tasks, 0):
                         raster_filename = f"{file_name}{task_counter:02d}.tif"
                         target_file = bypass_max_path_limit(
                             os.path.join(self.target_folder, raster_filename)
@@ -387,7 +406,7 @@ class LizardResultDownloadWorker(QThread):
                         # get tile download link from each task as it completes
                         file_link = get_raster_file_link(descriptor_id=descriptor_id, task_id=raster_task_id)
                         # reserve last 10% of progress for raster merging
-                        progress = int((task_counter/len(raster_tasks))*90)
+                        progress = int(10+(task_counter/len(raster_tasks))*80)
                         if progress > previous_progress:
                             self.progress.emit(progress, file_name)
                         previous_progress = progress
@@ -414,20 +433,17 @@ class LizardResultDownloadWorker(QThread):
                     vrt_options = {"resolution": "average", "resampleAlg": "nearest", "srcNodata": self.nodata}
                     build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
                     self.progress.emit(100, file_name)
-                    self.file = vrt_filepath
                 # single-tile raster download
                 else:
                     target_file = bypass_max_path_limit(
                         os.path.join(self.target_folder, (file_name + ".tif"))
                     )
                     file_link = get_raster_file_link(descriptor_id=descriptor_id, task_id=raster_tasks[0])
-                    self.progress.emit(10, file_name)
                     try:
                         with requests.get(file_link, stream=True) as response:
                             response.raise_for_status()
                             total_size = int(response.headers.get("content-length", 0))
                             downloaded_size = 0
-                            previous_progress = -1
                             with open(target_file, "wb") as file:
                                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                                     file.write(chunk)

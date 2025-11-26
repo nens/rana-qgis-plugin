@@ -213,10 +213,6 @@ def create_raster_tasks(descriptor_id: str, raster_id: str, spatial_bounds, proj
     Create Lizard raster tasks for a raster.
     Reimplemented code from https://github.com/nens/lizard-qgis-plugin
     """
-    authcfg_id = get_authcfg_id()
-    tenant = get_tenant_id()
-
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/{raster_id}/task"
     bboxes, width, height = spatial_bounds
     raster_tasks = []
     for x1, y1, x2, y2 in bboxes:
