@@ -65,7 +65,7 @@ class ResultBrowser(QDialog):
         self.pixelsize_box = QLineEdit(self)
         self.crs_select_box = QgsProjectionSelectionWidget(self)
 
-        self.no_data_box.setText("-9999.00")
+        self.no_data_box.setText("-9999")
         self.pixelsize_box.setText("1.00000")
         self.crs_select_box.setCrs(QgsCoordinateReferenceSystem(scenario_crs))
 
@@ -143,8 +143,8 @@ class ResultBrowser(QDialog):
                 id = int(name_item.data(Qt.ItemDataRole.UserRole))
                 self.selected_results.append(id)
 
-        self.selected_nodata = self.no_data_box.text()
-        self.selected_pixelsize = self.pixelsize_box.text()
+        self.selected_nodata = int(self.no_data_box.text())
+        self.selected_pixelsize = float(self.pixelsize_box.text())
         self.selected_crs = self.crs_select_box.crs().authid()
 
         return super().accept()
