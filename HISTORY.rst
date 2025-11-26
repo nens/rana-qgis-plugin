@@ -4,7 +4,7 @@ History
 1.1.21 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Download generated postprocessing rasters.
 
 
 1.1.20 (2025-11-18)
