@@ -145,6 +145,6 @@ class ResultBrowser(QDialog):
 
         self.selected_nodata = self.no_data_box.text()
         self.selected_pixelsize = self.pixelsize_box.text()
-        self.selected_crs = self.crs_select_box.crs
+        self.selected_crs = self.crs_select_box.crs().authid()
 
         return super().accept()
