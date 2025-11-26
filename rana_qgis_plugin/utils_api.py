@@ -197,17 +197,6 @@ def split_scenario_extent(
     return spatial_bounds
 
 
-# def test(scenario_instance, resolution, max_pixel_count, no_data=-9999):
-#     spatial_bounds = split_scenario_extent(scenario_instance, resolution, max_pixel_count)
-#     descriptor_id = ""
-#     raster_id = scenario_instance[""]
-#     projection = scenario_instance[""]
-#     raster_tasks = create_raster_tasks(descriptor_id, raster_id, spatial_bounds, projection, no_data)
-#     if len(raster_tasks) > 1:
-#         for raster_task_id in raster_tasks:
-#             file_link = get_raster_file_link(descriptor_id=descriptor_id, task_id=raster_task_id)
-
-
 def create_raster_tasks(descriptor_id: str, raster_id: str, spatial_bounds, projection: str, no_data: int = None):
     """
     Create Lizard raster tasks for a raster.
