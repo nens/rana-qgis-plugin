@@ -378,6 +378,10 @@ def map_result_to_file_name(result: dict) -> str:
         return "gridadmin.h5"
     else:
         if result["attachment_url"]:
-            return get_filename_from_attachment_url(result["attachment_url"]).replace("/", "-").replace("\\", "-")
+            return (
+                get_filename_from_attachment_url(result["attachment_url"])
+                .replace("/", "-")
+                .replace("\\", "-")
+            )
         else:
             return result["code"].replace("/", "-").replace("\\", "-")

@@ -1,5 +1,7 @@
 from typing import List
 
+from qgis.core import QgsCoordinateReferenceSystem
+from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -8,13 +10,11 @@ from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QLabel,
+    QLineEdit,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QLineEdit,
 )
-from qgis.gui import QgsProjectionSelectionWidget
-from qgis.core import QgsCoordinateReferenceSystem
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils import get_filename_from_attachment_url
@@ -36,9 +36,7 @@ class ResultBrowser(QDialog):
         results_group = QGroupBox("Results", self)
         results_group.setLayout(QGridLayout())
 
-        postprocessed_rasters_group = QGroupBox(
-            "Generate raster results", self
-        )
+        postprocessed_rasters_group = QGroupBox("Generate raster results", self)
         postprocessed_rasters_group.setLayout(QGridLayout())
 
         self.results_table = QTableWidget(self)
@@ -127,7 +125,12 @@ class ResultBrowser(QDialog):
         layout.addWidget(buttonBox)
 
     def get_selected_results(self) -> List[int]:
-        return self.selected_results, self.selected_nodata, self.selected_pixelsize, self.selected_crs
+        return (
+            self.selected_results,
+            self.selected_nodata,
+            self.selected_pixelsize,
+            self.selected_crs,
+        )
 
     def accept(self) -> None:
         self.selected_results = []

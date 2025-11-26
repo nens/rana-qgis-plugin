@@ -179,13 +179,15 @@ class Loader(QObject):
 
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
-                grid=deepcopy(descriptor["meta"]["grid"])
+                grid = deepcopy(descriptor["meta"]["grid"])
                 results = get_tenant_file_descriptor_view(
                     file["descriptor_id"], "lizard-scenario-results"
                 )
                 result_browser = ResultBrowser(None, results, grid["crs"])
                 if result_browser.exec() == QDialog.DialogCode.Accepted:
-                    result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
+                    result_ids, nodata, pixelsize, crs = (
+                        result_browser.get_selected_results()
+                    )
                     if len(result_ids) == 0:
                         return
                     filtered_result_ids = []
@@ -212,7 +214,6 @@ class Loader(QObject):
                         else:
                             filtered_result_ids.append(result_id)
 
-
                     self.lizard_result_download_worker = LizardResultDownloadWorker(
                         project=project,
                         file=file,
@@ -221,7 +222,7 @@ class Loader(QObject):
                         grid=grid,
                         nodata=nodata,
                         crs=crs,
-                        pixelsize=pixelsize
+                        pixelsize=pixelsize,
                     )
 
                     self.lizard_result_download_worker.finished.connect(
