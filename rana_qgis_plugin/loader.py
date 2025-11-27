@@ -171,9 +171,11 @@ class Loader(QObject):
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
-            schematisation_name,
+            schematisation_name.replace("/", "-").replace("\\", "-"),
             schematisation_version,
-            descriptor["meta"]["simulation"]["name"],
+            descriptor["meta"]["simulation"]["name"]
+            .replace("/", "-")
+            .replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
 
