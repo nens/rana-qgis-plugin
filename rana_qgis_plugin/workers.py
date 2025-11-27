@@ -375,8 +375,10 @@ class LizardResultDownloadWorker(QThread):
 
                 except requests.exceptions.RequestException as e:
                     self.failed.emit(f"Failed to download file: {str(e)}")
+                    break
                 except Exception as e:
                     self.failed.emit(f"An error occurred: {str(e)}")
+                    break
             # if raster first needs to be generated
             else:
                 previous_progress = -1
@@ -447,8 +449,10 @@ class LizardResultDownloadWorker(QThread):
 
                         except requests.exceptions.RequestException as e:
                             self.failed.emit(f"Failed to download file: {str(e)}")
+                            break
                         except Exception as e:
                             self.failed.emit(f"An error occurred: {str(e)}")
+                            break
 
                     raster_filepaths.sort()
                     first_raster_filepath = raster_filepaths[0]
@@ -491,7 +495,9 @@ class LizardResultDownloadWorker(QThread):
 
                     except requests.exceptions.RequestException as e:
                         self.failed.emit(f"Failed to download file: {str(e)}")
+                        break
                     except Exception as e:
                         self.failed.emit(f"An error occurred: {str(e)}")
+                        break
 
         self.finished.emit(self.project, self.file, self.target_folder)

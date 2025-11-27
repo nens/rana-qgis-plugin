@@ -243,7 +243,6 @@ def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict):
 
 
 def get_raster_file_link(descriptor_id: str, task_id: str):
-    # TODO handle failed tasks better
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = (
