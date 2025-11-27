@@ -763,12 +763,14 @@ class RanaBrowser(QWidget):
                 "Projects",
                 self.projects_browser.project["name"],
             ] + online_path.split("/")[:-1]
-            selected_item = get_tenant_project_file(project_id, {"path": online_path})
-            self.files_browser.selected_item = selected_item
+            self.files_browser.selected_item = get_tenant_project_file(
+                project_id, {"path": online_path}
+            )
         if self.files_browser.selected_item:
-            # TODO: check if this is a file?
-            self.communication.log_info(f"Opening file {str(self.selected_file)}")
+            # handle item as it was selected in the UI
             self.files_browser.update()
+            # open in qgis; note that selected_item is either None or a file
+            self.communication.log_info(f"Opening file {str(self.selected_file)}")
             self.open_in_qgis_selected.emit(
                 self.projects_browser.project, self.selected_file
             )
