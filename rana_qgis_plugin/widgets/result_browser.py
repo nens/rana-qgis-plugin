@@ -3,6 +3,7 @@ from typing import List
 from qgis.core import QgsCoordinateReferenceSystem
 from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QDoubleValidator
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -14,7 +15,6 @@ from qgis.PyQt.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
 )
-from qgis.PyQt.QtGui import QDoubleValidator
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils import get_filename_from_attachment_url
@@ -63,8 +63,22 @@ class ResultBrowser(QDialog):
         self.pixelsize_box = QLineEdit(self)
         self.crs_select_box = QgsProjectionSelectionWidget(self)
 
-        self.no_data_box.setValidator(QDoubleValidator(bottom=-1000000.0, top=1000000.0, decimals=1, notation=QDoubleValidator.StandardNotation))
-        self.pixelsize_box.setValidator(QDoubleValidator(bottom=0.00001, top=1000000.00000, decimals=5, notation=QDoubleValidator.StandardNotation))
+        self.no_data_box.setValidator(
+            QDoubleValidator(
+                bottom=-1000000.0,
+                top=1000000.0,
+                decimals=1,
+                notation=QDoubleValidator.StandardNotation,
+            )
+        )
+        self.pixelsize_box.setValidator(
+            QDoubleValidator(
+                bottom=0.00001,
+                top=1000000.00000,
+                decimals=5,
+                notation=QDoubleValidator.StandardNotation,
+            )
+        )
 
         self.no_data_box.setText("-9999.0")
         self.pixelsize_box.setText("1.00000")
@@ -76,8 +90,12 @@ class ResultBrowser(QDialog):
 
         # only show raster download options if raster is selected
         self.raster_selected = False
+
         def check_raster_selected():
-            select_states = [self.postprocessed_rasters_table.item(i, 0).checkState() for i in range(self.postprocessed_rasters_table.rowCount())]
+            select_states = [
+                self.postprocessed_rasters_table.item(i, 0).checkState()
+                for i in range(self.postprocessed_rasters_table.rowCount())
+            ]
             if any(state == Qt.CheckState.Checked for state in select_states):
                 self.no_data_box.setEnabled(True)
                 self.pixelsize_box.setEnabled(True)
@@ -86,6 +104,7 @@ class ResultBrowser(QDialog):
                 self.no_data_box.setEnabled(False)
                 self.pixelsize_box.setEnabled(False)
                 self.crs_select_box.setEnabled(False)
+
         self.postprocessed_rasters_table.cellChanged.connect(check_raster_selected)
 
         postprocessed_rasters_group.layout().addWidget(inputs_group)
