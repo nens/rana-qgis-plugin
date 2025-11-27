@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
 )
+from qgis.PyQt.QtGui import QDoubleValidator
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils import get_filename_from_attachment_url
@@ -63,7 +64,10 @@ class ResultBrowser(QDialog):
         self.pixelsize_box = QLineEdit(self)
         self.crs_select_box = QgsProjectionSelectionWidget(self)
 
-        self.no_data_box.setText("-9999")
+        self.no_data_box.setValidator(QDoubleValidator(bottom=-1000000.0, top=1000000.0, decimals=1, notation=QDoubleValidator.StandardNotation))
+        self.pixelsize_box.setValidator(QDoubleValidator(bottom=0.00001, top=1000000.00000, decimals=5, notation=QDoubleValidator.StandardNotation))
+
+        self.no_data_box.setText("-9999.0")
         self.pixelsize_box.setText("1.00000")
         self.crs_select_box.setCrs(QgsCoordinateReferenceSystem(scenario_crs))
 
