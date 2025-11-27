@@ -71,6 +71,20 @@ class ResultBrowser(QDialog):
         inputs_form.addRow("Pixel size:", self.pixelsize_box)
         inputs_form.addRow("CRS:", self.crs_select_box)
 
+        # only show raster download options if raster is selected
+        self.raster_selected = False
+        def check_raster_selected():
+            select_states = [self.postprocessed_rasters_table.item(i, 0).checkState() for i in range(self.postprocessed_rasters_table.rowCount())]
+            if any(state == Qt.CheckState.Checked for state in select_states):
+                self.no_data_box.setEnabled(True)
+                self.pixelsize_box.setEnabled(True)
+                self.crs_select_box.setEnabled(True)
+            else:
+                self.no_data_box.setEnabled(False)
+                self.pixelsize_box.setEnabled(False)
+                self.crs_select_box.setEnabled(False)
+        self.postprocessed_rasters_table.cellChanged.connect(check_raster_selected)
+
         postprocessed_rasters_group.layout().addWidget(inputs_group)
 
         for i, result in enumerate([r for r in results if r["attachment_url"]]):
