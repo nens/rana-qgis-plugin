@@ -182,7 +182,7 @@ class ResultBrowser(QDialog):
                 id = int(name_item.data(Qt.ItemDataRole.UserRole))
                 self.selected_results.append(id)
 
-        self.selected_nodata = int(self.no_data_box.text())
+        self.selected_nodata = float(self.no_data_box.text())
         self.selected_pixelsize = float(self.pixelsize_box.text())
         self.selected_crs = self.crs_select_box.crs().authid()
 
