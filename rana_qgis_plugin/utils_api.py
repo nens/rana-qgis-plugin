@@ -1,3 +1,5 @@
+import math
+from time import sleep
 from typing import Optional, TypedDict
 
 import requests
@@ -144,6 +146,83 @@ def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
         return None
 
 
+def create_raster_tasks(
+    descriptor_id: str,
+    raster_id: str,
+    spatial_bounds,
+    projection: str,
+    no_data: int = None,
+):
+    """
+    Create Lizard raster tasks for a raster.
+    Reimplemented code from https://github.com/nens/lizard-qgis-plugin
+    """
+    bboxes, width, height = spatial_bounds
+    raster_tasks = []
+    for x1, y1, x2, y2 in bboxes:
+        bbox = f"{x1},{y1},{x2},{y2}"
+        payload = {
+            "width": width,
+            "height": height,
+            "bbox": bbox,
+            "projection": projection,
+            "format": "geotiff",
+            "async": "true",
+        }
+        if no_data is not None:
+            payload["nodata"] = no_data
+        r = request_raster_generate(
+            descriptor_id=descriptor_id, raster_id=raster_id, payload=payload
+        )
+        raster_tasks.append(r)
+
+    return raster_tasks
+
+
+def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/{raster_id}/task"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, _ = network_manager.post(payload=payload)
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        raise Exception(network_manager.description())
+
+
+def get_raster_file_link(descriptor_id: str, task_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = (
+        f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/"
+        + "{raster_id}"
+        + f"/task/{task_id}"
+    )
+
+    network_manager = NetworkManager(url, authcfg_id)
+    job_complete = False
+    while not job_complete:
+        status, error = network_manager.fetch()
+        if status:
+            response = network_manager.content
+            if response["status"] == "failure":
+                job_complete == True
+                raise Exception("Raster generation failed")
+            elif response["status"] == "success":
+                job_complete == True
+                return response["result"]
+            else:
+                # wait 5 seconds before polling raster generate task again
+                sleep(5)
+        else:
+            job_complete = True
+            raise Exception(f"Failed to retrieve raster: {error}")
+
+
 def start_file_upload(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -249,4 +328,7 @@ def map_result_to_file_name(result: dict) -> str:
     elif result["name"] == "Grid administration":
         return "gridadmin.h5"
     else:
-        return get_filename_from_attachment_url(result["attachment_url"])
+        if result["attachment_url"]:
+            return get_filename_from_attachment_url(result["attachment_url"])
+        else:
+            return result["code"]

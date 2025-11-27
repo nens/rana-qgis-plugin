@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
@@ -170,20 +171,25 @@ class Loader(QObject):
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
-            schematisation_name,
+            schematisation_name.replace("/", "-").replace("\\", "-"),
             schematisation_version,
-            descriptor["meta"]["simulation"]["name"],
+            descriptor["meta"]["simulation"]["name"]
+            .replace("/", "-")
+            .replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
 
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
+                grid = deepcopy(descriptor["meta"]["grid"])
                 results = get_tenant_file_descriptor_view(
                     file["descriptor_id"], "lizard-scenario-results"
                 )
-                result_browser = ResultBrowser(None, results)
+                result_browser = ResultBrowser(None, results, grid["crs"])
                 if result_browser.exec() == QDialog.DialogCode.Accepted:
-                    result_ids = result_browser.get_selected_results_id()
+                    result_ids, nodata, pixelsize, crs = (
+                        result_browser.get_selected_results()
+                    )
                     if len(result_ids) == 0:
                         return
                     filtered_result_ids = []
@@ -211,10 +217,14 @@ class Loader(QObject):
                             filtered_result_ids.append(result_id)
 
                     self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        project,
-                        file,
-                        filtered_result_ids,
-                        target_folder,
+                        project=project,
+                        file=file,
+                        result_ids=filtered_result_ids,
+                        target_folder=target_folder,
+                        grid=grid,
+                        nodata=nodata,
+                        crs=crs,
+                        pixelsize=pixelsize,
                     )
 
                     self.lizard_result_download_worker.finished.connect(
