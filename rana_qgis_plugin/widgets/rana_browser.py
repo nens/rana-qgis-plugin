@@ -54,14 +54,13 @@ class FileView(QWidget):
         self.project = project
 
     def setup_ui(self):
-        # TODO fix button icon
         file_refresh_btn = QToolButton()
         file_refresh_btn.setToolTip("Refresh")
         file_refresh_btn.clicked.connect(self.refresh)
+        file_refresh_btn.setIcon(refresh_icon)
         self.file_table_widget = QTableWidget(1, 2)
-        # TODO: fix table
-        # self.file_table_widget.setHorizontalHeaderVisible(False)
-        # self.file_table_widget.setVerticalHeaderVisible(False)
+        self.file_table_widget.horizontalHeader().setVisible(False)
+        self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QVBoxLayout()
         self.btn_open = QPushButton("Open in QGIS")
         self.btn_save_vector_style = QPushButton("Save Style to Rana")
@@ -452,6 +451,23 @@ class ProjectsBrowser(QWidget):
             return
         self.populate_projects()
 
+    @staticmethod
+    def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
+        project_name = project["name"]
+        name_item = QStandardItem(project_name)
+        name_item.setToolTip(project_name)
+        name_item.setData(project, role=Qt.ItemDataRole.UserRole)
+        last_activity = project["last_activity"]
+        last_activity_timestamp = convert_to_timestamp(last_activity)
+        last_activity_localtime = convert_to_local_time(last_activity)
+        last_activity_relative = convert_to_relative_time(last_activity)
+        last_activity_item = NumericItem(last_activity_relative)
+        last_activity_item.setData(
+            last_activity_timestamp, role=Qt.ItemDataRole.UserRole
+        )
+        last_activity_item.setToolTip(last_activity_localtime)
+        return [name_item, last_activity_item]
+
     def populate_projects(self, clear: bool = False):
         if clear:
             self.projects_model.clear()
@@ -467,23 +483,8 @@ class ProjectsBrowser(QWidget):
         paginated_projects = projects[start_index:end_index]
 
         # Add paginated projects to the project model
-        # TODO: add method to add project item
         for project in paginated_projects:
-            project_name = project["name"]
-            name_item = QStandardItem(project_name)
-            name_item.setToolTip(project_name)
-            name_item.setData(project, role=Qt.ItemDataRole.UserRole)
-            last_activity = project["last_activity"]
-            last_activity_timestamp = convert_to_timestamp(last_activity)
-            last_activity_localtime = convert_to_local_time(last_activity)
-            last_activity_relative = convert_to_relative_time(last_activity)
-            last_activity_item = NumericItem(last_activity_relative)
-            last_activity_item.setData(
-                last_activity_timestamp, role=Qt.ItemDataRole.UserRole
-            )
-            last_activity_item.setToolTip(last_activity_localtime)
-            # Add items to the model
-            self.projects_model.appendRow([name_item, last_activity_item])
+            self.projects_model.appendRow(self._process_project_item(project))
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.setColumnWidth(0, 300)
@@ -653,9 +654,9 @@ class RanaBrowser(QWidget):
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
         logo_label = QLabel("LOGO")
-        # TODO label position!
         logo_label.setPixmap(QPixmap(os.path.join(ICONS_DIR, "banner.svg")))
         top_layout.addWidget(self.breadcrumbs)
+        top_layout.addStretch()
         top_layout.addWidget(logo_label)
         # Add browsers and file view to rana widget
         self.rana_widget.addWidget(self.projects_browser)
@@ -759,14 +760,15 @@ class RanaBrowser(QWidget):
         self.projects_browser.set_project_from_id(project_id)
         if self.project is not None:
             self.communication.log_warn(f"Selecting project {project_id}")
-            paths = [
-                "Projects",
-                self.projects_browser.project["name"],
-            ] + online_path.split("/")[:-1]
             self.files_browser.selected_item = get_tenant_project_file(
                 project_id, {"path": online_path}
             )
         if self.files_browser.selected_item:
+            paths = [
+                "Projects",
+                self.projects_browser.project["name"],
+            ] + online_path.split("/")[:-1]
+            self.breadcrumbs.set_paths(paths)
             # handle item as it was selected in the UI
             self.files_browser.update()
             # open in qgis; note that selected_item is either None or a file
