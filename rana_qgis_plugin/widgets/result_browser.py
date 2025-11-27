@@ -9,7 +9,6 @@ from qgis.PyQt.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QGroupBox,
-    QLabel,
     QLineEdit,
     QTableWidget,
     QTableWidgetItem,
