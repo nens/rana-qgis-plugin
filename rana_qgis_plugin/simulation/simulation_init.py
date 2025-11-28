@@ -6,7 +6,9 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtCore import Qt
 
 base_dir = os.path.dirname(os.path.dirname(__file__))
-uicls, basecls = uic.loadUiType(os.path.join(base_dir, "simulation", "simulation_wizard", "init_dialog.ui"))
+uicls, basecls = uic.loadUiType(
+    os.path.join(base_dir, "simulation", "simulation_wizard", "init_dialog.ui")
+)
 
 
 class SimulationInit(uicls, basecls):
@@ -37,11 +39,13 @@ class SimulationInit(uicls, basecls):
         self.open_wizard = False
         self.initial_conditions = None
         self.multiple_simulations_widget.setVisible(False)
-        self.cb_multiple_simulations.stateChanged.connect(self.multiple_simulations_changed)
+        self.cb_multiple_simulations.stateChanged.connect(
+            self.multiple_simulations_changed
+        )
         self.cb_breaches.stateChanged.connect(self.toggle_breaches)
         self.cb_precipitation.stateChanged.connect(self.toggle_precipitation)
         self.pb_next.clicked.connect(self.start_wizard)
-        self.pb_cancel.clicked.connect(self.close)
+        self.pb_cancel.clicked.connect(self.reject)
         self.setup_initial_options()
         self.check_template_events()
 
@@ -52,7 +56,9 @@ class SimulationInit(uicls, basecls):
         self.cb_boundary.setFocusPolicy(Qt.NoFocus)
 
         # Disable substance if not in organisation contract
-        contracts = self.api.fetch_contracts(organisation__unique_id=self.organisation.unique_id)
+        contracts = self.api.fetch_contracts(
+            organisation__unique_id=self.organisation.unique_id
+        )
         self.has_water_quality_license = False
         for contract in contracts:
             if "waterquality" in contract.scope:
@@ -90,7 +96,10 @@ class SimulationInit(uicls, basecls):
         else:
             self.cb_sources_sinks.setDisabled(True)
         # Check local/timeseries rain
-        local_ts_rain_events = ["lizardtimeseriesrain", "localrain"]  # TODO: add "filetimeseriesrain"
+        local_ts_rain_events = [
+            "lizardtimeseriesrain",
+            "localrain",
+        ]  # TODO: add "filetimeseriesrain"
         if any(getattr(self.events, event_name) for event_name in local_ts_rain_events):
             self.cb_local_or_ts_rain.setChecked(True)
         else:
@@ -135,8 +144,16 @@ class SimulationInit(uicls, basecls):
             self.cb_dwf.setDisabled(True)
         if self.events.filelaterals:
             filelaterals = self.events.filelaterals
-            laterals_events = [filelateral for filelateral in filelaterals if filelateral.periodic != "daily"]
-            dwf_events = [filelateral for filelateral in filelaterals if filelateral.periodic == "daily"]
+            laterals_events = [
+                filelateral
+                for filelateral in filelaterals
+                if filelateral.periodic != "daily"
+            ]
+            dwf_events = [
+                filelateral
+                for filelateral in filelaterals
+                if filelateral.periodic == "daily"
+            ]
             if laterals_events:
                 self.cb_laterals.setChecked(True)
             if dwf_events:
@@ -148,13 +165,18 @@ class SimulationInit(uicls, basecls):
             self.cb_breaches.setChecked(True)
         # Check precipitation
         rain_events = ["lizardrasterrain", "timeseriesrain", "filerasterrain"]
-        if any(getattr(self.events, rain_event_name) for rain_event_name in rain_events):
+        if any(
+            getattr(self.events, rain_event_name) for rain_event_name in rain_events
+        ):
             self.cb_precipitation.setChecked(True)
         # Check wind
         if self.events.initial_winddragcoefficient or self.events.wind:
             self.cb_wind.setChecked(True)
         # Check post-processing options
-        if self.lizard_post_processing_overview and self.lizard_post_processing_overview.results.basic:
+        if (
+            self.lizard_post_processing_overview
+            and self.lizard_post_processing_overview.results.basic
+        ):
             self.cb_postprocess.setChecked(True)
         # Check substances
         if self.events.substances and self.has_water_quality_license:
@@ -195,30 +217,54 @@ class SimulationInit(uicls, basecls):
         """Start new simulation wizard based on selected options."""
         self.initial_conditions = SimulationInitObject()
         self.initial_conditions.include_substances = self.cb_substances.isChecked()
-        self.initial_conditions.include_boundary_conditions = self.cb_boundary.isChecked()
-        self.initial_conditions.include_structure_controls = self.cb_structure_controls.isChecked()
-        self.initial_conditions.include_initial_conditions = self.cb_conditions.isChecked()
+        self.initial_conditions.include_boundary_conditions = (
+            self.cb_boundary.isChecked()
+        )
+        self.initial_conditions.include_structure_controls = (
+            self.cb_structure_controls.isChecked()
+        )
+        self.initial_conditions.include_initial_conditions = (
+            self.cb_conditions.isChecked()
+        )
         self.initial_conditions.initial_saved_state = self.events.initial_savedstate
         self.initial_conditions.include_laterals = self.cb_laterals.isChecked()
         self.initial_conditions.include_dwf = self.cb_dwf.isChecked()
         self.initial_conditions.include_breaches = self.cb_breaches.isChecked()
-        self.initial_conditions.include_precipitations = self.cb_precipitation.isChecked()
+        self.initial_conditions.include_precipitations = (
+            self.cb_precipitation.isChecked()
+        )
         self.initial_conditions.include_wind = self.cb_wind.isChecked()
-        self.initial_conditions.include_lizard_post_processing = self.cb_postprocess.isChecked()
-        self.initial_conditions.multiple_simulations = self.cb_multiple_simulations.isChecked()
+        self.initial_conditions.include_lizard_post_processing = (
+            self.cb_postprocess.isChecked()
+        )
+        self.initial_conditions.multiple_simulations = (
+            self.cb_multiple_simulations.isChecked()
+        )
         if self.initial_conditions.multiple_simulations:
-            self.initial_conditions.number_of_simulations = int(self.dd_number_of_simulation.currentText())
+            self.initial_conditions.number_of_simulations = int(
+                self.dd_number_of_simulation.currentText()
+            )
         nos = self.initial_conditions.number_of_simulations + 1
-        self.initial_conditions.simulations_list = [f"Simulation{i}" for i in range(1, nos)]
-        self.initial_conditions.simulations_difference = self.dd_simulation_difference.currentText()
+        self.initial_conditions.simulations_list = [
+            f"Simulation{i}" for i in range(1, nos)
+        ]
+        self.initial_conditions.simulations_difference = (
+            self.dd_simulation_difference.currentText()
+        )
         self.initial_conditions.generate_saved_state = self.cb_generate.isChecked()
         self.initial_conditions.include_raster_edits = self.cb_raster_edits.isChecked()
         self.initial_conditions.include_leakage = self.cb_leakage.isChecked()
-        self.initial_conditions.include_sources_sinks = self.cb_sources_sinks.isChecked()
-        self.initial_conditions.include_local_ts_rain = self.cb_local_or_ts_rain.isChecked()
-        self.initial_conditions.include_obstacle_edits = self.cb_obstacle_edits.isChecked()
+        self.initial_conditions.include_sources_sinks = (
+            self.cb_sources_sinks.isChecked()
+        )
+        self.initial_conditions.include_local_ts_rain = (
+            self.cb_local_or_ts_rain.isChecked()
+        )
+        self.initial_conditions.include_obstacle_edits = (
+            self.cb_obstacle_edits.isChecked()
+        )
         self.open_wizard = True
-        self.close()
+        self.accept()
 
 
 class SimulationInitObject:

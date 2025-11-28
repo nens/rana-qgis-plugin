@@ -3509,7 +3509,7 @@ class SummaryWidget(uicls_summary_page, basecls_summary_page):
         self.cb_save_template.stateChanged.connect(self.save_template_state_changed)
         # This option is opt-out if "create simulation template" is checked,
         # but required when "create simulation template is not checked"
-        self.cb_start_simulation.setEnabled(False)
+        # self.cb_start_simulation.setEnabled(False)
 
         self.dd_simulation.currentIndexChanged.connect(self.simulation_change)
         self.precipitation_widget.hide()
@@ -3574,12 +3574,12 @@ class SummaryWidget(uicls_summary_page, basecls_summary_page):
         """Handle template checkbox state change."""
         if value == 0:
             self.template_widget.hide()
-            self.cb_start_simulation.setChecked(True)
-            self.cb_start_simulation.setEnabled(False)
+            # self.cb_start_simulation.setChecked(True)
+            # self.cb_start_simulation.setEnabled(False)
         if value == 2:
             self.template_widget.show()
-            self.cb_start_simulation.setChecked(True)
-            self.cb_start_simulation.setEnabled(True)
+            # self.cb_start_simulation.setChecked(True)
+            # self.cb_start_simulation.setEnabled(True)
 
 
 class NamePage(QWizardPage):
@@ -3894,6 +3894,8 @@ class SimulationWizard(QWizard):
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
         self.working_dir = working_dir
+        self.communication.log_warn("=================")
+        self.communication.log_warn(str(self.working_dir))
         self.local_schematisations = list_local_schematisations(
             self.working_dir, use_config_for_revisions=False
         )
@@ -3954,7 +3956,7 @@ class SimulationWizard(QWizard):
         self.summary_page = SummaryPage(self, initial_conditions=init_conditions)
         self.addPage(self.summary_page)
         self.currentIdChanged.connect(self.page_changed)
-        self.setButtonText(QWizard.FinishButton, "Add to queue")
+        self.setButtonText(QWizard.FinishButton, "Start simulation in Rana")
         self.finish_btn = self.button(QWizard.FinishButton)
         self.finish_btn.clicked.connect(self.run_new_simulation)
         self.cancel_btn = self.button(QWizard.CancelButton)
@@ -4969,9 +4971,10 @@ class SimulationWizard(QWizard):
                     new_simulation.template_name = template_name + f"_{i}"
                 else:
                     new_simulation.template_name = template_name
-            new_simulation.start_simulation = (
-                self.summary_page.main_widget.cb_start_simulation.isChecked()
-            )
+            new_simulation.start_simulation = True
+            # # (
+            #     self.summary_page.main_widget.cb_start_simulation.isChecked()
+            # )
             self.new_simulations.append(new_simulation)
         self.unload_breach_layers()
         self.start_simulations(self.new_simulations)

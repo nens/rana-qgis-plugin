@@ -190,34 +190,42 @@ class Loader(QObject):
         working_dir = QgsSettings().value("threedi/working_dir", "")
 
         _, personal_api_token = get_3di_auth()
-        # TODO: add threedi working dir and URL to settings
-        api_url = "https://api.3di.live"
+        # TODO: add threedi working dir and URL to settings (or better: retrieve from Rana)
+        api_url = "https://api.staging.3di.live"
         threedi_api = get_api_client_with_personal_api_token(
             personal_api_token, api_url
         )
         tc = ThreediCalls(threedi_api)
         organisations = {org.unique_id: org for org in tc.fetch_organisations()}
 
-        user_profile = tc.fetch_current_user()
-
-        # retrieve schematisation info
+        # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
         )
+
+        # TODO: currently we pick latest revision
         if not schematisation["latest_revision"]["has_threedimodel"]:
             self.communication.show_warn("Generate a model first")
             return
 
-        # retrieve templates
+        # Retrieve templates
         model_pk = int(schematisation["latest_revision"]["threedimodel"]["id"])
         current_model = tc.fetch_3di_model(model_pk)
-        templates, _ = tc.fetch_simulation_templates_with_count(
-            model_pk, limit=50, offset=0
-        )
 
-        # TODO: allow to choose templates and organisations
-        simulation_template = templates[0]
-        organisation = list(organisations.items())[0][1]
+        template_dialog = ModelSelectionDialog(
+            self.communication,
+            model_pk,
+            threedi_api,
+            organisations,
+            schematisation["schematisation"]["id"],
+            self.parent(),
+        )
+        if template_dialog.exec() == QDialog.Rejected:
+            self.simulation_started.emit()
+            return
+
+        simulation_template = template_dialog.get_selected_template()
+        organisation = template_dialog.get_selected_organisation()
 
         (
             simulation,
@@ -236,9 +244,11 @@ class Loader(QObject):
             api=tc,
             parent=self.parent(),
         )
-        simulation_init_wizard.exec()
+        if simulation_init_wizard.exec() == QDialog.Rejected:
+            self.simulation_started.emit()
+            return
+
         if simulation_init_wizard.open_wizard:
-            # Pick latest template and latest revision
             simulation_wizard = SimulationWizard(
                 self.simulation_runner_pool,
                 working_dir,
@@ -263,7 +273,9 @@ class Loader(QObject):
             simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
             )
-            simulation_wizard.exec()
+
+            if simulation_wizard.exec() == QDialog.Rejected:
+                self.simulation_started.emit()
 
     def start_process(self, project, simulations):
         # Find the simulation tracker processes
@@ -282,7 +294,11 @@ class Loader(QObject):
             params = {
                 "project_id": project["id"],
                 "inputs": {"simulation_id": sim.simulation.id},
-                "outputs": {"results": {"id": "results.zip"}},
+                "outputs": {
+                    "results": {
+                        "id": f"{sim.simulation.name}_{sim.simulation.id}_results.zip"
+                    }
+                },
                 "name": f"simulation_tracker_{sim.simulation.name}",
             }
             self.communication.log_warn(str(params))
