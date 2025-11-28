@@ -31,6 +31,7 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_processes,
@@ -189,8 +190,11 @@ class Loader(QObject):
             return
 
         _, personal_api_token = get_3di_auth()
-        # TODO: Retrieve URL from Rana)
+
+        frontend_settings = get_frontend_settings()
         api_url = "https://api.staging.3di.live"
+        # api_url = frontend_settings["hcc_url"]
+        self.communication.log_warn(str(api_url))
         threedi_api = get_api_client_with_personal_api_token(
             personal_api_token, api_url
         )

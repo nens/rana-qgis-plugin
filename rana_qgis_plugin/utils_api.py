@@ -17,6 +17,18 @@ class UserInfo(TypedDict):
     email: str
 
 
+def get_frontend_settings():
+    url = f"{api_url()}/frontend-settings"
+    network_manager = NetworkManager(url, get_authcfg_id())
+    status = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
 def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
     authcfg_id = get_authcfg_id()
     url = COGNITO_USER_INFO_ENDPOINT
