@@ -40,6 +40,7 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -181,16 +182,14 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     def start_simulation(self, project, file):
         os.makedirs(CACHE_PATH, exist_ok=True)
-        if not QgsSettings().contains("threedi/working_dir"):
+        if not hcc_working_dir():
             self.communication.show_warn(
                 "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
             )
             return
 
-        working_dir = QgsSettings().value("threedi/working_dir", "")
-
         _, personal_api_token = get_3di_auth()
-        # TODO: add threedi working dir and URL to settings (or better: retrieve from Rana)
+        # TODO: Retrieve URL from Rana)
         api_url = "https://api.staging.3di.live"
         threedi_api = get_api_client_with_personal_api_token(
             personal_api_token, api_url
@@ -251,7 +250,7 @@ class Loader(QObject):
         if simulation_init_wizard.open_wizard:
             simulation_wizard = SimulationWizard(
                 self.simulation_runner_pool,
-                working_dir,
+                hcc_working_dir(),
                 simulation_template,
                 organisation,
                 current_model,

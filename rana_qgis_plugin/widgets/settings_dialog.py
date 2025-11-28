@@ -1,21 +1,27 @@
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QGridLayout,
     QGroupBox,
     QLabel,
     QLineEdit,
+    QMessageBox,
+    QPushButton,
     QVBoxLayout,
 )
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
+from rana_qgis_plugin.utils import is_writable
 from rana_qgis_plugin.utils_settings import (
     base_url,
     cognito_client_id,
     cognito_client_id_native,
+    hcc_working_dir,
     set_base_url,
     set_cognito_client_id,
     set_cognito_client_id_native,
+    set_hcc_working_dir,
 )
 
 
@@ -51,6 +57,17 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(auth_group)
 
+        sim_group = QGroupBox("Simulation", self)
+        sim_group.setLayout(QGridLayout())
+        sim_group.layout().addWidget(QLabel("Working directory"), 0, 0)
+        self.working_dir_le = QLineEdit(hcc_working_dir(), sim_group)
+        sim_group.layout().addWidget(self.working_dir_le, 0, 1)
+        browse_pb = QPushButton("Browse", sim_group)
+        sim_group.layout().addWidget(browse_pb, 0, 2)
+        browse_pb.clicked.connect(self.browse)
+
+        layout.addWidget(sim_group)
+
         buttonBox = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -76,4 +93,20 @@ class SettingsDialog(QDialog):
             self._authenticationSettingsChanged = True
             set_base_url(self.url_lineedit.text())
 
+        set_hcc_working_dir(self.working_dir_le.text())
+
         return super().accept()
+
+    def browse(self):
+        work_dir = QFileDialog.getExistingDirectory(
+            self, "Select Working Directory", self.working_dir_le.text()
+        )
+        if work_dir:
+            if not is_writable(work_dir):
+                QMessageBox.warning(
+                    self,
+                    "Warning",
+                    "Can't write to the selected location. Please select a folder to which you have write permission.",
+                )
+                return
+            self.working_dir_le.setText(work_dir)
