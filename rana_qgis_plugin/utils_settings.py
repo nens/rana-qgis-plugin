@@ -76,3 +76,13 @@ def logout_redirect_uri_encoded():
 
 def logout_url():
     return f"{COGNITO_LOGOUT_ENDPOINT}?client_id={cognito_client_id()}&logout_uri={logout_redirect_uri_encoded()}"
+
+
+def hcc_working_dir() -> str:
+    # Backwards compatible to older software
+    return QgsSettings().value("threedi/working_dir")
+
+
+def set_hcc_working_dir(working_dir: str) -> str:
+    # Backwards compatible to older software
+    QgsSettings().setValue("threedi/working_dir", working_dir)

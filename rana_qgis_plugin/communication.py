@@ -116,6 +116,10 @@ class UICommunication:
         """Log the message to QGIS log with a given level."""
         QgsMessageLog.logMessage(msg, self.context, level)
 
+    def log_err(self, msg):
+        """Log the warning to QGIS logs."""
+        self.log_msg(msg, level=Qgis.MessageLevel.Critical)
+
     def log_warn(self, msg):
         """Log the warning to QGIS logs."""
         self.log_msg(msg, level=Qgis.MessageLevel.Warning)
