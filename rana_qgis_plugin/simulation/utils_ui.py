@@ -9,10 +9,20 @@ from uuid import uuid4
 from qgis.gui import QgsFileWidget, QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import QCoreApplication, QDate, QLocale, QSettings, QTime
 from qgis.PyQt.QtGui import QColor, QDoubleValidator, QIcon
-from qgis.PyQt.QtWidgets import (QCheckBox, QComboBox, QDateEdit,
-                                 QDoubleSpinBox, QFileDialog, QGroupBox,
-                                 QItemDelegate, QLineEdit, QRadioButton,
-                                 QSpinBox, QTimeEdit, QWidget)
+from qgis.PyQt.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFileDialog,
+    QGroupBox,
+    QItemDelegate,
+    QLineEdit,
+    QRadioButton,
+    QSpinBox,
+    QTimeEdit,
+    QWidget,
+)
 
 
 def style_path(qml_filename):
@@ -47,7 +57,9 @@ def set_widget_background_color(widget, hex_color="#F0F0F0"):
     widget.setPalette(palette)
 
 
-def scan_widgets_parameters(main_widget, get_combobox_text, remove_postfix, lineedits_as_float_or_none):
+def scan_widgets_parameters(
+    main_widget, get_combobox_text, remove_postfix, lineedits_as_float_or_none
+):
     """Scan widget children and get their values.
 
     In Qt Designer, widgets in the same UI file need to have an unique object name. When an object
@@ -66,7 +78,9 @@ def scan_widgets_parameters(main_widget, get_combobox_text, remove_postfix, line
                 if widget.text():
                     val, to_float_possible = QLocale().toFloat(widget.text())
                     assert to_float_possible  # Should be handled by validators
-                    if "e" in widget.text().lower():  # we use python buildin for scientific notation
+                    if (
+                        "e" in widget.text().lower()
+                    ):  # we use python buildin for scientific notation
                         parameters[obj_name] = float(widget.text())
                     else:
                         parameters[obj_name] = val
@@ -77,7 +91,9 @@ def scan_widgets_parameters(main_widget, get_combobox_text, remove_postfix, line
         elif isinstance(widget, (QCheckBox, QRadioButton)):
             parameters[obj_name] = widget.isChecked()
         elif isinstance(widget, QComboBox):
-            parameters[obj_name] = widget.currentText() if get_combobox_text else widget.currentIndex()
+            parameters[obj_name] = (
+                widget.currentText() if get_combobox_text else widget.currentIndex()
+            )
         elif isinstance(widget, QDateEdit):
             parameters[obj_name] = widget.dateTime().toString("yyyy-MM-dd")
         elif isinstance(widget, QTimeEdit):
@@ -146,7 +162,9 @@ def set_widgets_parameters(main_widget, find_combobox_text=True, **widget_parame
                 widget.clear()
 
 
-def get_filepath(parent, extension_filter=None, extension=None, save=False, dialog_title=None):
+def get_filepath(
+    parent, extension_filter=None, extension=None, save=False, dialog_title=None
+):
     """Opening dialog to get a filepath."""
     if extension_filter is None:
         extension_filter = "All Files (*.*)"
@@ -154,12 +172,20 @@ def get_filepath(parent, extension_filter=None, extension=None, save=False, dial
     if dialog_title is None:
         dialog_title = "Choose file"
 
-    working_dir = QSettings().value("threedi/working_dir", os.path.expanduser("~"), type=str)
-    starting_dir = QSettings().value("threedi/last_schematisation_folder", working_dir, type=str)
+    working_dir = QSettings().value(
+        "threedi/working_dir", os.path.expanduser("~"), type=str
+    )
+    starting_dir = QSettings().value(
+        "threedi/last_schematisation_folder", working_dir, type=str
+    )
     if save is True:
-        file_name, __ = QFileDialog.getSaveFileName(parent, dialog_title, starting_dir, extension_filter)
+        file_name, __ = QFileDialog.getSaveFileName(
+            parent, dialog_title, starting_dir, extension_filter
+        )
     else:
-        file_name, __ = QFileDialog.getOpenFileName(parent, dialog_title, starting_dir, extension_filter)
+        file_name, __ = QFileDialog.getOpenFileName(
+            parent, dialog_title, starting_dir, extension_filter
+        )
     if len(file_name) == 0:
         return None
 
@@ -167,7 +193,9 @@ def get_filepath(parent, extension_filter=None, extension=None, save=False, dial
         if not file_name.endswith(extension):
             file_name += extension
 
-    QSettings().setValue("threedi/last_schematisation_folder", os.path.dirname(file_name))
+    QSettings().setValue(
+        "threedi/last_schematisation_folder", os.path.dirname(file_name)
+    )
     return file_name
 
 
@@ -190,7 +218,9 @@ def ensure_valid_schema(schematisation_filepath, communication):
     try:
         from threedi_schema import ThreediDatabase, errors
     except ImportError:
-        communication.show_error("Could not import `threedi-schema` library to validate database schema.")
+        communication.show_error(
+            "Could not import `threedi-schema` library to validate database schema."
+        )
         return
     try:
         threedi_db = ThreediDatabase(schematisation_filepath)
@@ -213,7 +243,9 @@ def ensure_valid_schema(schematisation_filepath, communication):
         if not do_migration:
             return False
         progress_bar_callback = progress_bar_callback_factory(communication)
-        migration_succeed, migration_feedback_msg = migrate_schematisation_schema(schematisation_filepath, progress_bar_callback)
+        migration_succeed, migration_feedback_msg = migrate_schematisation_schema(
+            schematisation_filepath, progress_bar_callback
+        )
         if not migration_succeed:
             communication.show_error(migration_feedback_msg)
             return False
@@ -229,7 +261,9 @@ def backup_schematisation_file(filename):
     backup_folder = os.path.join(os.path.dirname(os.path.dirname(filename)), "_backup")
     os.makedirs(backup_folder, exist_ok=True)
     prefix = str(uuid4())[:8]
-    backup_file_path = os.path.join(backup_folder, f"{prefix}_{os.path.basename(filename)}")
+    backup_file_path = os.path.join(
+        backup_folder, f"{prefix}_{os.path.basename(filename)}"
+    )
     shutil.copyfile(filename, backup_file_path)
     return backup_file_path
 
@@ -251,9 +285,7 @@ def migrate_schematisation_schema(schematisation_filepath, progress_callback=Non
             except errors.InvalidSRIDException:
                 srid = None
         if srid is None:
-            migration_feedback_msg = (
-                "Could not fetch valid EPSG code from database or DEM; aborting database migration."
-            )
+            migration_feedback_msg = "Could not fetch valid EPSG code from database or DEM; aborting database migration."
     except ImportError:
         migration_feedback_msg = "Missing threedi-schema library (or its dependencies). Schema migration failed."
     except Exception as e:
@@ -264,10 +296,16 @@ def migrate_schematisation_schema(schematisation_filepath, progress_callback=Non
         try:
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always", UserWarning)
-                schema.upgrade(backup=False, epsg_code_override=srid, progress_func=progress_callback)
+                schema.upgrade(
+                    backup=False,
+                    epsg_code_override=srid,
+                    progress_func=progress_callback,
+                )
             if w:
                 for warning in w:
-                    migration_feedback_msg += f'{warning._category_name}: {warning.message}\n'
+                    migration_feedback_msg += (
+                        f"{warning._category_name}: {warning.message}\n"
+                    )
             shutil.rmtree(os.path.dirname(backup_filepath))
             migration_succeed = True
         except errors.UpgradeFailedError:
@@ -281,11 +319,15 @@ def migrate_schematisation_schema(schematisation_filepath, progress_callback=Non
     return migration_succeed, migration_feedback_msg
 
 
-def progress_bar_callback_factory(communication, minimum=0, maximum=100, clear_msg_bar=True):
+def progress_bar_callback_factory(
+    communication, minimum=0, maximum=100, clear_msg_bar=True
+):
     """Callback function to track schematisation migration progress."""
 
     def progress_bar_callback(progres_value, message):
-        communication.progress_bar(message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar)
+        communication.progress_bar(
+            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
+        )
         QCoreApplication.processEvents()
 
     return progress_bar_callback

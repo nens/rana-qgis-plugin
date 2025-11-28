@@ -17,7 +17,9 @@ PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
 CACHE_PATH = os.path.join(PLUGIN_PATH, "_cached_data")
 TEMPLATE_PATH = os.path.join(CACHE_PATH, "templates.json")
 INITIAL_WATERLEVELS_TEMPLATE = os.path.join(CACHE_PATH, "initial_waterlevels.json")
-INITIAL_CONCENTRATIONS_TEMPLATE = os.path.join(CACHE_PATH, "initial_concentrations.json")
+INITIAL_CONCENTRATIONS_TEMPLATE = os.path.join(
+    CACHE_PATH, "initial_concentrations.json"
+)
 BOUNDARY_CONDITIONS_TEMPLATE = os.path.join(CACHE_PATH, "boundary_conditions.json")
 LATERALS_FILE_TEMPLATE = os.path.join(CACHE_PATH, "laterals.json")
 DWF_FILE_TEMPLATE = os.path.join(CACHE_PATH, "dwf.json")
@@ -258,7 +260,10 @@ def extract_error_message(e):
         elif "errors" in error_body:
             errors = error_body["errors"]
             try:
-                error_parts = [f"{err['reason']} ({err['instance']['related_object']})" for err in errors]
+                error_parts = [
+                    f"{err['reason']} ({err['instance']['related_object']})"
+                    for err in errors
+                ]
             except TypeError:
                 error_parts = list(errors.values())
             error_details = "\n" + "\n".join(error_parts)
@@ -296,7 +301,9 @@ def apply_24h_timeseries(start_datetime, end_datetime, timeseries):
     full_days_duration = full_days_delta.days + 1
     full_days_sec = full_days_duration * day_in_sec
     flow_ts = [ts[-1] for ts in timeseries]
-    extended_flow_ts = flow_ts + flow_ts[1:] * (full_days_duration - 1)  # skipping 0.0 time step while extending TS
+    extended_flow_ts = flow_ts + flow_ts[1:] * (
+        full_days_duration - 1
+    )  # skipping 0.0 time step while extending TS
     full_days_seconds_range = range(0, full_days_sec + hour_in_sec, hour_in_sec)
     start_time_delta = start_datetime - start_day
     end_time_delta = end_datetime - start_day
@@ -317,7 +324,10 @@ def apply_24h_timeseries(start_datetime, end_datetime, timeseries):
 
 def split_to_even_chunks(collection, chunk_length):
     """Split collection to even chunks list."""
-    return [collection[i : i + chunk_length] for i in range(0, len(collection), chunk_length)]
+    return [
+        collection[i : i + chunk_length]
+        for i in range(0, len(collection), chunk_length)
+    ]
 
 
 def intervals_are_even(time_series):
@@ -345,9 +355,14 @@ def parse_timeseries(timeseries: str):
     return [[float(f) for f in line.split(",")] for line in timeseries.split("\n")]
 
 
-def translate_illegal_chars(text, illegal_characters=r'\/:*?"<>|', replacement_character="-"):
+def translate_illegal_chars(
+    text, illegal_characters=r'\/:*?"<>|', replacement_character="-"
+):
     """Remove illegal characters from the text."""
-    sanitized_text = "".join(char if char not in illegal_characters else replacement_character for char in text)
+    sanitized_text = "".join(
+        char if char not in illegal_characters else replacement_character
+        for char in text
+    )
     return sanitized_text
 
 
@@ -357,13 +372,18 @@ class NestedObject:
     def __init__(self, data):
         for key, value in data.items():
             if isinstance(value, (list, tuple)):
-                setattr(self, key, [NestedObject(x) if isinstance(x, dict) else x for x in value])
+                setattr(
+                    self,
+                    key,
+                    [NestedObject(x) if isinstance(x, dict) else x for x in value],
+                )
             else:
-                setattr(self, key, NestedObject(value) if isinstance(value, dict) else value)
+                setattr(
+                    self, key, NestedObject(value) if isinstance(value, dict) else value
+                )
 
 
 class SchematisationRasterReferences:
-
     @staticmethod
     def settings_to_api_raster_types():
         raster_type_map = {
@@ -376,20 +396,27 @@ class SchematisationRasterReferences:
 
     @staticmethod
     def api_to_settings_raster_types():
-        raster_type_map = {v: k for k, v in SchematisationRasterReferences.settings_to_api_raster_types().items()}
+        raster_type_map = {
+            v: k
+            for k, v in SchematisationRasterReferences.settings_to_api_raster_types().items()
+        }
         return raster_type_map
 
     @staticmethod
     def api_client_raster_type(settings_raster_type):
         try:
-            return SchematisationRasterReferences.settings_to_api_raster_types()[settings_raster_type]
+            return SchematisationRasterReferences.settings_to_api_raster_types()[
+                settings_raster_type
+            ]
         except KeyError:
             return settings_raster_type
 
     @staticmethod
     def settings_raster_type(api_raster_type):
         try:
-            return SchematisationRasterReferences.api_to_settings_raster_types()[api_raster_type]
+            return SchematisationRasterReferences.api_to_settings_raster_types()[
+                api_raster_type
+            ]
         except KeyError:
             return api_raster_type
 
@@ -437,9 +464,18 @@ class SchematisationRasterReferences:
         """Rasters mapping for the Groundwater."""
         raster_info = OrderedDict(
             (
-                ("equilibrium_infiltration_rate_file", "Equilibrium infiltration rate [mm/d]"),
-                ("groundwater_hydraulic_conductivity_file", "Hydraulic conductivity [m/day]"),
-                ("groundwater_impervious_layer_level_file", "Impervious layer level [m MSL]"),
+                (
+                    "equilibrium_infiltration_rate_file",
+                    "Equilibrium infiltration rate [mm/d]",
+                ),
+                (
+                    "groundwater_hydraulic_conductivity_file",
+                    "Hydraulic conductivity [m/day]",
+                ),
+                (
+                    "groundwater_impervious_layer_level_file",
+                    "Impervious layer level [m MSL]",
+                ),
                 ("infiltration_decay_period_file", "Infiltration decay period [d]"),
                 ("initial_infiltration_rate_file", "Initial infiltration rate [mm/d]"),
                 ("leakage_file", "Leakage [mm/d]"),
@@ -492,7 +528,10 @@ class SchematisationRasterReferences:
     def raster_table_mapping(cls):
         """Rasters to geopackage tables mapping."""
         table_mapping = {}
-        for table_name, raster_files_references in cls.raster_reference_tables().items():
+        for (
+            table_name,
+            raster_files_references,
+        ) in cls.raster_reference_tables().items():
             for raster_type in raster_files_references.keys():
                 table_mapping[raster_type] = table_name
         return table_mapping

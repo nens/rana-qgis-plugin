@@ -34,13 +34,19 @@ class SimulationProgressDelegate(QStyledItemDelegate):
         elif status_name in {SimulationStatusName.STARTING.value}:
             pbar_color = default_color
             ptext = "Starting up simulation .."
-        elif status_name in {SimulationStatusName.INITIALIZED.value, SimulationStatusName.POSTPROCESSING.value}:
+        elif status_name in {
+            SimulationStatusName.INITIALIZED.value,
+            SimulationStatusName.POSTPROCESSING.value,
+        }:
             pbar_color = default_color
             ptext = f"{new_percentage}%"
         elif status_name == SimulationStatusName.FINISHED.value:
             pbar_color = QColor(10, 180, 40)
             ptext = f"{new_percentage}%"
-        elif status_name in {SimulationStatusName.ENDED.value, SimulationStatusName.STOPPED.value}:
+        elif status_name in {
+            SimulationStatusName.ENDED.value,
+            SimulationStatusName.STOPPED.value,
+        }:
             pbar_color = Qt.gray
             ptext = f"{new_percentage}% (stopped)"
         elif status_name == SimulationStatusName.CRASHED.value:

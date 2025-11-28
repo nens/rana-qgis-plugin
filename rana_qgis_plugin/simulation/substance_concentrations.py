@@ -57,7 +57,9 @@ class SubstanceConcentrationsWidget(QWidget):
         """Help texts for substance concentrations."""
         font = QFont("Segoe UI", 10, QFont.Normal)
         text_layout = QHBoxLayout()
-        text1 = QLabel(f"Specify the same constant substance concentrations for all {self.widget_name}s")
+        text1 = QLabel(
+            f"Specify the same constant substance concentrations for all {self.widget_name}s"
+        )
         text2 = QLabel("- or -")
         text3 = QLabel(
             f"Upload CSV containing a specific time series for each {self.widget_name} (overules the constant values)"
@@ -102,7 +104,9 @@ class SubstanceConcentrationsWidget(QWidget):
             validator = QDoubleValidator()
             validator.setNotation(QDoubleValidator.StandardNotation)
             line_edit_constant.setValidator(validator)
-            line_edit_constant.textChanged.connect(partial(self.handle_constant_value, name, var_type))
+            line_edit_constant.textChanged.connect(
+                partial(self.handle_constant_value, name, var_type)
+            )
 
             # units label
             units_label = QLabel(units)
@@ -123,7 +127,9 @@ class SubstanceConcentrationsWidget(QWidget):
             combo_box_time_units.addItems(["mins", "hrs", "s"])
             combo_box_time_units.setObjectName(f"cb_time_units_{var_type}_{name}")
             combo_box_time_units.setFont(font)
-            combo_box_time_units.currentIndexChanged.connect(partial(self.update_time_units, name, var_type))
+            combo_box_time_units.currentIndexChanged.connect(
+                partial(self.update_time_units, name, var_type)
+            )
 
             # upload button
             upload_button = QPushButton("Upload CSV")
@@ -148,7 +154,9 @@ class SubstanceConcentrationsWidget(QWidget):
 
     def handle_constant_value(self, name: str, var_type: str):
         """Handle constant value for substance concentrations."""
-        le_substance_constant = self.groupbox.findChild(QLineEdit, f"le_substance_constant_{var_type}_{name}")
+        le_substance_constant = self.groupbox.findChild(
+            QLineEdit, f"le_substance_constant_{var_type}_{name}"
+        )
         constant_value = le_substance_constant.text().strip()
         if not constant_value:
             self.clear_substance_constants(name, var_type)
@@ -174,12 +182,16 @@ class SubstanceConcentrationsWidget(QWidget):
 
     def load_csv(self, name: str, var_type: str):
         """Load CSV file."""
-        combo_box_time_units = self.groupbox.findChild(QComboBox, f"cb_time_units_{var_type}_{name}")
+        combo_box_time_units = self.groupbox.findChild(
+            QComboBox, f"cb_time_units_{var_type}_{name}"
+        )
         time_units = combo_box_time_units.currentText()
         substances, filename = self.open_upload_dialog(name, var_type, time_units)
         if not filename:
             return
-        le_substance = self.groupbox.findChild(QLineEdit, f"le_substance_csv_{var_type}_{name}")
+        le_substance = self.groupbox.findChild(
+            QLineEdit, f"le_substance_csv_{var_type}_{name}"
+        )
         le_substance.setText(filename)
         if var_type == self.TYPE_1D:
             self.substance_concentrations_1d.update(substances)
@@ -188,10 +200,15 @@ class SubstanceConcentrationsWidget(QWidget):
 
     def open_upload_dialog(self, name: str, var_type: str, time_units: str = "s"):
         """Open dialog for selecting CSV file with laterals."""
-        last_folder = read_3di_settings("last_substances_folder", os.path.expanduser("~"))
+        last_folder = read_3di_settings(
+            "last_substances_folder", os.path.expanduser("~")
+        )
         file_filter = "CSV (*.csv );;All Files (*)"
         filename, __ = QFileDialog.getOpenFileName(
-            self, f"Substance Concentrations for {name} ({var_type})", last_folder, file_filter
+            self,
+            f"Substance Concentrations for {name} ({var_type})",
+            last_folder,
+            file_filter,
         )
         if len(filename) == 0:
             return None, None
@@ -226,14 +243,18 @@ class SubstanceConcentrationsWidget(QWidget):
 
     def update_time_units(self, name: str, var_type: str):
         """Update time units for substance concentrations."""
-        combo_box = self.groupbox.findChild(QComboBox, f"cb_time_units_{var_type}_{name}")
+        combo_box = self.groupbox.findChild(
+            QComboBox, f"cb_time_units_{var_type}_{name}"
+        )
         time_units = combo_box.currentText()
         error_message = self.parent_widget.handle_substance_csv_errors(
             self.csv_header, self.substance_list, var_type, time_units
         )
         if error_message:
             # clear the QLineEdit and members
-            le_substance = self.groupbox.findChild(QLineEdit, f"le_substance_csv_{var_type}_{name}")
+            le_substance = self.groupbox.findChild(
+                QLineEdit, f"le_substance_csv_{var_type}_{name}"
+            )
             le_substance.clear()
 
             self.csv_header = None
@@ -245,7 +266,9 @@ class SubstanceConcentrationsWidget(QWidget):
                     k: [substance for substance in v if substance["substance"] != name]
                     for k, v in self.substance_concentrations_1d.items()
                 }
-                substance_concentrations_1d = {k: v for k, v in substance_concentrations_1d.items() if v}
+                substance_concentrations_1d = {
+                    k: v for k, v in substance_concentrations_1d.items() if v
+                }
                 self.substance_concentrations_1d.clear()
                 self.substance_concentrations_1d.update(substance_concentrations_1d)
             else:
@@ -253,7 +276,9 @@ class SubstanceConcentrationsWidget(QWidget):
                     k: [substance for substance in v if substance["substance"] != name]
                     for k, v in self.substance_concentrations_2d.items()
                 }
-                substance_concentrations_2d = {k: v for k, v in substance_concentrations_2d.items() if v}
+                substance_concentrations_2d = {
+                    k: v for k, v in substance_concentrations_2d.items() if v
+                }
                 self.substance_concentrations_2d.clear()
                 self.substance_concentrations_2d.update(substance_concentrations_2d)
 
@@ -261,9 +286,13 @@ class SubstanceConcentrationsWidget(QWidget):
         """Remove the substance value from substance_constants_1d or substance_constants_2d."""
         if var_type == self.TYPE_1D:
             self.substance_constants_1d = [
-                substance for substance in self.substance_constants_1d if substance_name not in substance
+                substance
+                for substance in self.substance_constants_1d
+                if substance_name not in substance
             ]
         else:
             self.substance_constants_2d = [
-                substance for substance in self.substance_constants_2d if substance_name not in substance
+                substance
+                for substance in self.substance_constants_2d
+                if substance_name not in substance
             ]
