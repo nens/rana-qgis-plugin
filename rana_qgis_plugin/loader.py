@@ -134,7 +134,11 @@ class Loader(QObject):
 
     def on_file_download_progress(self, progress: int, file_name: str = ""):
         self.communication.progress_bar(
-            f"Downloading file {file_name}...", 0, 100, progress, clear_msg_bar=True
+            f"Generating/downloading file {file_name}...",
+            0,
+            100,
+            progress,
+            clear_msg_bar=True,
         )
         self.file_download_progress.emit(progress, file_name)
 
