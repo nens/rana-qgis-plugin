@@ -407,11 +407,6 @@ class ProjectsBrowser(QWidget):
         self.projects = get_tenant_projects(self.communication)
         from qgis.core import Qgis, QgsMessageLog
 
-        for project in self.projects:
-            QgsMessageLog.logMessage(
-                f'{project["name"]=}; {project["id"]=}', "DEBUG", Qgis.Info
-            )
-
     def refresh(self):
         self.current_page = 1
         self.fetch_projects()
