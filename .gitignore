@@ -4,8 +4,10 @@ quick_map_services
 OSMDownloader
 nens_dependency_loader
 Serval
-threedi_*
-ThreeDi*
+threedi_m*
+threedi_r*
+threedi_s*
+ThreeDiC*
 valuetool
 __pycache__
 crayfish
