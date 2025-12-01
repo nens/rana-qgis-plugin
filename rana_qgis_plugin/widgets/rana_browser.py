@@ -636,8 +636,8 @@ class RanaBrowser(QWidget):
         self.projects_browser.project = project
 
     @property
-    def selected_file(self):
-        return self.file_view.selected_file
+    def selected_item(self):
+        return self.files_browser.selected_item
 
     def setup_ui(self):
         self.rana_widget = QStackedWidget()
@@ -691,7 +691,7 @@ class RanaBrowser(QWidget):
         # Connect upload button
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
-                self.project, self.selected_file
+                self.project, self.selected_item
             )
         )
         # connect updating folder from breadcrumb
@@ -700,27 +700,27 @@ class RanaBrowser(QWidget):
         )
         # Connect buttons in file view
         self.file_view.btn_open.clicked.connect(
-            lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_file)
+            lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_item)
         )
         self.file_view.btn_save.clicked.connect(
-            lambda _,: self.upload_file_selected.emit(self.project, self.selected_file)
+            lambda _,: self.upload_file_selected.emit(self.project, self.selected_item)
         )
         self.file_view.btn_save_vector_style.clicked.connect(
             lambda _,: self.save_vector_styling_selected.emit(
-                self.project, self.selected_file
+                self.project, self.selected_item
             )
         )
         self.file_view.btn_wms.clicked.connect(
-            lambda _,: self.open_wms_selected.emit(self.project, self.selected_file)
+            lambda _,: self.open_wms_selected.emit(self.project, self.selected_item)
         )
         self.file_view.btn_download.clicked.connect(
             lambda _,: self.download_file_selected.emit(
-                self.project, self.selected_file
+                self.project, self.selected_item
             )
         )
         self.file_view.btn_download_results.clicked.connect(
             lambda _,: self.download_results_selected.emit(
-                self.project, self.selected_file
+                self.project, self.selected_item
             )
         )
         # Ensure correct page is shown
@@ -772,9 +772,9 @@ class RanaBrowser(QWidget):
             # handle item as it was selected in the UI
             self.files_browser.update()
             # open in qgis; note that selected_item is either None or a file
-            self.communication.log_info(f"Opening file {str(self.selected_file)}")
+            self.communication.log_info(f"Opening file {str(self.selected_item)}")
             self.open_in_qgis_selected.emit(
-                self.projects_browser.project, self.selected_file
+                self.projects_browser.project, self.selected_item
             )
         else:
             self.project = None
