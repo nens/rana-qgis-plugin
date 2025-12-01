@@ -192,9 +192,8 @@ class Loader(QObject):
         _, personal_api_token = get_3di_auth()
 
         frontend_settings = get_frontend_settings()
-        api_url = "https://api.staging.3di.live"
-        # api_url = frontend_settings["hcc_url"]
-        self.communication.log_warn(str(api_url))
+        api_url = frontend_settings["hcc_url"].rstrip("/")
+
         threedi_api = get_api_client_with_personal_api_token(
             personal_api_token, api_url
         )
