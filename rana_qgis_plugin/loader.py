@@ -270,7 +270,7 @@ class Loader(QObject):
                     lizard_post_processing_overview,
                 )
             simulation_wizard.simulation_created.connect(
-                partial(self.start_process, project)
+                partial(self.start_process, project, file)
             )
             simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
@@ -279,7 +279,7 @@ class Loader(QObject):
             if simulation_wizard.exec() == QDialog.Rejected:
                 self.simulation_started.emit()
 
-    def start_process(self, project, simulations):
+    def start_process(self, project, file, simulations):
         # Find the simulation tracker processes
         processes = get_tenant_processes(self.communication)
         track_process = None
@@ -292,13 +292,16 @@ class Loader(QObject):
             self.communication.log_err("No simulation tracker available")
             return
 
+        # Store the result in the same folder as the file
+        output_file_path = file["id"].rpartition("/")[0] + file["id"].rpartition("/")[1]
+
         for sim in simulations:
             params = {
                 "project_id": project["id"],
                 "inputs": {"simulation_id": sim.simulation.id},
                 "outputs": {
                     "results": {
-                        "id": f"{sim.simulation.name}_{sim.simulation.id}_results.zip"
+                        "id": f"{output_file_path}{sim.simulation.name}_{sim.simulation.id}_results.zip"
                     }
                 },
                 "name": f"simulation_tracker_{sim.simulation.name}",

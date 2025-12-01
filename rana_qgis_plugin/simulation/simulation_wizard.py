@@ -3894,8 +3894,6 @@ class SimulationWizard(QWizard):
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
         self.working_dir = working_dir
-        self.communication.log_warn("=================")
-        self.communication.log_warn(str(self.working_dir))
         self.local_schematisations = list_local_schematisations(
             self.working_dir, use_config_for_revisions=False
         )
