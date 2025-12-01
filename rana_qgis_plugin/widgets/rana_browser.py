@@ -745,11 +745,11 @@ class RanaBrowser(QWidget):
 
     @pyqtSlot()
     def enable(self):
-        self.rana_files.setEnabled(True)
+        self.rana_browser.setEnabled(True)
 
     @pyqtSlot()
     def disable(self):
-        self.rana_files.setEnabled(False)
+        self.rana_browser.setEnabled(False)
 
     @pyqtSlot()
     def refresh(self):
