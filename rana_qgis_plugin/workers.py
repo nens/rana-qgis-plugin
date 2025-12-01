@@ -3,6 +3,7 @@ import json
 import os
 import zipfile
 from pathlib import Path
+from time import sleep
 from typing import List
 
 import requests
@@ -413,46 +414,67 @@ class LizardResultDownloadWorker(QThread):
                         previous_progress = progress
 
                 # multi-tile raster download
-                # TODO: fix path formatting with / creating nested dirs
                 if len(raster_tasks) > 1:
-                    raster_filepaths = []
-                    for task_counter, raster_task_id in enumerate(raster_tasks, 0):
-                        raster_filename = f"{file_name}{task_counter:02d}.tif"
-                        target_file = bypass_max_path_limit(
-                            os.path.join(self.target_folder, raster_filename)
-                        )
-                        raster_filepaths.append(target_file)
-                        # get tile download link from each task as it completes
-                        file_link = get_raster_file_link(
-                            descriptor_id=descriptor_id, task_id=raster_task_id
-                        )
-                        # reserve last 10% of progress for raster merging
-                        progress = int(10 + (task_counter / len(raster_tasks)) * 80)
-                        if progress > previous_progress:
-                            self.progress.emit(progress, file_name)
-                        previous_progress = progress
-                        try:
-                            with requests.get(file_link, stream=True) as response:
-                                response.raise_for_status()
-                                total_size = int(
-                                    response.headers.get("content-length", 0)
+
+                    def download_tile(file_link, target_file):
+                        with requests.get(file_link, stream=True) as response:
+                            response.raise_for_status()
+                            total_size = int(response.headers.get("content-length", 0))
+                            with open(target_file, "wb") as file:
+                                for chunk in response.iter_content(
+                                    chunk_size=CHUNK_SIZE
+                                ):
+                                    file.write(chunk)
+
+                    rasters = {
+                        raster_task_id: {
+                            "downloaded": False,
+                            "filepath": bypass_max_path_limit(
+                                os.path.join(
+                                    self.target_folder,
+                                    f"{file_name}{task_number:02d}.tif",
                                 )
-                                downloaded_size = 0
-                                previous_progress = -1
-                                with open(target_file, "wb") as file:
-                                    for chunk in response.iter_content(
-                                        chunk_size=CHUNK_SIZE
-                                    ):
-                                        file.write(chunk)
-                                        downloaded_size += len(chunk)
+                            ),
+                        }
+                        for task_number, raster_task_id in enumerate(raster_tasks)
+                    }
+                    task_counter = 0
 
-                        except requests.exceptions.RequestException as e:
-                            self.failed.emit(f"Failed to download file: {str(e)}")
-                            break
-                        except Exception as e:
-                            self.failed.emit(f"An error occurred: {str(e)}")
-                            break
+                    while False in [task["downloaded"] for task in rasters.values()]:
+                        # wait between each repoll of task statuses
+                        sleep(5)
+                        for raster_task_id in rasters.keys():
+                            # poll all raster generate tasks to check if any is ready to download
+                            if not rasters[raster_task_id]["downloaded"]:
+                                file_link = get_raster_file_link(
+                                    descriptor_id=descriptor_id, task_id=raster_task_id
+                                )
+                                if file_link:
+                                    try:
+                                        download_tile(
+                                            file_link,
+                                            rasters[raster_task_id]["filepath"],
+                                        )
+                                        rasters[raster_task_id]["downloaded"] = True
 
+                                        task_counter += 1
+                                        # reserve last 10% of progress for raster merging
+                                        progress = int(
+                                            10 + (task_counter / len(raster_tasks)) * 80
+                                        )
+                                        if progress > previous_progress:
+                                            self.progress.emit(progress, file_name)
+                                        previous_progress = progress
+                                    except requests.exceptions.RequestException as e:
+                                        self.failed.emit(
+                                            f"Failed to download file: {str(e)}"
+                                        )
+                                        break
+                                    except Exception as e:
+                                        self.failed.emit(f"An error occurred: {str(e)}")
+                                        break
+
+                    raster_filepaths = [item["filepath"] for item in rasters.values()]
                     raster_filepaths.sort()
                     first_raster_filepath = raster_filepaths[0]
                     vrt_filepath = first_raster_filepath.replace("_01", "").replace(

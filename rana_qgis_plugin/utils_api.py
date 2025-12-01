@@ -1,5 +1,4 @@
 import math
-from time import sleep
 from typing import Optional, TypedDict
 
 import requests
@@ -204,23 +203,17 @@ def get_raster_file_link(descriptor_id: str, task_id: str):
     )
 
     network_manager = NetworkManager(url, authcfg_id)
-    job_complete = False
-    while not job_complete:
-        status, error = network_manager.fetch()
-        if status:
-            response = network_manager.content
-            if response["status"] == "failure":
-                job_complete == True
-                raise Exception("Raster generation failed")
-            elif response["status"] == "success":
-                job_complete == True
-                return response["result"]
-            else:
-                # wait 5 seconds before polling raster generate task again
-                sleep(5)
+    status, error = network_manager.fetch()
+    if status:
+        response = network_manager.content
+        if response["status"] == "failure":
+            raise Exception("Raster generation failed")
+        elif response["status"] == "success":
+            return response["result"]
         else:
-            job_complete = True
-            raise Exception(f"Failed to retrieve raster: {error}")
+            return False  # retry after interval
+    else:
+        raise Exception(f"Failed to retrieve raster: {error}")
 
 
 def start_file_upload(project_id: str, params: dict):
