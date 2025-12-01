@@ -64,6 +64,7 @@ class Loader(QObject):
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
+    simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
 
@@ -185,8 +186,9 @@ class Loader(QObject):
         os.makedirs(CACHE_PATH, exist_ok=True)
         if not hcc_working_dir():
             self.communication.show_warn(
-                "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
+                "Working directory not yet set, please configure this in the plugin settings."
             )
+            self.simulation_started_failed.emit()
             return
 
         _, personal_api_token = get_3di_auth()
@@ -208,6 +210,7 @@ class Loader(QObject):
         # TODO: currently we pick latest revision
         if not schematisation["latest_revision"]["has_threedimodel"]:
             self.communication.show_warn("Generate a model first")
+            self.simulation_started_failed.emit()
             return
 
         # Retrieve templates
@@ -223,7 +226,7 @@ class Loader(QObject):
             self.parent(),
         )
         if template_dialog.exec() == QDialog.Rejected:
-            self.simulation_started.emit()
+            self.simulation_cancelled.emit()
             return
 
         simulation_template = template_dialog.get_selected_template()
@@ -247,7 +250,7 @@ class Loader(QObject):
             parent=self.parent(),
         )
         if simulation_init_wizard.exec() == QDialog.Rejected:
-            self.simulation_started.emit()
+            self.simulation_cancelled.emit()
             return
 
         if simulation_init_wizard.open_wizard:
@@ -277,7 +280,7 @@ class Loader(QObject):
             )
 
             if simulation_wizard.exec() == QDialog.Rejected:
-                self.simulation_started.emit()
+                self.simulation_cancelled.emit()
 
     def start_process(self, project, file, simulations):
         # Find the simulation tracker processes
@@ -343,7 +346,7 @@ class Loader(QObject):
     def download_results(self, project, file):
         if not QgsSettings().contains("threedi/working_dir"):
             self.communication.show_warn(
-                "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
+                "Working directory not yet set, please configure this in the plugin settings."
             )
 
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])

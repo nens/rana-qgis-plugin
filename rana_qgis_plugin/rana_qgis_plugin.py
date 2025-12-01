@@ -272,6 +272,7 @@ class RanaQgisPlugin:
             self.loader.vector_style_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
             self.loader.simulation_started.connect(self.rana_browser.enable)
+            self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
