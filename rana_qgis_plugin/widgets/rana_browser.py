@@ -14,6 +14,7 @@ from qgis.PyQt.QtWidgets import (
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QToolButton,
     QTreeView,
     QVBoxLayout,
@@ -635,17 +636,17 @@ class RanaBrowser(QWidget):
         return self.files_browser.selected_item
 
     def setup_ui(self):
-        self.rana_widget = QStackedWidget()
+        self.rana_browser = QTabWidget()
+        self.rana_processes = QWidget()
+        self.rana_files = QStackedWidget()
+        self.rana_browser.addTab(self.rana_files, "Files")
+        self.rana_browser.addTab(self.rana_processes, "Processes")
+        self.rana_browser.setCurrentIndex(0)
+        self.rana_browser.setTabEnabled(1, False)
         # Set up breadcrumbs, browser and file view widgets
         self.breadcrumbs = BreadCrumbsWidget(
-            rana_widget=self.rana_widget, communication=self.communication, parent=self
+            rana_widget=self.rana_files, communication=self.communication, parent=self
         )
-        # Setup widgets that populate the rana widget
-        self.projects_browser = ProjectsBrowser(
-            communication=self.communication, parent=self
-        )
-        self.files_browser = FilesBrowser(communication=self.communication, parent=self)
-        self.file_view = FileView(communication=self.communication, parent=self)
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
         logo_label = QLabel("LOGO")
@@ -653,15 +654,21 @@ class RanaBrowser(QWidget):
         top_layout.addWidget(self.breadcrumbs)
         top_layout.addStretch()
         top_layout.addWidget(logo_label)
-        # Add browsers and file view to rana widget
-        self.rana_widget.addWidget(self.projects_browser)
-        self.rana_widget.addWidget(self.files_browser)
-        self.rana_widget.addWidget(self.file_view)
         # Add components to the layout
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
-        layout.addWidget(self.rana_widget)
+        layout.addWidget(self.rana_browser)
         self.setLayout(layout)
+        # Setup widgets that populate the rana widget
+        self.projects_browser = ProjectsBrowser(
+            communication=self.communication, parent=self
+        )
+        self.files_browser = FilesBrowser(communication=self.communication, parent=self)
+        self.file_view = FileView(communication=self.communication, parent=self)
+        # Add browsers and file view to rana widget
+        self.rana_files.addWidget(self.projects_browser)
+        self.rana_files.addWidget(self.files_browser)
+        self.rana_files.addWidget(self.file_view)
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
@@ -720,34 +727,34 @@ class RanaBrowser(QWidget):
         )
         # Ensure correct page is shown
         self.projects_browser.projects_refreshed.connect(
-            lambda: self.rana_widget.setCurrentIndex(0)
+            lambda: self.rana_files.setCurrentIndex(0)
         )
         self.projects_browser.project_selected.connect(
-            lambda _: self.rana_widget.setCurrentIndex(1)
+            lambda _: self.rana_files.setCurrentIndex(1)
         )
         self.files_browser.folder_selected.connect(
-            lambda: self.rana_widget.setCurrentIndex(1)
+            lambda: self.rana_files.setCurrentIndex(1)
         )
         self.files_browser.file_selected.connect(
-            lambda _: self.rana_widget.setCurrentIndex(2)
+            lambda _: self.rana_files.setCurrentIndex(2)
         )
-        self.file_view.file_showed.connect(lambda: self.rana_widget.setCurrentIndex(2))
+        self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
         self.breadcrumbs.folder_selected.connect(
-            lambda: self.rana_widget.setCurrentIndex(1)
+            lambda: self.rana_files.setCurrentIndex(1)
         )
 
     @pyqtSlot()
     def enable(self):
-        self.rana_widget.setEnabled(True)
+        self.rana_files.setEnabled(True)
 
     @pyqtSlot()
     def disable(self):
-        self.rana_widget.setEnabled(False)
+        self.rana_files.setEnabled(False)
 
     @pyqtSlot()
     def refresh(self):
-        if hasattr(self.rana_widget.currentWidget(), "refresh"):
-            self.rana_widget.currentWidget().refresh()
+        if hasattr(self.rana_files.currentWidget(), "refresh"):
+            self.rana_files.currentWidget().refresh()
         else:
             raise Exception("Attempted refresh on widget without refresh support")
 
