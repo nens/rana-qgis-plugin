@@ -4,7 +4,7 @@ History
 1.1.21 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Add revision view and new simulation button
 
 
 1.1.20 (2025-11-18)
