@@ -89,7 +89,9 @@ class Loader(QObject):
 
     def on_file_download_finished(self, project, file, local_file_path: str):
         self.communication.clear_message_bar()
-        self.communication.bar_info(f"File(s) downloaded to: {local_file_path}")
+        self.communication.bar_info(
+            f"File(s) downloaded to: {local_file_path}", dur=240
+        )
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
