@@ -2,10 +2,9 @@ import math
 import os
 from pathlib import Path
 
-from qgis.core import Qgis, QgsMessageLog
-from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
-from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
+from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -657,8 +656,16 @@ class RanaBrowser(QWidget):
         )
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
-        logo_label = QLabel("LOGO")
-        logo_label.setPixmap(QPixmap(os.path.join(ICONS_DIR, "banner.svg")))
+
+        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
+        renderer = banner.renderer()
+        original_size = renderer.defaultSize()  # QSize
+        width = 150
+        height = int(original_size.height() / original_size.width() * width)
+        banner.setFixedWidth(width)
+        banner.setFixedHeight(height)
+        logo_label = banner
+
         top_layout.addWidget(self.breadcrumbs)
         top_layout.addStretch()
         top_layout.addWidget(logo_label)
