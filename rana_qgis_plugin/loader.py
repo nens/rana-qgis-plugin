@@ -31,6 +31,7 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    delete_tenant_project_file,
     get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -180,6 +181,10 @@ class Loader(QObject):
         """Start the worker for uploading files"""
         self.initialize_file_upload_worker(project, file)
         self.file_upload_worker.start()
+
+    @pyqtSlot(dict, dict)
+    def delete_file(self, project, file):
+        delete_tenant_project_file(project["id"], {"path": file["id"]})
 
     @pyqtSlot(dict, dict)
     def start_simulation(self, project, file):

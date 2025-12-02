@@ -56,6 +56,11 @@ class NetworkManager(object):
         )
         return self.process_request()
 
+    def delete(self, params: dict = None):
+        self.prepare_request(params)
+        self._reply = self._network_manager.deleteResource(self._request)
+        return self.process_request()
+
     def prepare_request(self, params: dict = None):
         # Initialize some properties again
         self._content = None
@@ -96,6 +101,14 @@ class NetworkManager(object):
                 location = self._reply.rawHeader(b"Location")
                 if location:
                     return status, str(location, "utf-8")
+
+            if (
+                self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+                == 204
+            ):
+                self._reply.deleteLater()
+                return status, description
+
             raw_content = self._reply.readAll()
             self._content = json.loads(str(raw_content, "utf-8"))
 

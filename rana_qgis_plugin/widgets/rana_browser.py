@@ -5,12 +5,13 @@ from pathlib import Path
 from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
-from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QStackedWidget,
     QTableWidget,
@@ -233,6 +234,7 @@ class FilesBrowser(QWidget):
     path_changed = pyqtSignal(str)
     busy = pyqtSignal()
     ready = pyqtSignal()
+    file_deletion_requested = pyqtSignal(dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -252,6 +254,8 @@ class FilesBrowser(QWidget):
         project_refresh_btn.setIcon(refresh_icon)
         project_refresh_btn.clicked.connect(self.update)
         self.files_tv = QTreeView()
+        self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
@@ -279,6 +283,18 @@ class FilesBrowser(QWidget):
         if append_path:
             self.path_changed.emit(selected_name)
         self.communication.clear_message_bar()
+
+    def menu_requested(self, pos):
+        menu = QMenu(self)
+        action_stop = QAction("Delete", self)
+        index = self.files_tv.indexAt(pos)
+        file_item = self.files_model.itemFromIndex(index)
+        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+        action_stop.triggered.connect(
+            lambda _: self.file_deletion_requested.emit(selected_item)
+        )
+        menu.addAction(action_stop)
+        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
@@ -625,6 +641,7 @@ class RanaBrowser(QWidget):
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
+    delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -703,6 +720,9 @@ class RanaBrowser(QWidget):
             lambda _,: self.upload_new_file_selected.emit(
                 self.project, self.selected_item
             )
+        )
+        self.files_browser.file_deletion_requested.connect(
+            lambda file: self.delete_file_selected.emit(self.project, file)
         )
         # connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
