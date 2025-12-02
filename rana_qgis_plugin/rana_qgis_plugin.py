@@ -253,6 +253,12 @@ class RanaQgisPlugin:
             self.rana_browser.download_results_selected.connect(
                 self.rana_browser.disable
             )
+            self.rana_browser.start_simulation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.start_simulation_selected.connect(
+                self.loader.start_simulation
+            )
 
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
@@ -265,6 +271,9 @@ class RanaQgisPlugin:
             self.loader.vector_style_finished.connect(self.rana_browser.enable)
             self.loader.vector_style_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
+            self.loader.simulation_started.connect(self.rana_browser.enable)
+            self.loader.simulation_cancelled.connect(self.rana_browser.enable)
+            self.loader.simulation_started_failed.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True

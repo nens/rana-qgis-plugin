@@ -1,10 +1,22 @@
 History
 =======
 
-1.1.19 (unreleased)
+1.1.21 (unreleased)
 -------------------
 
 - Nothing changed yet.
+
+
+1.1.20 (2025-11-18)
+-------------------
+
+- Bump dependency loader to 1.2.6.
+
+
+1.1.19 (2025-11-18)
+-------------------
+
+- Bump dependency loader to 1.2.5.
 
 
 1.1.18 (2025-10-01)

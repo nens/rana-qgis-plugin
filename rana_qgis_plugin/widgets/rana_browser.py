@@ -7,6 +7,7 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -69,6 +70,7 @@ class FileView(QWidget):
         self.btn_wms = QPushButton("Open WMS in QGIS")
         self.btn_download = QPushButton("Download")
         self.btn_download_results = QPushButton("Download Selected Results")
+        self.btn_start_simulation = QPushButton("Start Simulation")
         for btn in [
             self.btn_open,
             self.btn_save_vector_style,
@@ -76,6 +78,7 @@ class FileView(QWidget):
             self.btn_wms,
             self.btn_download,
             self.btn_download_results,
+            self.btn_start_simulation,
         ]:
             button_layout.addWidget(btn)
         layout = QVBoxLayout(self)
@@ -178,6 +181,7 @@ class FileView(QWidget):
             self.btn_wms.hide()
             self.btn_download.hide()
             self.btn_download_results.hide()
+            self.btn_start_simulation.show()
         elif data_type == "scenario":
             self.btn_open.hide()
             self.btn_save.hide()
@@ -190,6 +194,7 @@ class FileView(QWidget):
                 self.btn_wms.hide()
                 self.btn_download.hide()
                 self.btn_download_results.hide()
+            self.btn_start_simulation.hide()
         elif data_type in SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
@@ -199,6 +204,7 @@ class FileView(QWidget):
             self.btn_wms.hide()
             self.btn_download.hide()
             self.btn_download_results.hide()
+            self.btn_start_simulation.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
@@ -206,6 +212,7 @@ class FileView(QWidget):
             self.btn_save_vector_style.hide()
             self.btn_download.hide()
             self.btn_download_results.hide()
+            self.btn_start_simulation.hide()
         self.file_showed.emit()
 
     def refresh(self):
@@ -617,6 +624,7 @@ class RanaBrowser(QWidget):
     upload_new_file_selected = pyqtSignal(dict, dict)
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
+    start_simulation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -722,6 +730,11 @@ class RanaBrowser(QWidget):
         )
         self.file_view.btn_download_results.clicked.connect(
             lambda _,: self.download_results_selected.emit(
+                self.project, self.selected_item
+            )
+        )
+        self.file_view.btn_start_simulation.clicked.connect(
+            lambda _,: self.start_simulation_selected.emit(
                 self.project, self.selected_item
             )
         )
