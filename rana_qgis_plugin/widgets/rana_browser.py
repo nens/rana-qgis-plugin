@@ -11,6 +11,7 @@ from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -53,29 +54,43 @@ from rana_qgis_plugin.utils_api import (
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
+    busy = pyqtSignal()
+    ready = pyqtSignal()
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
         self.communication = communication
         self.revisions = []
+        self.selected_file = None
         self.setup_ui()
 
     def setup_ui(self):
         revisions_refreash_btn = QToolButton()
         revisions_refreash_btn.setToolTip("Refresh")
-        # revisions_refreash_btn.clicked.connect(self.refresh)
+        revisions_refreash_btn.clicked.connect(self.show_revisions)
         revisions_refreash_btn.setIcon(refresh_icon)
         self.revisions_table = QTableView()
         self.revisions_table.setSortingEnabled(True)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
+        self.revisions_model.setColumnCount(3)
+        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         self.revisions_table.setModel(self.revisions_model)
+        self.revisions_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
         layout = QVBoxLayout(self)
         layout.addWidget(revisions_refreash_btn)
         layout.addWidget(self.revisions_table)
         self.setLayout(layout)
 
-    def show_revisions(self, selected_file: dict):
+    def show_revisions_for_file(self, selected_file: dict):
+        self.selected_file = selected_file
+        self.show_revisions()
+
+    def show_revisions(self):
+        self.busy.emit()
+        selected_file = self.selected_file
         self.revisions_model.clear()
         if not selected_file.get("data_type") == "threedi_schematisation":
             return
@@ -101,10 +116,12 @@ class RevisionsView(QWidget):
             date_str = revision.commit_date.strftime("%d-%m-%y %H:%M")
             if revision.id == schematisation["latest_revision"]["id"]:
                 date_str += " (latest)"
+            msg = revision.commit_message
+            msg += " ".join(3 * [msg])
             self.revisions_model.appendRow(
                 [
                     QStandardItem(date_str),
-                    QStandardItem(revision.commit_message),
+                    QStandardItem(msg),
                     QStandardItem(""),
                 ]
             )
@@ -116,9 +133,7 @@ class RevisionsView(QWidget):
                 self.revisions_table.setIndexWidget(
                     self.revisions_model.index(i, 2), new_sim_btn
                 )
-        self.revisions_table.resizeColumnToContents(0)
-        self.revisions_table.resizeColumnToContents(1)
-        self.revisions_table.resizeColumnToContents(2)
+        self.ready.emit()
 
 
 class FileView(QWidget):
@@ -780,6 +795,8 @@ class RanaBrowser(QWidget):
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
+        self.revisions_view.busy.connect(lambda: self.disable)
+        self.revisions_view.ready.connect(lambda: self.enable)
         self.files_browser.busy.connect(lambda: self.disable)
         self.files_browser.ready.connect(lambda: self.enable)
         # Add browsers and file view to rana widget
@@ -870,7 +887,7 @@ class RanaBrowser(QWidget):
             )
         )
         self.file_view.show_revisions_clicked.connect(
-            self.revisions_view.show_revisions
+            self.revisions_view.show_revisions_for_file
         )
         # Start simulation from file view; use latest revision
         self.file_view.btn_start_simulation.clicked.connect(
