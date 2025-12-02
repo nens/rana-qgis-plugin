@@ -493,9 +493,12 @@ class LizardResultDownloadWorker(QThread):
                     target_file = bypass_max_path_limit(
                         os.path.join(self.target_folder, (file_name + ".tif"))
                     )
-                    file_link = get_raster_file_link(
-                        descriptor_id=descriptor_id, task_id=raster_tasks[0]
-                    )
+                    file_link = False
+                    while file_link == False:
+                        sleep(5)
+                        file_link = get_raster_file_link(
+                            descriptor_id=descriptor_id, task_id=raster_tasks[0]
+                        )
                     try:
                         with requests.get(file_link, stream=True) as response:
                             response.raise_for_status()
