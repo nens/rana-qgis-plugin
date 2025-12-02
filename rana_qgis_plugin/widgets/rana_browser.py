@@ -117,7 +117,6 @@ class RevisionsView(QWidget):
             if revision.id == schematisation["latest_revision"]["id"]:
                 date_str += " (latest)"
             msg = revision.commit_message
-            msg += " ".join(3 * [msg])
             self.revisions_model.appendRow(
                 [
                     QStandardItem(date_str),
@@ -363,7 +362,7 @@ class FilesBrowser(QWidget):
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
         layout = QVBoxLayout(self)
-        # todo: move refresh to far right
+        # todo: move refresh to far right (some day)
         layout.addWidget(project_refresh_btn)
         layout.addWidget(self.files_tv)
         layout.addWidget(self.btn_upload)
