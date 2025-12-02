@@ -112,6 +112,20 @@ def delete_tenant_project_file(project_id: str, params: dict):
         return False
 
 
+def delete_tenant_project_directory(project_id: str, params: dict):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/delete"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, _ = network_manager.delete(params)
+
+    if status:
+        return True
+    else:
+        return False
+
+
 def get_tenant_project_file(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

@@ -31,6 +31,7 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    delete_tenant_project_directory,
     delete_tenant_project_file,
     get_frontend_settings,
     get_tenant_file_descriptor,
@@ -68,6 +69,7 @@ class Loader(QObject):
     simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
+    file_deleted = pyqtSignal()
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -184,7 +186,17 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def delete_file(self, project, file):
-        delete_tenant_project_file(project["id"], {"path": file["id"]})
+        self.communication.log_warn(str(file))
+        if file["type"] == "directory":
+            if delete_tenant_project_directory(project["id"], {"path": file["id"]}):
+                self.file_deleted.emit()
+            else:
+                self.communication.show_warn(f"Unable to delete directory {file['id']}")
+        else:
+            if delete_tenant_project_file(project["id"], {"path": file["id"]}):
+                self.file_deleted.emit()
+            else:
+                self.communication.show_warn(f"Unable to delete file {file['id']}")
 
     @pyqtSlot(dict, dict)
     def start_simulation(self, project, file):
