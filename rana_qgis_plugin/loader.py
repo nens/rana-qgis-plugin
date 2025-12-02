@@ -186,7 +186,6 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def delete_file(self, project, file):
-        self.communication.log_warn(str(file))
         if file["type"] == "directory":
             if delete_tenant_project_directory(project["id"], {"path": file["id"]}):
                 self.file_deleted.emit()

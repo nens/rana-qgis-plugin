@@ -285,16 +285,17 @@ class FilesBrowser(QWidget):
         self.communication.clear_message_bar()
 
     def menu_requested(self, pos):
-        menu = QMenu(self)
-        action_stop = QAction("Delete", self)
         index = self.files_tv.indexAt(pos)
         file_item = self.files_model.itemFromIndex(index)
-        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        action_stop.triggered.connect(
-            lambda _: self.file_deletion_requested.emit(selected_item)
-        )
-        menu.addAction(action_stop)
-        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+        if file_item:
+            action_stop = QAction("Delete", self)
+            selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+            action_stop.triggered.connect(
+                lambda _: self.file_deletion_requested.emit(selected_item)
+            )
+            menu = QMenu(self)
+            menu.addAction(action_stop)
+            menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
