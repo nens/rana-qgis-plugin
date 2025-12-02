@@ -829,6 +829,9 @@ class RanaBrowser(QWidget):
         self.file_view.show_revisions_clicked.connect(
             self.revisions_view.show_revisions
         )
+        self.file_view.show_revisions_clicked.connect(
+            lambda _: self.breadcrumbs.add_path("Revisions")
+        )
         # Start simulation from file view; use latest revision
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _: self.start_simulation_selected.emit(
