@@ -182,7 +182,8 @@ class Loader(QObject):
         self.file_upload_worker.start()
 
     @pyqtSlot(dict, dict)
-    def start_simulation(self, project, file):
+    @pyqtSlot(dict, dict, int)
+    def start_simulation(self, project, file, revision_id=None):
         os.makedirs(CACHE_PATH, exist_ok=True)
         if not hcc_working_dir():
             self.communication.show_warn(
@@ -207,15 +208,24 @@ class Loader(QObject):
             self.communication, file["descriptor_id"]
         )
 
-        # TODO: currently we pick latest revision
-        if not schematisation["latest_revision"]["has_threedimodel"]:
+        # Pick latest revision if no revision is provided
+        if revision_id:
+            revision = tc.fetch_schematisation_revision(
+                schematisation["schematisation"]["id"], revision_id
+            ).to_dict()
+        else:
+            revision = schematisation["latest_revision"]
+
+        if not revision["has_threedimodel"]:
             self.communication.show_warn("Generate a model first")
             self.simulation_started_failed.emit()
             return
 
         # Retrieve templates
-        model_pk = int(schematisation["latest_revision"]["threedimodel"]["id"])
-        current_model = tc.fetch_3di_model(model_pk)
+        current_model = tc.fetch_schematisation_revision_3di_models(
+            schematisation["schematisation"]["id"], revision["id"]
+        )[0].to_dict()
+        model_pk = current_model["id"]
 
         template_dialog = ModelSelectionDialog(
             self.communication,

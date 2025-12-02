@@ -51,6 +51,8 @@ from rana_qgis_plugin.utils_api import (
 
 
 class RevisionsView(QWidget):
+    new_simulation_clicked = pyqtSignal(int)
+
     def __init__(self, communication, parent=None):
         super().__init__(parent)
         self.communication = communication
@@ -95,15 +97,28 @@ class RevisionsView(QWidget):
             return
         # Populate table
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
-        for revision in revisions:
+        for i, revision in enumerate(revisions):
             date_str = revision.commit_date.strftime("%d-%m-%y %H:%M")
             if revision.id == schematisation["latest_revision"]["id"]:
                 date_str += " (latest)"
             self.revisions_model.appendRow(
-                [QStandardItem(date_str), QStandardItem(revision.commit_message)]
+                [
+                    QStandardItem(date_str),
+                    QStandardItem(revision.commit_message),
+                    QStandardItem(""),
+                ]
             )
+            if revision.has_threedimodel:
+                new_sim_btn = QPushButton("New simulation")
+                new_sim_btn.clicked.connect(
+                    lambda _: self.new_simulation_clicked.emit(revision.id)
+                )
+                self.revisions_table.setIndexWidget(
+                    self.revisions_model.index(i, 2), new_sim_btn
+                )
         self.revisions_table.resizeColumnToContents(0)
         self.revisions_table.resizeColumnToContents(1)
+        self.revisions_table.resizeColumnToContents(2)
 
 
 class FileView(QWidget):
@@ -291,9 +306,6 @@ class FileView(QWidget):
 
     def refresh(self):
         assert self.selected_file
-        QgsMessageLog.logMessage(
-            f'{self.project["id"]=}; {self.selected_file["id"]=}', "DEBUG", Qgis.Info
-        )
         self.selected_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
@@ -490,7 +502,6 @@ class ProjectsBrowser(QWidget):
 
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication)
-        from qgis.core import Qgis, QgsMessageLog
 
     def refresh(self):
         self.current_page = 1
@@ -702,6 +713,7 @@ class RanaBrowser(QWidget):
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
+    start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -750,14 +762,14 @@ class RanaBrowser(QWidget):
         )
         self.files_browser = FilesBrowser(communication=self.communication, parent=self)
         self.file_view = FileView(communication=self.communication, parent=self)
-        self.revivisions_view = RevisionsView(
+        self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
         )
         # Add browsers and file view to rana widget
         self.rana_files.addWidget(self.projects_browser)
         self.rana_files.addWidget(self.files_browser)
         self.rana_files.addWidget(self.file_view)
-        self.rana_files.addWidget(self.revivisions_view)
+        self.rana_files.addWidget(self.revisions_view)
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
@@ -814,13 +826,20 @@ class RanaBrowser(QWidget):
                 self.project, self.selected_item
             )
         )
+        self.file_view.show_revisions_clicked.connect(
+            self.revisions_view.show_revisions
+        )
+        # Start simulation from file view; use latest revision
         self.file_view.btn_start_simulation.clicked.connect(
-            lambda _,: self.start_simulation_selected.emit(
+            lambda _: self.start_simulation_selected.emit(
                 self.project, self.selected_item
             )
         )
-        self.file_view.show_revisions_clicked.connect(
-            self.revivisions_view.show_revisions
+        # Start simulation for specific revision
+        self.revisions_view.new_simulation_clicked.connect(
+            lambda revision_id: self.start_simulation_selected_with_revision.emit(
+                self.project, self.selected_item, revision_id
+            )
         )
         # Ensure correct page is shown
         self.projects_browser.projects_refreshed.connect(
