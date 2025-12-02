@@ -932,10 +932,10 @@ class RanaBrowser(QWidget):
             # handle item as it was selected in the UI
             self.files_browser.update()
             # open in qgis; note that selected_item is either None or a file
-            # TODO: uncomment
-            # self.open_in_qgis_selected.emit(
-            #     self.projects_browser.project, self.selected_item
-            # )
+            TODO: uncomment
+            self.open_in_qgis_selected.emit(
+                self.projects_browser.project, self.selected_item
+            )
             self.communication.log_info(f"Opening file {str(self.selected_item)}")
         else:
             self.project = None
