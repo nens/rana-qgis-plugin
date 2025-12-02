@@ -4,24 +4,45 @@ from functools import partial
 from pathlib import Path
 
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
-from qgis.PyQt.QtCore import QObject, QSettings, QThread, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import (
+    QObject,
+    QSettings,
+    QThread,
+    QThreadPool,
+    pyqtSignal,
+    pyqtSlot,
+)
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog
+from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
+from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
+from rana_qgis_plugin.simulation.simulation_init import SimulationInit
+from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
+from rana_qgis_plugin.simulation.threedi_calls import (
+    ThreediCalls,
+    get_api_client_with_personal_api_token,
+)
+from rana_qgis_plugin.simulation.utils import CACHE_PATH, extract_error_message
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
+    get_tenant_processes,
     get_tenant_project_file,
     get_threedi_schematisation,
     map_result_to_file_name,
+    start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -44,14 +65,21 @@ class Loader(QObject):
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
+    simulation_cancelled = pyqtSignal()
+    simulation_started = pyqtSignal()
+    simulation_started_failed = pyqtSignal()
 
-    def __init__(self, communication, parent=None):
+    def __init__(self, communication, parent):
         super().__init__(parent)
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.communication = communication
+
+        # For simulations
+        self.simulation_runner_pool = QThreadPool()
+        self.simulation_runner_pool.setMaxThreadCount(1)
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -161,10 +189,171 @@ class Loader(QObject):
         self.file_upload_worker.start()
 
     @pyqtSlot(dict, dict)
+    def start_simulation(self, project, file):
+        os.makedirs(CACHE_PATH, exist_ok=True)
+        if not hcc_working_dir():
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            self.simulation_started_failed.emit()
+            return
+
+        _, personal_api_token = get_3di_auth()
+
+        frontend_settings = get_frontend_settings()
+        api_url = frontend_settings["hcc_url"].rstrip("/")
+
+        threedi_api = get_api_client_with_personal_api_token(
+            personal_api_token, api_url
+        )
+        tc = ThreediCalls(threedi_api)
+        organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+
+        # Retrieve schematisation info
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+
+        # TODO: currently we pick latest revision
+        if not schematisation["latest_revision"]["has_threedimodel"]:
+            self.communication.show_warn("Generate a model first")
+            self.simulation_started_failed.emit()
+            return
+
+        # Retrieve templates
+        model_pk = int(schematisation["latest_revision"]["threedimodel"]["id"])
+        current_model = tc.fetch_3di_model(model_pk)
+
+        template_dialog = ModelSelectionDialog(
+            self.communication,
+            model_pk,
+            threedi_api,
+            organisations,
+            schematisation["schematisation"]["id"],
+            self.parent(),
+        )
+        if template_dialog.exec() == QDialog.Rejected:
+            self.simulation_cancelled.emit()
+            return
+
+        simulation_template = template_dialog.get_selected_template()
+        organisation = template_dialog.get_selected_organisation()
+
+        (
+            simulation,
+            settings_overview,
+            events,
+            lizard_post_processing_overview,
+        ) = self.get_simulation_data_from_template(tc, simulation_template)
+
+        simulation_init_wizard = SimulationInit(
+            current_model,
+            simulation_template,
+            settings_overview,
+            events,
+            lizard_post_processing_overview,
+            organisation,
+            api=tc,
+            parent=self.parent(),
+        )
+        if simulation_init_wizard.exec() == QDialog.Rejected:
+            self.simulation_cancelled.emit()
+            return
+
+        if simulation_init_wizard.open_wizard:
+            simulation_wizard = SimulationWizard(
+                self.simulation_runner_pool,
+                hcc_working_dir(),
+                simulation_template,
+                organisation,
+                current_model,
+                threedi_api,
+                self.communication,
+                simulation_init_wizard,
+                self.parent(),
+            )
+            if simulation:
+                simulation_wizard.load_template_parameters(
+                    simulation,
+                    settings_overview,
+                    events,
+                    lizard_post_processing_overview,
+                )
+            simulation_wizard.simulation_created.connect(
+                partial(self.start_process, project, file)
+            )
+            simulation_wizard.simulation_created_failed.connect(
+                self.simulation_started_failed
+            )
+
+            if simulation_wizard.exec() == QDialog.Rejected:
+                self.simulation_cancelled.emit()
+
+    def start_process(self, project, file, simulations):
+        # Find the simulation tracker processes
+        processes = get_tenant_processes(self.communication)
+        track_process = None
+        for process in processes:
+            if "simulation_tracker" in process["tags"]:
+                track_process = process["id"]
+                break
+
+        if track_process is None:
+            self.communication.log_err("No simulation tracker available")
+            return
+
+        # Store the result in the same folder as the file
+        output_file_path = file["id"].rpartition("/")[0] + file["id"].rpartition("/")[1]
+
+        for sim in simulations:
+            params = {
+                "project_id": project["id"],
+                "inputs": {"simulation_id": sim.simulation.id},
+                "outputs": {
+                    "results": {
+                        "id": f"{output_file_path}{sim.simulation.name}_{sim.simulation.id}_results.zip"
+                    }
+                },
+                "name": f"simulation_tracker_{sim.simulation.name}",
+            }
+            self.communication.log_warn(str(params))
+            result = start_tenant_process(self.communication, track_process, params)
+            self.communication.log_warn(str(result))
+
+        self.simulation_started.emit()
+
+    def get_simulation_data_from_template(self, tc, template):
+        simulation, settings_overview, events, lizard_post_processing_overview = (
+            None,
+            None,
+            None,
+            None,
+        )
+        try:
+            simulation = template.simulation
+            sim_id = simulation.id
+            settings_overview = tc.fetch_simulation_settings_overview(str(sim_id))
+            events = tc.fetch_simulation_events(sim_id)
+            cloned_from_url = simulation.cloned_from
+            if cloned_from_url:
+                source_sim_id = cloned_from_url.strip("/").split("/")[-1]
+                lizard_post_processing_overview = (
+                    tc.fetch_simulation_lizard_postprocessing_overview(source_sim_id)
+                )
+        except ApiException as e:
+            error_msg = extract_error_message(e)
+            if "No basic post-processing resource found" not in error_msg:
+                self.communication.bar_error(error_msg)
+        except Exception as e:
+            error_msg = f"Error: {e}"
+            self.communication.bar_error(error_msg)
+        return simulation, settings_overview, events, lizard_post_processing_overview
+
+    @pyqtSlot(dict, dict)
     def download_results(self, project, file):
         if not QgsSettings().contains("threedi/working_dir"):
             self.communication.show_warn(
-                "3Di working directory not yet set, please configure this in 3Di Models & Simulations plugin."
+                "Working directory not yet set, please configure this in the plugin settings."
             )
 
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])

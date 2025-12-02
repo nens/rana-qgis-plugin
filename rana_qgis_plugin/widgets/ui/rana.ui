@@ -4,7 +4,7 @@
  <widget class="QWidget" name="RanaBrowser">
   <layout class="QGridLayout" name="gridLayout">
    <item row="1" column="0">
-    <widget class="QWidget" name="widget" native="true">
+    <widget class="QWidget" name="top_widget" native="true">
      <layout class="QHBoxLayout" name="horizontalLayout_2">
       <property name="bottomMargin">
        <number>0</number>
@@ -245,6 +245,13 @@
            <widget class="QPushButton" name="btn_download_results">
             <property name="text">
              <string>Download Selected Results</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btn_start_simulation">
+            <property name="text">
+             <string>Start Simulation</string>
             </property>
            </widget>
           </item>

@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -18,6 +19,20 @@ from threedi_mi_utils import (
 
 from .communication import UICommunication
 from .utils_qgis import get_threedi_models_and_simulations_instance
+
+
+def is_writable(working_dir: str) -> bool:
+    """Try to write and remove an empty text file into given location."""
+    try:
+        test_filename = f"{uuid4()}.txt"
+        test_file_path = os.path.join(working_dir, test_filename)
+        with open(test_file_path, "w") as test_file:
+            test_file.write("")
+        os.remove(test_file_path)
+    except (PermissionError, OSError):
+        return False
+    else:
+        return True
 
 
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:

@@ -14,7 +14,15 @@ refresh_icon = QIcon(os.path.join(ICONS_DIR, "refresh.svg"))
 rana_icon = QIcon(os.path.join(ICONS_DIR, "rana.svg"))
 settings_icon = QgsApplication.getThemeIcon("/processingAlgorithm.svg")
 
-# Exported PYQT5 icons
-style = QApplication.style()
-dir_icon = style.standardIcon(QStyle.StandardPixmap.SP_DirIcon)
-file_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+
+def get_safe_icon(standard_pixmap):
+    """Safely get a standard icon, with fallback to a blank QIcon"""
+    app = QApplication.instance()
+    if app and app.style():
+        return app.style().standardIcon(standard_pixmap)
+    return QIcon()  # Return empty icon as fallback
+
+
+# Use the safe function
+dir_icon = get_safe_icon(QStyle.StandardPixmap.SP_DirIcon)
+file_icon = get_safe_icon(QStyle.StandardPixmap.SP_FileIcon)

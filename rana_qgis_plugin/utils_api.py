@@ -18,6 +18,18 @@ class UserInfo(TypedDict):
     email: str
 
 
+def get_frontend_settings():
+    url = f"{api_url()}/frontend-settings"
+    network_manager = NetworkManager(url, get_authcfg_id())
+    status = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
 def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
     authcfg_id = get_authcfg_id()
     url = COGNITO_USER_INFO_ENDPOINT
@@ -214,6 +226,39 @@ def get_raster_file_link(descriptor_id: str, task_id: str):
             return False  # retry after interval
     else:
         raise Exception(f"Failed to retrieve raster: {error}")
+
+
+def get_tenant_processes(communication: UICommunication):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/processes"
+    params = {"limit": 1000}
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+
+    if status:
+        response = network_manager.content
+        items = response["items"]
+        return items
+    else:
+        communication.show_error(f"Failed to get processes: {error}")
+        return []
+
+
+def start_tenant_process(communication: UICommunication, process_id, params: dict):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/processes/{process_id}/execution"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.post(payload=params)
+
+    if status:
+        return network_manager.content
+    else:
+        communication.show_error(f"Failed to start process {process_id}: {error}")
+        return None
 
 
 def start_file_upload(project_id: str, params: dict):
