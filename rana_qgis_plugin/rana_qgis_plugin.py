@@ -260,6 +260,12 @@ class RanaQgisPlugin:
             self.rana_browser.start_simulation_selected.connect(
                 self.loader.start_simulation
             )
+            self.rana_browser.start_simulation_selected_with_revision.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.start_simulation_selected_with_revision.connect(
+                self.loader.start_simulation
+            )
             self.rana_browser.delete_file_selected.connect(self.loader.delete_file)
 
             self.loader.file_download_finished.connect(self.rana_browser.enable)
