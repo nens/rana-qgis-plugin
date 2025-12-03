@@ -219,7 +219,9 @@ def get_raster_file_link(descriptor_id: str, task_id: str):
     if status:
         response = network_manager.content
         if response["status"] == "failure":
-            raise Exception("Raster generation failed")
+            split_response = response["detail"].split('"')
+            message = split_response[split_response.index("msg") + 2]
+            raise Exception(f"Raster generation failed: {message}")
         elif response["status"] == "success":
             return response["result"]
         else:

@@ -344,6 +344,7 @@ class LizardResultDownloadWorker(QThread):
     @pyqtSlot()
     def run(self):
         descriptor_id = self.file["descriptor_id"]
+        task_failed = False
         for result_id in self.result_ids:
             # Retrieve URLS from file descriptors (again), presigned url might be expired
             results = get_tenant_file_descriptor_view(
@@ -375,9 +376,11 @@ class LizardResultDownloadWorker(QThread):
 
                 except requests.exceptions.RequestException as e:
                     self.failed.emit(f"Failed to download file: {str(e)}")
+                    task_failed = True
                     break
                 except Exception as e:
                     self.failed.emit(f"An error occurred: {str(e)}")
+                    task_failed = True
                     break
             # if raster first needs to be generated
             else:
@@ -440,17 +443,21 @@ class LizardResultDownloadWorker(QThread):
                     }
                     task_counter = 0
 
-                    while False in [task["downloaded"] for task in rasters.values()]:
+                    while (
+                        False in [task["downloaded"] for task in rasters.values()]
+                        and not task_failed
+                    ):
                         # wait between each repoll of task statuses
                         sleep(5)
                         for raster_task_id in rasters.keys():
                             # poll all raster generate tasks to check if any is ready to download
                             if not rasters[raster_task_id]["downloaded"]:
-                                file_link = get_raster_file_link(
-                                    descriptor_id=descriptor_id, task_id=raster_task_id
-                                )
-                                if file_link:
-                                    try:
+                                try:
+                                    file_link = get_raster_file_link(
+                                        descriptor_id=descriptor_id,
+                                        task_id=raster_task_id,
+                                    )
+                                    if file_link:
                                         download_tile(
                                             file_link,
                                             rasters[raster_task_id]["filepath"],
@@ -465,63 +472,70 @@ class LizardResultDownloadWorker(QThread):
                                         if progress > previous_progress:
                                             self.progress.emit(progress, file_name)
                                         previous_progress = progress
-                                    except requests.exceptions.RequestException as e:
-                                        self.failed.emit(
-                                            f"Failed to download file: {str(e)}"
-                                        )
-                                        break
-                                    except Exception as e:
-                                        self.failed.emit(f"An error occurred: {str(e)}")
-                                        break
+                                except requests.exceptions.RequestException as e:
+                                    self.failed.emit(
+                                        f"Failed to download file: {str(e)}"
+                                    )
+                                    task_failed = True
+                                    break
+                                except Exception as e:
+                                    self.failed.emit(f"An error occurred: {str(e)}")
+                                    task_failed = True
+                                    break
+                    if not task_failed:
+                        raster_filepaths = [
+                            item["filepath"] for item in rasters.values()
+                        ]
+                        raster_filepaths.sort()
+                        first_raster_filepath = raster_filepaths[0]
+                        vrt_filepath = first_raster_filepath.replace("_01", "").replace(
+                            ".tif", ".vrt"
+                        )
 
-                    raster_filepaths = [item["filepath"] for item in rasters.values()]
-                    raster_filepaths.sort()
-                    first_raster_filepath = raster_filepaths[0]
-                    vrt_filepath = first_raster_filepath.replace("_01", "").replace(
-                        ".tif", ".vrt"
-                    )
-
-                    vrt_options = {
-                        "resolution": "average",
-                        "resampleAlg": "nearest",
-                        "srcNodata": self.nodata,
-                    }
-                    build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
-                    self.progress.emit(100, file_name)
+                        vrt_options = {
+                            "resolution": "average",
+                            "resampleAlg": "nearest",
+                            "srcNodata": self.nodata,
+                        }
+                        build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
+                        self.progress.emit(100, file_name)
                 # single-tile raster download
                 else:
                     target_file = bypass_max_path_limit(
                         os.path.join(self.target_folder, (file_name + ".tif"))
                     )
                     file_link = False
-                    while file_link == False:
+                    while not (file_link or task_failed):
                         sleep(5)
-                        file_link = get_raster_file_link(
-                            descriptor_id=descriptor_id, task_id=raster_tasks[0]
-                        )
-                    try:
-                        with requests.get(file_link, stream=True) as response:
-                            response.raise_for_status()
-                            total_size = int(response.headers.get("content-length", 0))
-                            downloaded_size = 0
-                            with open(target_file, "wb") as file:
-                                for chunk in response.iter_content(
-                                    chunk_size=CHUNK_SIZE
-                                ):
-                                    file.write(chunk)
-                                    downloaded_size += len(chunk)
-                                    progress = int(
-                                        10 + (downloaded_size / total_size) * 90
-                                    )
-                                    if progress > previous_progress:
-                                        self.progress.emit(progress, file_name)
-                                        previous_progress = progress
+                        try:
+                            file_link = get_raster_file_link(
+                                descriptor_id=descriptor_id, task_id=raster_tasks[0]
+                            )
+                            with requests.get(file_link, stream=True) as response:
+                                response.raise_for_status()
+                                total_size = int(
+                                    response.headers.get("content-length", 0)
+                                )
+                                downloaded_size = 0
+                                with open(target_file, "wb") as file:
+                                    for chunk in response.iter_content(
+                                        chunk_size=CHUNK_SIZE
+                                    ):
+                                        file.write(chunk)
+                                        downloaded_size += len(chunk)
+                                        progress = int(
+                                            10 + (downloaded_size / total_size) * 90
+                                        )
+                                        if progress > previous_progress:
+                                            self.progress.emit(progress, file_name)
+                                            previous_progress = progress
 
-                    except requests.exceptions.RequestException as e:
-                        self.failed.emit(f"Failed to download file: {str(e)}")
-                        break
-                    except Exception as e:
-                        self.failed.emit(f"An error occurred: {str(e)}")
-                        break
+                        except requests.exceptions.RequestException as e:
+                            self.failed.emit(f"Failed to download file: {str(e)}")
+                            task_failed = True
+                        except Exception as e:
+                            self.failed.emit(f"An error occurred: {str(e)}")
+                            task_failed = True
 
-        self.finished.emit(self.project, self.file, self.target_folder)
+        if not task_failed:
+            self.finished.emit(self.project, self.file, self.target_folder)
