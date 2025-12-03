@@ -86,6 +86,28 @@ class FileView(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
+    def get_general_file_info(self, selected_file: dict):
+        fields = {}
+        fields["filename"] = os.path.basename(selected_file["id"].rstrip("/"))
+        fields["username"] = (
+            selected_file["user"]["given_name"]
+            + " "
+            + selected_file["user"]["family_name"]
+        )
+        fields["last_modified"] = convert_to_local_time(selected_file["last_modified"])
+        fields["size"] = (
+            display_bytes(selected_file["size"])
+            if data_type != "threedi_schematisation"
+            else "N/A"
+        )
+        descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        fields["meta"] = descriptor["meta"] if descriptor else None
+        fields["description"] = descriptor["description"] if descriptor else None
+        return fields
+
+    def get_more_info_fields(self):
+        pass
+
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
         self.file_table_widget.clearContents()
