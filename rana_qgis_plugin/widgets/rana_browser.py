@@ -714,7 +714,7 @@ class RanaBrowser(QWidget):
         context_menu_signals = (
             (self.files_browser.file_deletion_requested, self.delete_file_selected),
             (self.files_browser.open_in_qgis_requested, self.open_in_qgis_selected),
-            (self.files_browser.upload_file_requested, self.upload_new_file_selected),
+            (self.files_browser.upload_file_requested, self.upload_file_selected),
             (
                 self.files_browser.save_vector_styling_requested,
                 self.save_vector_styling_selected,
