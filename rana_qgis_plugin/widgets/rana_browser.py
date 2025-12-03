@@ -234,12 +234,12 @@ class FilesBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
     file_deletion_requested = pyqtSignal(dict)
-    open_in_qgis_selected = pyqtSignal(dict)
-    upload_file_selected = pyqtSignal(dict)
-    save_vector_styling_selected = pyqtSignal(dict)
-    open_wms_selected = pyqtSignal(dict)
-    download_file_selected = pyqtSignal(dict)
-    download_results_selected = pyqtSignal(dict)
+    open_in_qgis_requested = pyqtSignal(dict)
+    upload_file_requested = pyqtSignal(dict)
+    save_vector_styling_requested = pyqtSignal(dict)
+    open_wms_requested = pyqtSignal(dict)
+    download_file_requested = pyqtSignal(dict)
+    download_results_requested = pyqtSignal(dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -300,23 +300,23 @@ class FilesBrowser(QWidget):
         actions = [("Delete", self.file_deletion_requested)]
         # Add open in QGIS is supported for all supported data types
         if data_type in SUPPORTED_DATA_TYPES:
-            actions.append(("Open in QGIS", self.open_in_qgis_selected))
+            actions.append(("Open in QGIS", self.open_in_qgis_requested))
         # Add save only for vector and raster files
         if data_type in ["vector", "raster"]:
-            actions.append(("Save data to Rana", self.upload_file_selected))
+            actions.append(("Save data to Rana", self.upload_file_requested))
         # Add save vector style only for vector files
         if data_type == "vector":
             actions.append(
-                ("Save vector style to Rana", self.save_vector_styling_selected)
+                ("Save vector style to Rana", self.save_vector_styling_requested)
             )
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
             meta = descriptor["meta"] if descriptor else None
             if meta and meta["simulation"]["software"]["id"] == "3Di":
-                actions.append(("Open WMS in QGIS", self.open_wms_selected))
-                actions.append(("Download", self.download_file_selected))
-                actions.append(("Download results", self.download_results_selected))
+                actions.append(("Open WMS in QGIS", self.open_wms_requested))
+                actions.append(("Download", self.download_file_requested))
+                actions.append(("Download results", self.download_results_requested))
         # populate menu
         menu = QMenu(self)
         for action_label, action_signal in actions:
@@ -760,9 +760,26 @@ class RanaBrowser(QWidget):
                 self.project, self.selected_item
             )
         )
-        self.files_browser.file_deletion_requested.connect(
-            lambda file: self.delete_file_selected.emit(self.project, file)
+        # Connect file browser context menu signals
+        context_menu_signals = (
+            (self.files_browser.file_deletion_requested, self.delete_file_selected),
+            (self.files_browser.open_in_qgis_requested, self.open_in_qgis_selected),
+            (self.files_browser.upload_file_requested, self.upload_new_file_selected),
+            (
+                self.files_browser.save_vector_styling_requested,
+                self.save_vector_styling_selected,
+            ),
+            (self.files_browser.open_wms_requested, self.open_wms_selected),
+            (self.files_browser.download_file_requested, self.download_file_selected),
+            (
+                self.files_browser.download_results_requested,
+                self.download_results_selected,
+            ),
         )
+        for file_browser_signal, rana_signal in context_menu_signals:
+            file_browser_signal.connect(
+                lambda file, signal=rana_signal: signal.emit(self.project, file)
+            )
         # connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.fetch_and_populate(self.project, path)
