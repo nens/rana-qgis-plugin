@@ -756,9 +756,11 @@ class BreadCrumbsWidget(QWidget):
             if clicked_item.type == BreadcrumbType.FILE:
                 self.file_selected.emit()
             else:
-                path = "/".join(
-                    item.name for item in self._items[2:]
-                )  # Skip Projects and project name
+                # path should be None for project root
+                if len(self._items) == 2:
+                    path = None
+                else:
+                    path = "/".join(item.name for item in self._items[2:]) + "/"
                 self.folder_selected.emit(path)
             self.communication.clear_message_bar()
         self.update()
@@ -863,7 +865,9 @@ class RanaBrowser(QWidget):
         )
         self.files_browser.folder_selected.connect(self.breadcrumbs.add_folder)
         self.files_browser.file_selected.connect(
-            lambda selected_item: self.breadcrumbs.add_file(selected_item["id"])
+            lambda selected_item: self.breadcrumbs.add_file(
+                selected_item["id"].split("/")[-1]
+            )
         )
         self.file_view.show_revisions_clicked.connect(self.breadcrumbs.add_revisions)
         # Connect upload button
