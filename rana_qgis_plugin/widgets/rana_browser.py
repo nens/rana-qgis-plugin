@@ -5,15 +5,16 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
-from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
-from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QStackedWidget,
     QTableView,
@@ -337,6 +338,7 @@ class FilesBrowser(QWidget):
     path_changed = pyqtSignal(str)
     busy = pyqtSignal()
     ready = pyqtSignal()
+    file_deletion_requested = pyqtSignal(dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -356,6 +358,8 @@ class FilesBrowser(QWidget):
         project_refresh_btn.setIcon(refresh_icon)
         project_refresh_btn.clicked.connect(self.update)
         self.files_tv = QTreeView()
+        self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
@@ -381,6 +385,19 @@ class FilesBrowser(QWidget):
         else:
             self.file_selected.emit(self.selected_item)
         self.communication.clear_message_bar()
+
+    def menu_requested(self, pos):
+        index = self.files_tv.indexAt(pos)
+        file_item = self.files_model.itemFromIndex(index)
+        if file_item:
+            action_stop = QAction("Delete", self)
+            selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+            action_stop.triggered.connect(
+                lambda _: self.file_deletion_requested.emit(selected_item)
+            )
+            menu = QMenu(self)
+            menu.addAction(action_stop)
+            menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
@@ -742,6 +759,7 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -774,8 +792,16 @@ class RanaBrowser(QWidget):
         )
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
-        logo_label = QLabel("LOGO")
-        logo_label.setPixmap(QPixmap(os.path.join(ICONS_DIR, "banner.svg")))
+
+        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
+        renderer = banner.renderer()
+        original_size = renderer.defaultSize()  # QSize
+        width = 150
+        height = int(original_size.height() / original_size.width() * width)
+        banner.setFixedWidth(width)
+        banner.setFixedHeight(height)
+        logo_label = banner
+
         top_layout.addWidget(self.breadcrumbs)
         top_layout.addStretch()
         top_layout.addWidget(logo_label)
@@ -830,6 +856,9 @@ class RanaBrowser(QWidget):
             lambda _,: self.upload_new_file_selected.emit(
                 self.project, self.selected_item
             )
+        )
+        self.files_browser.file_deletion_requested.connect(
+            lambda file: self.delete_file_selected.emit(self.project, file)
         )
         # connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(

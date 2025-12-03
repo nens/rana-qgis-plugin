@@ -265,6 +265,8 @@ class RanaQgisPlugin:
             self.rana_browser.start_simulation_selected_with_revision.connect(
                 self.loader.start_simulation
             )
+            self.rana_browser.delete_file_selected.connect(self.loader.delete_file)
+
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
@@ -279,6 +281,7 @@ class RanaQgisPlugin:
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
+            self.loader.file_deleted.connect(self.rana_browser.refresh)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
