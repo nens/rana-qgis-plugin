@@ -234,6 +234,12 @@ class FilesBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
     file_deletion_requested = pyqtSignal(dict)
+    open_in_qgis_selected = pyqtSignal(dict)
+    upload_file_selected = pyqtSignal(dict)
+    save_vector_styling_selected = pyqtSignal(dict)
+    open_wms_selected = pyqtSignal(dict)
+    download_file_selected = pyqtSignal(dict)
+    download_results_selected = pyqtSignal(dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -286,15 +292,40 @@ class FilesBrowser(QWidget):
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
         file_item = self.files_model.itemFromIndex(index)
-        if file_item:
-            action_stop = QAction("Delete", self)
-            selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-            action_stop.triggered.connect(
-                lambda _: self.file_deletion_requested.emit(selected_item)
+        if not file_item:
+            return
+        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+        data_type = selected_item["data_type"]
+        # Add delete option files and folders
+        actions = [("Delete", self.file_deletion_requested)]
+        # Add open in QGIS is supported for all supported data types
+        if data_type in SUPPORTED_DATA_TYPES:
+            actions.append(("Open in QGIS", self.open_in_qgis_selected))
+        # Add save only for vector and raster files
+        if data_type in ["vector", "raster"]:
+            actions.append(("Save data to Rana", self.upload_file_selected))
+        # Add save vector style only for vector files
+        if data_type == "vector":
+            actions.append(
+                ("Save vector style to Rana", self.save_vector_styling_selected)
             )
-            menu = QMenu(self)
-            menu.addAction(action_stop)
-            menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+        # Add options to open WMS and download file and results only for 3Di scenarios
+        if data_type == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+            meta = descriptor["meta"] if descriptor else None
+            if meta and meta["simulation"]["software"]["id"] == "3Di":
+                actions.append(("Open WMS in QGIS", self.open_wms_selected))
+                actions.append(("Download", self.download_file_selected))
+                actions.append(("Download results", self.download_results_selected))
+        # populate menu
+        menu = QMenu(self)
+        for action_label, action_signal in actions:
+            action = QAction(action_label, self)
+            action.triggered.connect(
+                lambda _, signal=action_signal: signal.emit(selected_item)
+            )
+            menu.addAction(action)
+        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
