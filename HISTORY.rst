@@ -4,6 +4,7 @@ History
 1.1.21 (unreleased)
 -------------------
 
+- Replace file interaction buttons with context menu
 - Download generated postprocessing rasters.
 
 

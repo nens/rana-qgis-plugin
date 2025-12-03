@@ -2,15 +2,15 @@ import math
 import os
 from pathlib import Path
 
-from qgis.core import Qgis, QgsMessageLog
-from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
-from qgis.PyQt.QtGui import QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QStackedWidget,
     QTableWidget,
@@ -64,23 +64,8 @@ class FileView(QWidget):
         self.file_table_widget.horizontalHeader().setVisible(False)
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QVBoxLayout()
-        self.btn_open = QPushButton("Open in QGIS")
-        self.btn_save_vector_style = QPushButton("Save Style to Rana")
-        self.btn_save = QPushButton("Save Data to Rana")
-        self.btn_wms = QPushButton("Open WMS in QGIS")
-        self.btn_download = QPushButton("Download")
-        self.btn_download_results = QPushButton("Download Selected Results")
         self.btn_start_simulation = QPushButton("Start Simulation")
-        for btn in [
-            self.btn_open,
-            self.btn_save_vector_style,
-            self.btn_save,
-            self.btn_wms,
-            self.btn_download,
-            self.btn_download_results,
-            self.btn_start_simulation,
-        ]:
-            button_layout.addWidget(btn)
+        button_layout.addWidget(self.btn_start_simulation)
         layout = QVBoxLayout(self)
         layout.addWidget(file_refresh_btn)
         layout.addWidget(self.file_table_widget)
@@ -175,43 +160,8 @@ class FileView(QWidget):
 
         # Show/hide the buttons based on the file data type
         if data_type == "threedi_schematisation":
-            self.btn_open.show()
-            self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-            self.btn_wms.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
             self.btn_start_simulation.show()
-        elif data_type == "scenario":
-            self.btn_open.hide()
-            self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-            if meta["simulation"]["software"]["id"] == "3Di":
-                self.btn_wms.show()
-                self.btn_download.show()
-                self.btn_download_results.show()
-            else:
-                self.btn_wms.hide()
-                self.btn_download.hide()
-                self.btn_download_results.hide()
-            self.btn_start_simulation.hide()
-        elif data_type in SUPPORTED_DATA_TYPES.keys():
-            self.btn_open.show()
-            self.btn_save.show()
-            self.btn_save_vector_style.hide()
-            if data_type == "vector":
-                self.btn_save_vector_style.show()
-            self.btn_wms.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
-            self.btn_start_simulation.hide()
         else:
-            self.btn_open.hide()
-            self.btn_save.hide()
-            self.btn_wms.hide()
-            self.btn_save_vector_style.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
             self.btn_start_simulation.hide()
         self.file_showed.emit()
 
@@ -233,6 +183,13 @@ class FilesBrowser(QWidget):
     path_changed = pyqtSignal(str)
     busy = pyqtSignal()
     ready = pyqtSignal()
+    file_deletion_requested = pyqtSignal(dict)
+    open_in_qgis_requested = pyqtSignal(dict)
+    upload_file_requested = pyqtSignal(dict)
+    save_vector_styling_requested = pyqtSignal(dict)
+    open_wms_requested = pyqtSignal(dict)
+    download_file_requested = pyqtSignal(dict)
+    download_results_requested = pyqtSignal(dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -252,6 +209,8 @@ class FilesBrowser(QWidget):
         project_refresh_btn.setIcon(refresh_icon)
         project_refresh_btn.clicked.connect(self.update)
         self.files_tv = QTreeView()
+        self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
@@ -279,6 +238,44 @@ class FilesBrowser(QWidget):
         if append_path:
             self.path_changed.emit(selected_name)
         self.communication.clear_message_bar()
+
+    def menu_requested(self, pos):
+        index = self.files_tv.indexAt(pos)
+        file_item = self.files_model.itemFromIndex(index)
+        if not file_item:
+            return
+        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+        data_type = selected_item["data_type"]
+        # Add delete option files and folders
+        actions = [("Delete", self.file_deletion_requested)]
+        # Add open in QGIS is supported for all supported data types
+        if data_type in SUPPORTED_DATA_TYPES:
+            actions.append(("Open in QGIS", self.open_in_qgis_requested))
+        # Add save only for vector and raster files
+        if data_type in ["vector", "raster"]:
+            actions.append(("Save data to Rana", self.upload_file_requested))
+        # Add save vector style only for vector files
+        if data_type == "vector":
+            actions.append(
+                ("Save vector style to Rana", self.save_vector_styling_requested)
+            )
+        # Add options to open WMS and download file and results only for 3Di scenarios
+        if data_type == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+            meta = descriptor["meta"] if descriptor else None
+            if meta and meta["simulation"]["software"]["id"] == "3Di":
+                actions.append(("Open WMS in QGIS", self.open_wms_requested))
+                actions.append(("Download", self.download_file_requested))
+                actions.append(("Download results", self.download_results_requested))
+        # populate menu
+        menu = QMenu(self)
+        for action_label, action_signal in actions:
+            action = QAction(action_label, self)
+            action.triggered.connect(
+                lambda _, signal=action_signal: signal.emit(selected_item)
+            )
+            menu.addAction(action)
+        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
@@ -625,6 +622,7 @@ class RanaBrowser(QWidget):
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
+    delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -657,8 +655,16 @@ class RanaBrowser(QWidget):
         )
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
-        logo_label = QLabel("LOGO")
-        logo_label.setPixmap(QPixmap(os.path.join(ICONS_DIR, "banner.svg")))
+
+        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
+        renderer = banner.renderer()
+        original_size = renderer.defaultSize()  # QSize
+        width = 150
+        height = int(original_size.height() / original_size.width() * width)
+        banner.setFixedWidth(width)
+        banner.setFixedHeight(height)
+        logo_label = banner
+
         top_layout.addWidget(self.breadcrumbs)
         top_layout.addStretch()
         top_layout.addWidget(logo_label)
@@ -704,35 +710,31 @@ class RanaBrowser(QWidget):
                 self.project, self.selected_item
             )
         )
-        # connect updating folder from breadcrumb
+        # Connect file browser context menu signals
+        context_menu_signals = (
+            (self.files_browser.file_deletion_requested, self.delete_file_selected),
+            (self.files_browser.open_in_qgis_requested, self.open_in_qgis_selected),
+            (self.files_browser.upload_file_requested, self.upload_new_file_selected),
+            (
+                self.files_browser.save_vector_styling_requested,
+                self.save_vector_styling_selected,
+            ),
+            (self.files_browser.open_wms_requested, self.open_wms_selected),
+            (self.files_browser.download_file_requested, self.download_file_selected),
+            (
+                self.files_browser.download_results_requested,
+                self.download_results_selected,
+            ),
+        )
+        for file_browser_signal, rana_signal in context_menu_signals:
+            file_browser_signal.connect(
+                lambda file, signal=rana_signal: signal.emit(self.project, file)
+            )
+        # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.fetch_and_populate(self.project, path)
         )
-        # Connect buttons in file view
-        self.file_view.btn_open.clicked.connect(
-            lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_save.clicked.connect(
-            lambda _,: self.upload_file_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_save_vector_style.clicked.connect(
-            lambda _,: self.save_vector_styling_selected.emit(
-                self.project, self.selected_item
-            )
-        )
-        self.file_view.btn_wms.clicked.connect(
-            lambda _,: self.open_wms_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_download.clicked.connect(
-            lambda _,: self.download_file_selected.emit(
-                self.project, self.selected_item
-            )
-        )
-        self.file_view.btn_download_results.clicked.connect(
-            lambda _,: self.download_results_selected.emit(
-                self.project, self.selected_item
-            )
-        )
+        # Connect start simulation button
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _,: self.start_simulation_selected.emit(
                 self.project, self.selected_item
