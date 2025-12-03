@@ -393,7 +393,6 @@ class FilesBrowser(QWidget):
         self.ready.emit()
 
     def fetch_and_populate(self, project: dict, path: str = None):
-        # project = self.project
         self.files = get_tenant_project_files(
             self.communication,
             project["id"],
@@ -931,7 +930,6 @@ class RanaBrowser(QWidget):
             # handle item as it was selected in the UI
             self.files_browser.update()
             # open in qgis; note that selected_item is either None or a file
-            TODO: uncomment
             self.open_in_qgis_selected.emit(
                 self.projects_browser.project, self.selected_item
             )

@@ -224,12 +224,11 @@ class Loader(QObject):
         # Retrieve templates
         current_model = tc.fetch_schematisation_revision_3di_models(
             schematisation["schematisation"]["id"], revision["id"]
-        )[0].to_dict()
-        model_pk = current_model["id"]
+        )[0]
 
         template_dialog = ModelSelectionDialog(
             self.communication,
-            model_pk,
+            current_model.id,
             threedi_api,
             organisations,
             schematisation["schematisation"]["id"],
