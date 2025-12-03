@@ -65,6 +65,7 @@ class Loader(QObject):
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
+    download_results_cancelled = pyqtSignal()
     simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
@@ -432,6 +433,8 @@ class Loader(QObject):
                         self.on_file_download_progress
                     )
                     self.lizard_result_download_worker.start()
+                else:
+                    self.download_results_cancelled.emit()
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):
