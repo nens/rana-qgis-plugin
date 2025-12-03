@@ -64,23 +64,8 @@ class FileView(QWidget):
         self.file_table_widget.horizontalHeader().setVisible(False)
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QVBoxLayout()
-        self.btn_open = QPushButton("Open in QGIS")
-        self.btn_save_vector_style = QPushButton("Save Style to Rana")
-        self.btn_save = QPushButton("Save Data to Rana")
-        self.btn_wms = QPushButton("Open WMS in QGIS")
-        self.btn_download = QPushButton("Download")
-        self.btn_download_results = QPushButton("Download Selected Results")
         self.btn_start_simulation = QPushButton("Start Simulation")
-        for btn in [
-            self.btn_open,
-            self.btn_save_vector_style,
-            self.btn_save,
-            self.btn_wms,
-            self.btn_download,
-            self.btn_download_results,
-            self.btn_start_simulation,
-        ]:
-            button_layout.addWidget(btn)
+        button_layout.addWidget(self.btn_start_simulation)
         layout = QVBoxLayout(self)
         layout.addWidget(file_refresh_btn)
         layout.addWidget(self.file_table_widget)
@@ -175,43 +160,8 @@ class FileView(QWidget):
 
         # Show/hide the buttons based on the file data type
         if data_type == "threedi_schematisation":
-            self.btn_open.show()
-            self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-            self.btn_wms.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
             self.btn_start_simulation.show()
-        elif data_type == "scenario":
-            self.btn_open.hide()
-            self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-            if meta["simulation"]["software"]["id"] == "3Di":
-                self.btn_wms.show()
-                self.btn_download.show()
-                self.btn_download_results.show()
-            else:
-                self.btn_wms.hide()
-                self.btn_download.hide()
-                self.btn_download_results.hide()
-            self.btn_start_simulation.hide()
-        elif data_type in SUPPORTED_DATA_TYPES.keys():
-            self.btn_open.show()
-            self.btn_save.show()
-            self.btn_save_vector_style.hide()
-            if data_type == "vector":
-                self.btn_save_vector_style.show()
-            self.btn_wms.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
-            self.btn_start_simulation.hide()
         else:
-            self.btn_open.hide()
-            self.btn_save.hide()
-            self.btn_wms.hide()
-            self.btn_save_vector_style.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
             self.btn_start_simulation.hide()
         self.file_showed.emit()
 
@@ -780,35 +730,11 @@ class RanaBrowser(QWidget):
             file_browser_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
-        # connect updating folder from breadcrumb
+        # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.fetch_and_populate(self.project, path)
         )
-        # Connect buttons in file view
-        self.file_view.btn_open.clicked.connect(
-            lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_save.clicked.connect(
-            lambda _,: self.upload_file_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_save_vector_style.clicked.connect(
-            lambda _,: self.save_vector_styling_selected.emit(
-                self.project, self.selected_item
-            )
-        )
-        self.file_view.btn_wms.clicked.connect(
-            lambda _,: self.open_wms_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_download.clicked.connect(
-            lambda _,: self.download_file_selected.emit(
-                self.project, self.selected_item
-            )
-        )
-        self.file_view.btn_download_results.clicked.connect(
-            lambda _,: self.download_results_selected.emit(
-                self.project, self.selected_item
-            )
-        )
+        # Connect start simulation button
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _,: self.start_simulation_selected.emit(
                 self.project, self.selected_item
