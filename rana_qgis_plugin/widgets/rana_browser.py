@@ -178,11 +178,13 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
+        self.btn_create_model = QPushButton("Create 3Di Model")
         self.btn_show_revisions = QPushButton("Show Revisions")
         self.btn_show_revisions.clicked.connect(
             lambda _: self.show_revisions_clicked.emit(self.project, self.selected_file)
         )
         button_layout.addWidget(self.btn_start_simulation)
+        button_layout.addWidget(self.btn_create_model)
         button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
         layout.addWidget(file_refresh_btn)
@@ -193,6 +195,9 @@ class FileView(QWidget):
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
         self.file_table_widget.clearContents()
+        schematisation_button = None
+        self.btn_create_model.hide()
+        self.btn_start_simulation.hide()
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
             selected_file["user"]["given_name"]
@@ -258,6 +263,10 @@ class FileView(QWidget):
                         revision["number"] if revision else None,
                     ),
                 ]
+                if revision.get("has_threedimodel"):
+                    schematisation_button = self.btn_start_simulation
+                else:
+                    schematisation_button = self.btn_create_model
                 file_details.extend(schematisation_details)
             else:
                 self.communication.show_error("Failed to download 3Di schematisation.")
@@ -277,11 +286,8 @@ class FileView(QWidget):
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
-        self.btn_show_revisions.show()
-        if data_type == "threedi_schematisation":
-            self.btn_start_simulation.show()
-        else:
-            self.btn_start_simulation.hide()
+        if schematisation_button:
+            schematisation_button.show()
         self.file_showed.emit()
 
     def refresh(self):
