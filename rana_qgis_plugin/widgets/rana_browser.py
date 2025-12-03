@@ -180,6 +180,7 @@ class FileView(QWidget):
             self.btn_show_revisions,
         ]:
             button_layout.addWidget(btn)
+            btn.hide()
         layout = QVBoxLayout(self)
         layout.addWidget(file_refresh_btn)
         layout.addWidget(self.file_table_widget)
@@ -490,7 +491,8 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
-        self.projects_tv.clicked.connect(self.select_project)
+        # self.projects_tv.clicked.connect(self.select_project)
+        self.projects_tv.doubleClicked.connect(self.select_project)
         # Create navigation buttons
         self.btn_previous = QPushButton("<")
         self.label_page_number = QLabel("Page 1/1")
@@ -612,6 +614,7 @@ class ProjectsBrowser(QWidget):
         self.change_page(1)
 
     def select_project(self, index: QModelIndex):
+        self.setEnabled(False)
         self.busy.emit()
         self.communication.progress_bar("Loading project...", clear_msg_bar=True)
         try:
@@ -802,32 +805,6 @@ class RanaBrowser(QWidget):
         self.rana_files.addWidget(self.files_browser)
         self.rana_files.addWidget(self.file_view)
         self.rana_files.addWidget(self.revisions_view)
-        # Ensure correct page is shown
-        self.projects_browser.projects_refreshed.connect(
-            lambda: self.rana_files.setCurrentIndex(0)
-        )
-        self.projects_browser.project_selected.connect(
-            lambda _: self.rana_files.setCurrentIndex(1)
-        )
-        self.files_browser.folder_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(1)
-        )
-        self.files_browser.file_selected.connect(
-            lambda _: self.rana_files.setCurrentIndex(2)
-        )
-        self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
-        self.file_view.show_revisions_clicked.connect(
-            lambda _: self.rana_files.setCurrentIndex(3)
-        )
-        self.breadcrumbs.projects_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(0)
-        )
-        self.breadcrumbs.folder_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(1)
-        )
-        self.breadcrumbs.file_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(2)
-        )
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
@@ -898,6 +875,32 @@ class RanaBrowser(QWidget):
             lambda revision_id: self.start_simulation_selected_with_revision.emit(
                 self.project, self.selected_item, revision_id
             )
+        )
+        # Ensure correct page is shown - do this last zo all updates are done
+        self.projects_browser.projects_refreshed.connect(
+            lambda: self.rana_files.setCurrentIndex(0)
+        )
+        self.projects_browser.project_selected.connect(
+            lambda _: self.rana_files.setCurrentIndex(1)
+        )
+        self.files_browser.folder_selected.connect(
+            lambda: self.rana_files.setCurrentIndex(1)
+        )
+        self.files_browser.file_selected.connect(
+            lambda _: self.rana_files.setCurrentIndex(2)
+        )
+        self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
+        self.file_view.show_revisions_clicked.connect(
+            lambda _: self.rana_files.setCurrentIndex(3)
+        )
+        self.breadcrumbs.projects_selected.connect(
+            lambda: self.rana_files.setCurrentIndex(0)
+        )
+        self.breadcrumbs.folder_selected.connect(
+            lambda: self.rana_files.setCurrentIndex(1)
+        )
+        self.breadcrumbs.file_selected.connect(
+            lambda: self.rana_files.setCurrentIndex(2)
         )
 
     @pyqtSlot()
