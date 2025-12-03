@@ -47,6 +47,7 @@ from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_project_file,
+    get_tenant_project_file_history,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
@@ -63,6 +64,7 @@ class RevisionsView(QWidget):
         self.communication = communication
         self.revisions = []
         self.selected_file = None
+        self.project = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -85,7 +87,8 @@ class RevisionsView(QWidget):
         layout.addWidget(self.revisions_table)
         self.setLayout(layout)
 
-    def show_revisions_for_file(self, selected_file: dict):
+    def show_revisions_for_file(self, project: dict, selected_file: dict):
+        self.project = project
         self.selected_file = selected_file
         self.show_revisions()
 
@@ -93,52 +96,67 @@ class RevisionsView(QWidget):
         self.busy.emit()
         selected_file = self.selected_file
         self.revisions_model.clear()
-        if not selected_file.get("data_type") == "threedi_schematisation":
-            return
-        # retrieve schematisation and revisions
-        schematisation = get_threedi_schematisation(
-            self.communication, selected_file["descriptor_id"]
-        )
-        _, personal_api_token = get_3di_auth()
-        frontend_settings = get_frontend_settings()
-        api_url = frontend_settings["hcc_url"].rstrip("/")
-        threedi_api = get_api_client_with_personal_api_token(
-            personal_api_token, api_url
-        )
-        tc = ThreediCalls(threedi_api)
-        revisions = tc.fetch_schematisation_revisions(
-            schematisation["schematisation"]["id"]
-        )
-        if len(revisions) == 0:
-            return
+        # collect rows to show in widget, format: [date_str, event, (button_label, signal_func)]
+        rows = []
+        if selected_file.get("data_type") == "threedi_schematisation":
+            # retrieve schematisation and revisions
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_file["descriptor_id"]
+            )
+            _, personal_api_token = get_3di_auth()
+            frontend_settings = get_frontend_settings()
+            api_url = frontend_settings["hcc_url"].rstrip("/")
+            threedi_api = get_api_client_with_personal_api_token(
+                personal_api_token, api_url
+            )
+            tc = ThreediCalls(threedi_api)
+            revisions = tc.fetch_schematisation_revisions(
+                schematisation["schematisation"]["id"]
+            )
+            # Extract data from each revision
+            for i, revision in enumerate(revisions):
+                date_str = revision.commit_date.strftime("%d-%m-%y %H:%M")
+                if revision.id == schematisation["latest_revision"]["id"]:
+                    date_str += " (latest)"
+                if revision.has_threedimodel:
+                    btn_data = (
+                        "New simulation",
+                        lambda _: self.new_simulation_clicked.emit(revision.id),
+                    )
+                else:
+                    btn_data = None
+                rows.append([date_str, revision.commit_message, btn_data])
+        else:
+            history = get_tenant_project_file_history(
+                self.project["id"], {"path": self.selected_file["id"]}
+            )
+            for item in history["items"]:
+                date_str = convert_to_local_time(item["created_at"])
+                rows.append([date_str, item["message"], None])
+
         # Populate table
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
-        for i, revision in enumerate(revisions):
-            date_str = revision.commit_date.strftime("%d-%m-%y %H:%M")
-            if revision.id == schematisation["latest_revision"]["id"]:
-                date_str += " (latest)"
-            msg = revision.commit_message
+        for i, (date_str, event, btn_data) in enumerate(rows):
             self.revisions_model.appendRow(
                 [
                     QStandardItem(date_str),
-                    QStandardItem(msg),
+                    QStandardItem(event),
                     QStandardItem(""),
                 ]
             )
-            if revision.has_threedimodel:
-                new_sim_btn = QPushButton("New simulation")
-                new_sim_btn.clicked.connect(
-                    lambda _: self.new_simulation_clicked.emit(revision.id)
-                )
+            if btn_data:
+                btn_label, btn_func = btn_data
+                btn = QPushButton(btn_label)
+                btn.clicked.connect(btn_func)
                 self.revisions_table.setIndexWidget(
-                    self.revisions_model.index(i, 2), new_sim_btn
+                    self.revisions_model.index(i, 2), btn
                 )
         self.ready.emit()
 
 
 class FileView(QWidget):
     file_showed = pyqtSignal()
-    show_revisions_clicked = pyqtSignal(dict)
+    show_revisions_clicked = pyqtSignal(dict, dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -168,7 +186,7 @@ class FileView(QWidget):
         self.btn_start_simulation = QPushButton("New Simulation")
         self.btn_show_revisions = QPushButton("Show Revisions")
         self.btn_show_revisions.clicked.connect(
-            lambda _: self.show_revisions_clicked.emit(self.selected_file)
+            lambda _: self.show_revisions_clicked.emit(self.project, self.selected_file)
         )
         for btn in [
             self.btn_open,
@@ -275,6 +293,7 @@ class FileView(QWidget):
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
+        self.btn_show_revisions.show()
         if data_type == "threedi_schematisation":
             self.btn_open.show()
             self.btn_save.hide()
@@ -283,7 +302,6 @@ class FileView(QWidget):
             self.btn_download.hide()
             self.btn_download_results.hide()
             self.btn_start_simulation.show()
-            self.btn_show_revisions.show()
         elif data_type == "scenario":
             self.btn_open.hide()
             self.btn_save.hide()
@@ -297,7 +315,6 @@ class FileView(QWidget):
                 self.btn_download.hide()
                 self.btn_download_results.hide()
             self.btn_start_simulation.hide()
-            self.btn_show_revisions.hide()
         elif data_type in SUPPORTED_DATA_TYPES.keys():
             self.btn_open.show()
             self.btn_save.show()
@@ -308,7 +325,6 @@ class FileView(QWidget):
             self.btn_download.hide()
             self.btn_download_results.hide()
             self.btn_start_simulation.hide()
-            self.btn_show_revisions.hide()
         else:
             self.btn_open.hide()
             self.btn_save.hide()
@@ -317,7 +333,6 @@ class FileView(QWidget):
             self.btn_download.hide()
             self.btn_download_results.hide()
             self.btn_start_simulation.hide()
-            self.btn_show_revisions.hide()
         self.file_showed.emit()
 
     def refresh(self):
