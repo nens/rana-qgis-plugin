@@ -56,6 +56,7 @@ from rana_qgis_plugin.utils_api import (
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
+    create_3di_model_clicked = pyqtSignal(int)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -124,7 +125,10 @@ class RevisionsView(QWidget):
                         lambda _: self.new_simulation_clicked.emit(revision.id),
                     )
                 else:
-                    btn_data = None
+                    btn_data = (
+                        "Create 3Di model",
+                        lambda _: self.create_3di_model_clicked.emit(revision.id),
+                    )
                 rows.append([date_str, revision.commit_message, btn_data])
         else:
             history = get_tenant_project_file_history(
@@ -762,6 +766,7 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    create_model_selected = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
@@ -892,6 +897,11 @@ class RanaBrowser(QWidget):
         )
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _: self.start_simulation_selected.emit(
+                self.project, self.selected_item
+            )
+        )
+        self.file_view.btn_create_model.clicked.connect(
+            lambda _: self.create_model_selected.emit(
                 self.project, self.selected_item
             )
         )
