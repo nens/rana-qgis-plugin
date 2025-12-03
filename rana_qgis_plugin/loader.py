@@ -356,8 +356,17 @@ class Loader(QObject):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
             )
-
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        if (
+            not descriptor["meta"]
+            or not descriptor["meta"]["simulation"]
+            or not descriptor["meta"]["simulation"]["name"]
+        ):
+            self.communication.show_error(
+                "Scenario is corrupt; did you upload a zip directly?"
+            )
+            self.download_results_cancelled.emit()
+            return
         schematisation_name = descriptor["meta"]["schematisation"]["name"]
         schematisation_id = descriptor["meta"]["schematisation"]["id"]
         schematisation_version = descriptor["meta"]["schematisation"]["version"]
