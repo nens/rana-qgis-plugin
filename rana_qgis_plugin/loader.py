@@ -50,6 +50,7 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.utils_settings import hcc_working_dir
+from rana_qgis_plugin.widgets.new_schematisation_dialog import NewSchematisationDialog
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -639,3 +640,13 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
+
+    @pyqtSlot(dict, dict)
+    def upload_new_schematisation_to_rana(self, project, file):
+        last_saved_dir = QSettings().value(
+            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
+        )
+        new_schematisation_dialog = NewSchematisationDialog(None, path=last_saved_dir)
+        if new_schematisation_dialog.exec() == QDialog.DialogCode.Accepted:
+            assert False
+            print(new_schematisation_dialog.file_list)

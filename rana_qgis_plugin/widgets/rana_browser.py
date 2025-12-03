@@ -389,9 +389,11 @@ class FilesBrowser(QWidget):
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
+        self.btn_new_schematisation = QPushButton("New schematisation")
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
         layout.addWidget(self.btn_upload)
+        layout.addWidget(self.btn_new_schematisation)
         self.setLayout(layout)
 
     def refresh(self):
@@ -517,6 +519,9 @@ class FilesBrowser(QWidget):
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
         self.files_tv.setColumnWidth(0, 300)
+
+    def new_schematisation(self):
+        pass
 
 
 class ProjectsBrowser(QWidget):
@@ -811,6 +816,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
+    upload_new_schematisation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -939,6 +945,12 @@ class RanaBrowser(QWidget):
             file_browser_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
+        # Connect new schematisation button
+        self.files_browser.btn_new_schematisation.clicked.connect(
+            lambda _,: self.upload_new_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
+        )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.fetch_and_populate(self.project, path)
