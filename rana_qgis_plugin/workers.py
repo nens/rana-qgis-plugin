@@ -3,6 +3,7 @@ import json
 import os
 import zipfile
 from pathlib import Path
+from time import sleep
 from typing import List
 
 import requests
@@ -11,15 +12,17 @@ from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
-from .utils import get_local_file_path, image_to_bytes
+from .utils import build_vrt, get_local_file_path, image_to_bytes, split_scenario_extent
 from .utils_api import (
     finish_file_upload,
+    get_raster_file_link,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
     get_tenant_project_file,
     get_vector_style_file,
     get_vector_style_upload_urls,
     map_result_to_file_name,
+    request_raster_generate,
     start_file_upload,
 )
 
@@ -318,17 +321,30 @@ class LizardResultDownloadWorker(QThread):
     failed = pyqtSignal(str)
 
     def __init__(
-        self, project: dict, file: dict, result_ids: List[int], target_folder: str
+        self,
+        project: dict,
+        file: dict,
+        result_ids: List[int],
+        target_folder: str,
+        grid: dict,
+        nodata: int,
+        pixelsize: float,
+        crs: str,
     ):
         super().__init__()
         self.project = project
         self.file = file
         self.result_ids = result_ids
         self.target_folder = target_folder
+        self.grid = grid
+        self.nodata = nodata
+        self.pixelsize = pixelsize
+        self.crs = crs
 
     @pyqtSlot()
     def run(self):
         descriptor_id = self.file["descriptor_id"]
+        task_failed = False
         for result_id in self.result_ids:
             # Retrieve URLS from file descriptors (again), presigned url might be expired
             results = get_tenant_file_descriptor_view(
@@ -336,28 +352,190 @@ class LizardResultDownloadWorker(QThread):
             )
             result = [r for r in results if r["id"] == result_id][0]
             file_name = map_result_to_file_name(result)
-            target_file = bypass_max_path_limit(
-                os.path.join(self.target_folder, file_name)
-            )
+            # if raster can be downloaded directly from rana
+            if result["attachment_url"]:
+                target_file = bypass_max_path_limit(
+                    os.path.join(self.target_folder, file_name)
+                )
+                try:
+                    with requests.get(
+                        result["attachment_url"], stream=True
+                    ) as response:
+                        response.raise_for_status()
+                        total_size = int(response.headers.get("content-length", 0))
+                        downloaded_size = 0
+                        previous_progress = -1
+                        with open(target_file, "wb") as file:
+                            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                                file.write(chunk)
+                                downloaded_size += len(chunk)
+                                progress = int((downloaded_size / total_size) * 100)
+                                if progress > previous_progress:
+                                    self.progress.emit(progress, file_name)
+                                    previous_progress = progress
 
-            try:
-                with requests.get(result["attachment_url"], stream=True) as response:
-                    response.raise_for_status()
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded_size = 0
-                    previous_progress = -1
-                    with open(target_file, "wb") as file:
-                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                            file.write(chunk)
-                            downloaded_size += len(chunk)
-                            progress = int((downloaded_size / total_size) * 100)
-                            if progress > previous_progress:
-                                self.progress.emit(progress, file_name)
-                                previous_progress = progress
+                except requests.exceptions.RequestException as e:
+                    self.failed.emit(f"Failed to download file: {str(e)}")
+                    task_failed = True
+                    break
+                except Exception as e:
+                    self.failed.emit(f"An error occurred: {str(e)}")
+                    task_failed = True
+                    break
+            # if raster first needs to be generated
+            else:
+                previous_progress = -1
+                spatial_bounds = split_scenario_extent(
+                    grid=self.grid, resolution=self.pixelsize, max_pixel_count=1 * 10**8
+                )
+                # start generate task for each tile of the raster to be downloaded
+                bboxes, width, height = spatial_bounds
+                raster_tasks = []
+                counter = 0
+                for x1, y1, x2, y2 in bboxes:
+                    bbox = f"{x1},{y1},{x2},{y2}"
+                    payload = {
+                        "width": width,
+                        "height": height,
+                        "bbox": bbox,
+                        "projection": self.crs,
+                        "format": "geotiff",
+                        "async": "true",
+                    }
+                    if self.nodata is not None:
+                        payload["nodata"] = self.nodata
+                    r = request_raster_generate(
+                        descriptor_id=descriptor_id,
+                        raster_id=result["raster_id"],
+                        payload=payload,
+                    )
+                    raster_tasks.append(r)
+                    counter += 1
+                    progress = int((counter / len(bboxes)) * 10)
+                    if progress > previous_progress:
+                        self.progress.emit(progress, file_name)
+                        previous_progress = progress
 
-            except requests.exceptions.RequestException as e:
-                self.failed.emit(f"Failed to download file: {str(e)}")
-            except Exception as e:
-                self.failed.emit(f"An error occurred: {str(e)}")
+                # multi-tile raster download
+                if len(raster_tasks) > 1:
 
-        self.finished.emit(self.project, self.file, self.target_folder)
+                    def download_tile(file_link, target_file):
+                        with requests.get(file_link, stream=True) as response:
+                            response.raise_for_status()
+                            total_size = int(response.headers.get("content-length", 0))
+                            with open(target_file, "wb") as file:
+                                for chunk in response.iter_content(
+                                    chunk_size=CHUNK_SIZE
+                                ):
+                                    file.write(chunk)
+
+                    rasters = {
+                        raster_task_id: {
+                            "downloaded": False,
+                            "filepath": bypass_max_path_limit(
+                                os.path.join(
+                                    self.target_folder,
+                                    f"{file_name}{task_number:02d}.tif",
+                                )
+                            ),
+                        }
+                        for task_number, raster_task_id in enumerate(raster_tasks)
+                    }
+                    task_counter = 0
+
+                    while (
+                        False in [task["downloaded"] for task in rasters.values()]
+                        and not task_failed
+                    ):
+                        # wait between each repoll of task statuses
+                        sleep(5)
+                        for raster_task_id in rasters.keys():
+                            # poll all raster generate tasks to check if any is ready to download
+                            if not rasters[raster_task_id]["downloaded"]:
+                                try:
+                                    file_link = get_raster_file_link(
+                                        descriptor_id=descriptor_id,
+                                        task_id=raster_task_id,
+                                    )
+                                    if file_link:
+                                        download_tile(
+                                            file_link,
+                                            rasters[raster_task_id]["filepath"],
+                                        )
+                                        rasters[raster_task_id]["downloaded"] = True
+
+                                        task_counter += 1
+                                        # reserve last 10% of progress for raster merging
+                                        progress = int(
+                                            10 + (task_counter / len(raster_tasks)) * 80
+                                        )
+                                        if progress > previous_progress:
+                                            self.progress.emit(progress, file_name)
+                                        previous_progress = progress
+                                except requests.exceptions.RequestException as e:
+                                    self.failed.emit(
+                                        f"Failed to download file: {str(e)}"
+                                    )
+                                    task_failed = True
+                                    break
+                                except Exception as e:
+                                    self.failed.emit(f"An error occurred: {str(e)}")
+                                    task_failed = True
+                                    break
+                    if not task_failed:
+                        raster_filepaths = [
+                            item["filepath"] for item in rasters.values()
+                        ]
+                        raster_filepaths.sort()
+                        first_raster_filepath = raster_filepaths[0]
+                        vrt_filepath = first_raster_filepath.replace("_01", "").replace(
+                            ".tif", ".vrt"
+                        )
+
+                        vrt_options = {
+                            "resolution": "average",
+                            "resampleAlg": "nearest",
+                            "srcNodata": self.nodata,
+                        }
+                        build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
+                        self.progress.emit(100, file_name)
+                # single-tile raster download
+                else:
+                    target_file = bypass_max_path_limit(
+                        os.path.join(self.target_folder, (file_name + ".tif"))
+                    )
+                    file_link = False
+                    while not (file_link or task_failed):
+                        sleep(5)
+                        try:
+                            file_link = get_raster_file_link(
+                                descriptor_id=descriptor_id, task_id=raster_tasks[0]
+                            )
+                            with requests.get(file_link, stream=True) as response:
+                                response.raise_for_status()
+                                total_size = int(
+                                    response.headers.get("content-length", 0)
+                                )
+                                downloaded_size = 0
+                                with open(target_file, "wb") as file:
+                                    for chunk in response.iter_content(
+                                        chunk_size=CHUNK_SIZE
+                                    ):
+                                        file.write(chunk)
+                                        downloaded_size += len(chunk)
+                                        progress = int(
+                                            10 + (downloaded_size / total_size) * 90
+                                        )
+                                        if progress > previous_progress:
+                                            self.progress.emit(progress, file_name)
+                                            previous_progress = progress
+
+                        except requests.exceptions.RequestException as e:
+                            self.failed.emit(f"Failed to download file: {str(e)}")
+                            task_failed = True
+                        except Exception as e:
+                            self.failed.emit(f"An error occurred: {str(e)}")
+                            task_failed = True
+
+        if not task_failed:
+            self.finished.emit(self.project, self.file, self.target_folder)
