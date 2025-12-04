@@ -816,7 +816,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
-    upload_new_schematisation_selected = pyqtSignal(dict, dict)
+    upload_new_schematisation_selected = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -948,7 +948,7 @@ class RanaBrowser(QWidget):
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(
-                self.project, self.selected_item
+                self.project
             )
         )
         # Connect updating folder from breadcrumb

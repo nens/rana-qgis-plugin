@@ -4,6 +4,10 @@ import hashlib
 import json
 import os
 import tempfile
+import shutil
+import warnings
+from uuid import uuid4
+from qgis.core import QgsVectorLayer
 from collections import OrderedDict
 from datetime import datetime
 from enum import Enum
@@ -11,6 +15,7 @@ from operator import attrgetter
 from time import sleep
 from typing import List
 from zipfile import ZIP_DEFLATED, ZipFile
+from .utils_ui import progress_bar_callback_factory
 
 import requests
 from qgis.PyQt.QtCore import QSettings, QSortFilterProxyModel, Qt
@@ -373,6 +378,148 @@ def translate_illegal_chars(
         for char in text
     )
     return sanitized_text
+
+
+
+def backup_schematisation_file(filename):
+    """Make a backup of the schematisation file."""
+    backup_folder = os.path.join(os.path.dirname(os.path.dirname(filename)), "_backup")
+    os.makedirs(backup_folder, exist_ok=True)
+    prefix = str(uuid4())[:8]
+    backup_file_path = os.path.join(
+        backup_folder, f"{prefix}_{os.path.basename(filename)}"
+    )
+    shutil.copyfile(filename, backup_file_path)
+    return backup_file_path
+
+
+def migrate_schematisation_schema(schematisation_filepath, progress_callback=None):
+    migration_succeed = False
+    srid = None
+
+    try:
+        from threedi_schema import ThreediDatabase, errors
+
+        backup_filepath = backup_schematisation_file(schematisation_filepath)
+        threedi_db = ThreediDatabase(schematisation_filepath)
+        schema = threedi_db.schema
+        srid, _ = schema._get_epsg_data()
+        if srid is None:
+            try:
+                srid = schema._get_dem_epsg()
+            except errors.InvalidSRIDException:
+                srid = None
+        if srid is None:
+            migration_feedback_msg = "Could not fetch valid EPSG code from database or DEM; aborting database migration."
+    except ImportError:
+        migration_feedback_msg = "Missing threedi-schema library (or its dependencies). Schema migration failed."
+    except Exception as e:
+        migration_feedback_msg = f"{e}"
+
+    if srid is not None:
+        migration_feedback_msg = ""
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", UserWarning)
+                schema.upgrade(
+                    backup=False,
+                    epsg_code_override=srid,
+                    progress_func=progress_callback,
+                )
+            if w:
+                for warning in w:
+                    migration_feedback_msg += (
+                        f"{warning._category_name}: {warning.message}\n"
+                    )
+            shutil.rmtree(os.path.dirname(backup_filepath))
+            migration_succeed = True
+        except errors.UpgradeFailedError:
+            migration_feedback_msg = (
+                "The schematisation database schema cannot be migrated to the current version. "
+                "Please contact the service desk for assistance."
+            )
+        except Exception as e:
+            migration_feedback_msg = f"{e}"
+
+    return migration_succeed, migration_feedback_msg
+
+
+def ensure_valid_schema(schematisation_filepath, communication):
+    """Check if schema version is up-to-date and migrate it if needed."""
+    try:
+        from threedi_schema import ThreediDatabase, errors
+    except ImportError:
+        communication.show_error(
+            "Could not import `threedi-schema` library to validate database schema."
+        )
+        return
+    try:
+        threedi_db = ThreediDatabase(schematisation_filepath)
+
+        # Add additional check to deal with legacy gpkgs created by schematisation editor
+        if schematisation_filepath.endswith(".gpkg"):
+            version_num = threedi_db.schema.get_version()
+            if version_num < 300:
+                warn_msg = "The selected file is not a valid 3Di schematisation database.\n\nYou may have selected a geopackage that was created by an older version of the 3Di Schematisation Editor (before version 2.0). In that case, there will probably be a Spatialite (*.sqlite) in the same folder. Please use that file instead."
+                communication.show_error(warn_msg)
+                return False
+
+        threedi_db.schema.validate_schema()
+    except errors.MigrationMissingError:
+        warn_and_ask_msg = (
+            "The selected schematisation database cannot be used because its database schema version is out of date. "
+            "Would you like to migrate your schematisation to the current schema version?"
+        )
+        do_migration = communication.ask(None, "Missing migration", warn_and_ask_msg)
+        if not do_migration:
+            return False
+        progress_bar_callback = progress_bar_callback_factory(communication)
+        migration_succeed, migration_feedback_msg = migrate_schematisation_schema(
+            schematisation_filepath, progress_bar_callback
+        )
+        if not migration_succeed:
+            communication.show_error(migration_feedback_msg)
+            return False
+    except Exception as e:
+        error_msg = f"{e}"
+        communication.show_error(error_msg)
+        return False
+    return True
+
+
+def geopackage_layer(gpkg_path, table_name, layer_name=None):
+    """Creating vector layer out of GeoPackage source."""
+    uri = f"{gpkg_path}|layername={table_name}"
+    layer_name = table_name if layer_name is None else layer_name
+    vlayer = QgsVectorLayer(uri, layer_name, "ogr")
+    return vlayer
+
+
+def extract_error_message(e):
+    """Extracting useful information from ApiException exceptions."""
+    error_body = e.body
+    try:
+        if isinstance(error_body, str):
+            error_body = json.loads(error_body)
+        if "detail" in error_body:
+            error_details = error_body["detail"]
+        elif "details" in error_body:
+            error_details = error_body["details"]
+        elif "errors" in error_body:
+            errors = error_body["errors"]
+            try:
+                error_parts = [
+                    f"{err['reason']} ({err['instance']['related_object']})"
+                    for err in errors
+                ]
+            except TypeError:
+                error_parts = list(errors.values())
+            error_details = "\n" + "\n".join(error_parts)
+        else:
+            error_details = str(error_body)
+    except json.JSONDecodeError:
+        error_details = str(error_body)
+    return f"Error: {error_details}"
 
 
 class NestedObject:

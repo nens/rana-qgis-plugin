@@ -50,7 +50,7 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.utils_settings import hcc_working_dir
-from rana_qgis_plugin.widgets.new_schematisation_dialog import NewSchematisationDialog
+from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -641,12 +641,24 @@ class Loader(QObject):
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
 
-    @pyqtSlot(dict, dict)
-    def upload_new_schematisation_to_rana(self, project, file):
-        last_saved_dir = QSettings().value(
-            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
+    @pyqtSlot(dict)
+    def upload_new_schematisation_to_rana(self, project):
+        _, personal_api_token = get_3di_auth()
+
+        frontend_settings = get_frontend_settings()
+        api_url = frontend_settings["hcc_url"].rstrip("/")
+
+        threedi_api = get_api_client_with_personal_api_token(
+            personal_api_token, api_url
         )
-        new_schematisation_dialog = NewSchematisationDialog(None, path=last_saved_dir)
-        if new_schematisation_dialog.exec() == QDialog.DialogCode.Accepted:
-            assert False
-            print(new_schematisation_dialog.file_list)
+        tc = ThreediCalls(threedi_api)
+        organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+
+        work_dir = QSettings().value("threedi/working_dir", "")
+        new_schematisation_wizard = NewSchematisationWizard(
+            threedi_api, work_dir, self.communication, organisations, self.parent
+        )
+        new_schematisation_wizard.exec()
+
+        new_schematisation = new_schematisation_wizard.new_schematisation
+
