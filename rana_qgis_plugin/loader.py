@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
@@ -31,6 +32,8 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    delete_tenant_project_directory,
+    delete_tenant_project_file,
     get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -64,9 +67,11 @@ class Loader(QObject):
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
+    download_results_cancelled = pyqtSignal()
     simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
+    file_deleted = pyqtSignal()
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -116,7 +121,9 @@ class Loader(QObject):
 
     def on_file_download_finished(self, project, file, local_file_path: str):
         self.communication.clear_message_bar()
-        self.communication.bar_info(f"File(s) downloaded to: {local_file_path}")
+        self.communication.bar_info(
+            f"File(s) downloaded to: {local_file_path}", dur=240
+        )
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
@@ -161,7 +168,11 @@ class Loader(QObject):
 
     def on_file_download_progress(self, progress: int, file_name: str = ""):
         self.communication.progress_bar(
-            f"Downloading file {file_name}...", 0, 100, progress, clear_msg_bar=True
+            f"Generating/downloading file {file_name}...",
+            0,
+            100,
+            progress,
+            clear_msg_bar=True,
         )
         self.file_download_progress.emit(progress, file_name)
 
@@ -182,7 +193,21 @@ class Loader(QObject):
         self.file_upload_worker.start()
 
     @pyqtSlot(dict, dict)
-    def start_simulation(self, project, file):
+    def delete_file(self, project, file):
+        if file["type"] == "directory":
+            if delete_tenant_project_directory(project["id"], {"path": file["id"]}):
+                self.file_deleted.emit()
+            else:
+                self.communication.show_warn(f"Unable to delete directory {file['id']}")
+        else:
+            if delete_tenant_project_file(project["id"], {"path": file["id"]}):
+                self.file_deleted.emit()
+            else:
+                self.communication.show_warn(f"Unable to delete file {file['id']}")
+
+    @pyqtSlot(dict, dict)
+    @pyqtSlot(dict, dict, int)
+    def start_simulation(self, project, file, revision_id=None):
         os.makedirs(CACHE_PATH, exist_ok=True)
         if not hcc_working_dir():
             self.communication.show_warn(
@@ -207,19 +232,27 @@ class Loader(QObject):
             self.communication, file["descriptor_id"]
         )
 
-        # TODO: currently we pick latest revision
-        if not schematisation["latest_revision"]["has_threedimodel"]:
+        # Pick latest revision if no revision is provided
+        if revision_id:
+            revision = tc.fetch_schematisation_revision(
+                schematisation["schematisation"]["id"], revision_id
+            ).to_dict()
+        else:
+            revision = schematisation["latest_revision"]
+
+        if not revision["has_threedimodel"]:
             self.communication.show_warn("Generate a model first")
             self.simulation_started_failed.emit()
             return
 
         # Retrieve templates
-        model_pk = int(schematisation["latest_revision"]["threedimodel"]["id"])
-        current_model = tc.fetch_3di_model(model_pk)
+        current_model = tc.fetch_schematisation_revision_3di_models(
+            schematisation["schematisation"]["id"], revision["id"]
+        )[0]
 
         template_dialog = ModelSelectionDialog(
             self.communication,
-            model_pk,
+            current_model.id,
             threedi_api,
             organisations,
             schematisation["schematisation"]["id"],
@@ -348,8 +381,17 @@ class Loader(QObject):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
             )
-
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        if (
+            not descriptor["meta"]
+            or not descriptor["meta"]["simulation"]
+            or not descriptor["meta"]["simulation"]["name"]
+        ):
+            self.communication.show_error(
+                "Scenario is corrupt; did you upload a zip directly?"
+            )
+            self.download_results_cancelled.emit()
+            return
         schematisation_name = descriptor["meta"]["schematisation"]["name"]
         schematisation_id = descriptor["meta"]["schematisation"]["id"]
         schematisation_version = descriptor["meta"]["schematisation"]["version"]
@@ -359,20 +401,25 @@ class Loader(QObject):
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
-            schematisation_name,
+            schematisation_name.replace("/", "-").replace("\\", "-"),
             schematisation_version,
-            descriptor["meta"]["simulation"]["name"],
+            descriptor["meta"]["simulation"]["name"]
+            .replace("/", "-")
+            .replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
 
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
+                grid = deepcopy(descriptor["meta"]["grid"])
                 results = get_tenant_file_descriptor_view(
                     file["descriptor_id"], "lizard-scenario-results"
                 )
-                result_browser = ResultBrowser(None, results)
+                result_browser = ResultBrowser(None, results, grid["crs"])
                 if result_browser.exec() == QDialog.DialogCode.Accepted:
-                    result_ids = result_browser.get_selected_results_id()
+                    result_ids, nodata, pixelsize, crs = (
+                        result_browser.get_selected_results()
+                    )
                     if len(result_ids) == 0:
                         return
                     filtered_result_ids = []
@@ -400,10 +447,14 @@ class Loader(QObject):
                             filtered_result_ids.append(result_id)
 
                     self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        project,
-                        file,
-                        filtered_result_ids,
-                        target_folder,
+                        project=project,
+                        file=file,
+                        result_ids=filtered_result_ids,
+                        target_folder=target_folder,
+                        grid=grid,
+                        nodata=nodata,
+                        crs=crs,
+                        pixelsize=pixelsize,
                     )
 
                     self.lizard_result_download_worker.finished.connect(
@@ -416,6 +467,8 @@ class Loader(QObject):
                         self.on_file_download_progress
                     )
                     self.lizard_result_download_worker.start()
+                else:
+                    self.download_results_cancelled.emit()
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):

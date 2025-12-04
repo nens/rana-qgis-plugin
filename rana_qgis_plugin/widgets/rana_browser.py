@@ -1,17 +1,23 @@
 import math
 import os
+from collections import namedtuple
+from enum import Enum
 from pathlib import Path
+from typing import List
 
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
-from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QStackedWidget,
+    QTableView,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -21,9 +27,14 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
+from rana_qgis_plugin.simulation.threedi_calls import (
+    ThreediCalls,
+    get_api_client_with_personal_api_token,
+)
 from rana_qgis_plugin.utils import (
     NumericItem,
     convert_to_local_time,
@@ -33,16 +44,119 @@ from rana_qgis_plugin.utils import (
     elide_text,
 )
 from rana_qgis_plugin.utils_api import (
+    get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_project_file,
+    get_tenant_project_file_history,
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
 )
 
 
+class RevisionsView(QWidget):
+    new_simulation_clicked = pyqtSignal(int)
+    busy = pyqtSignal()
+    ready = pyqtSignal()
+
+    def __init__(self, communication, parent=None):
+        super().__init__(parent)
+        self.communication = communication
+        self.revisions = []
+        self.selected_file = None
+        self.project = None
+        self.setup_ui()
+
+    def setup_ui(self):
+        revisions_refreash_btn = QToolButton()
+        revisions_refreash_btn.setToolTip("Refresh")
+        revisions_refreash_btn.clicked.connect(self.show_revisions)
+        revisions_refreash_btn.setIcon(refresh_icon)
+        self.revisions_table = QTableView()
+        self.revisions_table.setSortingEnabled(True)
+        self.revisions_table.verticalHeader().hide()
+        self.revisions_model = QStandardItemModel()
+        self.revisions_model.setColumnCount(3)
+        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
+        self.revisions_table.setModel(self.revisions_model)
+        self.revisions_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
+        layout = QVBoxLayout(self)
+        layout.addWidget(revisions_refreash_btn)
+        layout.addWidget(self.revisions_table)
+        self.setLayout(layout)
+
+    def show_revisions_for_file(self, project: dict, selected_file: dict):
+        self.project = project
+        self.selected_file = selected_file
+        self.show_revisions()
+
+    def show_revisions(self):
+        self.busy.emit()
+        selected_file = self.selected_file
+        self.revisions_model.clear()
+        # collect rows to show in widget, format: [date_str, event, (button_label, signal_func)]
+        rows = []
+        if selected_file.get("data_type") == "threedi_schematisation":
+            # retrieve schematisation and revisions
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_file["descriptor_id"]
+            )
+            _, personal_api_token = get_3di_auth()
+            frontend_settings = get_frontend_settings()
+            api_url = frontend_settings["hcc_url"].rstrip("/")
+            threedi_api = get_api_client_with_personal_api_token(
+                personal_api_token, api_url
+            )
+            tc = ThreediCalls(threedi_api)
+            revisions = tc.fetch_schematisation_revisions(
+                schematisation["schematisation"]["id"]
+            )
+            # Extract data from each revision
+            for i, revision in enumerate(revisions):
+                date_str = revision.commit_date.strftime("%d-%m-%y %H:%M")
+                if revision.id == schematisation["latest_revision"]["id"]:
+                    date_str += " (latest)"
+                if revision.has_threedimodel:
+                    btn_data = (
+                        "New simulation",
+                        lambda _: self.new_simulation_clicked.emit(revision.id),
+                    )
+                else:
+                    btn_data = None
+                rows.append([date_str, revision.commit_message, btn_data])
+        else:
+            history = get_tenant_project_file_history(
+                self.project["id"], {"path": self.selected_file["id"]}
+            )
+            for item in history["items"]:
+                date_str = convert_to_local_time(item["created_at"])
+                rows.append([date_str, item["message"], None])
+
+        # Populate table
+        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
+        for i, (date_str, event, btn_data) in enumerate(rows):
+            self.revisions_model.appendRow(
+                [
+                    QStandardItem(date_str),
+                    QStandardItem(event),
+                    QStandardItem(""),
+                ]
+            )
+            if btn_data:
+                btn_label, btn_func = btn_data
+                btn = QPushButton(btn_label)
+                btn.clicked.connect(btn_func)
+                self.revisions_table.setIndexWidget(
+                    self.revisions_model.index(i, 2), btn
+                )
+        self.ready.emit()
+
+
 class FileView(QWidget):
     file_showed = pyqtSignal()
+    show_revisions_clicked = pyqtSignal(dict, dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -62,24 +176,14 @@ class FileView(QWidget):
         self.file_table_widget = QTableWidget(1, 2)
         self.file_table_widget.horizontalHeader().setVisible(False)
         self.file_table_widget.verticalHeader().setVisible(False)
-        button_layout = QVBoxLayout()
-        self.btn_open = QPushButton("Open in QGIS")
-        self.btn_save_vector_style = QPushButton("Save Style to Rana")
-        self.btn_save = QPushButton("Save Data to Rana")
-        self.btn_wms = QPushButton("Open WMS in QGIS")
-        self.btn_download = QPushButton("Download")
-        self.btn_download_results = QPushButton("Download Selected Results")
+        button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
-        for btn in [
-            self.btn_open,
-            self.btn_save_vector_style,
-            self.btn_save,
-            self.btn_wms,
-            self.btn_download,
-            self.btn_download_results,
-            self.btn_start_simulation,
-        ]:
-            button_layout.addWidget(btn)
+        self.btn_show_revisions = QPushButton("Show Revisions")
+        self.btn_show_revisions.clicked.connect(
+            lambda _: self.show_revisions_clicked.emit(self.project, self.selected_file)
+        )
+        button_layout.addWidget(self.btn_start_simulation)
+        button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
         layout.addWidget(file_refresh_btn)
         layout.addWidget(self.file_table_widget)
@@ -195,44 +299,10 @@ class FileView(QWidget):
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
+        self.btn_show_revisions.show()
         if data_type == "threedi_schematisation":
-            self.btn_open.show()
-            self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-            self.btn_wms.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
             self.btn_start_simulation.show()
-        elif data_type == "scenario":
-            self.btn_open.hide()
-            self.btn_save.hide()
-            self.btn_save_vector_style.hide()
-            if meta["simulation"]["software"]["id"] == "3Di":
-                self.btn_wms.show()
-                self.btn_download.show()
-                self.btn_download_results.show()
-            else:
-                self.btn_wms.hide()
-                self.btn_download.hide()
-                self.btn_download_results.hide()
-            self.btn_start_simulation.hide()
-        elif data_type in SUPPORTED_DATA_TYPES.keys():
-            self.btn_open.show()
-            self.btn_save.show()
-            self.btn_save_vector_style.hide()
-            if data_type == "vector":
-                self.btn_save_vector_style.show()
-            self.btn_wms.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
-            self.btn_start_simulation.hide()
         else:
-            self.btn_open.hide()
-            self.btn_save.hide()
-            self.btn_wms.hide()
-            self.btn_save_vector_style.hide()
-            self.btn_download.hide()
-            self.btn_download_results.hide()
             self.btn_start_simulation.hide()
         self.file_showed.emit()
 
@@ -249,11 +319,18 @@ class FileView(QWidget):
 
 
 class FilesBrowser(QWidget):
-    folder_selected = pyqtSignal()
+    folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
     path_changed = pyqtSignal(str)
     busy = pyqtSignal()
     ready = pyqtSignal()
+    file_deletion_requested = pyqtSignal(dict)
+    open_in_qgis_requested = pyqtSignal(dict)
+    upload_file_requested = pyqtSignal(dict)
+    save_vector_styling_requested = pyqtSignal(dict)
+    open_wms_requested = pyqtSignal(dict)
+    download_file_requested = pyqtSignal(dict)
+    download_results_requested = pyqtSignal(dict)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -273,6 +350,8 @@ class FilesBrowser(QWidget):
         project_refresh_btn.setIcon(refresh_icon)
         project_refresh_btn.clicked.connect(self.update)
         self.files_tv = QTreeView()
+        self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = QStandardItemModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
@@ -280,26 +359,62 @@ class FilesBrowser(QWidget):
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
         layout = QVBoxLayout(self)
-        # todo: move refresh to far right
+        # todo: move refresh to far right (some day)
         layout.addWidget(project_refresh_btn)
         layout.addWidget(self.files_tv)
         layout.addWidget(self.btn_upload)
         self.setLayout(layout)
 
     def refresh(self):
-        self.update(append_path=False)
+        self.update()
 
-    def update(self, append_path: bool = True):
+    def update(self):
         selected_path = self.selected_item["id"]
         selected_name = Path(selected_path.rstrip("/")).name
         if self.selected_item["type"] == "directory":
             self.fetch_and_populate(self.project, selected_path)
-            self.folder_selected.emit()
+            self.folder_selected.emit(selected_name)
         else:
             self.file_selected.emit(self.selected_item)
-        if append_path:
-            self.path_changed.emit(selected_name)
         self.communication.clear_message_bar()
+
+    def menu_requested(self, pos):
+        index = self.files_tv.indexAt(pos)
+        file_item = self.files_model.itemFromIndex(index)
+        if not file_item:
+            return
+        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+        data_type = selected_item["data_type"]
+        # Add delete option files and folders
+        actions = [("Delete", self.file_deletion_requested)]
+        # Add open in QGIS is supported for all supported data types
+        if data_type in SUPPORTED_DATA_TYPES:
+            actions.append(("Open in QGIS", self.open_in_qgis_requested))
+        # Add save only for vector and raster files
+        if data_type in ["vector", "raster"]:
+            actions.append(("Save data to Rana", self.upload_file_requested))
+        # Add save vector style only for vector files
+        if data_type == "vector":
+            actions.append(
+                ("Save vector style to Rana", self.save_vector_styling_requested)
+            )
+        # Add options to open WMS and download file and results only for 3Di scenarios
+        if data_type == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+            meta = descriptor["meta"] if descriptor else None
+            if meta and meta["simulation"]["software"]["id"] == "3Di":
+                actions.append(("Open WMS in QGIS", self.open_wms_requested))
+                actions.append(("Download", self.download_file_requested))
+                actions.append(("Download results", self.download_results_requested))
+        # populate menu
+        menu = QMenu(self)
+        for action_label, action_signal in actions:
+            action = QAction(action_label, self)
+            action.triggered.connect(
+                lambda _, signal=action_signal: signal.emit(selected_item)
+            )
+            menu.addAction(action)
+        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
@@ -313,7 +428,6 @@ class FilesBrowser(QWidget):
         self.ready.emit()
 
     def fetch_and_populate(self, project: dict, path: str = None):
-        project = self.project
         self.files = get_tenant_project_files(
             self.communication,
             project["id"],
@@ -411,7 +525,8 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
-        self.projects_tv.clicked.connect(self.select_project)
+        # self.projects_tv.clicked.connect(self.select_project)
+        self.projects_tv.doubleClicked.connect(self.select_project)
         # Create navigation buttons
         self.btn_previous = QPushButton("<")
         self.label_page_number = QLabel("Page 1/1")
@@ -434,7 +549,6 @@ class ProjectsBrowser(QWidget):
 
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication)
-        from qgis.core import Qgis, QgsMessageLog
 
     def refresh(self):
         self.current_page = 1
@@ -534,6 +648,7 @@ class ProjectsBrowser(QWidget):
         self.change_page(1)
 
     def select_project(self, index: QModelIndex):
+        self.setEnabled(False)
         self.busy.emit()
         self.communication.progress_bar("Loading project...", clear_msg_bar=True)
         try:
@@ -550,36 +665,52 @@ class ProjectsBrowser(QWidget):
             self.setEnabled(True)
 
 
-class BreadCrumbsWidget(QWidget):
-    folder_selected = pyqtSignal(str)
+class BreadcrumbType(Enum):
+    PROJECTS = "projects"
+    FOLDER = "folder"
+    FILE = "file"
+    REVISIONS = "revisions"
 
-    def __init__(self, rana_widget, communication, parent=None):
+
+BreadcrumbItem = namedtuple("BreadcrumbItem", ["type", "name"])
+
+
+class BreadCrumbsWidget(QWidget):
+    projects_selected = pyqtSignal()
+    folder_selected = pyqtSignal(str)
+    file_selected = pyqtSignal()
+
+    def __init__(self, communication, parent=None):
         super().__init__(parent)
-        self.rana_widget = rana_widget
         self.communication = communication
-        self.paths = ["Projects"]
-        self.selected_file = None
+        self._items: List[BreadcrumbItem] = [
+            BreadcrumbItem(BreadcrumbType.PROJECTS, "Projects")
+        ]
         self.setup_ui()
         self.update()
 
-    def set_selected_file_from_path(self, project_id: str, online_path: str):
-        self.update_selected_file(
-            get_tenant_project_file(project_id, {"path": online_path})
-        )
-
-    def update_selected_file(self, file: dict):
-        self.selected_file = file
+    def add_file(self, file_path):
+        # files can only be added after a folder
+        if self._items[-1].type == BreadcrumbType.FOLDER:
+            self._items.append(BreadcrumbItem(BreadcrumbType.FILE, file_path))
         self.update()
 
-    def add_path(self, path: str, update: bool = True):
-        self.paths.append(path)
-        if update:
-            self.update()
+    def add_folder(self, folder_name):
+        # folders can only be added after projects or a folder
+        if self._items[-1].type in [BreadcrumbType.PROJECTS, BreadcrumbType.FOLDER]:
+            self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, folder_name))
+        self.update()
 
-    def set_paths(self, paths: list[str], update: bool = True):
-        self.paths = paths
-        if update:
-            self.update()
+    def add_revisions(self):
+        # revisions can only be added after a file
+        if self._items[-1].type == BreadcrumbType.FILE:
+            self._items.append(BreadcrumbItem(BreadcrumbType.REVISIONS, "Revisions"))
+        self.update()
+
+    def set_folders(self, paths):
+        for item in paths:
+            self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, item))
+        self.update()
 
     def setup_ui(self):
         self.layout = QHBoxLayout(self)
@@ -592,49 +723,49 @@ class BreadCrumbsWidget(QWidget):
             widget = self.layout.itemAt(i).widget()
             if widget:
                 self.layout.removeWidget(widget)
-                del widget
+                widget.deleteLater()
 
     def update(self):
         self.clear()
-        # Add the breadcrumbs
-        for i, path in enumerate(self.paths):
-            label = self.get_button(i, path)
+        for i, item in enumerate(self._items):
+            label = self.get_button(i, item)
             self.layout.addWidget(label)
-            if i != len(self.paths) - 1:
+            if i != len(self._items) - 1:
                 separator = QLabel(">")
                 self.layout.addWidget(separator)
 
-    def get_button(self, index: int, path: str) -> QLabel:
-        label_text = elide_text(self.font(), path, 100)
-        link = f"<a href='{index}'>{label_text}</a>"
-        label = QLabel(label_text if index == len(self.paths) - 1 else link)
-        label.setTextFormat(Qt.TextFormat.RichText)
-        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
-        label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
+    def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
+        label_text = elide_text(self.font(), item.name, 100)
+        # Last item cannot be clicked
+        if index == len(self._items) - 1:
+            label = QLabel(label_text)
+        else:
+            link = f"<a href='{index}'>{label_text}</a>"
+            label = QLabel(link)
+            label.setTextFormat(Qt.TextFormat.RichText)
+            label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+            label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
         return label
 
     def on_click(self, index: int):
-        self.paths = self.paths[: index + 1]
-        if index == 0:
-            self.rana_widget.setCurrentIndex(0)
-            self.update()
-            self.selected_file = None
+        # Truncate items to clicked position
+        self._items = self._items[: index + 1]
+        if index == 0:  # Projects
+            self.projects_selected.emit()
         else:
-            self.rana_widget.setEnabled(False)
             self.communication.progress_bar("Loading files...", clear_msg_bar=True)
-            try:
-                only_directory_paths = self.paths[
-                    2:
-                ]  # Skip the first two paths: Projects and project_name
-                path = "/".join(only_directory_paths) + (
-                    "/" if only_directory_paths else ""
-                )
-                self.selected_file = {"id": path, "type": "directory"}
-                self.update()
+            clicked_item = self._items[index]
+            if clicked_item.type == BreadcrumbType.FILE:
+                self.file_selected.emit()
+            else:
+                # path should be None for project root
+                if len(self._items) == 2:
+                    path = None
+                else:
+                    path = "/".join(item.name for item in self._items[2:]) + "/"
                 self.folder_selected.emit(path)
-            finally:
-                self.communication.clear_message_bar()
-                self.rana_widget.setEnabled(True)
+            self.communication.clear_message_bar()
+        self.update()
 
 
 class RanaBrowser(QWidget):
@@ -646,6 +777,8 @@ class RanaBrowser(QWidget):
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
+    start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -674,7 +807,7 @@ class RanaBrowser(QWidget):
         self.rana_browser.setTabEnabled(1, False)
         # Set up breadcrumbs, browser and file view widgets
         self.breadcrumbs = BreadCrumbsWidget(
-            rana_widget=self.rana_files, communication=self.communication, parent=self
+            communication=self.communication, parent=self
         )
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
@@ -702,15 +835,21 @@ class RanaBrowser(QWidget):
         )
         self.files_browser = FilesBrowser(communication=self.communication, parent=self)
         self.file_view = FileView(communication=self.communication, parent=self)
+        self.revisions_view = RevisionsView(
+            communication=self.communication, parent=self
+        )
+        # Disable/enable widgets
+        self.projects_browser.busy.connect(lambda: self.disable)
+        self.projects_browser.ready.connect(lambda: self.enable)
+        self.revisions_view.busy.connect(lambda: self.disable)
+        self.revisions_view.ready.connect(lambda: self.enable)
+        self.files_browser.busy.connect(lambda: self.disable)
+        self.files_browser.ready.connect(lambda: self.enable)
         # Add browsers and file view to rana widget
         self.rana_files.addWidget(self.projects_browser)
         self.rana_files.addWidget(self.files_browser)
         self.rana_files.addWidget(self.file_view)
-        # Disable/enable widgets
-        self.projects_browser.busy.connect(lambda: self.disable)
-        self.projects_browser.ready.connect(lambda: self.enable)
-        self.files_browser.busy.connect(lambda: self.disable)
-        self.files_browser.ready.connect(lambda: self.enable)
+        self.rana_files.addWidget(self.revisions_view)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
@@ -718,56 +857,67 @@ class RanaBrowser(QWidget):
             self.files_browser.update_project
         )
         self.projects_browser.project_selected.connect(self.file_view.update_project)
-        self.projects_browser.project_selected.connect(
-            lambda project: self.breadcrumbs.set_paths(["Projects", project["name"]])
-        )
         # Show file details on selecting file
         self.files_browser.file_selected.connect(
             self.file_view.show_selected_file_details
         )
         # Update breadcrumbs when file browser path changes
-        self.files_browser.path_changed.connect(self.breadcrumbs.add_path)
+        self.projects_browser.project_selected.connect(
+            lambda selected_item: self.breadcrumbs.add_folder(selected_item["name"])
+        )
+        self.files_browser.folder_selected.connect(self.breadcrumbs.add_folder)
+        self.files_browser.file_selected.connect(
+            lambda selected_item: self.breadcrumbs.add_file(
+                selected_item["id"].split("/")[-1]
+            )
+        )
+        self.file_view.show_revisions_clicked.connect(self.breadcrumbs.add_revisions)
         # Connect upload button
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
                 self.project, self.selected_item
             )
         )
-        # connect updating folder from breadcrumb
+        # Connect file browser context menu signals
+        context_menu_signals = (
+            (self.files_browser.file_deletion_requested, self.delete_file_selected),
+            (self.files_browser.open_in_qgis_requested, self.open_in_qgis_selected),
+            (self.files_browser.upload_file_requested, self.upload_file_selected),
+            (
+                self.files_browser.save_vector_styling_requested,
+                self.save_vector_styling_selected,
+            ),
+            (self.files_browser.open_wms_requested, self.open_wms_selected),
+            (self.files_browser.download_file_requested, self.download_file_selected),
+            (
+                self.files_browser.download_results_requested,
+                self.download_results_selected,
+            ),
+        )
+        for file_browser_signal, rana_signal in context_menu_signals:
+            file_browser_signal.connect(
+                lambda file, signal=rana_signal: signal.emit(self.project, file)
+            )
+        # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.fetch_and_populate(self.project, path)
         )
-        # Connect buttons in file view
-        self.file_view.btn_open.clicked.connect(
-            lambda _,: self.open_in_qgis_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_save.clicked.connect(
-            lambda _,: self.upload_file_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_save_vector_style.clicked.connect(
-            lambda _,: self.save_vector_styling_selected.emit(
-                self.project, self.selected_item
-            )
-        )
-        self.file_view.btn_wms.clicked.connect(
-            lambda _,: self.open_wms_selected.emit(self.project, self.selected_item)
-        )
-        self.file_view.btn_download.clicked.connect(
-            lambda _,: self.download_file_selected.emit(
-                self.project, self.selected_item
-            )
-        )
-        self.file_view.btn_download_results.clicked.connect(
-            lambda _,: self.download_results_selected.emit(
-                self.project, self.selected_item
-            )
+        self.breadcrumbs.file_selected.connect(self.file_view.refresh)
+        self.file_view.show_revisions_clicked.connect(
+            self.revisions_view.show_revisions_for_file
         )
         self.file_view.btn_start_simulation.clicked.connect(
-            lambda _,: self.start_simulation_selected.emit(
+            lambda _: self.start_simulation_selected.emit(
                 self.project, self.selected_item
             )
         )
-        # Ensure correct page is shown
+        # Start simulation for specific revision
+        self.revisions_view.new_simulation_clicked.connect(
+            lambda revision_id: self.start_simulation_selected_with_revision.emit(
+                self.project, self.selected_item, revision_id
+            )
+        )
+        # Ensure correct page is shown - do this last zo all updates are done
         self.projects_browser.projects_refreshed.connect(
             lambda: self.rana_files.setCurrentIndex(0)
         )
@@ -781,8 +931,17 @@ class RanaBrowser(QWidget):
             lambda _: self.rana_files.setCurrentIndex(2)
         )
         self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
+        self.file_view.show_revisions_clicked.connect(
+            lambda _: self.rana_files.setCurrentIndex(3)
+        )
+        self.breadcrumbs.projects_selected.connect(
+            lambda: self.rana_files.setCurrentIndex(0)
+        )
         self.breadcrumbs.folder_selected.connect(
             lambda: self.rana_files.setCurrentIndex(1)
+        )
+        self.breadcrumbs.file_selected.connect(
+            lambda: self.rana_files.setCurrentIndex(2)
         )
 
     @pyqtSlot()
@@ -808,18 +967,16 @@ class RanaBrowser(QWidget):
                 project_id, {"path": online_path}
             )
         if self.files_browser.selected_item:
-            paths = [
-                "Projects",
-                self.projects_browser.project["name"],
-            ] + online_path.split("/")[:-1]
-            self.breadcrumbs.set_paths(paths)
+            paths = [self.projects_browser.project["name"]] + online_path.split("/")[
+                :-1
+            ]
+            self.breadcrumbs.set_folders(paths)
             # handle item as it was selected in the UI
             self.files_browser.update()
             # open in qgis; note that selected_item is either None or a file
-            self.communication.log_info(f"Opening file {str(self.selected_item)}")
             self.open_in_qgis_selected.emit(
                 self.projects_browser.project, self.selected_item
             )
+            self.communication.log_info(f"Opening file {str(self.selected_item)}")
         else:
             self.project = None
-            self.breadcrumbs.set_paths(["Projects"], update=False)

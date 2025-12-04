@@ -11,8 +11,4 @@ RUN python3 /root/dependencies.py
 
 RUN pip3 install -r /root/requirements-test.txt -c /root/constraints.txt --no-deps --upgrade --target /usr/share/qgis/python/plugins
 
-
-#RUN mkdir /tests_directory
-#COPY . /tests_directory
 WORKDIR /tests_directory
-#WORKDIR /root/.local/share/QGIS/QGIS3/profiles/default/python/plugins/rana_qgis_plugin
