@@ -205,6 +205,34 @@ class Loader(QObject):
             else:
                 self.communication.show_warn(f"Unable to delete file {file['id']}")
 
+    @pyqtSlot(dict)
+    @pyqtSlot(dict, int)
+    def create_schematisation_revision_3di_model(self, file, revision_id=None):
+        # TODO: find a way to test this
+        _, personal_api_token = get_3di_auth()
+        frontend_settings = get_frontend_settings()
+        api_url = frontend_settings["hcc_url"].rstrip("/")
+        threedi_api = get_api_client_with_personal_api_token(
+            personal_api_token, api_url
+        )
+        tc = ThreediCalls(threedi_api)
+        # Retrieve schematisation info
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        if not revision_id:
+            revision_id = schematisation["latest_revision"]["id"]
+        schematisation_id = schematisation["schematisation"]["id"]
+        # TODO replace log with actual call
+        from qgis.core import Qgis, QgsMessageLog
+
+        QgsMessageLog.logMessage(
+            f"run create_schematisation_revision_3di_model with {schematisation_id=}; {revision_id=}",
+            "DEBUG",
+            Qgis.Warning,
+        )
+        # tc.create_schematisation_revision_3di_model(schematisation["id"], revision_id)
+
     @pyqtSlot(dict, dict)
     @pyqtSlot(dict, dict, int)
     def start_simulation(self, project, file, revision_id=None):

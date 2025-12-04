@@ -766,7 +766,8 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
-    create_model_selected = pyqtSignal(dict, dict)
+    create_model_selected = pyqtSignal(dict)
+    create_model_selected_with_revision = pyqtSignal(dict, int)
     delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
@@ -901,8 +902,11 @@ class RanaBrowser(QWidget):
             )
         )
         self.file_view.btn_create_model.clicked.connect(
-            lambda _: self.create_model_selected.emit(
-                self.project, self.selected_item
+            lambda _: self.create_model_selected.emit(self.selected_item)
+        )
+        self.revisions_view.create_3di_model_clicked.connect(
+            lambda revision_id: self.create_model_selected_with_revision.emit(
+                self.selected_item, revision_id
             )
         )
         # Start simulation for specific revision

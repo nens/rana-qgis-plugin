@@ -266,8 +266,13 @@ class RanaQgisPlugin:
             self.rana_browser.start_simulation_selected_with_revision.connect(
                 self.loader.start_simulation
             )
+            self.rana_browser.create_model_selected.connect(
+                self.loader.create_schematisation_revision_3di_model
+            )
+            self.rana_browser.create_model_selected_with_revision.connect(
+                self.loader.create_schematisation_revision_3di_model
+            )
             self.rana_browser.delete_file_selected.connect(self.loader.delete_file)
-
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
