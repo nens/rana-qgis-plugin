@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QTimer, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
@@ -68,10 +68,6 @@ class RevisionsView(QWidget):
         self.setup_ui()
 
     def setup_ui(self):
-        revisions_refreash_btn = QToolButton()
-        revisions_refreash_btn.setToolTip("Refresh")
-        revisions_refreash_btn.clicked.connect(self.show_revisions)
-        revisions_refreash_btn.setIcon(refresh_icon)
         self.revisions_table = QTableView()
         self.revisions_table.setSortingEnabled(True)
         self.revisions_table.verticalHeader().hide()
@@ -83,7 +79,6 @@ class RevisionsView(QWidget):
             QHeaderView.Stretch
         )
         layout = QVBoxLayout(self)
-        layout.addWidget(revisions_refreash_btn)
         layout.addWidget(self.revisions_table)
         self.setLayout(layout)
 
@@ -92,10 +87,13 @@ class RevisionsView(QWidget):
         self.selected_file = selected_file
         self.show_revisions()
 
+    def refresh(self):
+        # TODO refresh without loosing sort
+        self.show_revisions()
+
     def show_revisions(self):
         self.busy.emit()
         selected_file = self.selected_file
-        self.revisions_model.clear()
         # collect rows to show in widget, format: [date_str, event, (button_label, signal_func)]
         rows = []
         if selected_file.get("data_type") == "threedi_schematisation":
@@ -135,6 +133,7 @@ class RevisionsView(QWidget):
                 rows.append([date_str, item["message"], None])
 
         # Populate table
+        self.revisions_model.clear()
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         for i, (date_str, event, btn_data) in enumerate(rows):
             self.revisions_model.appendRow(
@@ -169,10 +168,6 @@ class FileView(QWidget):
         self.project = project
 
     def setup_ui(self):
-        file_refresh_btn = QToolButton()
-        file_refresh_btn.setToolTip("Refresh")
-        file_refresh_btn.clicked.connect(self.refresh)
-        file_refresh_btn.setIcon(refresh_icon)
         self.file_table_widget = QTableWidget(1, 2)
         self.file_table_widget.horizontalHeader().setVisible(False)
         self.file_table_widget.verticalHeader().setVisible(False)
@@ -185,14 +180,12 @@ class FileView(QWidget):
         button_layout.addWidget(self.btn_start_simulation)
         button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
-        layout.addWidget(file_refresh_btn)
         layout.addWidget(self.file_table_widget)
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
-        self.file_table_widget.clearContents()
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
             selected_file["user"]["given_name"]
@@ -261,6 +254,7 @@ class FileView(QWidget):
                 file_details.extend(schematisation_details)
             else:
                 self.communication.show_error("Failed to download 3Di schematisation.")
+        self.file_table_widget.clearContents()
         self.file_table_widget.setRowCount(len(file_details))
         self.file_table_widget.horizontalHeader().setStretchLastSection(True)
         for i, (label, value) in enumerate(file_details):
@@ -323,10 +317,6 @@ class FilesBrowser(QWidget):
         self.fetch_and_populate(project)
 
     def setup_ui(self):
-        project_refresh_btn = QToolButton()
-        project_refresh_btn.setToolTip("Refresh")
-        project_refresh_btn.setIcon(refresh_icon)
-        project_refresh_btn.clicked.connect(self.update)
         self.files_tv = QTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
@@ -337,13 +327,12 @@ class FilesBrowser(QWidget):
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
         layout = QVBoxLayout(self)
-        # todo: move refresh to far right (some day)
-        layout.addWidget(project_refresh_btn)
         layout.addWidget(self.files_tv)
         layout.addWidget(self.btn_upload)
         self.setLayout(layout)
 
     def refresh(self):
+        # TODO: refresh without loosing sort
         self.update()
 
     def update(self):
@@ -491,11 +480,6 @@ class ProjectsBrowser(QWidget):
         self.projects_search = QLineEdit()
         self.projects_search.setPlaceholderText("🔍 Search for project by name")
         self.projects_search.textChanged.connect(self.filter_projects)
-        # Create refresh button
-        overview_refresh_btn = QToolButton()
-        overview_refresh_btn.setToolTip("Refresh")
-        overview_refresh_btn.clicked.connect(self.refresh)
-        overview_refresh_btn.setIcon(refresh_icon)
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
         self.projects_tv = QTreeView()
@@ -514,7 +498,6 @@ class ProjectsBrowser(QWidget):
         # Organize widgets in layouts
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.projects_search)
-        top_layout.addWidget(overview_refresh_btn)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
         pagination_layout.addWidget(self.label_page_number)
@@ -529,6 +512,7 @@ class ProjectsBrowser(QWidget):
         self.projects = get_tenant_projects(self.communication)
 
     def refresh(self):
+        # TODO: refresh without loosing sort
         self.current_page = 1
         self.fetch_projects()
         search_text = self.projects_search.text()
@@ -762,6 +746,9 @@ class RanaBrowser(QWidget):
         super().__init__()
         self.communication = communication
         self.setup_ui()
+        self.refresh_timer = QTimer()
+        self.refresh_timer.timeout.connect(self.refresh)
+        self.refresh_timer.start(10000)
 
     @property
     def project(self):
@@ -790,6 +777,7 @@ class RanaBrowser(QWidget):
         refresh_btn = QToolButton()
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
+        refresh_btn.clicked.connect(self.refresh)
         self.rana_browser.setCornerWidget(refresh_btn, Qt.TopRightCorner)
 
         # Setup top layout with logo and breadcrumbs
