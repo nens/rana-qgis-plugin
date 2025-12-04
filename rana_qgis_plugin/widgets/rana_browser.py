@@ -88,7 +88,6 @@ class RevisionsView(QWidget):
         self.show_revisions()
 
     def refresh(self):
-        # TODO refresh without loosing sort
         self.show_revisions()
 
     def show_revisions(self):
@@ -133,6 +132,8 @@ class RevisionsView(QWidget):
                 rows.append([date_str, item["message"], None])
 
         # Populate table
+        sort_column = self.revisions_table.horizontalHeader().sortIndicatorSection()
+        sort_order = self.revisions_table.horizontalHeader().sortIndicatorOrder()
         self.revisions_model.clear()
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         for i, (date_str, event, btn_data) in enumerate(rows):
@@ -150,6 +151,8 @@ class RevisionsView(QWidget):
                 self.revisions_table.setIndexWidget(
                     self.revisions_model.index(i, 2), btn
                 )
+        self.revisions_table.sortByColumn(sort_column, sort_order)
+        self.revisions_table.setSortingEnabled(True)
         self.ready.emit()
 
 
@@ -332,8 +335,9 @@ class FilesBrowser(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
-        # TODO: refresh without loosing sort
-        self.update()
+        if self.selected_item["type"] == "directory":
+            self.fetch_and_populate(self.project, self.selected_item["id"])
+        self.communication.clear_message_bar()
 
     def update(self):
         selected_path = self.selected_item["id"]
@@ -400,10 +404,11 @@ class FilesBrowser(QWidget):
             project["id"],
             {"path": path} if path else None,
         )
+        sort_column = self.files_tv.header().sortIndicatorSection()
+        sort_order = self.files_tv.header().sortIndicatorOrder()
         self.files_model.clear()
         header = ["Filename", "Data type", "Size", "Last modified"]
         self.files_model.setHorizontalHeaderLabels(header)
-
         directories = [file for file in self.files if file["type"] == "directory"]
         files = [file for file in self.files if file["type"] == "file"]
 
@@ -445,6 +450,9 @@ class FilesBrowser(QWidget):
             self.files_model.appendRow(
                 [name_item, data_type_item, size_item, last_modified_item]
             )
+
+        self.files_tv.sortByColumn(sort_column, sort_order)
+        self.files_tv.setSortingEnabled(True)
 
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
@@ -512,7 +520,6 @@ class ProjectsBrowser(QWidget):
         self.projects = get_tenant_projects(self.communication)
 
     def refresh(self):
-        # TODO: refresh without loosing sort
         self.current_page = 1
         self.fetch_projects()
         search_text = self.projects_search.text()
@@ -747,7 +754,8 @@ class RanaBrowser(QWidget):
         self.communication = communication
         self.setup_ui()
         self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self.refresh)
+        self.refresh_timer.timeout.connect(self.auto_refresh)
+        # TODO: set timer to 60000
         self.refresh_timer.start(10000)
 
     @property
@@ -922,6 +930,11 @@ class RanaBrowser(QWidget):
     @pyqtSlot()
     def disable(self):
         self.rana_browser.setEnabled(False)
+
+    def auto_refresh(self):
+        # skip auto refresh for projects view to not mess up pagination
+        if self.rana_files.currentIndex() in [1, 2, 3]:
+            self.refresh()
 
     @pyqtSlot()
     def refresh(self):
