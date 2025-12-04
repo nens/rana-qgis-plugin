@@ -7,6 +7,7 @@ History
 - Add revision view and new simulation button
 - Replace file interaction buttons with context menu
 - Download generated postprocessing rasters.
+- Add button to generate threedimodel when missing
 
 
 1.1.20 (2025-11-18)
