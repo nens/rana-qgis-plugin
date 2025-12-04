@@ -780,13 +780,18 @@ class RanaBrowser(QWidget):
         self.rana_processes = QWidget()
         self.rana_files = QStackedWidget()
         self.rana_browser.addTab(self.rana_files, "Files")
-        self.rana_browser.addTab(self.rana_processes, "Processes")
+        # self.rana_browser.addTab(self.rana_processes, "Processes")
         self.rana_browser.setCurrentIndex(0)
-        self.rana_browser.setTabEnabled(1, False)
+        # self.rana_browser.setTabEnabled(1, False)
         # Set up breadcrumbs, browser and file view widgets
         self.breadcrumbs = BreadCrumbsWidget(
             communication=self.communication, parent=self
         )
+        refresh_btn = QToolButton()
+        refresh_btn.setToolTip("Refresh")
+        refresh_btn.setIcon(refresh_icon)
+        self.rana_browser.setCornerWidget(refresh_btn, Qt.TopRightCorner)
+
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
 
