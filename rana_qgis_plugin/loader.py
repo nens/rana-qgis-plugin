@@ -29,6 +29,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
 from rana_qgis_plugin.simulation.utils import CACHE_PATH, extract_error_message
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
+    get_threedi_api,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
@@ -216,14 +217,7 @@ class Loader(QObject):
             self.simulation_started_failed.emit()
             return
 
-        _, personal_api_token = get_3di_auth()
-
-        frontend_settings = get_frontend_settings()
-        api_url = frontend_settings["hcc_url"].rstrip("/")
-
-        threedi_api = get_api_client_with_personal_api_token(
-            personal_api_token, api_url
-        )
+        threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
         organisations = {org.unique_id: org for org in tc.fetch_organisations()}
 
@@ -342,9 +336,7 @@ class Loader(QObject):
                 },
                 "name": f"simulation_tracker_{sim.simulation.name}",
             }
-            self.communication.log_warn(str(params))
-            result = start_tenant_process(self.communication, track_process, params)
-            self.communication.log_warn(str(result))
+            _ = start_tenant_process(self.communication, track_process, params)
 
         self.simulation_started.emit()
 
