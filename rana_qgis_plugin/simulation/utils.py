@@ -15,6 +15,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import requests
 from qgis.PyQt.QtCore import QSettings, QSortFilterProxyModel, Qt
 from qgis.PyQt.QtGui import QColor, QFont, QPalette
+from qgis.utils import plugins
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 
@@ -545,6 +546,12 @@ class SchematisationRasterReferences:
         return table_mapping
 
 
+class BuildOptionActions(Enum):
+    CREATED = "created"
+    LOADED = "loaded"
+    DOWNLOADED = "downloaded"
+
+
 def load_remote_schematisation(
     communications,
     schematisation,
@@ -572,18 +579,19 @@ def load_remote_schematisation(
             threedi_api,
         )
     )
-    ## downloaded_local_schematisation = schematisation_download.downloaded_local_schematisation
-    ## custom_geopackage_filepath = schematisation_download.downloaded_geopackage_filepath
-    # if downloaded_local_schematisation is not None:
-    #     self.load_local_schematisation(
-    #         local_schematisation=downloaded_local_schematisation,
-    #         action=BuildOptionActions.DOWNLOADED,
-    #         custom_geopackage_filepath=custom_geopackage_filepath,
-    #     )
-    #     wip_revision = downloaded_local_schematisation.wip_revision
-    #     if wip_revision is not None:
-    #         settings = QSettings("3di", "qgisplugin")
-    #         settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
+    if downloaded_local_schematisation is not None:
+        load_local_schematisation(
+            communications,
+            local_schematisation=downloaded_local_schematisation,
+            action=BuildOptionActions.DOWNLOADED,
+            custom_geopackage_filepath=custom_geopackage_filepath,
+        )
+        wip_revision = downloaded_local_schematisation.wip_revision
+        if wip_revision is not None:
+            settings = QSettings("3di", "qgisplugin")
+            settings.setValue(
+                "last_used_geopackage_path", wip_revision.schematisation_dir
+            )
 
 
 def download_required_files(
@@ -680,7 +688,6 @@ def download_required_files(
         if not schematisation_db_dir:
             return
 
-        communications.log_warn("download_schematisation_revision_sqlite")
         sqlite_download = tc.download_schematisation_revision_sqlite(
             schematisation_pk, revision_pk
         )
@@ -783,3 +790,42 @@ def download_required_files(
         communications.show_error(error_msg)
 
     return None, None
+
+
+def get_plugin_instance(plugin_name):
+    """Return given plugin name instance."""
+    try:
+        plugin_instance = plugins[plugin_name]
+    except (AttributeError, KeyError):
+        plugin_instance = None
+    return plugin_instance
+
+
+def load_local_schematisation(
+    communication,
+    local_schematisation=None,
+    action=BuildOptionActions.LOADED,
+    custom_geopackage_filepath=None,
+):
+    if local_schematisation and local_schematisation.schematisation_db_filepath:
+        try:
+            geopackage_filepath = (
+                local_schematisation.schematisation_db_filepath
+                if not custom_geopackage_filepath
+                else custom_geopackage_filepath
+            )
+            msg = f"Schematisation '{local_schematisation.name}' {action.value}!\n"
+            communication.bar_info(msg)
+            # Load new schematisation
+            schematisation_editor = get_plugin_instance("threedi_schematisation_editor")
+            if schematisation_editor:
+                schematisation_editor.load_schematisation(geopackage_filepath)
+            else:
+                msg += (
+                    "Please use the Rana Schematisation Editor to load it to your project from the GeoPackage:"
+                    f"\n{geopackage_filepath}"
+                )
+                communication.show_warn(msg)
+        except (TypeError, ValueError):
+            error_msg = "Invalid schematisation directory structure. Loading schematisation canceled."
+            communication.show_error(error_msg)
