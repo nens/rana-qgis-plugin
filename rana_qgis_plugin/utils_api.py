@@ -410,13 +410,17 @@ def get_threedi_schematisation(communication: UICommunication, descriptor_id: st
         return None
 
 
-def add_threedi_schematisation(communication: UICommunication, project_id: str, schematisation_id: str, path: str):
+def add_threedi_schematisation(
+    communication: UICommunication, project_id: str, schematisation_id: str, path: str
+):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.post(params={"schematisation_id": schematisation_id, "path": path})
+    status = network_manager.post(
+        params={"schematisation_id": schematisation_id, "path": path}
+    )
 
     if status:
         response = network_manager.content

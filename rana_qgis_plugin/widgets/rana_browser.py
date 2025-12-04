@@ -947,9 +947,7 @@ class RanaBrowser(QWidget):
             )
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
-            lambda _,: self.upload_new_schematisation_selected.emit(
-                self.project
-            )
+            lambda _,: self.upload_new_schematisation_selected.emit(self.project)
         )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(

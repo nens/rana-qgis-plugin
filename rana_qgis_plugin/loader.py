@@ -54,8 +54,8 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.utils_settings import hcc_working_dir
-from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
+from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
     FileDownloadWorker,
@@ -658,9 +658,15 @@ class Loader(QObject):
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
             return
-        available_organisations = [org.replace("-", "") for org in tenant_details["threedi_organisations"]]
+        available_organisations = [
+            org.replace("-", "") for org in tenant_details["threedi_organisations"]
+        ]
         tc = ThreediCalls(threedi_api)
-        organisations = {org.unique_id: org for org in tc.fetch_organisations() if org.unique_id in available_organisations}
+        organisations = {
+            org.unique_id: org
+            for org in tc.fetch_organisations()
+            if org.unique_id in available_organisations
+        }
 
         work_dir = QSettings().value("threedi/working_dir", "")
         new_schematisation_wizard = NewSchematisationWizard(
@@ -675,13 +681,25 @@ class Loader(QObject):
             return
         rana_path = new_schematisation_wizard.rana_path.rstrip("/")
         # check if directory path exists, otherwise make it
-        path_info = get_tenant_project_files(communication=self.communication, project_id=project["id"], params={"path": rana_path})
+        path_info = get_tenant_project_files(
+            communication=self.communication,
+            project_id=project["id"],
+            params={"path": rana_path},
+        )
         if not path_info:
             # don't continue if path creation fails for some reason
-            assert create_tenant_project_directory(project_id=project["id"], path=rana_path)
-            path_info = get_tenant_project_files(communication=self.communication, project_id=project["id"], params={"path": rana_path})
+            assert create_tenant_project_directory(
+                project_id=project["id"], path=rana_path
+            )
+            path_info = get_tenant_project_files(
+                communication=self.communication,
+                project_id=project["id"],
+                params={"path": rana_path},
+            )
         if rana_path != "" and path_info[0]["type"] != "directory":
-            self.communication.bar_info(f"Adding 3Di schematisation {new_schematisation.name} to main directory in Rana project {project["name"]} since specified path is unavailable")
+            self.communication.bar_info(
+                f"Adding 3Di schematisation {new_schematisation.name} to main directory in Rana project {project['name']} since specified path is unavailable"
+            )
             rana_path = ""
 
         if rana_path:
@@ -692,13 +710,16 @@ class Loader(QObject):
             communication=self.communication,
             project_id=project["id"],
             schematisation_id=new_schematisation.id,
-            path=file_path
+            path=file_path,
         )
         if response:
-            message = f"3Di schematisation {new_schematisation.name} added to Rana project"
+            message = (
+                f"3Di schematisation {new_schematisation.name} added to Rana project"
+            )
             if rana_path:
                 message += f" in directory {rana_path}"
             self.communication.bar_info(message)
         else:
-            self.communication.bar_error(f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project["name"]}!")
-
+            self.communication.bar_error(
+                f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
+            )

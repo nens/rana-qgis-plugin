@@ -14,7 +14,11 @@ from qgis.PyQt.QtWidgets import (
     QWizardPage,
 )
 
-from rana_qgis_plugin.simulation.utils_ui import get_filepath, read_3di_settings, save_3di_settings
+from rana_qgis_plugin.simulation.utils_ui import (
+    get_filepath,
+    read_3di_settings,
+    save_3di_settings,
+)
 
 
 class SchematisationNamePage(QWizardPage):
@@ -171,11 +175,11 @@ class SchematisationNameWidget(QWidget):
 
         # Rana path input
         self.le_rana_path = QLineEdit()
-        self.le_rana_path.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Preferred
-        )
+        self.le_rana_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.le_rana_path.setMaxLength(80)
-        self.le_rana_path.setPlaceholderText("Enter the path in your Rana project to place the 3Di schematisation in")
+        self.le_rana_path.setPlaceholderText(
+            "Enter the path in your Rana project to place the 3Di schematisation in"
+        )
         gridLayout.addWidget(self.le_rana_path, 8, 2)
 
         gridLayout.addItem(
