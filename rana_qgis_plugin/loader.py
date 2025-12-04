@@ -12,7 +12,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtWidgets import QDialog, QFileDialog
+from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import bypass_max_path_limit
 
@@ -223,15 +223,15 @@ class Loader(QObject):
         if not revision_id:
             revision_id = schematisation["latest_revision"]["id"]
         schematisation_id = schematisation["schematisation"]["id"]
-        # TODO replace log with actual call
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage(
-            f"run create_schematisation_revision_3di_model with {schematisation_id=}; {revision_id=}",
-            "DEBUG",
-            Qgis.Warning,
-        )
-        # tc.create_schematisation_revision_3di_model(schematisation["id"], revision_id)
+        try:
+            tc.create_schematisation_revision_3di_model(schematisation_id, revision_id)
+        except ApiException as e:
+            if e.status == 400:
+                QMessageBox.warning(
+                    QApplication.activeWindow(), "Warning", eval(e.body)[0]
+                )
+            else:
+                raise
 
     @pyqtSlot(dict, dict)
     @pyqtSlot(dict, dict, int)
