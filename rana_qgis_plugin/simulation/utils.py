@@ -566,8 +566,6 @@ def load_remote_schematisation(
     if isinstance(revision, dict):
         revision = NestedObject(revision)
 
-    # Download and load the schematisation
-    # communications, schematisation, revision, is_latest_revision, external_progress_bar, working_dir, threedi_api
     downloaded_local_schematisation, custom_geopackage_filepath = (
         download_required_files(
             communications,
