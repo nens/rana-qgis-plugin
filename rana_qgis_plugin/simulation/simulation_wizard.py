@@ -1082,14 +1082,10 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
                     continue
         except ApiException as e:
             error_msg = extract_error_message(e)
-            self.parent_page.parent_wizard.communication.bar_error(
-                error_msg, log_text_color=QColor(Qt.red)
-            )
+            self.parent_page.parent_wizard.communication.bar_error(error_msg)
         except Exception as e:
             error_msg = f"Error: {e}"
-            self.parent_page.parent_wizard.communication.bar_error(
-                error_msg, log_text_color=QColor(Qt.red)
-            )
+            self.parent_page.parent_wizard.communication.bar_error(error_msg)
 
     def load_1d_initial_waterlevel_csv(self):
         """Load 1D initial water level from the CSV file."""
