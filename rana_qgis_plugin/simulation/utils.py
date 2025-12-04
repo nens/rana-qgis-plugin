@@ -3,19 +3,20 @@
 import hashlib
 import json
 import os
-import tempfile
 import shutil
+import tempfile
 import warnings
-from uuid import uuid4
-from qgis.core import QgsVectorLayer
 from collections import OrderedDict
 from datetime import datetime
 from enum import Enum
 from typing import List
+from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
-from .utils_ui import progress_bar_callback_factory
 
 import requests
+from qgis.core import QgsVectorLayer
+
+from .utils_ui import progress_bar_callback_factory
 
 TEMPDIR = tempfile.gettempdir()
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -369,7 +370,6 @@ def translate_illegal_chars(
         for char in text
     )
     return sanitized_text
-
 
 
 def backup_schematisation_file(filename):

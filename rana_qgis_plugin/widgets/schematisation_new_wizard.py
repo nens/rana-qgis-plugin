@@ -12,8 +12,15 @@ from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation
 from threedi_schema import ThreediDatabase
 
-from rana_qgis_plugin.simulation.utils import ensure_valid_schema, geopackage_layer, extract_error_message
-from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls, SchematisationApiMapper
+from rana_qgis_plugin.simulation.threedi_calls import (
+    SchematisationApiMapper,
+    ThreediCalls,
+)
+from rana_qgis_plugin.simulation.utils import (
+    ensure_valid_schema,
+    extract_error_message,
+    geopackage_layer,
+)
 from rana_qgis_plugin.widgets.new_wizard_pages.explain import (
     SchematisationExplainPage,
 )

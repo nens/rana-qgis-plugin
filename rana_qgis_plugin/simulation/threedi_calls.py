@@ -1,9 +1,9 @@
 # 3Di Models and Simulations for QGIS, licensed under GPLv2 or (at your option) any later version
 # Copyright (C) 2023 by Lutra Consulting for 3Di Water Management
 import logging
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Tuple
-from collections import OrderedDict
 
 from threedi_api_client import ThreediApi
 from threedi_api_client.openapi import (
