@@ -656,7 +656,7 @@ class Loader(QObject):
 
         work_dir = QSettings().value("threedi/working_dir", "")
         new_schematisation_wizard = NewSchematisationWizard(
-            threedi_api, work_dir, self.communication, organisations, self.parent
+            threedi_api, work_dir, self.communication, organisations
         )
         new_schematisation_wizard.exec()
 
