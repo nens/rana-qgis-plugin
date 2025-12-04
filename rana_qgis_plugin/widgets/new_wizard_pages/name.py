@@ -40,9 +40,6 @@ class SchematisationNamePage(QWizardPage):
         self.main_widget.le_geopackage_path.textChanged.connect(self.update_pages_order)
 
         self.registerField(
-            "schematisation_name", self.main_widget.le_schematisation_name
-        )
-        self.registerField(
             "schematisation_description", self.main_widget.le_description
         )
         self.registerField("schematisation_tags", self.main_widget.le_tags)
