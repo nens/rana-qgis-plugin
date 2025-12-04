@@ -160,17 +160,17 @@ class NewSchematisationWizard(QWizard):
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
-            self.communication.bar_info(msg, log_text_color=QColor(Qt.darkGreen))
+            self.communication.bar_info(msg)
         except ApiException as e:
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = extract_error_message(e)
-            self.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.communication.bar_error(error_msg)
         except Exception as e:
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = f"Error: {e}"
-            self.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.communication.bar_error(error_msg)
 
     @staticmethod
     def get_paths_from_geopackage(geopackage_path):
@@ -274,17 +274,17 @@ class NewSchematisationWizard(QWizard):
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
-            self.communication.bar_info(msg, log_text_color=QColor(Qt.darkGreen))
+            self.communication.bar_info(msg)
         except ApiException as e:
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = extract_error_message(e)
-            self.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.communication.bar_error(error_msg)
         except Exception as e:
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = f"Error: {e}"
-            self.communication.bar_error(error_msg, log_text_color=QColor(Qt.red))
+            self.communication.bar_error(error_msg)
 
     def cancel_wizard(self):
         """Handling canceling wizard action."""
