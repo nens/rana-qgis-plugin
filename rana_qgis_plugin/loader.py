@@ -235,14 +235,7 @@ class Loader(QObject):
     @pyqtSlot(dict)
     @pyqtSlot(dict, int)
     def create_schematisation_revision_3di_model(self, file, revision_id=None):
-        # TODO: find a way to test this
-        _, personal_api_token = get_3di_auth()
-        frontend_settings = get_frontend_settings()
-        api_url = frontend_settings["hcc_url"].rstrip("/")
-        threedi_api = get_api_client_with_personal_api_token(
-            personal_api_token, api_url
-        )
-        tc = ThreediCalls(threedi_api)
+        tc = ThreediCalls(get_threedi_api())
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
