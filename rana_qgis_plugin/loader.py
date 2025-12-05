@@ -26,7 +26,11 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
 )
-from rana_qgis_plugin.simulation.utils import CACHE_PATH, extract_error_message
+from rana_qgis_plugin.simulation.utils import (
+    CACHE_PATH,
+    extract_error_message,
+    load_remote_schematisation,
+)
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_threedi_api,
@@ -119,6 +123,28 @@ class Loader(QObject):
             self.file_download_worker.start()
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
+
+    @pyqtSlot(dict, dict)
+    def open_simulation_with_revision(self, revision, schematisation):
+        if not hcc_working_dir():
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        pb = self.communication.progress_bar(
+            msg="Downloading remote schematisation...", clear_msg_bar=True
+        )
+
+        load_remote_schematisation(
+            self.communication,
+            schematisation,
+            revision,
+            pb,
+            hcc_working_dir(),
+            get_threedi_api(),
+        )
+        self.file_download_finished.emit(None)
 
     def on_file_download_finished(self, project, file, local_file_path: str):
         self.communication.clear_message_bar()

@@ -56,6 +56,7 @@ from rana_qgis_plugin.utils_api import (
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
+    open_simulation_revision_in_qgis_requested = pyqtSignal(dict, dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -82,6 +83,10 @@ class RevisionsView(QWidget):
         self.revisions_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
+        self.revisions_table.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self.revisions_table.customContextMenuRequested.connect(self.menu_requested)
         layout = QVBoxLayout(self)
         layout.addWidget(revisions_refreash_btn)
         layout.addWidget(self.revisions_table)
@@ -92,11 +97,29 @@ class RevisionsView(QWidget):
         self.selected_file = selected_file
         self.show_revisions()
 
+    def menu_requested(self, pos):
+        index = self.revisions_table.indexAt(pos)
+        revision_item = self.revisions_model.itemFromIndex(index)
+        if not revision_item:
+            return
+
+        threedi_revision, schematisation = revision_item.data()
+        if threedi_revision:
+            menu = QMenu(self)
+            action = QAction("Open in QGIS", self)
+            action.triggered.connect(
+                lambda _: self.open_simulation_revision_in_qgis_requested.emit(
+                    threedi_revision.to_dict(), schematisation["schematisation"]
+                )
+            )
+            menu.addAction(action)
+        menu.popup(self.revisions_table.viewport().mapToGlobal(pos))
+
     def show_revisions(self):
         self.busy.emit()
         selected_file = self.selected_file
         self.revisions_model.clear()
-        # collect rows to show in widget, format: [date_str, event, (button_label, signal_func)]
+        # collect rows to show in widget, format: [date_str, event, (button_label, signal_func), revision, schematisation]
         rows = []
         if selected_file.get("data_type") == "threedi_schematisation":
             # retrieve schematisation and revisions
@@ -125,21 +148,41 @@ class RevisionsView(QWidget):
                     )
                 else:
                     btn_data = None
-                rows.append([date_str, revision.commit_message, btn_data])
+                rows.append(
+                    [
+                        date_str,
+                        revision.commit_message,
+                        btn_data,
+                        revision,
+                        schematisation,
+                    ]
+                )
         else:
             history = get_tenant_project_file_history(
                 self.project["id"], {"path": self.selected_file["id"]}
             )
             for item in history["items"]:
                 date_str = convert_to_local_time(item["created_at"])
-                rows.append([date_str, item["message"], None])
+                rows.append([date_str, item["message"], None, None, None])
 
         # Populate table
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
-        for i, (date_str, event, btn_data) in enumerate(rows):
+        for i, (
+            date_str,
+            event,
+            btn_data,
+            threedi_revision,
+            threedi_schematisation,
+        ) in enumerate(rows):
+            date_item = QStandardItem(date_str)
+
+            # We store the revision object for loading specific revisions in menu_requested.
+            if threedi_revision:
+                date_item.setData((threedi_revision, threedi_schematisation))
+
             self.revisions_model.appendRow(
                 [
-                    QStandardItem(date_str),
+                    date_item,
                     QStandardItem(event),
                     QStandardItem(""),
                 ]
@@ -756,6 +799,7 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    open_simulation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
@@ -895,6 +939,11 @@ class RanaBrowser(QWidget):
                 self.project, self.selected_item, revision_id
             )
         )
+        # Load specific revision of schematisation
+        self.revisions_view.open_simulation_revision_in_qgis_requested.connect(
+            self.open_simulation_selected_with_revision
+        )
+
         # Ensure correct page is shown - do this last zo all updates are done
         self.projects_browser.projects_refreshed.connect(
             lambda: self.rana_files.setCurrentIndex(0)

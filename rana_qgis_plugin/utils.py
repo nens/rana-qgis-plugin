@@ -68,6 +68,7 @@ def add_layer_to_qgis(
     file: dict,
     descriptor: dict,
     schematisation_instance: dict,
+    revision_instance: dict = None,
 ):
     path = file["id"]
     file_name = os.path.basename(path.rstrip("/"))
@@ -119,7 +120,11 @@ def add_layer_to_qgis(
         communication.clear_message_bar()
 
         schematisation = schematisation_instance["schematisation"]
-        revision = schematisation_instance["latest_revision"]
+        if revision_instance:
+            revision = revision_instance
+        else:
+            revision = schematisation_instance["latest_revision"]
+
         if not revision:
             communication.show_warn("Cannot open a schematisation without a revision.")
             return
