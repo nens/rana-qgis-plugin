@@ -71,7 +71,8 @@ class RevisionsView(QWidget):
 
     def setup_ui(self):
         self.revisions_table = QTableView()
-        self.revisions_table.setSortingEnabled(True)
+        self.revisions_table.setSortingEnabled(False)
+        self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
         self.revisions_model.setColumnCount(3)
@@ -167,8 +168,6 @@ class RevisionsView(QWidget):
                 rows.append([date_str, item["message"], None, None, None])
 
         # Populate table
-        sort_column = self.revisions_table.horizontalHeader().sortIndicatorSection()
-        sort_order = self.revisions_table.horizontalHeader().sortIndicatorOrder()
         self.revisions_model.clear()
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         for i, (
@@ -198,8 +197,6 @@ class RevisionsView(QWidget):
                 self.revisions_table.setIndexWidget(
                     self.revisions_model.index(i, 2), btn
                 )
-        self.revisions_table.sortByColumn(sort_column, sort_order)
-        self.revisions_table.setSortingEnabled(True)
         self.ready.emit()
 
 
