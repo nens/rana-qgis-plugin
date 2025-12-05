@@ -279,6 +279,7 @@ class RanaQgisPlugin:
                 self.loader.open_schematisation_with_revision
             )
             self.rana_browser.delete_file_selected.connect(self.loader.delete_file)
+            self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)

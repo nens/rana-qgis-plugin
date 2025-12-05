@@ -6,7 +6,9 @@ import shutil
 import warnings
 from uuid import uuid4
 
+
 from qgis.gui import QgsFileWidget, QgsProjectionSelectionWidget
+from qgis.core import QgsVectorLayer
 from qgis.PyQt.QtCore import QCoreApplication, QDate, QLocale, QSettings, QTime
 from qgis.PyQt.QtGui import QColor, QDoubleValidator, QIcon
 from qgis.PyQt.QtWidgets import (
@@ -353,3 +355,11 @@ class NumericDelegate(QItemDelegate):
         validator.setNotation(QDoubleValidator.StandardNotation)
         editor.setValidator(validator)
         return editor
+
+
+def geopackage_layer(gpkg_path, table_name, layer_name=None):
+    """Creating vector layer out of GeoPackage source."""
+    uri = f"{gpkg_path}|layername={table_name}"
+    layer_name = table_name if layer_name is None else layer_name
+    vlayer = QgsVectorLayer(uri, layer_name, "ogr")
+    return vlayer
