@@ -17,7 +17,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
-from rana_qgis_plugin.utils import get_filename_from_attachment_url
+from rana_qgis_plugin.utils_api import get_filename_from_attachment_url
 
 
 class ResultBrowser(QDialog):

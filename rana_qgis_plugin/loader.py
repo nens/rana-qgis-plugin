@@ -12,9 +12,9 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtWidgets import QDialog, QFileDialog
+from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException
-from threedi_mi_utils import bypass_max_path_limit, LocalSchematisation
+from threedi_mi_utils import LocalSchematisation, bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.auth_3di import get_3di_auth
@@ -26,11 +26,16 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
 )
-from rana_qgis_plugin.simulation.utils import CACHE_PATH, extract_error_message
+from rana_qgis_plugin.simulation.utils import (
+    CACHE_PATH,
+    extract_error_message,
+    load_remote_schematisation,
+)
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
+    get_local_file_path,
+    get_threedi_api,
     get_threedi_schematisation_simulation_results_folder,
-    get_local_file_path
 )
 from rana_qgis_plugin.utils_api import (
     delete_tenant_project_directory,
@@ -47,7 +52,9 @@ from rana_qgis_plugin.utils_api import (
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
-from rana_qgis_plugin.widgets.schematisation_upload_wizard import SchematisationUploadWizard
+from rana_qgis_plugin.widgets.schematisation_upload_wizard import (
+    SchematisationUploadWizard,
+)
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
     FileDownloadWorker,
@@ -120,6 +127,28 @@ class Loader(QObject):
             self.file_download_worker.start()
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
+
+    @pyqtSlot(dict, dict)
+    def open_schematisation_with_revision(self, revision, schematisation):
+        if not hcc_working_dir():
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        pb = self.communication.progress_bar(
+            msg="Downloading remote schematisation...", clear_msg_bar=True
+        )
+
+        load_remote_schematisation(
+            self.communication,
+            schematisation,
+            revision,
+            pb,
+            hcc_working_dir(),
+            get_threedi_api(),
+        )
+        self.file_download_finished.emit(None)
 
     def on_file_download_finished(self, project, file, local_file_path: str):
         self.communication.clear_message_bar()
@@ -207,6 +236,27 @@ class Loader(QObject):
             else:
                 self.communication.show_warn(f"Unable to delete file {file['id']}")
 
+    @pyqtSlot(dict)
+    @pyqtSlot(dict, int)
+    def create_schematisation_revision_3di_model(self, file, revision_id=None):
+        tc = ThreediCalls(get_threedi_api())
+        # Retrieve schematisation info
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        if not revision_id:
+            revision_id = schematisation["latest_revision"]["id"]
+        schematisation_id = schematisation["schematisation"]["id"]
+        try:
+            tc.create_schematisation_revision_3di_model(schematisation_id, revision_id)
+        except ApiException as e:
+            if e.status == 400:
+                QMessageBox.warning(
+                    QApplication.activeWindow(), "Warning", eval(e.body)[0]
+                )
+            else:
+                raise
+
     @pyqtSlot(dict, dict)
     @pyqtSlot(dict, dict, int)
     def start_simulation(self, project, file, revision_id=None):
@@ -218,14 +268,7 @@ class Loader(QObject):
             self.simulation_started_failed.emit()
             return
 
-        _, personal_api_token = get_3di_auth()
-
-        frontend_settings = get_frontend_settings()
-        api_url = frontend_settings["hcc_url"].rstrip("/")
-
-        threedi_api = get_api_client_with_personal_api_token(
-            personal_api_token, api_url
-        )
+        threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
         organisations = {org.unique_id: org for org in tc.fetch_organisations()}
 
@@ -344,9 +387,7 @@ class Loader(QObject):
                 },
                 "name": f"simulation_tracker_{sim.simulation.name}",
             }
-            self.communication.log_warn(str(params))
-            result = start_tenant_process(self.communication, track_process, params)
-            self.communication.log_warn(str(result))
+            _ = start_tenant_process(self.communication, track_process, params)
 
         self.simulation_started.emit()
 
@@ -609,10 +650,12 @@ class Loader(QObject):
             return
         self.communication.bar_info("Start uploading revision to Rana...")
         schematisation = get_threedi_schematisation(
-                self.communication, file["descriptor_id"]
+            self.communication, file["descriptor_id"]
         )
         _, schematisation_filepath = get_local_file_path(project["slug"], file["id"])
-        current_local_schematisation = LocalSchematisation.initialize_from_location(schematisation_filepath, use_config_for_revisions=False)
+        current_local_schematisation = LocalSchematisation.initialize_from_location(
+            schematisation_filepath, use_config_for_revisions=False
+        )
         # todo: replace with convenience function
         _, personal_api_token = get_3di_auth()
         frontend_settings = get_frontend_settings()
@@ -624,12 +667,12 @@ class Loader(QObject):
         # TODO: this needs to be fixed!!!!!!!!!!!!!
         organisation = tc.fetch_organisations()[0]
         SchematisationUploadWizard(
-            current_local_schematisation = current_local_schematisation,
-            schematisation = schematisation["schematisation"],
-            schematisation_filepath = schematisation_filepath,
-            threedi_api = threedi_api,
-            organisation = organisation,
+            current_local_schematisation=current_local_schematisation,
+            schematisation=schematisation["schematisation"],
+            schematisation_filepath=schematisation_filepath,
+            threedi_api=threedi_api,
+            organisation=organisation,
             communication=self.communication,
-            parent = None
+            parent=None,
         )
         SchematisationUploadWizard.exec()

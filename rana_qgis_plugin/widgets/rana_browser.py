@@ -56,6 +56,8 @@ from rana_qgis_plugin.utils_api import (
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
+    create_3di_model_clicked = pyqtSignal(int)
+    open_schematisation_revision_in_qgis_requested = pyqtSignal(dict, dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -78,6 +80,10 @@ class RevisionsView(QWidget):
         self.revisions_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
+        self.revisions_table.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self.revisions_table.customContextMenuRequested.connect(self.menu_requested)
         layout = QVBoxLayout(self)
         layout.addWidget(self.revisions_table)
         self.setLayout(layout)
@@ -87,13 +93,31 @@ class RevisionsView(QWidget):
         self.selected_file = selected_file
         self.show_revisions()
 
+    def menu_requested(self, pos):
+        index = self.revisions_table.indexAt(pos)
+        revision_item = self.revisions_model.itemFromIndex(index)
+        if not revision_item:
+            return
+
+        threedi_revision, schematisation = revision_item.data()
+        if threedi_revision:
+            menu = QMenu(self)
+            action = QAction("Open in QGIS", self)
+            action.triggered.connect(
+                lambda _: self.open_schematisation_revision_in_qgis_requested.emit(
+                    threedi_revision.to_dict(), schematisation["schematisation"]
+                )
+            )
+            menu.addAction(action)
+        menu.popup(self.revisions_table.viewport().mapToGlobal(pos))
+
     def refresh(self):
         self.show_revisions()
 
     def show_revisions(self):
         self.busy.emit()
         selected_file = self.selected_file
-        # collect rows to show in widget, format: [date_str, event, (button_label, signal_func)]
+        # collect rows to show in widget, format: [date_str, event, (button_label, signal_func), revision, schematisation]
         rows = []
         if selected_file.get("data_type") == "threedi_schematisation":
             # retrieve schematisation and revisions
@@ -121,25 +145,48 @@ class RevisionsView(QWidget):
                         lambda _: self.new_simulation_clicked.emit(revision.id),
                     )
                 else:
-                    btn_data = None
-                rows.append([date_str, revision.commit_message, btn_data])
+                    btn_data = (
+                        "Create 3Di model",
+                        lambda _: self.create_3di_model_clicked.emit(revision.id),
+                    )
+                rows.append(
+                    [
+                        date_str,
+                        revision.commit_message,
+                        btn_data,
+                        revision,
+                        schematisation,
+                    ]
+                )
         else:
             history = get_tenant_project_file_history(
                 self.project["id"], {"path": self.selected_file["id"]}
             )
             for item in history["items"]:
                 date_str = convert_to_local_time(item["created_at"])
-                rows.append([date_str, item["message"], None])
+                rows.append([date_str, item["message"], None, None, None])
 
         # Populate table
         sort_column = self.revisions_table.horizontalHeader().sortIndicatorSection()
         sort_order = self.revisions_table.horizontalHeader().sortIndicatorOrder()
         self.revisions_model.clear()
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
-        for i, (date_str, event, btn_data) in enumerate(rows):
+        for i, (
+            date_str,
+            event,
+            btn_data,
+            threedi_revision,
+            threedi_schematisation,
+        ) in enumerate(rows):
+            date_item = QStandardItem(date_str)
+
+            # We store the revision object for loading specific revisions in menu_requested.
+            if threedi_revision:
+                date_item.setData((threedi_revision, threedi_schematisation))
+
             self.revisions_model.appendRow(
                 [
-                    QStandardItem(date_str),
+                    date_item,
                     QStandardItem(event),
                     QStandardItem(""),
                 ]
@@ -176,11 +223,13 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
+        self.btn_create_model = QPushButton("Create 3Di Model")
         self.btn_show_revisions = QPushButton("Show Revisions")
         self.btn_show_revisions.clicked.connect(
             lambda _: self.show_revisions_clicked.emit(self.project, self.selected_file)
         )
         button_layout.addWidget(self.btn_start_simulation)
+        button_layout.addWidget(self.btn_create_model)
         button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
         layout.addWidget(self.file_table_widget)
@@ -189,6 +238,9 @@ class FileView(QWidget):
 
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
+        schematisation_button = None
+        self.btn_create_model.hide()
+        self.btn_start_simulation.hide()
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
             selected_file["user"]["given_name"]
@@ -254,6 +306,10 @@ class FileView(QWidget):
                         revision["number"] if revision else None,
                     ),
                 ]
+                if revision.get("has_threedimodel"):
+                    schematisation_button = self.btn_start_simulation
+                else:
+                    schematisation_button = self.btn_create_model
                 file_details.extend(schematisation_details)
             else:
                 self.communication.show_error("Failed to download 3Di schematisation.")
@@ -274,11 +330,8 @@ class FileView(QWidget):
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
-        self.btn_show_revisions.show()
-        if data_type == "threedi_schematisation":
-            self.btn_start_simulation.show()
-        else:
-            self.btn_start_simulation.hide()
+        if schematisation_button:
+            schematisation_button.show()
         self.file_showed.emit()
 
     def refresh(self):
@@ -372,7 +425,7 @@ class FilesBrowser(QWidget):
             )
         if data_type == "threedi_schematisation":
             # TODO: only when changed?
-            actions.append(("Save revisions to Rana", self.save_revision_requested))
+            actions.append(("Save revision to Rana", self.save_revision_requested))
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
@@ -751,6 +804,9 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    create_model_selected = pyqtSignal(dict)
+    create_model_selected_with_revision = pyqtSignal(dict, int)
+    open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
     save_revision_selected = pyqtSignal(dict, dict)
 
@@ -895,12 +951,25 @@ class RanaBrowser(QWidget):
                 self.project, self.selected_item
             )
         )
+        self.file_view.btn_create_model.clicked.connect(
+            lambda _: self.create_model_selected.emit(self.selected_item)
+        )
+        self.revisions_view.create_3di_model_clicked.connect(
+            lambda revision_id: self.create_model_selected_with_revision.emit(
+                self.selected_item, revision_id
+            )
+        )
         # Start simulation for specific revision
         self.revisions_view.new_simulation_clicked.connect(
             lambda revision_id: self.start_simulation_selected_with_revision.emit(
                 self.project, self.selected_item, revision_id
             )
         )
+        # Load specific revision of schematisation
+        self.revisions_view.open_schematisation_revision_in_qgis_requested.connect(
+            self.open_schematisation_selected_with_revision
+        )
+
         # Ensure correct page is shown - do this last zo all updates are done
         self.projects_browser.projects_refreshed.connect(
             lambda: self.rana_files.setCurrentIndex(0)

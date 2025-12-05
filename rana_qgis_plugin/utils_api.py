@@ -7,7 +7,6 @@ from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
 from rana_qgis_plugin.network_manager import NetworkManager
-from rana_qgis_plugin.utils import get_filename_from_attachment_url
 from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
 
 
@@ -403,6 +402,10 @@ def get_threedi_personal_api_key(
     else:
         communication.show_error(f"Failed to retrieve 3Di personal api key: {error}")
         return None
+
+
+def get_filename_from_attachment_url(attachment_url: str) -> str:
+    return attachment_url.rsplit("/", 1)[-1].split("?", 1)[0]
 
 
 def map_result_to_file_name(result: dict) -> str:
