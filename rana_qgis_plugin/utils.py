@@ -17,8 +17,15 @@ from threedi_mi_utils import (
     list_local_schematisations,
 )
 
+from rana_qgis_plugin.auth_3di import get_3di_auth
+from rana_qgis_plugin.simulation.threedi_calls import (
+    get_api_client_with_personal_api_token,
+)
+from rana_qgis_plugin.simulation.utils import load_remote_schematisation
+from rana_qgis_plugin.utils_api import get_frontend_settings
+from rana_qgis_plugin.utils_settings import hcc_working_dir
+
 from .communication import UICommunication
-from .utils_qgis import get_threedi_models_and_simulations_instance
 
 
 def is_writable(working_dir: str) -> bool:
@@ -46,8 +53,12 @@ def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     return local_dir_structure, local_file_path
 
 
-def get_filename_from_attachment_url(attachment_url: str) -> str:
-    return attachment_url.rsplit("/", 1)[-1].split("?", 1)[0]
+def get_threedi_api():
+    _, personal_api_token = get_3di_auth()
+    frontend_settings = get_frontend_settings()
+    api_url = frontend_settings["hcc_url"].rstrip("/")
+    threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
+    return threedi_api
 
 
 def add_layer_to_qgis(
@@ -57,6 +68,7 @@ def add_layer_to_qgis(
     file: dict,
     descriptor: dict,
     schematisation_instance: dict,
+    revision_instance: dict = None,
 ):
     path = file["id"]
     file_name = os.path.basename(path.rstrip("/"))
@@ -106,26 +118,33 @@ def add_layer_to_qgis(
         communication.bar_info(f"Added {data_type} file: {local_file_path}")
     elif data_type == "threedi_schematisation" and schematisation_instance:
         communication.clear_message_bar()
-        threedi_models_and_simulations = get_threedi_models_and_simulations_instance()
-        if not threedi_models_and_simulations:
-            communication.show_error(
-                "Please enable the 3Di Models and Simulations plugin to open this schematisation."
-            )
-            return
+
         schematisation = schematisation_instance["schematisation"]
-        revision = schematisation_instance["latest_revision"]
+        if revision_instance:
+            revision = revision_instance
+        else:
+            revision = schematisation_instance["latest_revision"]
+
         if not revision:
             communication.show_warn("Cannot open a schematisation without a revision.")
             return
-        communication.bar_info(
-            f"Opening the schematisation in the 3Di Models and Simulations plugin..."
-        )
-        threedi_models_and_simulations.run()
         pb = communication.progress_bar(
             msg="Downloading remote schematisation...", clear_msg_bar=True
         )
-        threedi_models_and_simulations.dockwidget.build_options.load_remote_schematisation(
-            schematisation, revision, pb
+
+        if not hcc_working_dir():
+            communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        load_remote_schematisation(
+            communication,
+            schematisation,
+            revision,
+            pb,
+            hcc_working_dir(),
+            get_threedi_api(),
         )
         communication.clear_message_bar()
     else:
