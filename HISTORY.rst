@@ -7,6 +7,8 @@ History
 - Add revision view and new simulation button
 - Replace file interaction buttons with context menu
 - Download generated postprocessing rasters.
+- Replace page specific refresh buttons with single refresh button
+- Refresh files browser, file view and revisions view every 60 seconds
 
 
 1.1.20 (2025-11-18)
