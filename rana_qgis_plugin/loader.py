@@ -12,7 +12,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtWidgets import QDialog, QFileDialog
+from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import bypass_max_path_limit
 
@@ -231,6 +231,27 @@ class Loader(QObject):
                 self.file_deleted.emit()
             else:
                 self.communication.show_warn(f"Unable to delete file {file['id']}")
+
+    @pyqtSlot(dict)
+    @pyqtSlot(dict, int)
+    def create_schematisation_revision_3di_model(self, file, revision_id=None):
+        tc = ThreediCalls(get_threedi_api())
+        # Retrieve schematisation info
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        if not revision_id:
+            revision_id = schematisation["latest_revision"]["id"]
+        schematisation_id = schematisation["schematisation"]["id"]
+        try:
+            tc.create_schematisation_revision_3di_model(schematisation_id, revision_id)
+        except ApiException as e:
+            if e.status == 400:
+                QMessageBox.warning(
+                    QApplication.activeWindow(), "Warning", eval(e.body)[0]
+                )
+            else:
+                raise
 
     @pyqtSlot(dict, dict)
     @pyqtSlot(dict, dict, int)

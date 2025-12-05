@@ -56,6 +56,7 @@ from rana_qgis_plugin.utils_api import (
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
+    create_3di_model_clicked = pyqtSignal(int)
     open_schematisation_revision_in_qgis_requested = pyqtSignal(dict, dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
@@ -144,7 +145,10 @@ class RevisionsView(QWidget):
                         lambda _: self.new_simulation_clicked.emit(revision.id),
                     )
                 else:
-                    btn_data = None
+                    btn_data = (
+                        "Create 3Di model",
+                        lambda _: self.create_3di_model_clicked.emit(revision.id),
+                    )
                 rows.append(
                     [
                         date_str,
@@ -219,11 +223,13 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
+        self.btn_create_model = QPushButton("Create 3Di Model")
         self.btn_show_revisions = QPushButton("Show Revisions")
         self.btn_show_revisions.clicked.connect(
             lambda _: self.show_revisions_clicked.emit(self.project, self.selected_file)
         )
         button_layout.addWidget(self.btn_start_simulation)
+        button_layout.addWidget(self.btn_create_model)
         button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
         layout.addWidget(self.file_table_widget)
@@ -232,6 +238,9 @@ class FileView(QWidget):
 
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
+        schematisation_button = None
+        self.btn_create_model.hide()
+        self.btn_start_simulation.hide()
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
             selected_file["user"]["given_name"]
@@ -297,6 +306,10 @@ class FileView(QWidget):
                         revision["number"] if revision else None,
                     ),
                 ]
+                if revision.get("has_threedimodel"):
+                    schematisation_button = self.btn_start_simulation
+                else:
+                    schematisation_button = self.btn_create_model
                 file_details.extend(schematisation_details)
             else:
                 self.communication.show_error("Failed to download 3Di schematisation.")
@@ -317,11 +330,8 @@ class FileView(QWidget):
         self.file_table_widget.resizeColumnsToContents()
 
         # Show/hide the buttons based on the file data type
-        self.btn_show_revisions.show()
-        if data_type == "threedi_schematisation":
-            self.btn_start_simulation.show()
-        else:
-            self.btn_start_simulation.hide()
+        if schematisation_button:
+            schematisation_button.show()
         self.file_showed.emit()
 
     def refresh(self):
@@ -790,6 +800,8 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    create_model_selected = pyqtSignal(dict)
+    create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
 
@@ -931,6 +943,14 @@ class RanaBrowser(QWidget):
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _: self.start_simulation_selected.emit(
                 self.project, self.selected_item
+            )
+        )
+        self.file_view.btn_create_model.clicked.connect(
+            lambda _: self.create_model_selected.emit(self.selected_item)
+        )
+        self.revisions_view.create_3di_model_clicked.connect(
+            lambda revision_id: self.create_model_selected_with_revision.emit(
+                self.selected_item, revision_id
             )
         )
         # Start simulation for specific revision
