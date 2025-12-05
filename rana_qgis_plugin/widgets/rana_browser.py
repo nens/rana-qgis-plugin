@@ -752,6 +752,7 @@ class RanaBrowser(QWidget):
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
     delete_file_selected = pyqtSignal(dict, dict)
+    save_revision_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -875,6 +876,7 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
+            (self.files_browser.save_revision_requested, self.save_revision_selected),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(

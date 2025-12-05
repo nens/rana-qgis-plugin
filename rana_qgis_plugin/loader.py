@@ -600,3 +600,7 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
+
+    @pyqtSlot(dict, dict)
+    def save_revision(self, project, file):
+        self.communication.bar_info("Start uploading revision to Rana...")
