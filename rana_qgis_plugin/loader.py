@@ -26,9 +26,14 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
 )
-from rana_qgis_plugin.simulation.utils import CACHE_PATH, extract_error_message
+from rana_qgis_plugin.simulation.utils import (
+    CACHE_PATH,
+    extract_error_message,
+    load_remote_schematisation,
+)
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
+    get_threedi_api,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
@@ -118,6 +123,28 @@ class Loader(QObject):
             self.file_download_worker.start()
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
+
+    @pyqtSlot(dict, dict)
+    def open_schematisation_with_revision(self, revision, schematisation):
+        if not hcc_working_dir():
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        pb = self.communication.progress_bar(
+            msg="Downloading remote schematisation...", clear_msg_bar=True
+        )
+
+        load_remote_schematisation(
+            self.communication,
+            schematisation,
+            revision,
+            pb,
+            hcc_working_dir(),
+            get_threedi_api(),
+        )
+        self.file_download_finished.emit(None)
 
     def on_file_download_finished(self, project, file, local_file_path: str):
         self.communication.clear_message_bar()
@@ -244,14 +271,7 @@ class Loader(QObject):
             self.simulation_started_failed.emit()
             return
 
-        _, personal_api_token = get_3di_auth()
-
-        frontend_settings = get_frontend_settings()
-        api_url = frontend_settings["hcc_url"].rstrip("/")
-
-        threedi_api = get_api_client_with_personal_api_token(
-            personal_api_token, api_url
-        )
+        threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
         organisations = {org.unique_id: org for org in tc.fetch_organisations()}
 
@@ -370,9 +390,7 @@ class Loader(QObject):
                 },
                 "name": f"simulation_tracker_{sim.simulation.name}",
             }
-            self.communication.log_warn(str(params))
-            result = start_tenant_process(self.communication, track_process, params)
-            self.communication.log_warn(str(result))
+            _ = start_tenant_process(self.communication, track_process, params)
 
         self.simulation_started.emit()
 
