@@ -267,11 +267,11 @@ class RanaQgisPlugin:
                 self.loader.start_simulation
             )
 
-            self.rana_browser.open_simulation_selected_with_revision.connect(
+            self.rana_browser.open_schematisation_selected_with_revision.connect(
                 self.rana_browser.disable
             )
-            self.rana_browser.open_simulation_selected_with_revision.connect(
-                self.loader.open_simulation_with_revision
+            self.rana_browser.open_schematisation_selected_with_revision.connect(
+                self.loader.open_schematisation_with_revision
             )
 
             self.rana_browser.delete_file_selected.connect(self.loader.delete_file)

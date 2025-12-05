@@ -56,7 +56,7 @@ from rana_qgis_plugin.utils_api import (
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
-    open_simulation_revision_in_qgis_requested = pyqtSignal(dict, dict)
+    open_schematisation_revision_in_qgis_requested = pyqtSignal(dict, dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -108,7 +108,7 @@ class RevisionsView(QWidget):
             menu = QMenu(self)
             action = QAction("Open in QGIS", self)
             action.triggered.connect(
-                lambda _: self.open_simulation_revision_in_qgis_requested.emit(
+                lambda _: self.open_schematisation_revision_in_qgis_requested.emit(
                     threedi_revision.to_dict(), schematisation["schematisation"]
                 )
             )
@@ -799,7 +799,7 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
-    open_simulation_selected_with_revision = pyqtSignal(dict, dict)
+    open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
@@ -940,8 +940,8 @@ class RanaBrowser(QWidget):
             )
         )
         # Load specific revision of schematisation
-        self.revisions_view.open_simulation_revision_in_qgis_requested.connect(
-            self.open_simulation_selected_with_revision
+        self.revisions_view.open_schematisation_revision_in_qgis_requested.connect(
+            self.open_schematisation_selected_with_revision
         )
 
         # Ensure correct page is shown - do this last zo all updates are done

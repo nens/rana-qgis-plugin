@@ -125,7 +125,7 @@ class Loader(QObject):
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
     @pyqtSlot(dict, dict)
-    def open_simulation_with_revision(self, revision, schematisation):
+    def open_schematisation_with_revision(self, revision, schematisation):
         if not hcc_working_dir():
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
