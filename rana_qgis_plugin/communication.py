@@ -1,7 +1,7 @@
 # Rana plugin for QGIS
 # Copyright (C) 2023 by Lutra Consulting for 3Di Water Management
 from qgis.core import Qgis, QgsMessageLog
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QCoreApplication, Qt
 from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox, QProgressBar, QPushButton
 
 
@@ -151,3 +151,17 @@ class UICommunication:
         if self.iface is None:
             return None
         self.iface.messageBar().clearWidgets()
+
+
+def progress_bar_callback_factory(
+    communication, minimum=0, maximum=100, clear_msg_bar=True
+):
+    """Callback function to track progress."""
+
+    def progress_bar_callback(progres_value, message):
+        communication.progress_bar(
+            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
+        )
+        QCoreApplication.processEvents()
+
+    return progress_bar_callback
