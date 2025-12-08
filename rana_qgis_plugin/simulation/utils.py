@@ -18,7 +18,14 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import requests
 from qgis.core import QgsVectorLayer
 from qgis.PyQt.QtCore import QSettings, QSortFilterProxyModel, Qt
-from qgis.PyQt.QtGui import QColor, QFont, QPalette
+from qgis.PyQt.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QPalette,
+    QStandardItem,
+    QStandardItemModel,
+)
 from qgis.utils import plugins
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation, list_local_schematisations
@@ -26,6 +33,57 @@ from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
 from .utils_ui import progress_bar_callback_factory
+
+class LogLevels(Enum):
+    """Model Checker log levels."""
+
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    FUTURE_ERROR = "FUTURE_ERROR"
+
+
+class TreeViewLogger(object):
+    """Utility class for logging in TreeView"""
+
+    def __init__(self, tree_view=None, header=None):
+        self.tree_view = tree_view
+        self.header = header
+        self.model = QStandardItemModel()
+        self.tree_view.setModel(self.model)
+        self.levels_colors = {
+            LogLevels.INFO.value: QColor(Qt.black),
+            LogLevels.WARNING.value: QColor(229, 144, 80),
+            LogLevels.ERROR.value: QColor(Qt.red),
+            LogLevels.FUTURE_ERROR.value: QColor(102, 51, 153),
+        }
+        self.initialize_view()
+
+    def clear(self):
+        """Clear list view model."""
+        self.tree_view.model().clear()
+
+    def initialize_view(self):
+        """Clear list view model and set header columns if available."""
+        self.tree_view.model().clear()
+        if self.header:
+            self.tree_view.model().setHorizontalHeaderLabels(self.header)
+
+    def log_result_row(self, row, log_level):
+        """Show row data with proper log level styling."""
+        text_color = self.levels_colors[log_level]
+        if self.tree_view is not None:
+            items = []
+            for value in row:
+                item = QStandardItem(str(value))
+                item.setForeground(QBrush(text_color))
+                items.append(item)
+            self.model.appendRow(items)
+            for i in range(len(self.header)):
+                self.tree_view.resizeColumnToContents(i)
+        else:
+            print(row)
+
 
 TEMPDIR = tempfile.gettempdir()
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))

@@ -363,6 +363,7 @@ class FilesBrowser(QWidget):
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
+    save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
@@ -401,6 +402,10 @@ class FilesBrowser(QWidget):
             self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
 
+    def select_path(self, selected_path: str):
+        self.selected_item = {"id": selected_path, "type": "directory"}
+        self.fetch_and_populate(self.project, selected_path)
+
     def update(self):
         selected_path = self.selected_item["id"]
         selected_name = Path(selected_path.rstrip("/")).name
@@ -417,7 +422,7 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        data_type = selected_item["data_type"]
+        data_type = selected_item.get("data_type", None)
         # Add delete option files and folders
         actions = [("Delete", self.file_deletion_requested)]
         # Add open in QGIS is supported for all supported data types
@@ -431,6 +436,9 @@ class FilesBrowser(QWidget):
             actions.append(
                 ("Save vector style to Rana", self.save_vector_styling_requested)
             )
+        if data_type == "threedi_schematisation":
+            # TODO: only when changed?
+            actions.append(("Save revision to Rana", self.save_revision_requested))
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
@@ -809,6 +817,7 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    save_revision_selected = pyqtSignal(dict, dict)
     create_model_selected = pyqtSignal(dict)
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
@@ -937,6 +946,7 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
+            (self.files_browser.save_revision_requested, self.save_revision_selected),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(
@@ -948,7 +958,7 @@ class RanaBrowser(QWidget):
         )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
-            lambda path: self.files_browser.fetch_and_populate(self.project, path)
+            lambda path: self.files_browser.select_path(path)
         )
         self.breadcrumbs.file_selected.connect(self.file_view.refresh)
         self.file_view.show_revisions_clicked.connect(
