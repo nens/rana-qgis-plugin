@@ -3,12 +3,14 @@ import os
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import Callable, List
 
 from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QTimer, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -353,6 +355,32 @@ class FileView(QWidget):
         self.show_selected_file_details(self.selected_file)
 
 
+class StringInputDialog(QDialog):
+    def __init__(self, question: str, title: str, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout()
+        label = QLabel("Enter folder name:")
+        self.input = QLineEdit()
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        layout.addWidget(label)
+        layout.addWidget(self.input)
+        layout.addWidget(button_box)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        self.setWindowTitle("Create New Folder")
+        self.setLayout(layout)
+
+    def folder_name(self) -> str:
+        return self.input.text().strip()
+
+
+class RenameDialog(StringInputDialog):
+    def __init__(self, parent=None):
+        super().__init__(question="Enter new name:", title="Rename")
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -360,6 +388,7 @@ class FilesBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
     file_deletion_requested = pyqtSignal(dict)
+    rename_item_requested = pyqtSignal(dict, str)
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
@@ -421,7 +450,10 @@ class FilesBrowser(QWidget):
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
         data_type = selected_item.get("data_type", None)
         # Add delete option files and folders
-        actions = [("Delete", self.file_deletion_requested)]
+        actions = [
+            ("Delete", self.file_deletion_requested),
+            ("Rename", self.show_rename_dialog),
+        ]
         # Add open in QGIS is supported for all supported data types
         if data_type in SUPPORTED_DATA_TYPES:
             actions.append(("Open in QGIS", self.open_in_qgis_requested))
@@ -443,13 +475,21 @@ class FilesBrowser(QWidget):
                 actions.append(("Download results", self.download_results_requested))
         # populate menu
         menu = QMenu(self)
-        for action_label, action_signal in actions:
+        for action_label, action_handler in actions:
             action = QAction(action_label, self)
-            action.triggered.connect(
-                lambda _, signal=action_signal: signal.emit(selected_item)
-            )
+            if hasattr(action_handler, "emit"):
+                action.triggered.connect(
+                    lambda _, signal=action_handler: signal.emit(selected_item)
+                )
+            elif isinstance(action_handler, Callable):
+                action.triggered.connect(action_handler)
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+
+    def show_rename_dialog(self):
+        dialog = RenameDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.rename_item_requested.emit(self.selected_item, dialog.folder_name())
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
