@@ -747,8 +747,12 @@ class Loader(QObject):
                     new_upload,
                 )
 
-                upload_worker.signals.finished.connect(self.schematisation_uploaded)
-                upload_worker.signals.failed.connect(self.schematisation_upload_failed)
+                upload_worker.signals.revision_committed.connect(
+                    self.schematisation_uploaded
+                )
+                upload_worker.signals.upload_failed.connect(
+                    self.schematisation_upload_failed
+                )
 
                 # upload_worker.signals.progress.connect(self.on_update_upload_progress)
                 # upload_worker.signals.canceled.connect(self.on_upload_canceled)
