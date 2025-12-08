@@ -17,15 +17,11 @@ from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.auth import get_authcfg_id
-from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
 from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
-from rana_qgis_plugin.simulation.threedi_calls import (
-    ThreediCalls,
-    get_api_client_with_personal_api_token,
-)
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
     extract_error_message,
@@ -41,7 +37,6 @@ from rana_qgis_plugin.utils_api import (
     create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
-    get_frontend_settings,
     get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -647,14 +642,7 @@ class Loader(QObject):
 
     @pyqtSlot(dict)
     def upload_new_schematisation_to_rana(self, project):
-        _, personal_api_token = get_3di_auth()
-
-        frontend_settings = get_frontend_settings()
-        api_url = frontend_settings["hcc_url"].rstrip("/")
-
-        threedi_api = get_api_client_with_personal_api_token(
-            personal_api_token, api_url
-        )
+        threedi_api = get_threedi_api()
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
             return
