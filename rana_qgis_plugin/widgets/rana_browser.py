@@ -520,9 +520,6 @@ class FilesBrowser(QWidget):
             self.files_tv.resizeColumnToContents(i)
         self.files_tv.setColumnWidth(0, 300)
 
-    def new_schematisation(self):
-        pass
-
 
 class ProjectsBrowser(QWidget):
     projects_refreshed = pyqtSignal()
