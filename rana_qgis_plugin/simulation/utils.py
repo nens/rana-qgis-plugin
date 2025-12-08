@@ -34,6 +34,7 @@ from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
 from .utils_ui import progress_bar_callback_factory
 
+
 class LogLevels(Enum):
     """Model Checker log levels."""
 
