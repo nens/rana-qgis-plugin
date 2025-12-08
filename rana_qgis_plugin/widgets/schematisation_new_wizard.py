@@ -7,7 +7,7 @@ from operator import itemgetter
 from qgis.core import QgsFeature
 from qgis.PyQt.QtCore import QSettings, QSize, Qt
 from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import QSizePolicy, QWizard
+from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QWizard
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation
 from threedi_schema import ThreediDatabase
@@ -38,6 +38,22 @@ class CommitErrors(Exception):
 
 class GeoPackageError(Exception):
     pass
+
+
+def feedback_callback_factory(communication):
+    """Callback function to track schematisation migration progress."""
+
+    def feedback_callback(progress, message):
+        communication.progress_bar(
+            msg=message,
+            minimum=0,
+            maximum=100,
+            init_value=int(progress),
+            clear_msg_bar=True,
+        )
+        QApplication.processEvents()
+
+    return feedback_callback
 
 
 class NewSchematisationWizard(QWizard):
@@ -122,11 +138,16 @@ class NewSchematisationWizard(QWizard):
             geopackage_filepath = os.path.join(
                 wip_revision.schematisation_dir, schematisation_filename
             )
+
             empty_db = ThreediDatabase(geopackage_filepath)
+            # upgrading a new schema with no revision breaks the progressbar so we first upgrade to 0200 (the first revision) without a progressbar
+            empty_db.schema.upgrade(revision="0200")
+            feedback_callback = feedback_callback_factory(self.communication)
             empty_db.schema.upgrade(
+                progress_func=feedback_callback,
                 epsg_code_override=schematisation_settings["model_settings"][
                     "epsg_code"
-                ]
+                ],
             )
 
             for raster_filepath in raster_filepaths:
