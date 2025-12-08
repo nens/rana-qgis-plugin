@@ -688,7 +688,7 @@ class Loader(QObject):
             )
         if rana_path != "" and path_info[0]["type"] != "directory":
             self.communication.bar_info(
-                f"Adding 3Di schematisation {new_schematisation.name} to main directory in Rana project {project['name']} since specified path is unavailable"
+                f"Adding schematisation {new_schematisation.name} to main directory in Rana project {project['name']} since specified path is unavailable"
             )
             rana_path = ""
 
