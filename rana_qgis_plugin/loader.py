@@ -19,6 +19,9 @@ from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local import (
+    SchematisationLoad,
+)
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
 from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
@@ -26,6 +29,8 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
 )
+from rana_qgis_plugin.simulation.upload_wizard.model_deletion import ModelDeletionDialog
+from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
     extract_error_message,
@@ -649,24 +654,85 @@ class Loader(QObject):
         if file["data_type"] != "threedi_schematisation":
             return
 
-        # self.communication.bar_info("Start uploading revision to Rana...")
-        schematisation = get_threedi_schematisation(
+        rana_schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
         )
-        self.communication.log_warn(str(schematisation))
+
+        threedi_api = get_threedi_api()
+        tc = ThreediCalls(threedi_api)
+        schematisation = tc.fetch_schematisation(
+            rana_schematisation["schematisation"]["id"]
+        )
 
         local_schematisations = list_local_schematisations(
             hcc_working_dir(), use_config_for_revisions=False
         )
 
-        # Check whether we
+        # Check whether we have this schematisation locally
+        local_schematisation = local_schematisations.get(schematisation.id)
+        if local_schematisation is None:
+            self.communication.show_warn(
+                "Current schematisation not yet stored locally, please download a revision first."
+            )
+            return
 
-        self.communication.log_warn(str(local_schematisations))
-        schematisation_filepath = None
+        schematisation_filepath = local_schematisation.schematisation_db_filepath
+
         schema_gpkg_loaded = is_loaded_in_schematisation_editor(schematisation_filepath)
         if schema_gpkg_loaded is False:
             title = "Warning"
             question = (
-                "Warning: the GeoPackage that you loaded with the 3Di Schematisation Editor is not in the revision you "
+                "Warning: the GeoPackage that you loaded with the Rana Schematisation Editor is not in the revision you "
                 "are about to upload. Do you want to continue?"
             )
+            if not self.communication.ask(
+                self.parent(), title, question, QMessageBox.Warning
+            ):
+                return
+
+        self.organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        organisation = self.organisations.get(schematisation.owner)
+
+        # Let the user select a local revision
+        dial = SchematisationLoad(
+            hcc_working_dir(), self.communication, local_schematisation, self.parent()
+        )
+        if dial.exec() == QDialog.DialogCode.Accepted:
+            # Upload that revision as new revision
+            upload_dial = UploadWizard(
+                local_schematisation,
+                schematisation,
+                schematisation_filepath,
+                organisation,
+                self.communication,
+                tc,
+                self.parent(),
+            )
+            if upload_dial.exec() == QDialog.DialogCode.Accepted:
+                new_upload = upload_dial.new_upload
+                if not new_upload:
+                    return
+                if new_upload["make_3di_model"]:
+                    # TODO
+                    user_profile = threedi_api.auth_profile_list()
+                    current_user = {
+                        "username": user_profile.username,
+                        "first_name": user_profile.first_name,
+                        "last_name": user_profile.last_name,
+                    }
+                    self.communication.log_warn(str(current_user))
+                    deletion_dlg = ModelDeletionDialog(
+                        self.communication,
+                        threedi_api,
+                        local_schematisation,
+                        organisation,
+                        current_user,
+                        self.parent(),
+                    )
+
+                    if deletion_dlg.threedi_models_to_show:
+                        if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
+                            self.communication.bar_warn("Uploading canceled...")
+                        return
+
+                # Do the actual upload
