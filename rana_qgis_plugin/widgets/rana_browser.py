@@ -388,7 +388,7 @@ class FilesBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
     file_deletion_requested = pyqtSignal(dict)
-    rename_item_requested = pyqtSignal(dict, str)
+    file_rename_requested = pyqtSignal(dict, str)
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
@@ -482,14 +482,16 @@ class FilesBrowser(QWidget):
                     lambda _, signal=action_handler: signal.emit(selected_item)
                 )
             elif isinstance(action_handler, Callable):
-                action.triggered.connect(action_handler)
+                action.triggered.connect(
+                    lambda _, func=action_handler: func(selected_item)
+                )
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
-    def show_rename_dialog(self):
+    def show_rename_dialog(self, selected_item):
         dialog = RenameDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.rename_item_requested.emit(self.selected_item, dialog.folder_name())
+            self.file_rename_requested.emit(selected_item, dialog.folder_name())
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
@@ -855,6 +857,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
+    rename_file_selected = pyqtSignal(dict, dict, str)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -983,6 +986,11 @@ class RanaBrowser(QWidget):
             file_browser_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
+        self.files_browser.file_rename_requested.connect(
+            lambda file, new_name: self.rename_file_selected.emit(
+                self.project, file, new_name
+            )
+        )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.select_path(path)
