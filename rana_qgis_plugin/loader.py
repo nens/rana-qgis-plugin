@@ -36,6 +36,7 @@ from rana_qgis_plugin.simulation.utils import (
     extract_error_message,
     load_remote_schematisation,
 )
+from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_local_file_path,
@@ -98,6 +99,10 @@ class Loader(QObject):
         # For simulations
         self.simulation_runner_pool = QThreadPool()
         self.simulation_runner_pool.setMaxThreadCount(1)
+
+        # For upload of schematisations
+        self.upload_thread_pool = QThreadPool()
+        self.upload_thread_pool.setMaxThreadCount(1)
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -736,3 +741,15 @@ class Loader(QObject):
                         return
 
                 # Do the actual upload
+                upload_worker = SchematisationUploadProgressWorker(
+                    threedi_api,
+                    local_schematisation,
+                    new_upload,
+                )
+
+                # upload_worker.signals.progress.connect(self.on_update_upload_progress)
+                # upload_worker.signals.finished.connect(self.on_upload_finished_success)
+                # upload_worker.signals.failed.connect(self.on_upload_failed)
+                # upload_worker.signals.canceled.connect(self.on_upload_canceled)
+                # upload_worker.signals.revision_committed.connect(self.on_revision_committed)
+                self.upload_thread_pool.start(upload_worker)
