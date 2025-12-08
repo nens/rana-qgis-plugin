@@ -24,7 +24,9 @@ from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
+    BuildOptionActions,
     extract_error_message,
+    load_local_schematisation,
     load_remote_schematisation,
 )
 from rana_qgis_plugin.utils import (
@@ -711,3 +713,9 @@ class Loader(QObject):
             self.communication.bar_error(
                 f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
             )
+        local_schematisation = new_schematisation_wizard.new_local_schematisation
+        load_local_schematisation(
+            communication=self.communication,
+            local_schematisation=local_schematisation,
+            action=BuildOptionActions.CREATED,
+        )
