@@ -178,7 +178,7 @@ class SchematisationNameWidget(QWidget):
         self.le_rana_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.le_rana_path.setMaxLength(80)
         self.le_rana_path.setPlaceholderText(
-            "Enter the path in your Rana project to place the 3Di schematisation in"
+            "Directory in your Rana project to place the 3Di schematisation in (optional)"
         )
         gridLayout.addWidget(self.le_rana_path, 8, 2)
 
