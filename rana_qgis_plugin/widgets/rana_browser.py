@@ -85,6 +85,8 @@ class RevisionsView(QWidget):
             Qt.ContextMenuPolicy.CustomContextMenu
         )
         self.revisions_table.customContextMenuRequested.connect(self.menu_requested)
+        self.revisions_table.setShowGrid(False)
+        self.revisions_table.horizontalHeader().setFrameStyle(0)
         layout = QVBoxLayout(self)
         layout.addWidget(self.revisions_table)
         self.setLayout(layout)
@@ -193,9 +195,17 @@ class RevisionsView(QWidget):
             if btn_data:
                 btn_label, btn_func = btn_data
                 btn = QPushButton(btn_label)
+                btn.setFixedWidth(150)
+                btn.setFixedHeight(25)
                 btn.clicked.connect(btn_func)
+                container = QWidget()
+                layout = QVBoxLayout(container)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                layout.addWidget(btn)
+
                 self.revisions_table.setIndexWidget(
-                    self.revisions_model.index(i, 2), btn
+                    self.revisions_model.index(i, 2), container
                 )
         self.ready.emit()
 
