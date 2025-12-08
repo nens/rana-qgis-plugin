@@ -87,6 +87,8 @@ class Loader(QObject):
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
+    schematisation_uploaded = pyqtSignal()
+    schematisation_upload_failed = pyqtSignal()
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -718,14 +720,12 @@ class Loader(QObject):
                 if not new_upload:
                     return
                 if new_upload["make_3di_model"]:
-                    # TODO
                     user_profile = threedi_api.auth_profile_list()
                     current_user = {
                         "username": user_profile.username,
                         "first_name": user_profile.first_name,
                         "last_name": user_profile.last_name,
                     }
-                    self.communication.log_warn(str(current_user))
                     deletion_dlg = ModelDeletionDialog(
                         self.communication,
                         threedi_api,
@@ -747,9 +747,10 @@ class Loader(QObject):
                     new_upload,
                 )
 
+                upload_worker.signals.finished.connect(self.schematisation_uploaded)
+                upload_worker.signals.failed.connect(self.schematisation_upload_failed)
+
                 # upload_worker.signals.progress.connect(self.on_update_upload_progress)
-                # upload_worker.signals.finished.connect(self.on_upload_finished_success)
-                # upload_worker.signals.failed.connect(self.on_upload_failed)
                 # upload_worker.signals.canceled.connect(self.on_upload_canceled)
                 # upload_worker.signals.revision_committed.connect(self.on_revision_committed)
                 self.upload_thread_pool.start(upload_worker)
