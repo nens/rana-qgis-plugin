@@ -303,6 +303,7 @@ class NewSchematisationWizard(QWizard):
                 return
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
+            self.rana_path = self.schematisation_name_page.field("rana_path")
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
         except ApiException as e:
