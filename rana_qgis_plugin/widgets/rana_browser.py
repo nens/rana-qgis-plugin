@@ -363,6 +363,7 @@ class FilesBrowser(QWidget):
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
+    save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
@@ -433,6 +434,9 @@ class FilesBrowser(QWidget):
             actions.append(
                 ("Save vector style to Rana", self.save_vector_styling_requested)
             )
+        if data_type == "threedi_schematisation":
+            # TODO: only when changed?
+            actions.append(("Save revision to Rana", self.save_revision_requested))
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
@@ -811,6 +815,7 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    save_revision_selected = pyqtSignal(dict, dict)
     create_model_selected = pyqtSignal(dict)
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
@@ -938,6 +943,7 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
+            (self.files_browser.save_revision_requested, self.save_revision_selected),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(
