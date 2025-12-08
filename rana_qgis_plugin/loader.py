@@ -75,6 +75,9 @@ class Loader(QObject):
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
     download_results_cancelled = pyqtSignal()
+    schematisation_upload_cancelled = pyqtSignal()
+    schematisation_upload_finished = pyqtSignal()
+    schematisation_upload_failed = pyqtSignal()
     simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
@@ -664,10 +667,13 @@ class Loader(QObject):
         )
         response = new_schematisation_wizard.exec()
         if response != QDialog.DialogCode.Accepted:
+            self.schematisation_upload_cancelled.emit()
             return
 
         new_schematisation = new_schematisation_wizard.new_schematisation
         if new_schematisation is None:
+            self.communication.bar_error("Schematisation creation failed")
+            self.schematisation_upload_failed.emit()
             return
         rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
         # check if directory path exists, otherwise make it
@@ -710,9 +716,11 @@ class Loader(QObject):
                 message += f" in directory {rana_path}"
             self.communication.bar_info(message)
         else:
+            self.schematisation_upload_failed.emit()
             self.communication.bar_error(
                 f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
             )
+        self.schematisation_upload_finished.emit()
         local_schematisation = new_schematisation_wizard.new_local_schematisation
         load_local_schematisation(
             communication=self.communication,

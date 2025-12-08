@@ -240,6 +240,9 @@ class RanaQgisPlugin:
                 self.loader.upload_new_file_to_rana
             )
             self.rana_browser.upload_new_schematisation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.upload_new_schematisation_selected.connect(
                 self.loader.upload_new_schematisation_to_rana
             )
             self.loader.loading_cancelled.connect(self.rana_browser.enable)
@@ -296,6 +299,11 @@ class RanaQgisPlugin:
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
+            self.loader.schematisation_upload_cancelled.connect(
+                self.rana_browser.enable
+            )
+            self.loader.schematisation_upload_finished.connect(self.rana_browser.enable)
+            self.loader.schematisation_upload_failed.connect(self.rana_browser.enable)
             self.loader.file_deleted.connect(self.rana_browser.refresh)
 
         self.iface.addTabifiedDockWidget(
