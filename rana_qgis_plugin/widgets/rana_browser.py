@@ -355,8 +355,8 @@ class FileView(QWidget):
         self.show_selected_file_details(self.selected_file)
 
 
-class CreateFolderDialog(QDialog):
-    def __init__(self, parent=None):
+class StringInputDialog(QDialog):
+    def __init__(self, question: str, title: str, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout()
         label = QLabel("Enter folder name:")
@@ -374,6 +374,11 @@ class CreateFolderDialog(QDialog):
 
     def folder_name(self) -> str:
         return self.input.text().strip()
+
+
+class CreateFolderDialog(StringInputDialog):
+    def __init__(self, parent=None):
+        super().__init__(question="Enter folder name:", title="Create New Folder")
 
 
 class FilesBrowser(QWidget):
