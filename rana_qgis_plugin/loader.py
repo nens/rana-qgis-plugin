@@ -37,13 +37,14 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    create_folder,
     delete_tenant_project_directory,
     delete_tenant_project_file,
-    get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_processes,
     get_tenant_project_file,
+    get_tenant_project_files,
     get_threedi_schematisation,
     map_result_to_file_name,
     start_tenant_process,
@@ -232,6 +233,32 @@ class Loader(QObject):
                 self.file_deleted.emit()
             else:
                 self.communication.show_warn(f"Unable to delete file {file['id']}")
+
+    @pyqtSlot(dict, dict, str)
+    def create_new_folder_on_rana(self, project, selected_item, folder_name: str):
+        """Create new folder on Rana and show warning when folder already exists"""
+
+        root_path = selected_item["id"]
+        names = [
+            file["id"].strip("/")
+            for file in get_tenant_project_files(
+                self.communication,
+                project["id"],
+                params={"path": root_path} if root_path else None,
+            )
+            if file["type"] == "directory"
+        ]
+        if folder_name in names:
+            QMessageBox.warning(
+                self.parent(), "Warning", f"Folder {folder_name} already exists."
+            )
+            return
+        folder_path = root_path + folder_name + "/"
+        success = create_folder(project["id"], params={"path": folder_path})
+        if success:
+            self.folder_created.emit()
+        else:
+            self.communication.show_warn(f"Unable to create folder {folder_name}")
 
     @pyqtSlot(dict)
     @pyqtSlot(dict, int)
@@ -516,15 +543,6 @@ class Loader(QObject):
 
         self.initialize_file_download_worker(project, file)
         self.file_download_worker.start()
-
-    @pyqtSlot(dict, str)
-    def create_new_folder_on_rana(self, project, folder_name):
-        """Create new folder on Rana and show warning when folder already exists"""
-        # TODO
-        # - create create_folder function to utils_api that returns result
-        # - show succes in communication and emit folder_created
-        # - show failure in dialog
-        pass
 
     @pyqtSlot(dict, dict)
     def upload_new_file_to_rana(self, project, file):

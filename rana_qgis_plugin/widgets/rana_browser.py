@@ -435,9 +435,7 @@ class FilesBrowser(QWidget):
             return
         dialog = CreateFolderDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            folder_name = dialog.folder_name()
-            path = Path(self.selected_item["id"]).joinpath(folder_name)
-            self.create_folder_requested.emit(str(path))
+            self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
         if self.selected_item["type"] == "directory":
@@ -460,7 +458,7 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        data_type = selected_item["data_type"]
+        data_type = selected_item.get("data_type", None)
         # Add delete option files and folders
         actions = [("Delete", self.file_deletion_requested)]
         # Add open in QGIS is supported for all supported data types
@@ -856,7 +854,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
-    create_folder_selected = pyqtSignal(dict, str)
+    create_folder_selected = pyqtSignal(dict, dict, str)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -968,7 +966,7 @@ class RanaBrowser(QWidget):
         # Connect create new folder button
         self.files_browser.create_folder_requested.connect(
             lambda folder_name: self.create_folder_selected.emit(
-                self.project, folder_name
+                self.project, self.selected_item, folder_name
             )
         )
         # Connect file browser context menu signals
