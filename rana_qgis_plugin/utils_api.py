@@ -132,10 +132,7 @@ def move_file(project_id: str, params: dict) -> bool:
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/move"
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post(params=params)
-    from qgis.core import Qgis, QgsMessageLog
 
-    QgsMessageLog.logMessage(f"{url=}; {params=}", "DEBUG", Qgis.Info)
-    QgsMessageLog.logMessage(f"{status=}; {msg=}", "DEBUG", Qgis.Info)
     if status:
         return True
     else:
@@ -149,10 +146,7 @@ def move_directory(project_id: str, params: dict) -> bool:
 
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post(params)
-    from qgis.core import Qgis, QgsMessageLog
 
-    QgsMessageLog.logMessage(f"{url=}; {params=}", "DEBUG", Qgis.Info)
-    QgsMessageLog.logMessage(f"{status=}; {msg=}", "DEBUG", Qgis.Info)
     if status:
         return True
     else:
