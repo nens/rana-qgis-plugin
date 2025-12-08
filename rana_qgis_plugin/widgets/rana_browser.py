@@ -399,6 +399,10 @@ class FilesBrowser(QWidget):
             self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
 
+    def select_path(self, selected_path: str):
+        self.selected_item = {"id": selected_path, "type": "directory"}
+        self.fetch_and_populate(self.project, selected_path)
+
     def update(self):
         selected_path = self.selected_item["id"]
         selected_name = Path(selected_path.rstrip("/")).name
@@ -941,7 +945,7 @@ class RanaBrowser(QWidget):
             )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
-            lambda path: self.files_browser.fetch_and_populate(self.project, path)
+            lambda path: self.files_browser.select_path(path)
         )
         self.breadcrumbs.file_selected.connect(self.file_view.refresh)
         self.file_view.show_revisions_clicked.connect(
