@@ -669,7 +669,7 @@ class Loader(QObject):
         new_schematisation = new_schematisation_wizard.new_schematisation
         if new_schematisation is None:
             return
-        rana_path = new_schematisation_wizard.rana_path.rstrip("/")
+        rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
         # check if directory path exists, otherwise make it
         path_info = get_tenant_project_files(
             communication=self.communication,
