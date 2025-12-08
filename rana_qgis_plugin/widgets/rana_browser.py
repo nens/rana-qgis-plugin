@@ -356,25 +356,21 @@ class FileView(QWidget):
 
 
 class CreateFolderDialog(QDialog):
-    """Dialog to input a new folder name"""
-
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Create New Folder")
-        self.setLayout(QVBoxLayout())
-
-        self.label = QLabel("Enter folder name:")
+        layout = QVBoxLayout()
+        label = QLabel("Enter folder name:")
         self.input = QLineEdit()
-        self.button_box = QDialogButtonBox(
+        button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-
-        self.layout().addWidget(self.label)
-        self.layout().addWidget(self.input)
-        self.layout().addWidget(self.button_box)
-
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(label)
+        layout.addWidget(self.input)
+        layout.addWidget(button_box)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        self.setWindowTitle("Create New Folder")
+        self.setLayout(layout)
 
     def folder_name(self) -> str:
         return self.input.text().strip()
@@ -417,7 +413,6 @@ class FilesBrowser(QWidget):
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
-        # TODO btn can be local I think
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         layout = QVBoxLayout(self)
@@ -429,7 +424,6 @@ class FilesBrowser(QWidget):
         self.setLayout(layout)
 
     def show_create_folder_dialog(self):
-        # TODO: handle impossible names?
         # Make sure this button cannot do anything if the files browser is not in a folder
         if self.selected_item["type"] != "directory":
             return
