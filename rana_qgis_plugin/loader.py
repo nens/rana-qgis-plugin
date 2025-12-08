@@ -17,7 +17,6 @@ from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.auth import get_authcfg_id
-from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local import (
     SchematisationLoad,
@@ -25,15 +24,14 @@ from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local i
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
 from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
-from rana_qgis_plugin.simulation.threedi_calls import (
-    ThreediCalls,
-    get_api_client_with_personal_api_token,
-)
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.upload_wizard.model_deletion import ModelDeletionDialog
 from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
+    BuildOptionActions,
     extract_error_message,
+    load_local_schematisation,
     load_remote_schematisation,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
@@ -44,13 +42,16 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    add_threedi_schematisation,
+    create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
-    get_frontend_settings,
+    get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_processes,
     get_tenant_project_file,
+    get_tenant_project_files,
     get_threedi_schematisation,
     map_result_to_file_name,
     start_tenant_process,
@@ -61,6 +62,7 @@ from rana_qgis_plugin.utils_qgis import (
 )
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
+from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
     FileDownloadWorker,
@@ -83,6 +85,9 @@ class Loader(QObject):
     vector_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
     download_results_cancelled = pyqtSignal()
+    schematisation_upload_cancelled = pyqtSignal()
+    schematisation_upload_finished = pyqtSignal()
+    schematisation_upload_failed = pyqtSignal()
     simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
@@ -655,6 +660,89 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
+
+    @pyqtSlot(dict)
+    def upload_new_schematisation_to_rana(self, project):
+        threedi_api = get_threedi_api()
+        tenant_details = get_tenant_details(self.communication)
+        if not tenant_details:
+            return
+        available_organisations = [
+            org.replace("-", "") for org in tenant_details["threedi_organisations"]
+        ]
+        tc = ThreediCalls(threedi_api)
+        organisations = {
+            org.unique_id: org
+            for org in tc.fetch_organisations()
+            if org.unique_id in available_organisations
+        }
+
+        work_dir = QSettings().value("threedi/working_dir", "")
+        new_schematisation_wizard = NewSchematisationWizard(
+            threedi_api, work_dir, self.communication, organisations
+        )
+        response = new_schematisation_wizard.exec()
+        if response != QDialog.DialogCode.Accepted:
+            self.schematisation_upload_cancelled.emit()
+            return
+
+        new_schematisation = new_schematisation_wizard.new_schematisation
+        if new_schematisation is None:
+            self.communication.bar_error("Schematisation creation failed")
+            self.schematisation_upload_failed.emit()
+            return
+        rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
+        # check if directory path exists, otherwise make it
+        path_info = get_tenant_project_files(
+            communication=self.communication,
+            project_id=project["id"],
+            params={"path": rana_path},
+        )
+        if not path_info:
+            # don't continue if path creation fails for some reason
+            assert create_tenant_project_directory(
+                project_id=project["id"], path=rana_path
+            )
+            path_info = get_tenant_project_files(
+                communication=self.communication,
+                project_id=project["id"],
+                params={"path": rana_path},
+            )
+        if rana_path != "" and path_info[0]["type"] != "directory":
+            self.communication.bar_info(
+                f"Adding schematisation {new_schematisation.name} to main directory in Rana project {project['name']} since specified path is unavailable"
+            )
+            rana_path = ""
+
+        if rana_path:
+            file_path = rana_path + "/" + new_schematisation.name
+        else:
+            file_path = new_schematisation.name
+        response = add_threedi_schematisation(
+            communication=self.communication,
+            project_id=project["id"],
+            schematisation_id=new_schematisation.id,
+            path=file_path,
+        )
+        if response:
+            message = (
+                f"3Di schematisation {new_schematisation.name} added to Rana project"
+            )
+            if rana_path:
+                message += f" in directory {rana_path}"
+            self.communication.bar_info(message)
+        else:
+            self.schematisation_upload_failed.emit()
+            self.communication.bar_error(
+                f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
+            )
+        self.schematisation_upload_finished.emit()
+        local_schematisation = new_schematisation_wizard.new_local_schematisation
+        load_local_schematisation(
+            communication=self.communication,
+            local_schematisation=local_schematisation,
+            action=BuildOptionActions.CREATED,
+        )
 
     @pyqtSlot(dict, dict)
     def save_revision(self, project, file):

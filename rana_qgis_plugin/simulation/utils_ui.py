@@ -353,3 +353,17 @@ class NumericDelegate(QItemDelegate):
         validator.setNotation(QDoubleValidator.StandardNotation)
         editor.setValidator(validator)
         return editor
+
+
+def progress_bar_callback_factory(
+    communication, minimum=0, maximum=100, clear_msg_bar=True
+):
+    """Callback function to track progress."""
+
+    def progress_bar_callback(progres_value, message):
+        communication.progress_bar(
+            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
+        )
+        QCoreApplication.processEvents()
+
+    return progress_bar_callback
