@@ -77,6 +77,7 @@ class Loader(QObject):
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
+    folder_created = pyqtSignal()
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -515,6 +516,15 @@ class Loader(QObject):
 
         self.initialize_file_download_worker(project, file)
         self.file_download_worker.start()
+
+    @pyqtSlot(dict, str)
+    def create_new_folder_on_rana(self, project, folder_name):
+        """Create new folder on Rana and show warning when folder already exists"""
+        # TODO
+        # - create create_folder function to utils_api that returns result
+        # - show succes in communication and emit folder_created
+        # - show failure in dialog
+        pass
 
     @pyqtSlot(dict, dict)
     def upload_new_file_to_rana(self, project, file):

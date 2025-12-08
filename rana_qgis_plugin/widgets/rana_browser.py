@@ -9,6 +9,8 @@ from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QTimer, pyqtSignal, pyq
 from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -353,6 +355,31 @@ class FileView(QWidget):
         self.show_selected_file_details(self.selected_file)
 
 
+class CreateFolderDialog(QDialog):
+    """Dialog to input a new folder name"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create New Folder")
+        self.setLayout(QVBoxLayout())
+
+        self.label = QLabel("Enter folder name:")
+        self.input = QLineEdit()
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+
+        self.layout().addWidget(self.label)
+        self.layout().addWidget(self.input)
+        self.layout().addWidget(self.button_box)
+
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+
+    def folder_name(self) -> str:
+        return self.input.text().strip()
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -366,6 +393,7 @@ class FilesBrowser(QWidget):
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
+    create_folder_requested = pyqtSignal(str)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -389,10 +417,27 @@ class FilesBrowser(QWidget):
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
+        # TODO btn can be local I think
+        btn_create_folder = QPushButton("Create New Folder")
+        btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
-        layout.addWidget(self.btn_upload)
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.btn_upload)
+        btn_layout.addWidget(btn_create_folder)
+        layout.addLayout(btn_layout)
         self.setLayout(layout)
+
+    def show_create_folder_dialog(self):
+        # TODO: handle impossible names?
+        # Make sure this button cannot do anything if the files browser is not in a folder
+        if self.selected_item["type"] != "directory":
+            return
+        dialog = CreateFolderDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            folder_name = dialog.folder_name()
+            path = Path(self.selected_item["id"]).joinpath(folder_name)
+            self.create_folder_requested.emit(str(path))
 
     def refresh(self):
         if self.selected_item["type"] == "directory":
@@ -811,6 +856,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
+    create_folder_selected = pyqtSignal(dict, str)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -917,6 +963,12 @@ class RanaBrowser(QWidget):
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
                 self.project, self.selected_item
+            )
+        )
+        # Connect create new folder button
+        self.files_browser.create_folder_requested.connect(
+            lambda folder_name: self.create_folder_selected.emit(
+                self.project, folder_name
             )
         )
         # Connect file browser context menu signals
