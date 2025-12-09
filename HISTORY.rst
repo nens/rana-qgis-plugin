@@ -12,6 +12,7 @@ History
 - Refresh files browser, file view and revisions view every 60 seconds
 - Add option to create a new folder
 - Add button and dialog from M&S plugin to generate/upload new schematisation to 3Di and Rana
+- Allow user to set file cache directory
 
 
 1.1.20 (2025-11-18)
