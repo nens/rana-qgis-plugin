@@ -12,12 +12,15 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
+    QSizePolicy,
+    QSpacerItem,
     QStackedWidget,
     QTableView,
     QTableWidget,
@@ -908,7 +911,7 @@ class RanaBrowser(QWidget):
         self.rana_browser.addTab(self.rana_files, "Files")
         # self.rana_browser.addTab(self.rana_processes, "Processes")
         self.rana_browser.setCurrentIndex(0)
-        # self.rana_browser.setTabEnabled(1, False)
+        self.rana_browser.tabBar().setTabVisible(0, False)
         # Set up breadcrumbs, browser and file view widgets
         self.breadcrumbs = BreadCrumbsWidget(
             communication=self.communication, parent=self
@@ -917,10 +920,10 @@ class RanaBrowser(QWidget):
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
         refresh_btn.clicked.connect(self.refresh)
-        self.rana_browser.setCornerWidget(refresh_btn, Qt.TopRightCorner)
+        # self.rana_browser.setCornerWidget(refresh_btn, Qt.TopRightCorner)
 
         # Setup top layout with logo and breadcrumbs
-        top_layout = QHBoxLayout()
+        top_layout = QGridLayout()
 
         banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
         renderer = banner.renderer()
@@ -931,9 +934,14 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         logo_label = banner
 
-        top_layout.addWidget(self.breadcrumbs)
-        top_layout.addStretch()
-        top_layout.addWidget(logo_label)
+        top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        top_layout.addItem(spacer, 0, 3, 1, 1)
+        top_layout.addWidget(logo_label, 0, 4)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        top_layout.addItem(spacer, 1, 0, 1, 1)
+        top_layout.addWidget(refresh_btn, 1, 4, Qt.AlignRight)
+
         # Add components to the layout
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
