@@ -9,7 +9,7 @@ from operator import attrgetter
 
 from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QCoreApplication, QSettings, QSize
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, QSize, Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QGridLayout,
@@ -70,6 +70,7 @@ class StartWidget(uicls_start_page, basecls_start_page):
 
         self.tv_revisions_model = QStandardItemModel()
         self.revisions_tv.setModel(self.tv_revisions_model)
+        self.revisions_tv.setFocusPolicy(Qt.NoFocus)
         self.current_local_schematisation = current_local_schematisation
         self.schematisation = schematisation
         self.schematisation_filepath = schematisation_filepath
