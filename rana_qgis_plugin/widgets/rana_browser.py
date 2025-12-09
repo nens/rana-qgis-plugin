@@ -73,7 +73,7 @@ class RevisionsView(QWidget):
 
     def setup_ui(self):
         self.revisions_table = QTableView()
-        self.revisions_table.setSortingEnabled(False)
+        self.revisions_table.setSortingEnabled(True)
         self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
@@ -143,9 +143,8 @@ class RevisionsView(QWidget):
             )
             # Extract data from each revision
             for i, revision in enumerate(revisions):
-                date_str = revision.commit_date.strftime("%d-%m-%y %H:%M")
-                if revision.id == schematisation["latest_revision"]["id"]:
-                    date_str += " (latest)"
+                commit_date = revision.commit_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                latest = revision.id == schematisation["latest_revision"]["id"]
                 if revision.has_threedimodel:
                     btn_data = (
                         "New simulation",
@@ -161,7 +160,8 @@ class RevisionsView(QWidget):
                     )
                 rows.append(
                     [
-                        date_str,
+                        commit_date,
+                        latest,
                         revision.commit_message,
                         btn_data,
                         revision,
@@ -173,28 +173,37 @@ class RevisionsView(QWidget):
                 self.project["id"], {"path": self.selected_file["id"]}
             )
             for item in history["items"]:
-                date_str = convert_to_local_time(item["created_at"])
-                rows.append([date_str, item["message"], None, None, None])
+                # date_str = convert_to_local_time(item["created_at"])
+                rows.append(
+                    [item["created_at"], False, item["message"], None, None, None]
+                )
 
         # Populate table
         self.revisions_model.clear()
         self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         for i, (
-            date_str,
+            commit_date,
+            latest,
             event,
             btn_data,
             threedi_revision,
             threedi_schematisation,
         ) in enumerate(rows):
-            date_item = QStandardItem(date_str)
-
+            locel_time = convert_to_local_time(commit_date)
+            if latest:
+                locel_time += " (latest)"
+            commit_item = NumericItem(locel_time)
+            # Use numeric timestamp for sorting
+            commit_item.setData(
+                convert_to_timestamp(commit_date), role=Qt.ItemDataRole.UserRole
+            )
             # We store the revision object for loading specific revisions in menu_requested.
             if threedi_revision:
-                date_item.setData((threedi_revision, threedi_schematisation))
+                commit_item.setData((threedi_revision, threedi_schematisation))
 
             self.revisions_model.appendRow(
                 [
-                    date_item,
+                    commit_item,
                     QStandardItem(event),
                     QStandardItem(""),
                 ]
