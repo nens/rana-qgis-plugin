@@ -147,12 +147,15 @@ class RevisionsView(QWidget):
                 if revision.has_threedimodel:
                     btn_data = (
                         "New simulation",
-                        lambda _: self.new_simulation_clicked.emit(revision.id),
+                        lambda _, rev_id=revision.id: self.new_simulation_clicked.emit(
+                            rev_id
+                        ),
                     )
                 else:
                     btn_data = (
-                        "Create 3Di model",
-                        lambda _: self.create_3di_model_clicked.emit(revision.id),
+                        "Create Rana model",
+                        lambda _,
+                        rev_id=revision.id: self.create_3di_model_clicked.emit(rev_id),
                     )
                 rows.append(
                     [
@@ -391,6 +394,7 @@ class FilesBrowser(QWidget):
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
+    save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
@@ -420,11 +424,13 @@ class FilesBrowser(QWidget):
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.files_tv)
+        self.btn_new_schematisation = QPushButton("New schematisation")
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.btn_upload)
         btn_layout.addWidget(btn_create_folder)
+        btn_layout.addWidget(self.btn_new_schematisation)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.files_tv)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
 
@@ -440,6 +446,10 @@ class FilesBrowser(QWidget):
         if self.selected_item["type"] == "directory":
             self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
+
+    def select_path(self, selected_path: str):
+        self.selected_item = {"id": selected_path, "type": "directory"}
+        self.fetch_and_populate(self.project, selected_path)
 
     def update(self):
         selected_path = self.selected_item["id"]
@@ -471,6 +481,9 @@ class FilesBrowser(QWidget):
             actions.append(
                 ("Save vector style to Rana", self.save_vector_styling_requested)
             )
+        if data_type == "threedi_schematisation":
+            # TODO: only when changed?
+            actions.append(("Save revision to Rana", self.save_revision_requested))
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
@@ -849,11 +862,13 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    save_revision_selected = pyqtSignal(dict, dict)
     create_model_selected = pyqtSignal(dict)
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
     create_folder_selected = pyqtSignal(dict, dict, str)
+    upload_new_schematisation_selected = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -983,14 +998,19 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
+            (self.files_browser.save_revision_requested, self.save_revision_selected),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
+        # Connect new schematisation button
+        self.files_browser.btn_new_schematisation.clicked.connect(
+            lambda _,: self.upload_new_schematisation_selected.emit(self.project)
+        )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
-            lambda path: self.files_browser.fetch_and_populate(self.project, path)
+            lambda path: self.files_browser.select_path(path)
         )
         self.breadcrumbs.file_selected.connect(self.file_view.refresh)
         self.file_view.show_revisions_clicked.connect(
