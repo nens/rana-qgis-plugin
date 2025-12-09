@@ -171,14 +171,14 @@ class SchematisationNameWidget(QWidget):
         gridLayout.addLayout(gridLayout_2, 7, 2)
 
         # Rana path label
-        gridLayout.addWidget(QLabel("New schematisation name:"), 8, 0)
+        gridLayout.addWidget(QLabel("Rana schematisation directory:"), 8, 0)
 
         # Rana path input
         self.le_rana_path = QLineEdit()
         self.le_rana_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.le_rana_path.setMaxLength(80)
         self.le_rana_path.setPlaceholderText(
-            "Directory in your Rana project to place the 3Di schematisation in (optional)"
+            "Directory in your Rana project to place the new schematisation in (optional)"
         )
         gridLayout.addWidget(self.le_rana_path, 8, 2)
 
