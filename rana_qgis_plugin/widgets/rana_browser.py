@@ -103,8 +103,10 @@ class RevisionsView(QWidget):
         revision_item = self.revisions_model.itemFromIndex(index)
         if not revision_item:
             return
-
-        threedi_revision, schematisation = revision_item.data()
+        data = revision_item.data()
+        if not data:
+            return
+        threedi_revision, schematisation = data
         if threedi_revision:
             menu = QMenu(self)
             action = QAction("Open in QGIS", self)
