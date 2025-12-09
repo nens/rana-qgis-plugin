@@ -1,3 +1,5 @@
+import os
+
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -82,6 +84,9 @@ class SettingsDialog(QDialog):
         cachedir_browse_pb.clicked.connect(
             lambda: self.browse("Cache Directory", self.cache_dir_le)
         )
+        if rana_cache_dir() is None:
+            base_dir = os.path.join(os.path.expanduser("~"), "Rana")
+            self.cache_dir_le.setText(base_dir)
 
         layout.addWidget(files_group)
 
