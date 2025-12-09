@@ -16,6 +16,7 @@ History
 - Allow user to set file cache directory
 - Rename tenant to organisation in user interfaces
 - Reactivate plugin when workdir is not set
+- Add Code and Created fields to project list view
 
 
 1.1.20 (2025-11-18)
