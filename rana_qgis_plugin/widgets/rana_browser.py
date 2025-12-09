@@ -709,6 +709,8 @@ class ProjectsBrowser(QWidget):
         name_item = QStandardItem(project_name)
         name_item.setToolTip(project_name)
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
+        code = project["code"]
+        code_item = QStandardItem(code)
         last_activity = project["last_activity"]
         last_activity_timestamp = convert_to_timestamp(last_activity)
         last_activity_localtime = convert_to_local_time(last_activity)
@@ -718,13 +720,20 @@ class ProjectsBrowser(QWidget):
             last_activity_timestamp, role=Qt.ItemDataRole.UserRole
         )
         last_activity_item.setToolTip(last_activity_localtime)
-        return [name_item, last_activity_item]
+        created = project["created_at"]
+        created_timestamp = convert_to_timestamp(created)
+        created_localtime = convert_to_local_time(created)
+        created_relative = convert_to_relative_time(created)
+        created_item = NumericItem(created_relative)
+        created_item.setData(created_timestamp, role=Qt.ItemDataRole.UserRole)
+        created_item.setToolTip(created_localtime)
+        return [name_item, code_item, last_activity_item, created_item]
 
     def populate_projects(self, clear: bool = False):
         if clear:
             self.projects_model.clear()
         self.projects_model.removeRows(0, self.projects_model.rowCount())
-        header = ["Project Name", "Last activity"]
+        header = ["Project Name", "Code", "Last activity", "Created"]
         self.projects_model.setHorizontalHeaderLabels(header)
 
         # Paginate projects
