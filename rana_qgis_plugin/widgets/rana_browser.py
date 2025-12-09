@@ -9,6 +9,8 @@ from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QTimer, pyqtSignal, pyq
 from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -101,8 +103,10 @@ class RevisionsView(QWidget):
         revision_item = self.revisions_model.itemFromIndex(index)
         if not revision_item:
             return
-
-        threedi_revision, schematisation = revision_item.data()
+        data = revision_item.data()
+        if not data:
+            return
+        threedi_revision, schematisation = data
         if threedi_revision:
             menu = QMenu(self)
             action = QAction("Open in QGIS", self)
@@ -144,12 +148,15 @@ class RevisionsView(QWidget):
                 if revision.has_threedimodel:
                     btn_data = (
                         "New simulation",
-                        lambda _: self.new_simulation_clicked.emit(revision.id),
+                        lambda _, rev_id=revision.id: self.new_simulation_clicked.emit(
+                            rev_id
+                        ),
                     )
                 else:
                     btn_data = (
-                        "Create 3Di model",
-                        lambda _: self.create_3di_model_clicked.emit(revision.id),
+                        "Create Rana model",
+                        lambda _,
+                        rev_id=revision.id: self.create_3di_model_clicked.emit(rev_id),
                     )
                 rows.append(
                     [
@@ -362,6 +369,32 @@ class FileView(QWidget):
         self.show_selected_file_details(self.selected_file)
 
 
+class StringInputDialog(QDialog):
+    def __init__(self, question: str, title: str, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout()
+        label = QLabel("Enter folder name:")
+        self.input = QLineEdit()
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        layout.addWidget(label)
+        layout.addWidget(self.input)
+        layout.addWidget(button_box)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        self.setWindowTitle("Create New Folder")
+        self.setLayout(layout)
+
+    def folder_name(self) -> str:
+        return self.input.text().strip()
+
+
+class CreateFolderDialog(StringInputDialog):
+    def __init__(self, parent=None):
+        super().__init__(question="Enter folder name:", title="Create New Folder")
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -372,9 +405,11 @@ class FilesBrowser(QWidget):
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
+    save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
+    create_folder_requested = pyqtSignal(str)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -398,10 +433,25 @@ class FilesBrowser(QWidget):
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
+        btn_create_folder = QPushButton("Create New Folder")
+        btn_create_folder.clicked.connect(self.show_create_folder_dialog)
+        self.btn_new_schematisation = QPushButton("New schematisation")
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.btn_upload)
+        btn_layout.addWidget(btn_create_folder)
+        btn_layout.addWidget(self.btn_new_schematisation)
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
-        layout.addWidget(self.btn_upload)
+        layout.addLayout(btn_layout)
         self.setLayout(layout)
+
+    def show_create_folder_dialog(self):
+        # Make sure this button cannot do anything if the files browser is not in a folder
+        if self.selected_item["type"] != "directory":
+            return
+        dialog = CreateFolderDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
         if self.selected_item["type"] == "directory":
@@ -428,7 +478,7 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        data_type = selected_item.get("data_type", None)
+        data_type = selected_item.get("data_type")
         # Add delete option files and folders
         actions = [("Delete", self.file_deletion_requested)]
         # Add open in QGIS is supported for all supported data types
@@ -442,6 +492,9 @@ class FilesBrowser(QWidget):
             actions.append(
                 ("Save vector style to Rana", self.save_vector_styling_requested)
             )
+        if data_type == "threedi_schematisation":
+            # TODO: only when changed?
+            actions.append(("Save revision to Rana", self.save_revision_requested))
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
@@ -820,10 +873,13 @@ class RanaBrowser(QWidget):
     download_results_selected = pyqtSignal(dict, dict)
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
+    save_revision_selected = pyqtSignal(dict, dict)
     create_model_selected = pyqtSignal(dict)
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
+    create_folder_selected = pyqtSignal(dict, dict, str)
+    upload_new_schematisation_selected = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -932,6 +988,12 @@ class RanaBrowser(QWidget):
                 self.project, self.selected_item
             )
         )
+        # Connect create new folder button
+        self.files_browser.create_folder_requested.connect(
+            lambda folder_name: self.create_folder_selected.emit(
+                self.project, self.selected_item, folder_name
+            )
+        )
         # Connect file browser context menu signals
         context_menu_signals = (
             (self.files_browser.file_deletion_requested, self.delete_file_selected),
@@ -947,11 +1009,16 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
+            (self.files_browser.save_revision_requested, self.save_revision_selected),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
+        # Connect new schematisation button
+        self.files_browser.btn_new_schematisation.clicked.connect(
+            lambda _,: self.upload_new_schematisation_selected.emit(self.project)
+        )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.select_path(path)
