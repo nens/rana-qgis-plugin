@@ -67,7 +67,7 @@ class SettingsDialog(QDialog):
         workdir_browse_pb = QPushButton("Browse", sim_group)
         sim_group.layout().addWidget(workdir_browse_pb, 0, 2)
         workdir_browse_pb.clicked.connect(
-            lambda: self.browse("Working directory", self.working_dir_le)
+            lambda: self.browse("Working Directory", self.working_dir_le)
         )
 
         layout.addWidget(sim_group)
@@ -80,7 +80,7 @@ class SettingsDialog(QDialog):
         cachedir_browse_pb = QPushButton("Browse", files_group)
         files_group.layout().addWidget(cachedir_browse_pb, 0, 2)
         cachedir_browse_pb.clicked.connect(
-            lambda: self.browse("Cache directory", self.cache_dir_le)
+            lambda: self.browse("Cache Directory", self.cache_dir_le)
         )
 
         layout.addWidget(files_group)
