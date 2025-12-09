@@ -5,8 +5,23 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
-from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QTimer, pyqtSignal, pyqtSlot
-from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtCore import (
+    QEvent,
+    QModelIndex,
+    QSettings,
+    Qt,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
+from qgis.PyQt.QtGui import (
+    QAction,
+    QDesktopServices,
+    QPixmap,
+    QStandardItem,
+    QStandardItemModel,
+)
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -57,6 +72,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_projects,
     get_threedi_schematisation,
 )
+from rana_qgis_plugin.utils_settings import base_url
 
 
 class RevisionsView(QWidget):
@@ -909,7 +925,6 @@ class RanaBrowser(QWidget):
         self.rana_processes = QWidget()
         self.rana_files = QStackedWidget()
         self.rana_browser.addTab(self.rana_files, "Files")
-        # self.rana_browser.addTab(self.rana_processes, "Processes")
         self.rana_browser.setCurrentIndex(0)
         self.rana_browser.tabBar().setTabVisible(0, False)
         # Set up breadcrumbs, browser and file view widgets
@@ -920,7 +935,6 @@ class RanaBrowser(QWidget):
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
         refresh_btn.clicked.connect(self.refresh)
-        # self.rana_browser.setCornerWidget(refresh_btn, Qt.TopRightCorner)
 
         # Setup top layout with logo and breadcrumbs
         top_layout = QGridLayout()
@@ -933,6 +947,7 @@ class RanaBrowser(QWidget):
         banner.setFixedWidth(width)
         banner.setFixedHeight(height)
         logo_label = banner
+        logo_label.installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1085,6 +1100,12 @@ class RanaBrowser(QWidget):
         self.breadcrumbs.file_selected.connect(
             lambda: self.rana_files.setCurrentIndex(2)
         )
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonPress:
+            link = base_url()
+            QDesktopServices.openUrl(QUrl(link))
+        return False
 
     @pyqtSlot()
     def enable(self):
