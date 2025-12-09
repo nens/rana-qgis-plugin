@@ -145,12 +145,15 @@ class RevisionsView(QWidget):
                 if revision.has_threedimodel:
                     btn_data = (
                         "New simulation",
-                        lambda _: self.new_simulation_clicked.emit(revision.id),
+                        lambda _, rev_id=revision.id: self.new_simulation_clicked.emit(
+                            rev_id
+                        ),
                     )
                 else:
                     btn_data = (
-                        "Create 3Di model",
-                        lambda _: self.create_3di_model_clicked.emit(revision.id),
+                        "Create Rana model",
+                        lambda _,
+                        rev_id=revision.id: self.create_3di_model_clicked.emit(rev_id),
                     )
                 rows.append(
                     [
