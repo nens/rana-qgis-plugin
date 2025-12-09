@@ -771,29 +771,28 @@ class Loader(QObject):
             )
             return
 
-        schematisation_filepath = local_schematisation.schematisation_db_filepath
-
-        schema_gpkg_loaded = is_loaded_in_schematisation_editor(schematisation_filepath)
-        if schema_gpkg_loaded is False:
-            title = "Warning"
-            question = (
-                "Warning: the GeoPackage that you loaded with the Rana Schematisation Editor is not in the revision you "
-                "are about to upload. Do you want to continue?"
-            )
-            if not self.communication.ask(
-                self.parent(), title, question, QMessageBox.Warning
-            ):
-                return
-
         self.organisations = {org.unique_id: org for org in tc.fetch_organisations()}
         organisation = self.organisations.get(schematisation.owner)
 
         # Let the user select a local revision
-        dial = SchematisationLoad(
+        load_dialog = SchematisationLoad(
             hcc_working_dir(), self.communication, local_schematisation, self.parent()
         )
-        if dial.exec() == QDialog.DialogCode.Accepted:
+        if load_dialog.exec() == QDialog.DialogCode.Accepted:
             # Upload that revision as new revision
+            local_schematisation = load_dialog.selected_local_schematisation
+            schematisation_filepath = local_schematisation.schematisation_db_filepath
+
+            schema_gpkg_loaded = is_loaded_in_schematisation_editor(
+                schematisation_filepath
+            )
+            if schema_gpkg_loaded is False:
+                question = "Warning: the revision you are about to upload is not loaded in the Rana Schematisation Editor. Do you want to continue?"
+                if not self.communication.ask(
+                    self.parent(), "Warning", question, QMessageBox.Warning
+                ):
+                    return
+
             upload_dial = UploadWizard(
                 local_schematisation,
                 schematisation,
