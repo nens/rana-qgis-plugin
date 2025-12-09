@@ -570,35 +570,45 @@ class Loader(QObject):
         last_saved_dir = QSettings().value(
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
         )
-        local_path, _ = QFileDialog.getOpenFileName(
+        local_paths, _ = QFileDialog.getOpenFileNames(
             None,
-            "Open file",
+            "Open file(s)",
             last_saved_dir,
-            "Rasters (*.tif *.tiff);;Vector files (*.gpkg *.sqlite)",
+            "All supported files (*.tif *.tiff *.gpkg *.sqlite);;"
+            "Rasters (*.tif *.tiff);;"
+            "Vector files (*.gpkg *.sqlite)",
         )
-        if not local_path:
+        if not local_paths:
             self.loading_cancelled.emit()
             return
 
         QSettings().setValue(
-            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", str(Path(local_path).parent)
+            f"{RANA_SETTINGS_ENTRY}/last_upload_folder",
+            str(Path(local_paths[0]).parent),
         )
-        self.communication.bar_info("Start uploading file to Rana...")
+        self.communication.bar_info("Start uploading file(s) to Rana...")
         online_dir = ""
         if file:
             assert file["type"] == "directory"
             online_dir = file["id"]
 
-        online_path = online_dir + Path(local_path).name
         self.new_file_upload_worker = FileUploadWorker(
             project,
-            Path(local_path),
-            online_path,
+            [Path(local_path) for local_path in local_paths],
+            online_dir,
+        )
+        online_path = (
+            online_dir + Path(local_paths[0]).name if len(local_paths) == 1 else None
         )
         self.new_file_upload_worker.finished.connect(
             partial(self.on_new_file_upload_finished, online_path)
         )
+        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
+        if len(local_paths) == 1:
+            self.new_file_upload_worker.failed.connect(
+                lambda error: self.file_upload_failed.emit(error)
+            )
         self.new_file_upload_worker.progress.connect(self.on_file_upload_progress)
         self.new_file_upload_worker.warning.connect(
             lambda msg: self.communication.show_warn(msg)
@@ -613,6 +623,9 @@ class Loader(QObject):
         )
         self.file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.file_upload_worker.failed.connect(self.on_file_upload_failed)
+        self.file_upload_worker.failed.connect(
+            lambda error: self.file_upload_failed.emit(error)
+        )
         self.file_upload_worker.progress.connect(self.on_file_upload_progress)
         self.file_upload_worker.conflict.connect(self.handle_file_conflict)
         self.file_upload_worker.warning.connect(
@@ -643,7 +656,7 @@ class Loader(QObject):
 
     def on_new_file_upload_finished(self, online_path: str, project):
         self.on_file_upload_finished()
-        if self.communication.ask(
+        if online_path and self.communication.ask(
             self.parent(), "Load", "Would you like to load the uploaded file from Rana?"
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
@@ -655,7 +668,6 @@ class Loader(QObject):
     def on_file_upload_failed(self, error: str):
         self.communication.clear_message_bar()
         self.communication.show_error(error)
-        self.file_upload_failed.emit(error)
 
     def on_file_upload_progress(self, progress: int):
         self.communication.progress_bar(

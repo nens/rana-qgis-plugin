@@ -10,6 +10,7 @@ History
 - Add button to generate threedimodel when missing
 - Replace page specific refresh buttons with single refresh button
 - Refresh files browser, file view and revisions view every 60 seconds
+- Add support for selecting and uploading multiple files to Rana
 - Add option to create a new folder
 - Add button and dialog from M&S plugin to generate/upload new schematisation to 3Di and Rana
 
