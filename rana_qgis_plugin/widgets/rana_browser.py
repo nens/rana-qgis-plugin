@@ -457,7 +457,7 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        data_type = selected_item.get("data_type", None)
+        data_type = selected_item.get("data_type")
         # Add delete option files and folders
         actions = [("Delete", self.file_deletion_requested)]
         # Add open in QGIS is supported for all supported data types
