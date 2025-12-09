@@ -37,12 +37,12 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
-    get_local_file_path,
     get_threedi_api,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
     add_threedi_schematisation,
+    create_folder,
     create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
@@ -92,6 +92,7 @@ class Loader(QObject):
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
+    folder_created = pyqtSignal()
     schematisation_uploaded = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
 
@@ -252,6 +253,32 @@ class Loader(QObject):
                 self.file_deleted.emit()
             else:
                 self.communication.show_warn(f"Unable to delete file {file['id']}")
+
+    @pyqtSlot(dict, dict, str)
+    def create_new_folder_on_rana(self, project, selected_item, folder_name: str):
+        """Create new folder on Rana and show warning when folder already exists"""
+
+        root_path = selected_item["id"]
+        names = [
+            file["id"].strip("/")
+            for file in get_tenant_project_files(
+                self.communication,
+                project["id"],
+                params={"path": root_path} if root_path else None,
+            )
+            if file["type"] == "directory"
+        ]
+        if folder_name in names:
+            QMessageBox.warning(
+                self.parent(), "Warning", f"Folder {folder_name} already exists."
+            )
+            return
+        folder_path = root_path + folder_name + "/"
+        success = create_folder(project["id"], params={"path": folder_path})
+        if success:
+            self.folder_created.emit()
+        else:
+            self.communication.show_warn(f"Unable to create folder {folder_name}")
 
     @pyqtSlot(dict)
     @pyqtSlot(dict, int)
