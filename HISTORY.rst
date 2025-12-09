@@ -14,6 +14,7 @@ History
 - Add option to create a new folder
 - Add button and dialog from M&S plugin to generate/upload new schematisation to 3Di and Rana
 - Allow user to set file cache directory
+- Rename tenant to organisation in user interfaces
 
 
 1.1.20 (2025-11-18)

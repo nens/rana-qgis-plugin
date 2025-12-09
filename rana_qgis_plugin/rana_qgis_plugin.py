@@ -139,7 +139,9 @@ class RanaQgisPlugin:
             if selected_tenant_id != current_tenant_id:
                 set_tenant_id(selected_tenant_id)
                 self.communication.clear_message_bar()
-                self.communication.bar_info(f"Tenant set to: {selected_tenant_id}")
+                self.communication.bar_info(
+                    f"Organisation set to: {selected_tenant_id}"
+                )
                 if self.rana_browser:
                     self.rana_browser.refresh()
 
@@ -163,7 +165,7 @@ class RanaQgisPlugin:
                     self.tenants = get_user_tenants(self.communication, user_id)
                     if len(self.tenants) > 1:
                         switch_tenant_action = QAction(
-                            "Switch Tenant", self.iface.mainWindow()
+                            "Switch Organisation", self.iface.mainWindow()
                         )
                         switch_tenant_action.triggered.connect(
                             self.open_tenant_selection_dialog
