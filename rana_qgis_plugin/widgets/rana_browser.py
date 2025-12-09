@@ -9,6 +9,8 @@ from qgis.PyQt.QtCore import QModelIndex, QSettings, Qt, QTimer, pyqtSignal, pyq
 from qgis.PyQt.QtGui import QAction, QPixmap, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -356,6 +358,32 @@ class FileView(QWidget):
         self.show_selected_file_details(self.selected_file)
 
 
+class StringInputDialog(QDialog):
+    def __init__(self, question: str, title: str, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout()
+        label = QLabel("Enter folder name:")
+        self.input = QLineEdit()
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        layout.addWidget(label)
+        layout.addWidget(self.input)
+        layout.addWidget(button_box)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        self.setWindowTitle("Create New Folder")
+        self.setLayout(layout)
+
+    def folder_name(self) -> str:
+        return self.input.text().strip()
+
+
+class CreateFolderDialog(StringInputDialog):
+    def __init__(self, parent=None):
+        super().__init__(question="Enter folder name:", title="Create New Folder")
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -370,6 +398,7 @@ class FilesBrowser(QWidget):
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
+    create_folder_requested = pyqtSignal(str)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -393,12 +422,25 @@ class FilesBrowser(QWidget):
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
+        btn_create_folder = QPushButton("Create New Folder")
+        btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.btn_upload)
+        btn_layout.addWidget(btn_create_folder)
+        btn_layout.addWidget(self.btn_new_schematisation)
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
-        layout.addWidget(self.btn_upload)
-        layout.addWidget(self.btn_new_schematisation)
+        layout.addLayout(btn_layout)
         self.setLayout(layout)
+
+    def show_create_folder_dialog(self):
+        # Make sure this button cannot do anything if the files browser is not in a folder
+        if self.selected_item["type"] != "directory":
+            return
+        dialog = CreateFolderDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
         if self.selected_item["type"] == "directory":
@@ -425,7 +467,7 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        data_type = selected_item.get("data_type", None)
+        data_type = selected_item.get("data_type")
         # Add delete option files and folders
         actions = [("Delete", self.file_deletion_requested)]
         # Add open in QGIS is supported for all supported data types
@@ -825,6 +867,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
+    create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
@@ -932,6 +975,12 @@ class RanaBrowser(QWidget):
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
                 self.project, self.selected_item
+            )
+        )
+        # Connect create new folder button
+        self.files_browser.create_folder_requested.connect(
+            lambda folder_name: self.create_folder_selected.emit(
+                self.project, self.selected_item, folder_name
             )
         )
         # Connect file browser context menu signals
