@@ -1,6 +1,7 @@
 import math
 import os
 from collections import namedtuple
+from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import List
@@ -58,10 +59,10 @@ from rana_qgis_plugin.simulation.threedi_calls import (
 from rana_qgis_plugin.utils import (
     NumericItem,
     convert_to_local_time,
-    convert_to_relative_time,
     convert_to_timestamp,
     display_bytes,
     elide_text,
+    format_activity_time,
 )
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
@@ -711,13 +712,14 @@ class ProjectsBrowser(QWidget):
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
         last_activity = project["last_activity"]
         last_activity_timestamp = convert_to_timestamp(last_activity)
+        display_last_activity = format_activity_time(last_activity)
         last_activity_localtime = convert_to_local_time(last_activity)
-        last_activity_relative = convert_to_relative_time(last_activity)
-        last_activity_item = NumericItem(last_activity_relative)
+        last_activity_item = NumericItem(display_last_activity)
         last_activity_item.setData(
             last_activity_timestamp, role=Qt.ItemDataRole.UserRole
         )
-        last_activity_item.setToolTip(last_activity_localtime)
+        if last_activity_localtime != display_last_activity:
+            last_activity_item.setToolTip(last_activity_localtime)
         return [name_item, last_activity_item]
 
     def populate_projects(self, clear: bool = False):

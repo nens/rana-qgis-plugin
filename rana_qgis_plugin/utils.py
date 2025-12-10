@@ -202,6 +202,16 @@ def convert_to_relative_time(timestamp: str) -> str:
         return "Just now"
 
 
+def format_activity_time(timestamp: str) -> str:
+    now = datetime.now(timezone.utc)
+    past = parser.isoparse(timestamp)
+    delta = relativedelta(now, past)
+    if delta.days < 7:
+        return convert_to_relative_time(timestamp)
+    else:
+        return convert_to_local_time(timestamp)
+
+
 def image_to_bytes(image: QImage) -> bytes:
     """Convert QImage to bytes."""
     byte_array = QByteArray()
