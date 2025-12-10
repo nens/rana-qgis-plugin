@@ -348,7 +348,7 @@ def progress_bar_callback_factory(
 
     def progress_bar_callback(progres_value, message):
         communication.progress_bar(
-            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
+            message, minimum, maximum, int(progres_value), clear_msg_bar=clear_msg_bar
         )
         QCoreApplication.processEvents()
 
