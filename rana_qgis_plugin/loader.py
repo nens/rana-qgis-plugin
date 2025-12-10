@@ -94,7 +94,7 @@ class Loader(QObject):
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
-    file_moved = pyqtSignal()
+    rename_finished = pyqtSignal()
     folder_created = pyqtSignal()
     schematisation_uploaded = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
@@ -261,7 +261,11 @@ class Loader(QObject):
     def rename_file(self, project, file, new_name):
         # create names without trailing /
         source_path = file["id"].rstrip("/")
-        target_path = str(Path(source_path).with_name(new_name))
+        try:
+            target_path = str(Path(source_path).with_name(new_name))
+        except ValueError:
+            self.communication.show_warn(f"Cannot rename to invalid name '{new_name}'")
+            self.rename_finished.emit()
         if file["type"] == "directory":
             # check for duplicates
             if len(Path(source_path).parents) > 1:
@@ -282,15 +286,14 @@ class Loader(QObject):
                     self.parent(), "Warning", f"Folder {new_name} already exists."
                 )
                 return
-            if move_directory(
+            success = move_directory(
                 project["id"],
                 params={
                     "source_path": source_path + "/",
                     "destination_path": target_path + "/",
                 },
-            ):
-                self.file_moved.emit()
-            else:
+            )
+            if not success:
                 self.communication.show_warn(f"Unable to rename directory {file['id']}")
         else:
             file = get_tenant_project_file(project["id"], {"path": target_path})
@@ -299,13 +302,13 @@ class Loader(QObject):
                     self.parent(), "Warning", f"Folder {new_name} already exists."
                 )
                 return
-            if move_file(
+            success = move_file(
                 project["id"],
                 params={"source_path": source_path, "destination_path": target_path},
-            ):
-                self.file_moved.emit()
-            else:
+            )
+            if not success:
                 self.communication.show_warn(f"Unable to rename file {file['id']}")
+        self.rename_finished.emit()
 
     @pyqtSlot(dict, dict, str)
     def create_new_folder_on_rana(self, project, selected_item, folder_name: str):
