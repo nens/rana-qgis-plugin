@@ -1,7 +1,6 @@
 import math
 import os
 from collections import namedtuple
-from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Callable, List
@@ -79,6 +78,7 @@ from rana_qgis_plugin.utils_settings import base_url
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
     create_3di_model_clicked = pyqtSignal(int)
+    delete_3di_model_clicked = pyqtSignal(int)
     open_schematisation_revision_in_qgis_requested = pyqtSignal(dict, dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
@@ -97,8 +97,8 @@ class RevisionsView(QWidget):
         self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
-        self.revisions_model.setColumnCount(3)
-        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
+        # self.revisions_model.setColumnCount(3)
+        # self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         self.revisions_table.setModel(self.revisions_model)
         self.revisions_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
@@ -146,7 +146,9 @@ class RevisionsView(QWidget):
         selected_file = self.selected_file
         # collect rows to show in widget, format: [date_str, event, (button_label, signal_func), revision, schematisation]
         rows = []
+        BTNData = namedtuple("BTNData", ["label", "func", "enabled", "tooltip"])
         if selected_file.get("data_type") == "threedi_schematisation":
+            nof_models = 0
             # retrieve schematisation and revisions
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
@@ -161,31 +163,58 @@ class RevisionsView(QWidget):
             revisions = tc.fetch_schematisation_revisions(
                 schematisation["schematisation"]["id"]
             )
+            # Check number of models and enable creation if max has been reached
+            create_enabled = True
+            create_tooltip = None
+            if (
+                sum(revision.has_threedimodel for revision in revisions)
+                >= schematisation["schematisation"]["threedimodel_limit"]
+            ):
+                create_enabled = False
+                create_tooltip = "The maximum number of Rana models has been reached. Please delete one of the existing models before creating a new one."
             # Extract data from each revision
             for i, revision in enumerate(revisions):
                 commit_date = revision.commit_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 latest = revision.id == schematisation["latest_revision"]["id"]
+                tooltip = (
+                    "A Rana model must be created before a simulation can be started."
+                    if not revision.has_threedimodel
+                    else None
+                )
+                sim_btn_data = BTNData(
+                    "New",
+                    lambda _, rev_id=revision.id: self.new_simulation_clicked.emit(
+                        rev_id
+                    ),
+                    revision.has_threedimodel,
+                    tooltip,
+                )
                 if revision.has_threedimodel:
-                    btn_data = (
-                        "New simulation",
-                        lambda _, rev_id=revision.id: self.new_simulation_clicked.emit(
-                            rev_id
-                        ),
+                    nof_models += 1
+                    model_btn_data = BTNData(
+                        "Delete",
+                        lambda _,
+                        rev_id=revision.id: self.delete_3di_model_clicked.emit(rev_id),
+                        True,
+                        None,
                     )
                 else:
-                    btn_data = (
-                        "Create Rana model",
+                    model_btn_data = BTNData(
+                        "Create",
                         lambda _,
                         rev_id=revision.id: self.create_3di_model_clicked.emit(rev_id),
+                        create_enabled,
+                        create_tooltip,
                     )
                 rows.append(
                     [
                         commit_date,
-                        latest,
                         revision.commit_message,
-                        btn_data,
+                        sim_btn_data,
+                        model_btn_data,
                         revision,
                         schematisation,
+                        latest,
                     ]
                 )
         else:
@@ -193,22 +222,27 @@ class RevisionsView(QWidget):
                 self.project["id"], {"path": self.selected_file["id"]}
             )
             for item in history["items"]:
-                # date_str = convert_to_local_time(item["created_at"])
-                rows.append(
-                    [item["created_at"], False, item["message"], None, None, None]
-                )
+                rows.append([item["created_at"], item["message"]])
 
         # Populate table
         self.revisions_model.clear()
-        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
-        for i, (
-            commit_date,
-            latest,
-            event,
-            btn_data,
-            threedi_revision,
-            threedi_schematisation,
-        ) in enumerate(rows):
+        self.revisions_model.setColumnCount(2)
+        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
+        latest = False
+        threedi_revision = sim_btn_data = model_btn_data = threedi_schematisation = None
+        for i, (commit_date, event, *schematisation_related) in enumerate(rows):
+            if schematisation_related:
+                (
+                    sim_btn_data,
+                    model_btn_data,
+                    threedi_revision,
+                    threedi_schematisation,
+                    latest,
+                ) = schematisation_related
+                self.revisions_model.setColumnCount(4)
+                self.revisions_model.setHorizontalHeaderLabels(
+                    ["Timestamp", "Event", "Simulation", "Rana Model"]
+                )
             locel_time = convert_to_local_time(commit_date)
             if latest:
                 locel_time += " (latest)"
@@ -220,7 +254,6 @@ class RevisionsView(QWidget):
             # We store the revision object for loading specific revisions in menu_requested.
             if threedi_revision:
                 commit_item.setData((threedi_revision, threedi_schematisation))
-
             self.revisions_model.appendRow(
                 [
                     commit_item,
@@ -228,21 +261,24 @@ class RevisionsView(QWidget):
                     QStandardItem(""),
                 ]
             )
-            if btn_data:
-                btn_label, btn_func = btn_data
-                btn = QPushButton(btn_label)
-                btn.setFixedWidth(150)
-                btn.setFixedHeight(25)
-                btn.clicked.connect(btn_func)
-                container = QWidget()
-                layout = QVBoxLayout(container)
-                layout.setContentsMargins(0, 0, 0, 0)
-                layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                layout.addWidget(btn)
-
-                self.revisions_table.setIndexWidget(
-                    self.revisions_model.index(i, 2), container
-                )
+            for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 2):
+                if btn_data:
+                    # btn_label, btn_func = btn_data
+                    btn = QPushButton(btn_data.label)
+                    btn.setFixedWidth(150)
+                    btn.setFixedHeight(25)
+                    btn.clicked.connect(btn_data.func)
+                    btn.setEnabled(btn_data.enabled)
+                    if btn_data.tooltip:
+                        btn.setToolTip(btn_data.tooltip)
+                    container = QWidget()
+                    layout = QVBoxLayout(container)
+                    layout.setContentsMargins(0, 0, 0, 0)
+                    layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    layout.addWidget(btn)
+                    self.revisions_table.setIndexWidget(
+                        self.revisions_model.index(i, col_idx), container
+                    )
         self.ready.emit()
 
 
@@ -919,6 +955,7 @@ class RanaBrowser(QWidget):
     save_revision_selected = pyqtSignal(dict, dict)
     create_model_selected = pyqtSignal(dict)
     create_model_selected_with_revision = pyqtSignal(dict, int)
+    delete_model_selected = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
     rename_file_selected = pyqtSignal(dict, dict, str)
@@ -1090,6 +1127,11 @@ class RanaBrowser(QWidget):
         )
         self.revisions_view.create_3di_model_clicked.connect(
             lambda revision_id: self.create_model_selected_with_revision.emit(
+                self.selected_item, revision_id
+            )
+        )
+        self.revisions_view.delete_3di_model_clicked.connect(
+            lambda revision_id: self.delete_model_selected.emit(
                 self.selected_item, revision_id
             )
         )

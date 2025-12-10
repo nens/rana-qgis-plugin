@@ -98,6 +98,7 @@ class Loader(QObject):
     folder_created = pyqtSignal()
     schematisation_uploaded = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
+    model_deleted = pyqtSignal()
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -356,6 +357,31 @@ class Loader(QObject):
                 )
             else:
                 raise
+
+    @pyqtSlot(dict, int)
+    def delete_schematisation_revision_3di_model(self, file, revision_id):
+        tc = ThreediCalls(get_threedi_api())
+        # Retrieve schematisation info
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        # Make sure the revision has a model that can be deleted
+        revision = tc.fetch_schematisation_revision(
+            schematisation["schematisation"]["id"], revision_id
+        )
+        if not revision or not revision.has_threedimodel:
+            return
+        # fetch_schematisation_revision_3di_models only returns enabled models
+        # and there can only be one active model, so we can safely take the first
+        current_model = tc.fetch_schematisation_revision_3di_models(
+            schematisation["schematisation"]["id"], revision_id
+        )[0]
+        tc.delete_3di_model(current_model.id)
+        revision = tc.fetch_schematisation_revision(
+            schematisation["schematisation"]["id"], revision_id
+        )
+        if not revision.has_threedimodel:
+            self.model_deleted.emit()
 
     @pyqtSlot(dict, dict)
     @pyqtSlot(dict, dict, int)
