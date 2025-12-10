@@ -16,6 +16,7 @@ History
 - Allow user to set file cache directory
 - Rename tenant to organisation in user interfaces
 - Reactivate plugin when workdir is not set
+= Dynamically fetch client cognito ids from Rana API endpoint
 
 
 1.1.20 (2025-11-18)
