@@ -521,7 +521,6 @@ class FilesBrowser(QWidget):
             meta = descriptor["meta"] if descriptor else None
             if meta and meta["simulation"]["software"]["id"] == "3Di":
                 actions.append(("Open WMS in QGIS", self.open_wms_requested))
-                actions.append(("Download", self.download_file_requested))
                 actions.append(("Download results", self.download_results_requested))
         # populate menu
         menu = QMenu(self)
