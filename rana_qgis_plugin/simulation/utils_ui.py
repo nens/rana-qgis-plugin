@@ -319,20 +319,6 @@ def migrate_schematisation_schema(schematisation_filepath, progress_callback=Non
     return migration_succeed, migration_feedback_msg
 
 
-def progress_bar_callback_factory(
-    communication, minimum=0, maximum=100, clear_msg_bar=True
-):
-    """Callback function to track schematisation migration progress."""
-
-    def progress_bar_callback(progres_value, message):
-        communication.progress_bar(
-            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
-        )
-        QCoreApplication.processEvents()
-
-    return progress_bar_callback
-
-
 def save_3di_settings(entry_name, value):
     """Save the 3Di settings entry."""
     settings = QSettings()
