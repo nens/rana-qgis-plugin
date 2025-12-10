@@ -452,7 +452,8 @@ class FilesBrowser(QWidget):
         # Add delete option files and folders
         actions = [
             ("Delete", self.file_deletion_requested),
-            ("Rename", self.show_rename_dialog),
+            ("Rename", lambda selected_item: self.edit_file_name(index, selected_item)),
+            # ("Rename", self.show_rename_dialog),
         ]
         # Add open in QGIS is supported for all supported data types
         if data_type in SUPPORTED_DATA_TYPES:
@@ -492,6 +493,27 @@ class FilesBrowser(QWidget):
         dialog = RenameDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.file_rename_requested.emit(selected_item, dialog.folder_name())
+
+    def edit_file_name(self, index: QModelIndex, selected_item: dict):
+        # Make the field at index editable
+        self.files_model.itemFromIndex(index).setFlags(
+            Qt.ItemFlag.ItemIsEditable
+            | Qt.ItemFlag.ItemIsEnabled
+            | Qt.ItemFlag.ItemIsSelectable
+        )
+
+        def handle_data_changed(topLeft, bottomRight, roles):
+            if topLeft == index:  # Only handle the specific item we're editing
+                new_name = self.files_model.itemFromIndex(topLeft).text()
+                self.file_rename_requested.emit(selected_item, new_name)
+                # Disconnect after handling
+                self.files_model.dataChanged.disconnect(handle_data_changed)
+
+        # Connect to dataChanged signal
+        self.files_model.dataChanged.connect(handle_data_changed)
+
+        # Enter editing mode
+        self.files_tv.edit(index)
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
