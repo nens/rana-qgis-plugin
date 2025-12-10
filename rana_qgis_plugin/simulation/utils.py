@@ -3,14 +3,88 @@
 import hashlib
 import json
 import os
+import shutil
 import tempfile
+import warnings
 from collections import OrderedDict
 from datetime import datetime
 from enum import Enum
+from operator import attrgetter
+from time import sleep
 from typing import List
+from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import requests
+from qgis.core import QgsVectorLayer
+from qgis.PyQt.QtCore import QSettings, QSortFilterProxyModel, Qt
+from qgis.PyQt.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QPalette,
+    QStandardItem,
+    QStandardItemModel,
+)
+from qgis.utils import plugins
+from threedi_api_client.openapi import ApiException
+from threedi_mi_utils import LocalSchematisation, list_local_schematisations
+
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
+
+from .utils_ui import progress_bar_callback_factory
+
+
+class LogLevels(Enum):
+    """Model Checker log levels."""
+
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    FUTURE_ERROR = "FUTURE_ERROR"
+
+
+class TreeViewLogger(object):
+    """Utility class for logging in TreeView"""
+
+    def __init__(self, tree_view=None, header=None):
+        self.tree_view = tree_view
+        self.header = header
+        self.model = QStandardItemModel()
+        self.tree_view.setModel(self.model)
+        self.levels_colors = {
+            LogLevels.INFO.value: QColor(Qt.black),
+            LogLevels.WARNING.value: QColor(229, 144, 80),
+            LogLevels.ERROR.value: QColor(Qt.red),
+            LogLevels.FUTURE_ERROR.value: QColor(102, 51, 153),
+        }
+        self.initialize_view()
+
+    def clear(self):
+        """Clear list view model."""
+        self.tree_view.model().clear()
+
+    def initialize_view(self):
+        """Clear list view model and set header columns if available."""
+        self.tree_view.model().clear()
+        if self.header:
+            self.tree_view.model().setHorizontalHeaderLabels(self.header)
+
+    def log_result_row(self, row, log_level):
+        """Show row data with proper log level styling."""
+        text_color = self.levels_colors[log_level]
+        if self.tree_view is not None:
+            items = []
+            for value in row:
+                item = QStandardItem(str(value))
+                item.setForeground(QBrush(text_color))
+                items.append(item)
+            self.model.appendRow(items)
+            for i in range(len(self.header)):
+                self.tree_view.resizeColumnToContents(i)
+        else:
+            print(row)
+
 
 TEMPDIR = tempfile.gettempdir()
 PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -366,6 +440,147 @@ def translate_illegal_chars(
     return sanitized_text
 
 
+def backup_schematisation_file(filename):
+    """Make a backup of the schematisation file."""
+    backup_folder = os.path.join(os.path.dirname(os.path.dirname(filename)), "_backup")
+    os.makedirs(backup_folder, exist_ok=True)
+    prefix = str(uuid4())[:8]
+    backup_file_path = os.path.join(
+        backup_folder, f"{prefix}_{os.path.basename(filename)}"
+    )
+    shutil.copyfile(filename, backup_file_path)
+    return backup_file_path
+
+
+def migrate_schematisation_schema(schematisation_filepath, progress_callback=None):
+    migration_succeed = False
+    srid = None
+
+    try:
+        from threedi_schema import ThreediDatabase, errors
+
+        backup_filepath = backup_schematisation_file(schematisation_filepath)
+        threedi_db = ThreediDatabase(schematisation_filepath)
+        schema = threedi_db.schema
+        srid, _ = schema._get_epsg_data()
+        if srid is None:
+            try:
+                srid = schema._get_dem_epsg()
+            except errors.InvalidSRIDException:
+                srid = None
+        if srid is None:
+            migration_feedback_msg = "Could not fetch valid EPSG code from database or DEM; aborting database migration."
+    except ImportError:
+        migration_feedback_msg = "Missing threedi-schema library (or its dependencies). Schema migration failed."
+    except Exception as e:
+        migration_feedback_msg = f"{e}"
+
+    if srid is not None:
+        migration_feedback_msg = ""
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", UserWarning)
+                schema.upgrade(
+                    backup=False,
+                    epsg_code_override=srid,
+                    progress_func=progress_callback,
+                )
+            if w:
+                for warning in w:
+                    migration_feedback_msg += (
+                        f"{warning._category_name}: {warning.message}\n"
+                    )
+            shutil.rmtree(os.path.dirname(backup_filepath))
+            migration_succeed = True
+        except errors.UpgradeFailedError:
+            migration_feedback_msg = (
+                "The schematisation database schema cannot be migrated to the current version. "
+                "Please contact the service desk for assistance."
+            )
+        except Exception as e:
+            migration_feedback_msg = f"{e}"
+
+    return migration_succeed, migration_feedback_msg
+
+
+def ensure_valid_schema(schematisation_filepath, communication):
+    """Check if schema version is up-to-date and migrate it if needed."""
+    try:
+        from threedi_schema import ThreediDatabase, errors
+    except ImportError:
+        communication.show_error(
+            "Could not import `threedi-schema` library to validate database schema."
+        )
+        return
+    try:
+        threedi_db = ThreediDatabase(schematisation_filepath)
+
+        # Add additional check to deal with legacy gpkgs created by schematisation editor
+        if schematisation_filepath.endswith(".gpkg"):
+            version_num = threedi_db.schema.get_version()
+            if version_num < 300:
+                warn_msg = "The selected file is not a valid 3Di schematisation database.\n\nYou may have selected a geopackage that was created by an older version of the 3Di Schematisation Editor (before version 2.0). In that case, there will probably be a Spatialite (*.sqlite) in the same folder. Please use that file instead."
+                communication.show_error(warn_msg)
+                return False
+
+        threedi_db.schema.validate_schema()
+    except errors.MigrationMissingError:
+        warn_and_ask_msg = (
+            "The selected schematisation database cannot be used because its database schema version is out of date. "
+            "Would you like to migrate your schematisation to the current schema version?"
+        )
+        do_migration = communication.ask(None, "Missing migration", warn_and_ask_msg)
+        if not do_migration:
+            return False
+        progress_bar_callback = progress_bar_callback_factory(communication)
+        migration_succeed, migration_feedback_msg = migrate_schematisation_schema(
+            schematisation_filepath, progress_bar_callback
+        )
+        if not migration_succeed:
+            communication.show_error(migration_feedback_msg)
+            return False
+    except Exception as e:
+        error_msg = f"{e}"
+        communication.show_error(error_msg)
+        return False
+    return True
+
+
+def geopackage_layer(gpkg_path, table_name, layer_name=None):
+    """Creating vector layer out of GeoPackage source."""
+    uri = f"{gpkg_path}|layername={table_name}"
+    layer_name = table_name if layer_name is None else layer_name
+    vlayer = QgsVectorLayer(uri, layer_name, "ogr")
+    return vlayer
+
+
+def extract_error_message(e):
+    """Extracting useful information from ApiException exceptions."""
+    error_body = e.body
+    try:
+        if isinstance(error_body, str):
+            error_body = json.loads(error_body)
+        if "detail" in error_body:
+            error_details = error_body["detail"]
+        elif "details" in error_body:
+            error_details = error_body["details"]
+        elif "errors" in error_body:
+            errors = error_body["errors"]
+            try:
+                error_parts = [
+                    f"{err['reason']} ({err['instance']['related_object']})"
+                    for err in errors
+                ]
+            except TypeError:
+                error_parts = list(errors.values())
+            error_details = "\n" + "\n".join(error_parts)
+        else:
+            error_details = str(error_body)
+    except json.JSONDecodeError:
+        error_details = str(error_body)
+    return f"Error: {error_details}"
+
+
 class NestedObject:
     """A class to convert a nested dictionary into an object."""
 
@@ -535,3 +750,286 @@ class SchematisationRasterReferences:
             for raster_type in raster_files_references.keys():
                 table_mapping[raster_type] = table_name
         return table_mapping
+
+
+class BuildOptionActions(Enum):
+    CREATED = "created"
+    LOADED = "loaded"
+    DOWNLOADED = "downloaded"
+
+
+def load_remote_schematisation(
+    communications,
+    schematisation,
+    revision,
+    progress_bar,
+    working_dir,
+    threedi_api,
+):
+    """Download and load a schematisation from the server."""
+    if isinstance(schematisation, dict):
+        schematisation = NestedObject(schematisation)
+    if isinstance(revision, dict):
+        revision = NestedObject(revision)
+
+    downloaded_local_schematisation, custom_geopackage_filepath = (
+        download_required_files(
+            communications,
+            schematisation,
+            revision,
+            False,
+            progress_bar,
+            working_dir,
+            threedi_api,
+        )
+    )
+    if downloaded_local_schematisation is not None:
+        load_local_schematisation(
+            communications,
+            local_schematisation=downloaded_local_schematisation,
+            action=BuildOptionActions.DOWNLOADED,
+            custom_geopackage_filepath=custom_geopackage_filepath,
+        )
+        wip_revision = downloaded_local_schematisation.wip_revision
+        if wip_revision is not None:
+            settings = QSettings("3di", "qgisplugin")
+            settings.setValue(
+                "last_used_geopackage_path", wip_revision.schematisation_dir
+            )
+
+
+def download_required_files(
+    communications,
+    schematisation,
+    revision,
+    is_latest_revision,
+    external_progress_bar,
+    working_dir,
+    threedi_api,
+):
+    """Download required schematisation revision files."""
+    try:
+        progress_bar = external_progress_bar
+        schematisation_pk = schematisation.id
+        schematisation_name = schematisation.name
+
+        # Move code from M&S plugin's SchematisationDownload to make this function more or less standalone.
+        tc = ThreediCalls(threedi_api)
+        revisions = tc.fetch_schematisation_revisions(schematisation_pk)
+        local_schematisations = list_local_schematisations(
+            working_dir, use_config_for_revisions=False
+        )
+        downloaded_geopackage_filepath = None
+        downloaded_local_schematisation = None
+
+        revision_pk = revision.id
+        revision_number = revision.number
+        revision_sqlite = revision.sqlite
+        if not is_latest_revision:
+            latest_online_revision = (
+                max([rev.number for rev in revisions]) if revisions else None
+            )
+            is_latest_revision = revision_number == latest_online_revision
+        try:
+            local_schematisation = local_schematisations[schematisation_pk]
+            local_schematisation_present = True
+        except KeyError:
+            local_schematisation = LocalSchematisation(
+                working_dir, schematisation_pk, schematisation_name, create=True
+            )
+            local_schematisations[schematisation_pk] = local_schematisation
+            local_schematisation_present = False
+
+        def decision_tree():
+            replace, store, cancel = "Replace", "Store", "Cancel"
+            title = "Pick action"
+            question = f"Replace local WIP or store as a revision {revision_number}?"
+            picked_action_name = communications.custom_ask(
+                None, title, question, replace, store, cancel
+            )
+            if picked_action_name == replace:
+                # Replace
+                local_schematisation.set_wip_revision(revision_number)
+                schema_db_dir = local_schematisation.wip_revision.schematisation_dir
+            elif picked_action_name == store:
+                # Store as a separate revision
+                if revision_number in local_schematisation.revisions:
+                    question = f"Replace local revision {revision_number} or Cancel?"
+                    picked_action_name = communications.custom_ask(
+                        None, title, question, "Replace", "Cancel"
+                    )
+                    if picked_action_name == "Replace":
+                        local_revision = local_schematisation.add_revision(
+                            revision_number
+                        )
+                        schema_db_dir = local_revision.schematisation_dir
+                    else:
+                        schema_db_dir = None
+                else:
+                    local_revision = local_schematisation.add_revision(revision_number)
+                    schema_db_dir = local_revision.schematisation_dir
+            else:
+                schema_db_dir = None
+            return schema_db_dir
+
+        if local_schematisation_present:
+            if is_latest_revision:
+                if local_schematisation.wip_revision is None:
+                    # WIP not exist
+                    local_schematisation.set_wip_revision(revision_number)
+                    schematisation_db_dir = (
+                        local_schematisation.wip_revision.schematisation_dir
+                    )
+                else:
+                    # WIP exist
+                    schematisation_db_dir = decision_tree()
+            else:
+                schematisation_db_dir = decision_tree()
+        else:
+            local_schematisation.set_wip_revision(revision_number)
+            schematisation_db_dir = local_schematisation.wip_revision.schematisation_dir
+
+        if not schematisation_db_dir:
+            return
+
+        sqlite_download = tc.download_schematisation_revision_sqlite(
+            schematisation_pk, revision_pk
+        )
+        revision_models = tc.fetch_schematisation_revision_3di_models(
+            schematisation_pk, revision_pk
+        )
+        rasters_downloads = []
+        for raster_file in revision.rasters or []:
+            raster_download = tc.download_schematisation_revision_raster(
+                raster_file.id, schematisation_pk, revision_pk
+            )
+            rasters_downloads.append((raster_file.name, raster_download))
+        number_of_steps = len(rasters_downloads) + 1
+
+        gridadmin_file, gridadmin_download = (None, None)
+        gridadmin_file_gpkg, gridadmin_download_gpkg = (None, None)
+        ignore_gridadmin_error_messages = [
+            "Gridadmin file not found",
+            "Geopackage file not found",
+        ]
+        for revision_model in sorted(
+            revision_models, key=attrgetter("id"), reverse=True
+        ):
+            try:
+                gridadmin_file, gridadmin_download = (
+                    tc.fetch_3di_model_gridadmin_download(revision_model.id)
+                )
+                if gridadmin_download is not None:
+                    gridadmin_file_gpkg, gridadmin_download_gpkg = (
+                        tc.fetch_3di_model_geopackage_download(revision_model.id)
+                    )
+                    number_of_steps += 1
+                    break
+            except ApiException as e:
+                error_msg = extract_error_message(e)
+                if not any(
+                    ignore_error_msg in error_msg
+                    for ignore_error_msg in ignore_gridadmin_error_messages
+                ):
+                    raise
+        if revision_number not in local_schematisation.revisions:
+            local_schematisation.add_revision(revision_number)
+        zip_filepath = os.path.join(
+            schematisation_db_dir, revision_sqlite.file.filename
+        )
+        progress_bar.setMaximum(number_of_steps)
+        current_progress = 0
+        progress_bar.setValue(current_progress)
+        get_download_file(sqlite_download, zip_filepath)
+        content_list = unzip_archive(zip_filepath)
+        os.remove(zip_filepath)
+        schematisation_db_file = content_list[0]
+        current_progress += 1
+        progress_bar.setValue(current_progress)
+        if gridadmin_download is not None:
+            grid_filepath = os.path.join(
+                local_schematisation.revisions[revision_number].grid_dir,
+                gridadmin_file.filename,
+            )
+            get_download_file(gridadmin_download, grid_filepath)
+            current_progress += 1
+            progress_bar.setValue(current_progress)
+        if gridadmin_download_gpkg is not None:
+            gpkg_filepath = os.path.join(
+                local_schematisation.revisions[revision_number].grid_dir,
+                gridadmin_file_gpkg.filename,
+            )
+            get_download_file(gridadmin_download_gpkg, gpkg_filepath)
+            current_progress += 1
+            progress_bar.setValue(current_progress)
+        for raster_filename, raster_download in rasters_downloads:
+            raster_filepath = os.path.join(
+                schematisation_db_dir, "rasters", raster_filename
+            )
+            get_download_file(raster_download, raster_filepath)
+            current_progress += 1
+            progress_bar.setValue(current_progress)
+        downloaded_local_schematisation = local_schematisation
+        expected_geopackage_path = os.path.join(
+            schematisation_db_dir, schematisation_db_file
+        )
+        if expected_geopackage_path.lower().endswith(".sqlite"):
+            expected_geopackage_path = (
+                expected_geopackage_path.rsplit(".", 1)[0] + ".gpkg"
+            )
+        if os.path.isfile(expected_geopackage_path):
+            downloaded_geopackage_filepath = expected_geopackage_path
+        sleep(1)
+        settings = QSettings()
+        settings.setValue("threedi/last_schematisation_folder", schematisation_db_dir)
+        msg = f"Schematisation '{schematisation_name} (revision {revision_number})' downloaded!"
+        communications.bar_info(msg)
+
+        return downloaded_local_schematisation, downloaded_geopackage_filepath
+    except ApiException as e:
+        error_msg = extract_error_message(e)
+        communications.show_error(error_msg)
+    except Exception as e:
+        error_msg = f"Error: {e}"
+        communications.show_error(error_msg)
+
+    return None, None
+
+
+def get_plugin_instance(plugin_name):
+    """Return given plugin name instance."""
+    try:
+        plugin_instance = plugins[plugin_name]
+    except (AttributeError, KeyError):
+        plugin_instance = None
+    return plugin_instance
+
+
+def load_local_schematisation(
+    communication,
+    local_schematisation=None,
+    action=BuildOptionActions.LOADED,
+    custom_geopackage_filepath=None,
+):
+    if local_schematisation and local_schematisation.schematisation_db_filepath:
+        try:
+            geopackage_filepath = (
+                local_schematisation.schematisation_db_filepath
+                if not custom_geopackage_filepath
+                else custom_geopackage_filepath
+            )
+            msg = f"Schematisation '{local_schematisation.name}' {action.value}!\n"
+            communication.bar_info(msg)
+            # Load new schematisation
+            schematisation_editor = get_plugin_instance("threedi_schematisation_editor")
+            if schematisation_editor:
+                schematisation_editor.load_schematisation(geopackage_filepath)
+            else:
+                msg += (
+                    "Please use the Rana Schematisation Editor to load it to your project from the GeoPackage:"
+                    f"\n{geopackage_filepath}"
+                )
+                communication.show_warn(msg)
+        except (TypeError, ValueError):
+            error_msg = "Invalid schematisation directory structure. Loading schematisation canceled."
+            communication.show_error(error_msg)

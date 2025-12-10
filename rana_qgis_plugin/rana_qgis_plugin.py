@@ -139,7 +139,9 @@ class RanaQgisPlugin:
             if selected_tenant_id != current_tenant_id:
                 set_tenant_id(selected_tenant_id)
                 self.communication.clear_message_bar()
-                self.communication.bar_info(f"Tenant set to: {selected_tenant_id}")
+                self.communication.bar_info(
+                    f"Organisation set to: {selected_tenant_id}"
+                )
                 if self.rana_browser:
                     self.rana_browser.refresh()
 
@@ -163,7 +165,7 @@ class RanaQgisPlugin:
                     self.tenants = get_user_tenants(self.communication, user_id)
                     if len(self.tenants) > 1:
                         switch_tenant_action = QAction(
-                            "Switch Tenant", self.iface.mainWindow()
+                            "Switch Organisation", self.iface.mainWindow()
                         )
                         switch_tenant_action.triggered.connect(
                             self.open_tenant_selection_dialog
@@ -239,6 +241,12 @@ class RanaQgisPlugin:
             self.rana_browser.upload_new_file_selected.connect(
                 self.loader.upload_new_file_to_rana
             )
+            self.rana_browser.upload_new_schematisation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.upload_new_schematisation_selected.connect(
+                self.loader.upload_new_schematisation_to_rana
+            )
             self.loader.loading_cancelled.connect(self.rana_browser.enable)
             self.rana_browser.download_file_selected.connect(self.loader.download_file)
             self.rana_browser.download_results_selected.connect(
@@ -266,8 +274,23 @@ class RanaQgisPlugin:
             self.rana_browser.start_simulation_selected_with_revision.connect(
                 self.loader.start_simulation
             )
+            self.rana_browser.create_model_selected.connect(
+                self.loader.create_schematisation_revision_3di_model
+            )
+            self.rana_browser.create_model_selected_with_revision.connect(
+                self.loader.create_schematisation_revision_3di_model
+            )
+            self.rana_browser.open_schematisation_selected_with_revision.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.open_schematisation_selected_with_revision.connect(
+                self.loader.open_schematisation_with_revision
+            )
             self.rana_browser.delete_file_selected.connect(self.loader.delete_file)
-
+            self.rana_browser.create_folder_selected.connect(
+                self.loader.create_new_folder_on_rana
+            )
+            self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
@@ -282,7 +305,13 @@ class RanaQgisPlugin:
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
+            self.loader.schematisation_upload_cancelled.connect(
+                self.rana_browser.enable
+            )
+            self.loader.schematisation_upload_finished.connect(self.rana_browser.enable)
+            self.loader.schematisation_upload_failed.connect(self.rana_browser.enable)
             self.loader.file_deleted.connect(self.rana_browser.refresh)
+            self.loader.folder_created.connect(self.rana_browser.refresh)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True

@@ -7,7 +7,6 @@ from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
 from rana_qgis_plugin.network_manager import NetworkManager
-from rana_qgis_plugin.utils import get_filename_from_attachment_url
 from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
 
 
@@ -62,6 +61,22 @@ def get_user_tenants(communication: UICommunication, user_id: str):
         return []
 
 
+def get_tenant_details(communication: UICommunication):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        communication.show_error(f"Failed to get tenant details: {error}")
+        return {}
+
+
 def get_tenant_projects(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -113,6 +128,20 @@ def delete_tenant_project_file(project_id: str, params: dict):
         return False
 
 
+def create_tenant_project_directory(project_id: str, path: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/create"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, _ = network_manager.post(params={"path": path})
+
+    if status:
+        return True
+    else:
+        return False
+
+
 def delete_tenant_project_directory(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -121,6 +150,18 @@ def delete_tenant_project_directory(project_id: str, params: dict):
     network_manager = NetworkManager(url, authcfg_id)
     status, _ = network_manager.delete(params)
 
+    if status:
+        return True
+    else:
+        return False
+
+
+def create_folder(project_id: str, params: dict) -> bool:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/create"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, _ = network_manager.post(params=params)
     if status:
         return True
     else:
@@ -381,6 +422,25 @@ def get_threedi_schematisation(communication: UICommunication, descriptor_id: st
         return None
 
 
+def add_threedi_schematisation(
+    communication: UICommunication, project_id: str, schematisation_id: str, path: str
+):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.post(
+        params={"schematisation_id": schematisation_id, "path": path}
+    )
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
 def get_threedi_personal_api_key(
     communication: UICommunication, user_id: str
 ) -> Optional[str]:
@@ -405,6 +465,10 @@ def get_threedi_personal_api_key(
         return None
 
 
+def get_filename_from_attachment_url(attachment_url: str) -> str:
+    return attachment_url.rsplit("/", 1)[-1].split("?", 1)[0]
+
+
 def map_result_to_file_name(result: dict) -> str:
     if result["name"] == "Raw 3Di output":
         return "results_3di.nc"
@@ -415,3 +479,6 @@ def map_result_to_file_name(result: dict) -> str:
             return get_filename_from_attachment_url(result["attachment_url"])
         else:
             return result["code"]
+
+
+return []

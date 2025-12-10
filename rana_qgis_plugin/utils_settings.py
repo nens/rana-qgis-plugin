@@ -35,6 +35,11 @@ def set_tenant_id(tenant: str):
 
 
 def get_tenant_id() -> str:
+    from qgis.core import Qgis, QgsMessageLog
+
+    QgsMessageLog.logMessage(
+        f"{QgsSettings().value(RANA_TENANT_ENTRY)}", "DEBUG", Qgis.Info
+    )
     return QgsSettings().value(RANA_TENANT_ENTRY)
 
 
@@ -86,3 +91,11 @@ def hcc_working_dir() -> str:
 def set_hcc_working_dir(working_dir: str) -> str:
     # Backwards compatible to older software
     QgsSettings().setValue("threedi/working_dir", working_dir)
+
+
+def rana_cache_dir() -> str:
+    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir")
+
+
+def set_rana_cache_dir(cache_dir: str) -> str:
+    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cache_dir", cache_dir)

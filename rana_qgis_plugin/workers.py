@@ -91,16 +91,14 @@ class FileUploadWorker(QThread):
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
 
-    def __init__(self, project: dict, local_path: Path, online_path: str):
+    def __init__(self, project: dict, local_paths: list[Path], online_dir: str):
         super().__init__()
         self.project = project
-        self.local_path = local_path
-        self.online_path = online_path
+        self.local_paths = local_paths
+        self.online_dir = online_dir
 
-    def handle_file_conflict(self):
-        server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.online_path}
-        )
+    def handle_file_conflict(self, online_path):
+        server_file = get_tenant_project_file(self.project["id"], {"path": online_path})
         if server_file:
             self.failed.emit("File already exist on server.")
             return False
@@ -108,49 +106,65 @@ class FileUploadWorker(QThread):
 
     @pyqtSlot()
     def run(self):
-        if not self.local_path or not self.project["id"]:
-            return
-        local_file_path = str(self.local_path)
+        # For a single file finished is only emitted if upload was successfull
+        if len(self.local_paths) == 1:
+            success = self.upload_single_file(self.local_paths[0], 0, 100)
+            if success:
+                self.finished.emit(self.project)
+        # For a multi upload we always emit finish
+        else:
+            progress_per_file = 100 // len(self.local_paths)
+            for i, local_path in enumerate(self.local_paths):
+                self.upload_single_file(
+                    local_path, i * progress_per_file, progress_per_file
+                )
+            self.finished.emit(self.project)
+
+    def upload_single_file(
+        self, local_path: Path, progress_start, progress_step
+    ) -> bool:
+        online_path = self.online_dir + local_path.name
 
         # Check if file exists locally before uploading
-        if not os.path.exists(local_file_path):
-            self.failed.emit(f"File not found: {local_file_path}")
-            return
+        if not local_path.exists():
+            self.failed.emit(f"File not found: {local_path}")
+            return False
 
         # Handle file conflict
-        continue_upload = self.handle_file_conflict()
+        continue_upload = self.handle_file_conflict(local_path)
         if not continue_upload:
-            return
+            return False
 
         # Save file to Rana
         try:
-            self.progress.emit(0, "")
+            self.progress.emit(progress_start, "")
             # Step 1: POST request to initiate the upload
             upload_response = start_file_upload(
-                self.project["id"], {"path": self.online_path}
+                self.project["id"], {"path": online_path}
             )
             if not upload_response:
                 self.failed.emit("Failed to initiate file upload.")
-                return
+                return False
             upload_url = upload_response["urls"][0]
             # Step 2: Upload the file to the upload_url
-            self.progress.emit(20, "")
-            with open(local_file_path, "rb") as file:
+            self.progress.emit(int(0.2 * progress_step + progress_start), "")
+            with open(local_path, "rb") as file:
                 response = requests.put(upload_url, data=file)
                 response.raise_for_status()
             # Step 3: Complete the upload
-            self.progress.emit(80, "")
+            self.progress.emit(int(0.8 * progress_step + progress_start), "")
             response = finish_file_upload(
                 self.project["id"],
                 upload_response,
             )
             if not response:
                 self.failed.emit("Failed to complete file upload.")
-                return
-            self.progress.emit(100, "")
-            self.finished.emit(self.project)
+                return False
+            self.progress.emit(progress_start + progress_step, "")
         except Exception as e:
             self.failed.emit(f"Failed to upload file to Rana: {str(e)}")
+            return False
+        return True
 
 
 class ExistingFileUploadWorker(FileUploadWorker):
@@ -169,7 +183,7 @@ class ExistingFileUploadWorker(FileUploadWorker):
     def handle_file_conflict(self):
         local_last_modified = QSettings().value(self.last_modified_key)
         server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.online_path}
+            self.project["id"], {"path": self.online_dir}
         )
         if not server_file:
             self.failed.emit(
