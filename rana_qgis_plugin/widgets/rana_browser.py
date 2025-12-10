@@ -376,11 +376,6 @@ class StringInputDialog(QDialog):
         return self.input.text().strip()
 
 
-class RenameDialog(StringInputDialog):
-    def __init__(self, parent=None):
-        super().__init__(question="Enter new name:", title="Rename")
-
-
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -453,7 +448,6 @@ class FilesBrowser(QWidget):
         actions = [
             ("Delete", self.file_deletion_requested),
             ("Rename", lambda selected_item: self.edit_file_name(index, selected_item)),
-            # ("Rename", self.show_rename_dialog),
         ]
         # Add open in QGIS is supported for all supported data types
         if data_type in SUPPORTED_DATA_TYPES:
@@ -489,13 +483,7 @@ class FilesBrowser(QWidget):
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
-    def show_rename_dialog(self, selected_item):
-        dialog = RenameDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.file_rename_requested.emit(selected_item, dialog.folder_name())
-
     def edit_file_name(self, index: QModelIndex, selected_item: dict):
-        # Make the field at index editable
         self.files_model.itemFromIndex(index).setFlags(
             Qt.ItemFlag.ItemIsEditable
             | Qt.ItemFlag.ItemIsEnabled
@@ -506,7 +494,6 @@ class FilesBrowser(QWidget):
             if topLeft == index:  # Only handle the specific item we're editing
                 new_name = self.files_model.itemFromIndex(topLeft).text()
                 self.file_rename_requested.emit(selected_item, new_name)
-                # Disconnect after handling
                 self.files_model.dataChanged.disconnect(handle_data_changed)
 
         # Connect to dataChanged signal
