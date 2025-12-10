@@ -4,7 +4,7 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import Callable, List
 
 from qgis.PyQt.QtCore import (
     QEvent,
@@ -389,8 +389,8 @@ class FileView(QWidget):
         self.show_selected_file_details(self.selected_file)
 
 
-class StringInputDialog(QDialog):
-    def __init__(self, question: str, title: str, parent=None):
+class CreateFolderDialog(QDialog):
+    def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout()
         label = QLabel("Enter folder name:")
@@ -410,11 +410,6 @@ class StringInputDialog(QDialog):
         return self.input.text().strip()
 
 
-class CreateFolderDialog(StringInputDialog):
-    def __init__(self, parent=None):
-        super().__init__(question="Enter folder name:", title="Create New Folder")
-
-
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -422,6 +417,7 @@ class FilesBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
     file_deletion_requested = pyqtSignal(dict)
+    file_rename_requested = pyqtSignal(dict, str)
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
@@ -500,7 +496,10 @@ class FilesBrowser(QWidget):
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
         data_type = selected_item.get("data_type")
         # Add delete option files and folders
-        actions = [("Delete", self.file_deletion_requested)]
+        actions = [
+            ("Delete", self.file_deletion_requested),
+            ("Rename", lambda selected_item: self.edit_file_name(index, selected_item)),
+        ]
         # Add open in QGIS is supported for all supported data types
         if data_type in SUPPORTED_DATA_TYPES:
             actions.append(("Open in QGIS", self.open_in_qgis_requested))
@@ -524,13 +523,37 @@ class FilesBrowser(QWidget):
                 actions.append(("Download results", self.download_results_requested))
         # populate menu
         menu = QMenu(self)
-        for action_label, action_signal in actions:
+        for action_label, action_handler in actions:
             action = QAction(action_label, self)
-            action.triggered.connect(
-                lambda _, signal=action_signal: signal.emit(selected_item)
-            )
+            if hasattr(action_handler, "emit"):
+                action.triggered.connect(
+                    lambda _, signal=action_handler: signal.emit(selected_item)
+                )
+            elif isinstance(action_handler, Callable):
+                action.triggered.connect(
+                    lambda _, func=action_handler: func(selected_item)
+                )
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+
+    def edit_file_name(self, index: QModelIndex, selected_item: dict):
+        self.files_model.itemFromIndex(index).setFlags(
+            Qt.ItemFlag.ItemIsEditable
+            | Qt.ItemFlag.ItemIsEnabled
+            | Qt.ItemFlag.ItemIsSelectable
+        )
+
+        def handle_data_changed(topLeft, bottomRight, roles):
+            if topLeft == index:  # Only handle the specific item we're editing
+                new_name = self.files_model.itemFromIndex(topLeft).text()
+                self.file_rename_requested.emit(selected_item, new_name)
+                self.files_model.dataChanged.disconnect(handle_data_changed)
+
+        # Connect to dataChanged signal
+        self.files_model.dataChanged.connect(handle_data_changed)
+
+        # Enter editing mode
+        self.files_tv.edit(index)
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
@@ -898,6 +921,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
+    rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict)
 
@@ -1039,6 +1063,11 @@ class RanaBrowser(QWidget):
             file_browser_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
+        self.files_browser.file_rename_requested.connect(
+            lambda file, new_name: self.rename_file_selected.emit(
+                self.project, file, new_name
+            )
+        )
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(self.project)

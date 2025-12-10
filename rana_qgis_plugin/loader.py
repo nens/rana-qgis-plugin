@@ -54,6 +54,8 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_threedi_schematisation,
     map_result_to_file_name,
+    move_directory,
+    move_file,
     start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import (
@@ -92,6 +94,7 @@ class Loader(QObject):
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
+    rename_finished = pyqtSignal()
     folder_created = pyqtSignal()
     schematisation_uploaded = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
@@ -253,6 +256,59 @@ class Loader(QObject):
                 self.file_deleted.emit()
             else:
                 self.communication.show_warn(f"Unable to delete file {file['id']}")
+
+    @pyqtSlot(dict, dict, str)
+    def rename_file(self, project, file, new_name):
+        # create names without trailing /
+        source_path = file["id"].rstrip("/")
+        try:
+            target_path = str(Path(source_path).with_name(new_name))
+        except ValueError:
+            self.communication.show_warn(f"Cannot rename to invalid name '{new_name}'")
+            self.rename_finished.emit()
+        if file["type"] == "directory":
+            # check for duplicates
+            if len(Path(source_path).parents) > 1:
+                root_path = Path(source_path).parent.as_posix()
+            else:
+                root_path = None
+            names = [
+                file["id"].strip("/")
+                for file in get_tenant_project_files(
+                    self.communication,
+                    project["id"],
+                    params={"path": root_path} if root_path else None,
+                )
+                if file["type"] == "directory"
+            ]
+            if new_name in names:
+                QMessageBox.warning(
+                    self.parent(), "Warning", f"Folder {new_name} already exists."
+                )
+                return
+            success = move_directory(
+                project["id"],
+                params={
+                    "source_path": source_path + "/",
+                    "destination_path": target_path + "/",
+                },
+            )
+            if not success:
+                self.communication.show_warn(f"Unable to rename directory {file['id']}")
+        else:
+            file = get_tenant_project_file(project["id"], {"path": target_path})
+            if file:
+                QMessageBox.warning(
+                    self.parent(), "Warning", f"Folder {new_name} already exists."
+                )
+                return
+            success = move_file(
+                project["id"],
+                params={"source_path": source_path, "destination_path": target_path},
+            )
+            if not success:
+                self.communication.show_warn(f"Unable to rename file {file['id']}")
+        self.rename_finished.emit()
 
     @pyqtSlot(dict, dict, str)
     def create_new_folder_on_rana(self, project, selected_item, folder_name: str):
