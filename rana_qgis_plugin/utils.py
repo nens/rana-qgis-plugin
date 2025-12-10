@@ -23,7 +23,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
 )
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
 from rana_qgis_plugin.utils_api import get_frontend_settings
-from rana_qgis_plugin.utils_settings import hcc_working_dir
+from rana_qgis_plugin.utils_settings import hcc_working_dir, rana_cache_dir
 
 from .communication import UICommunication
 
@@ -45,7 +45,10 @@ def is_writable(working_dir: str) -> bool:
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     file_name = os.path.basename(path.rstrip("/"))
     file_name_without_extension = os.path.splitext(file_name)[0]
-    base_dir = os.path.join(os.path.expanduser("~"), "Rana")
+    if not rana_cache_dir():
+        base_dir = os.path.join(os.path.expanduser("~"), "Rana")
+    else:
+        base_dir = rana_cache_dir()
     local_dir_structure = os.path.join(
         base_dir, project_slug, os.path.dirname(path), file_name_without_extension
     )
@@ -197,6 +200,16 @@ def convert_to_relative_time(timestamp: str) -> str:
         return f"{delta.minutes} minute{'s' if delta.minutes > 1 else ''} ago"
     else:
         return "Just now"
+
+
+def format_activity_time(timestamp: str) -> str:
+    now = datetime.now(timezone.utc)
+    past = parser.isoparse(timestamp)
+    delta = relativedelta(now, past)
+    if delta.days < 7:
+        return convert_to_relative_time(timestamp)
+    else:
+        return convert_to_local_time(timestamp)
 
 
 def image_to_bytes(image: QImage) -> bytes:

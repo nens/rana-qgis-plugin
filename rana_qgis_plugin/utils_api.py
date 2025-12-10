@@ -61,6 +61,22 @@ def get_user_tenants(communication: UICommunication, user_id: str):
         return []
 
 
+def get_tenant_details(communication: UICommunication):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        communication.show_error(f"Failed to get tenant details: {error}")
+        return {}
+
+
 def get_tenant_projects(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -112,6 +128,20 @@ def delete_tenant_project_file(project_id: str, params: dict):
         return False
 
 
+def create_tenant_project_directory(project_id: str, path: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/create"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, _ = network_manager.post(params={"path": path})
+
+    if status:
+        return True
+    else:
+        return False
+
+
 def delete_tenant_project_directory(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -146,7 +176,18 @@ def move_directory(project_id: str, params: dict) -> bool:
 
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post(params)
+    if status:
+        return True
+    else:
+        return False
 
+
+def create_folder(project_id: str, params: dict) -> bool:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/create"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, _ = network_manager.post(params=params)
     if status:
         return True
     else:
@@ -404,6 +445,25 @@ def get_threedi_schematisation(communication: UICommunication, descriptor_id: st
         return response
     else:
         communication.show_error(f"Failed to retrieve schematisation: {error}")
+        return None
+
+
+def add_threedi_schematisation(
+    communication: UICommunication, project_id: str, schematisation_id: str, path: str
+):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.post(
+        params={"schematisation_id": schematisation_id, "path": path}
+    )
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
         return None
 
 
