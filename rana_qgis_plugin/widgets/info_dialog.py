@@ -1,6 +1,6 @@
 from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
-rana_hcc_url = f"<a href='https://ranawaterintelligence.com/hcc-management'>ranawaterintelligence.com/hcc-management</a>"
+rana_hcc_url = "<a href='https://ranawaterintelligence.com/hcc-management'>ranawaterintelligence.com/hcc-management</a>"
 
 
 class InfoDialog(QDialog):
