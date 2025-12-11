@@ -299,6 +299,7 @@ class RanaQgisPlugin:
             self.rana_browser.create_folder_selected.connect(
                 self.loader.create_new_folder_on_rana
             )
+            self.rana_browser.save_revision_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
             self.loader.revision_saved.connect(
                 lambda: self.open_info_dialog(info_dialog.SaveRevisionDialog)

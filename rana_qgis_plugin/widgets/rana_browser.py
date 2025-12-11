@@ -1092,7 +1092,10 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
-            (self.files_browser.save_revision_requested, self.save_revision_selected),
+            (
+                self.files_browser.save_revision_requested,
+                self.save_revision_selected,
+            ),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(

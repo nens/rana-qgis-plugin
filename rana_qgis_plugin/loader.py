@@ -922,6 +922,7 @@ class Loader(QObject):
                 if not self.communication.ask(
                     self.parent(), "Warning", question, QMessageBox.Warning
                 ):
+                    self.schematisation_upload_cancelled.emit()
                     return
 
             upload_dial = UploadWizard(
@@ -956,6 +957,7 @@ class Loader(QObject):
                     if deletion_dlg.threedi_models_to_show:
                         if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
                             self.communication.bar_warn("Uploading canceled...")
+                            self.schematisation_upload_cancelled.emit()
                         return
 
                 # Do the actual upload
@@ -965,15 +967,26 @@ class Loader(QObject):
                     new_upload,
                 )
 
-                upload_worker.signals.revision_committed.connect(
-                    self.schematisation_uploaded
+                upload_worker.signals.thread_finished.connect(
+                    self.schematisation_upload_finished
                 )
                 upload_worker.signals.upload_failed.connect(
                     self.schematisation_upload_failed
                 )
+                upload_worker.signals.upload_progress.connect(
+                    self.on_schematisation_upload_progress
+                )
 
-                # upload_worker.signals.progress.connect(self.on_update_upload_progress)
-                # upload_worker.signals.canceled.connect(self.on_upload_canceled)
-                # upload_worker.signals.revision_committed.connect(self.on_revision_committed)
                 self.upload_thread_pool.start(upload_worker)
                 self.revision_saved.emit()
+
+    def on_schematisation_upload_progress(
+        self, task_name, task_progress, total_progress
+    ):
+        self.communication.progress_bar(
+            f"Uploading revision",
+            0,
+            100,
+            total_progress,
+            clear_msg_bar=True,
+        )
