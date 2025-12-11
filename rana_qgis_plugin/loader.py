@@ -96,6 +96,10 @@ class Loader(QObject):
     file_deleted = pyqtSignal()
     rename_finished = pyqtSignal()
     folder_created = pyqtSignal()
+    schematisation_uploaded = pyqtSignal()
+    schematisation_upload_failed = pyqtSignal()
+    model_created = pyqtSignal()
+    revision_saved = pyqtSignal()
     model_deleted = pyqtSignal()
 
     def __init__(self, communication, parent):
@@ -348,6 +352,7 @@ class Loader(QObject):
         schematisation_id = schematisation["schematisation"]["id"]
         try:
             tc.create_schematisation_revision_3di_model(schematisation_id, revision_id)
+            self.model_created.emit()
         except ApiException as e:
             if e.status == 400:
                 QMessageBox.warning(
@@ -973,6 +978,7 @@ class Loader(QObject):
                 )
 
                 self.upload_thread_pool.start(upload_worker)
+                self.revision_saved.emit()
 
     def on_schematisation_upload_progress(
         self, task_name, task_progress, total_progress

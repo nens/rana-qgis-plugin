@@ -450,6 +450,7 @@ class FilesBrowser(QWidget):
     path_changed = pyqtSignal(str)
     busy = pyqtSignal()
     ready = pyqtSignal()
+    create_folder_requested = pyqtSignal(str)
     file_deletion_requested = pyqtSignal(dict)
     file_rename_requested = pyqtSignal(dict, str)
     open_in_qgis_requested = pyqtSignal(dict)
@@ -459,7 +460,6 @@ class FilesBrowser(QWidget):
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
-    create_folder_requested = pyqtSignal(str)
 
     def __init__(self, communication, parent=None):
         super().__init__(parent)
@@ -1092,7 +1092,10 @@ class RanaBrowser(QWidget):
                 self.files_browser.download_results_requested,
                 self.download_results_selected,
             ),
-            (self.files_browser.save_revision_requested, self.save_revision_selected),
+            (
+                self.files_browser.save_revision_requested,
+                self.save_revision_selected,
+            ),
         )
         for file_browser_signal, rana_signal in context_menu_signals:
             file_browser_signal.connect(
