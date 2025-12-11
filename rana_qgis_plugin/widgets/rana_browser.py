@@ -3,7 +3,7 @@ import os
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 from qgis.PyQt.QtCore import (
     QEvent,
@@ -281,6 +281,41 @@ class RevisionsView(QWidget):
         self.ready.emit()
 
 
+class FileAction(Enum):
+    DELETE = "Delete"
+    RENAME = "Rename"
+    OPEN_IN_QGIS = "Open in QGIS"
+    UPLOAD_FILE = "Save data to Rana"
+    SAVE_VECTOR_STYLING = "Save vector style to Rana"
+    SAVE_REVISION = "Save revision to Rana"
+    OPEN_WMS = "Open WMS in QGIS"
+    # DOWNLOAD_FILE = "Download File"
+    DOWNLOAD_RESULTS = "Download results"
+
+
+def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
+    data_type = selected_item.get("data_type")
+    actions = [FileAction.DELETE, FileAction.RENAME]
+    # Add open in QGIS is supported for all supported data types
+    if data_type in SUPPORTED_DATA_TYPES:
+        actions.append(FileAction.OPEN_IN_QGIS)
+    # Add save only for vector and raster files
+    if data_type in ["vector", "raster"]:
+        actions.append(FileAction.UPLOAD_FILE)
+    # Add save vector style only for vector files
+    if data_type == "vector":
+        actions.append(FileAction.SAVE_VECTOR_STYLING)
+    if data_type == "threedi_schematisation":
+        actions.append(FileAction.SAVE_REVISION)
+    # Add options to open WMS and download file and results only for 3Di scenarios
+    if data_type == "scenario":
+        descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        meta = descriptor["meta"] if descriptor else None
+        if meta and meta["simulation"]["software"]["id"] == "3Di":
+            actions += [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
+    return actions
+
+
 class FileSignals(QObject):
     file_deletion_requested = pyqtSignal(dict)
     file_rename_requested = pyqtSignal(dict, str)
@@ -291,6 +326,20 @@ class FileSignals(QObject):
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
+
+    def get_signal(self, signal_type: FileAction) -> Optional[pyqtSignal]:
+        signal_map = {
+            FileAction.DELETE: self.file_deletion_requested,
+            FileAction.RENAME: self.file_rename_requested,
+            FileAction.OPEN_IN_QGIS: self.open_in_qgis_requested,
+            FileAction.UPLOAD_FILE: self.upload_file_requested,
+            FileAction.SAVE_VECTOR_STYLING: self.save_vector_styling_requested,
+            FileAction.SAVE_REVISION: self.save_revision_requested,
+            FileAction.OPEN_WMS: self.open_wms_requested,
+            # FileAction.DOWNLOAD_FILE: self.download_file_requested,
+            FileAction.DOWNLOAD_RESULTS: self.download_results_requested,
+        }
+        return signal_map.get(signal_type)
 
 
 class FileView(QWidget):
@@ -465,7 +514,7 @@ class FilesBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
 
-    def __init__(self, communication, file_signals, parent=None):
+    def __init__(self, communication, file_signals: FileSignals, parent=None):
         super().__init__(parent)
         self.project = None
         self.communication = communication
@@ -533,60 +582,27 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        data_type = selected_item.get("data_type")
-        # Add delete option files and folders
-        actions = [
-            ("Delete", self.file_signals.file_deletion_requested),
-            ("Rename", lambda selected_item: self.edit_file_name(index, selected_item)),
-        ]
-        # Add open in QGIS is supported for all supported data types
-        if data_type in SUPPORTED_DATA_TYPES:
-            actions.append(("Open in QGIS", self.file_signals.open_in_qgis_requested))
-        # Add save only for vector and raster files
-        if data_type in ["vector", "raster"]:
-            actions.append(
-                ("Save data to Rana", self.file_signals.upload_file_requested)
-            )
-        # Add save vector style only for vector files
-        if data_type == "vector":
-            actions.append(
-                (
-                    "Save vector style to Rana",
-                    self.file_signals.save_vector_styling_requested,
-                )
-            )
-        if data_type == "threedi_schematisation":
-            # TODO: only when changed?
-            actions.append(
-                ("Save revision to Rana", self.file_signals.save_revision_requested)
-            )
-        # Add options to open WMS and download file and results only for 3Di scenarios
-        if data_type == "scenario":
-            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
-            meta = descriptor["meta"] if descriptor else None
-            if meta and meta["simulation"]["software"]["id"] == "3Di":
-                actions.append(
-                    ("Open WMS in QGIS", self.file_signals.open_wms_requested)
-                )
-                actions.append(
-                    ("Download results", self.file_signals.download_results_requested)
-                )
-        # populate menu
+        actions = get_file_actions_for_data_type(selected_item)
         menu = QMenu(self)
-        for action_label, action_handler in actions:
-            action = QAction(action_label, self)
-            if hasattr(action_handler, "emit"):
+        for file_action in actions:
+            action = QAction(file_action.value, self)
+            action_signal = self.file_signals.get_signal(file_action)
+            if file_action == FileAction.RENAME:
                 action.triggered.connect(
-                    lambda _, signal=action_handler: signal.emit(selected_item)
+                    lambda _, selected_item=selected_item: self.edit_file_name(
+                        index, selected_item, action_signal
+                    )
                 )
-            elif isinstance(action_handler, Callable):
+            else:
                 action.triggered.connect(
-                    lambda _, func=action_handler: func(selected_item)
+                    lambda _, signal=action_signal: signal.emit(selected_item)
                 )
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
-    def edit_file_name(self, index: QModelIndex, selected_item: dict):
+    def edit_file_name(
+        self, index: QModelIndex, selected_item: dict, signal: pyqtSignal
+    ):
         self.files_model.itemFromIndex(index).setFlags(
             Qt.ItemFlag.ItemIsEditable
             | Qt.ItemFlag.ItemIsEnabled
@@ -596,7 +612,7 @@ class FilesBrowser(QWidget):
         def handle_data_changed(topLeft, bottomRight, roles):
             if topLeft == index:  # Only handle the specific item we're editing
                 new_name = self.files_model.itemFromIndex(topLeft).text()
-                self.file_signals.file_rename_requested.emit(selected_item, new_name)
+                signal.emit(selected_item, new_name)
                 self.files_model.dataChanged.disconnect(handle_data_changed)
 
         # Connect to dataChanged signal
