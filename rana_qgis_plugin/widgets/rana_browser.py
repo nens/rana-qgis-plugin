@@ -5,11 +5,13 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
-from qgis.core import QgsApplication
+from qgis.core import Qgis, QgsApplication, QgsMessageLog
+from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QEvent,
     QModelIndex,
     QSettings,
+    QSize,
     Qt,
     QTimer,
     QUrl,
@@ -29,6 +31,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -248,6 +251,17 @@ class RevisionsView(QWidget):
         self.ready.emit()
 
 
+def _clear_layout(layout):
+    """Remove widgets/layouts stored in a layout (Qt-safe)."""
+    while layout and layout.count():
+        item = layout.takeAt(0)
+        w = item.widget()
+        if w:
+            w.deleteLater()
+        elif item.layout():
+            _clear_layout(item.layout())
+
+
 class FileView(QWidget):
     file_showed = pyqtSignal()
     show_revisions_clicked = pyqtSignal(dict, dict)
@@ -266,6 +280,20 @@ class FileView(QWidget):
         self.file_table_widget = QTableWidget(1, 2)
         self.file_table_widget.horizontalHeader().setVisible(False)
         self.file_table_widget.verticalHeader().setVisible(False)
+        self.general_box = QgsCollapsibleGroupBox("General")
+        self.general_box.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
+
+        # TODO make this a list
+        self.general_table_widget = QTableWidget(1, 1)
+        self.general_table_widget.setShowGrid(False)
+        self.general_table_widget.horizontalHeader().setVisible(False)
+        self.general_table_widget.verticalHeader().setVisible(False)
+        layout = QVBoxLayout(self.general_box)
+        layout.addWidget(self.general_table_widget)
+        self.more_box = QgsCollapsibleGroupBox("More information")
+        self.files_box = QgsCollapsibleGroupBox("Related files")
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
         self.btn_create_model = QPushButton("Create 3Di Model")
@@ -277,146 +305,184 @@ class FileView(QWidget):
         button_layout.addWidget(self.btn_create_model)
         button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
-        layout.addWidget(self.file_table_widget)
+        # layout.addWidget(self.file_table_widget)
+        layout.addWidget(self.general_box)
+        layout.addWidget(self.more_box)
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-    def get_general_file_info(self, selected_file: dict):
+    def update_general_table(self, selected_file: dict):
+        rows = []
         # line 1: icon - filename - size
         file_icon = QgsApplication.getThemeIcon(
             get_file_icon_name(selected_file["data_type"])
         )
+        file_icon_label = QLabel()
+        file_icon_label.setPixmap(file_icon.pixmap(QSize(32, 32)))
         filename = Path(selected_file["id"]).name
         # TODO: retrieve schematisation size
         size_str = (
             display_bytes(selected_file["size"])
-            if data_type != "threedi_schematisation"
+            if selected_file["data_type"] != "threedi_schematisation"
             else "N/A"
         )
-
+        rows.append([file_icon_label, QLabel(filename), QLabel(size_str)])
         # line 2: user icon - user name - commit msg - time
-        user_icon = QgsApplication.getThemeIcon("user")
+        user_icon = QgsApplication.getThemeIcon("user.svg")
+        user_icon_label = QLabel()
+        user_icon_label.setPixmap(user_icon.pixmap(QSize(32, 32)))
         username = (
             selected_file["user"]["given_name"]
             + " "
             + selected_file["user"]["family_name"]
         )
-        if selected_file["data_type"] == "threedi-schematisation":
-            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
-            meta = descriptor["meta"] if descriptor else {}
-            msg = descriptor.get("description")
-            last_modified = convert_to_local_time(selected_file["last_modified"])
-
-        else:
+        if selected_file["data_type"] == "threedi_schematisation":
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
             )
             msg = schematisation["latest_revision"]["commit_message"]
             last_modified = convert_to_local_time(
-                revision.commit_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                schematisation["latest_revision"]["commit_date"]
             )
-        # TODO: make relative time
+        else:
+            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+            meta = descriptor["meta"] if descriptor else {}
+            msg = descriptor.get("description")
+            last_modified = convert_to_local_time(selected_file["last_modified"])
+        rows.append(
+            [user_icon_label, QLabel(username), QLabel(msg), QLabel(last_modified)]
+        )
+        self.general_table_widget.clearContents()
+        self.general_table_widget.setRowCount(len(rows))
+        self.general_table_widget.horizontalHeader().setStretchLastSection(True)
+        for i, row in enumerate(rows):
+            layout = QHBoxLayout()
+            for item in row[:-1]:
+                layout.addWidget(item)
+            layout.addStretch()
+            layout.addWidget(row[-1])
+
+            # Add layout to general_table_widget as a new row
+            container = QWidget()
+            container.setLayout(layout)
+            self.general_table_widget.setCellWidget(i, 0, container)
+        self.general_table_widget.resizeColumnsToContents()
+        self.general_table_widget.resizeRowsToContents()
 
     def get_more_info_fields(self):
         pass
 
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
-        schematisation_button = None
-        self.btn_create_model.hide()
-        self.btn_start_simulation.hide()
-        filename = os.path.basename(selected_file["id"].rstrip("/"))
-        username = (
-            selected_file["user"]["given_name"]
-            + " "
-            + selected_file["user"]["family_name"]
-        )
-        data_type = selected_file["data_type"]
-        meta = None
-        descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
-        meta = descriptor["meta"] if descriptor else None
-        description = descriptor["description"] if descriptor else None
+        self.update_general_table(selected_file)
+        # TODO: consider garbage
+        # TODO: fix margins
+        # existing_layout = self.general_box.layout()
+        # if existing_layout is None:
+        #     self.general_box.setLayout(QVBoxLayout())
+        #     existing_layout = self.general_box.layout()
+        # _clear_layout(existing_layout)
+        # container = self.get_general_file_info(selected_file)
+        # existing_layout.addWidget(container)
+        # existing_layout.setContentsMargins(0, 0, 0, 0)
+        # existing_layout.setSpacing(0)
 
-        last_modified = convert_to_local_time(selected_file["last_modified"])
-        size = (
-            display_bytes(selected_file["size"])
-            if data_type != "threedi_schematisation"
-            else "N/A"
-        )
-        file_details = [
-            ("Name", filename),
-            ("Size", size),
-            ("File type", selected_file["media_type"]),
-            ("Data type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
-            ("Added by", username),
-            ("Last modified", last_modified),
-            ("Description", description),
-        ]
-        if data_type == "scenario" and meta:
-            simulation = meta["simulation"]
-            schematisation = meta["schematisation"]
-            interval = simulation["interval"]
-            if interval:
-                start = convert_to_local_time(interval[0])
-                end = convert_to_local_time(interval[1])
-            else:
-                start = "N/A"
-                end = "N/A"
-            scenario_details = [
-                ("Simulation name", simulation["name"]),
-                ("Simulation ID", simulation["id"]),
-                ("Schematisation name", schematisation["name"]),
-                ("Schematisation ID", schematisation["id"]),
-                ("Schematisation version", schematisation["version"]),
-                ("Revision ID", schematisation["revision_id"]),
-                ("Model ID", schematisation["model_id"]),
-                ("Model software", simulation["software"]["id"]),
-                ("Software version", simulation["software"]["version"]),
-                ("Start", start),
-                ("End", end),
-            ]
-            file_details.extend(scenario_details)
-        if data_type == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
-            if schematisation:
-                revision = schematisation["latest_revision"]
-                schematisation_details = [
-                    ("Schematisation ID", schematisation["schematisation"]["id"]),
-                    ("Latest revision ID", revision["id"] if revision else None),
-                    (
-                        "Latest revision number",
-                        revision["number"] if revision else None,
-                    ),
-                ]
-                if revision.get("has_threedimodel"):
-                    schematisation_button = self.btn_start_simulation
-                else:
-                    schematisation_button = self.btn_create_model
-                file_details.extend(schematisation_details)
-            else:
-                self.communication.show_error("Failed to download 3Di schematisation.")
-        self.file_table_widget.clearContents()
-        self.file_table_widget.setRowCount(len(file_details))
-        self.file_table_widget.horizontalHeader().setStretchLastSection(True)
-        for i, (label, value) in enumerate(file_details):
-            label_item = QTableWidgetItem(label)
-            label_item.setFlags(
-                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-            )
-            value_item = QTableWidgetItem(str(value))
-            value_item.setFlags(
-                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-            )
-            self.file_table_widget.setItem(i, 0, label_item)
-            self.file_table_widget.setItem(i, 1, value_item)
-        self.file_table_widget.resizeColumnsToContents()
-
-        # Show/hide the buttons based on the file data type
-        if schematisation_button:
-            schematisation_button.show()
-        self.file_showed.emit()
+        # self.general_box.setLayout(general_info_layout)
+        # schematisation_button = None
+        # self.btn_create_model.hide()
+        # self.btn_start_simulation.hide()
+        # filename = os.path.basename(selected_file["id"].rstrip("/"))
+        # username = (
+        #     selected_file["user"]["given_name"]
+        #     + " "
+        #     + selected_file["user"]["family_name"]
+        # )
+        # data_type = selected_file["data_type"]
+        # meta = None
+        # descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        # meta = descriptor["meta"] if descriptor else None
+        # description = descriptor["description"] if descriptor else None
+        #
+        # last_modified = convert_to_local_time(selected_file["last_modified"])
+        # size = (
+        #     display_bytes(selected_file["size"])
+        #     if data_type != "threedi_schematisation"
+        #     else "N/A"
+        # )
+        # file_details = [
+        #     ("Name", filename),
+        #     ("Size", size),
+        #     ("File type", selected_file["media_type"]),
+        #     ("Data type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
+        #     ("Added by", username),
+        #     ("Last modified", last_modified),
+        #     ("Description", description),
+        # ]
+        # if data_type == "scenario" and meta:
+        #     simulation = meta["simulation"]
+        #     schematisation = meta["schematisation"]
+        #     interval = simulation["interval"]
+        #     if interval:
+        #         start = convert_to_local_time(interval[0])
+        #         end = convert_to_local_time(interval[1])
+        #     else:
+        #         start = "N/A"
+        #         end = "N/A"
+        #     scenario_details = [
+        #         ("Simulation name", simulation["name"]),
+        #         ("Simulation ID", simulation["id"]),
+        #         ("Schematisation name", schematisation["name"]),
+        #         ("Schematisation ID", schematisation["id"]),
+        #         ("Schematisation version", schematisation["version"]),
+        #         ("Revision ID", schematisation["revision_id"]),
+        #         ("Model ID", schematisation["model_id"]),
+        #         ("Model software", simulation["software"]["id"]),
+        #         ("Software version", simulation["software"]["version"]),
+        #         ("Start", start),
+        #         ("End", end),
+        #     ]
+        #     file_details.extend(scenario_details)
+        # if data_type == "threedi_schematisation":
+        #     schematisation = get_threedi_schematisation(
+        #         self.communication, selected_file["descriptor_id"]
+        #     )
+        #     if schematisation:
+        #         revision = schematisation["latest_revision"]
+        #         schematisation_details = [
+        #             ("Schematisation ID", schematisation["schematisation"]["id"]),
+        #             ("Latest revision ID", revision["id"] if revision else None),
+        #             (
+        #                 "Latest revision number",
+        #                 revision["number"] if revision else None,
+        #             ),
+        #         ]
+        #         if revision.get("has_threedimodel"):
+        #             schematisation_button = self.btn_start_simulation
+        #         else:
+        #             schematisation_button = self.btn_create_model
+        #         file_details.extend(schematisation_details)
+        #     else:
+        #         self.communication.show_error("Failed to download 3Di schematisation.")
+        # self.file_table_widget.clearContents()
+        # self.file_table_widget.setRowCount(len(file_details))
+        # self.file_table_widget.horizontalHeader().setStretchLastSection(True)
+        # for i, (label, value) in enumerate(file_details):
+        #     label_item = QTableWidgetItem(label)
+        #     label_item.setFlags(
+        #         Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        #     )
+        #     value_item = QTableWidgetItem(str(value))
+        #     value_item.setFlags(
+        #         Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        #     )
+        #     self.file_table_widget.setItem(i, 0, label_item)
+        #     self.file_table_widget.setItem(i, 1, value_item)
+        # self.file_table_widget.resizeColumnsToContents()
+        #
+        # # Show/hide the buttons based on the file data type
+        # if schematisation_button:
+        #     schematisation_button.show()
+        # self.file_showed.emit()
 
     def refresh(self):
         assert self.selected_file

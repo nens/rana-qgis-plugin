@@ -35,11 +35,6 @@ def set_tenant_id(tenant: str):
 
 
 def get_tenant_id() -> str:
-    from qgis.core import Qgis, QgsMessageLog
-
-    QgsMessageLog.logMessage(
-        f"{QgsSettings().value(RANA_TENANT_ENTRY)}", "DEBUG", Qgis.Info
-    )
     return QgsSettings().value(RANA_TENANT_ENTRY)
 
 

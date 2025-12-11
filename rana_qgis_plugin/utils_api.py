@@ -480,5 +480,3 @@ def map_result_to_file_name(result: dict) -> str:
         else:
             return result["code"]
 
-
-return []

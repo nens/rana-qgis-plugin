@@ -315,9 +315,9 @@ def build_vrt(output_filepath, raster_filepaths, **vrt_options):
 
 def get_file_icon_name(data_type: str) -> str:
     icon_map = {
-        "scenario": "mIconTemporalRaster",
-        "threedi-schematisation": "mIconDbSchema",
-        "raster": "mIconRaster",
-        "vector": "mIconVector",
+        "scenario": "mIconTemporalRaster.svg",
+        "threedi_schematisation": "mIconDbSchema.svg",
+        "raster": "mIconRaster.svg",
+        "vector": "mIconVector.svg",
     }
-    return icon_map.get(data_type, "mIconFile")
+    return icon_map.get(data_type, "mIconFile.svg")
