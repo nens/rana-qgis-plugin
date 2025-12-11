@@ -97,8 +97,6 @@ class RevisionsView(QWidget):
         self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
-        # self.revisions_model.setColumnCount(3)
-        # self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event", ""])
         self.revisions_table.setModel(self.revisions_model)
         self.revisions_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
