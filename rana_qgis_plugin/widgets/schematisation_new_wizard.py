@@ -17,10 +17,10 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
 )
 from rana_qgis_plugin.simulation.utils import (
-    ensure_valid_schema,
     extract_error_message,
     geopackage_layer,
 )
+from rana_qgis_plugin.simulation.utils_ui import ensure_valid_schema
 from rana_qgis_plugin.widgets.new_wizard_pages.explain import (
     SchematisationExplainPage,
 )

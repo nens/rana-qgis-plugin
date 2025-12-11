@@ -383,7 +383,7 @@ class FileView(QWidget):
                         revision["number"] if revision else None,
                     ),
                 ]
-                if revision.get("has_threedimodel"):
+                if revision and revision.get("has_threedimodel"):
                     schematisation_button = self.btn_start_simulation
                 else:
                     schematisation_button = self.btn_create_model

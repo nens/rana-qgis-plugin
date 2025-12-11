@@ -558,9 +558,14 @@ class Loader(QObject):
             or not descriptor["meta"]["simulation"]
             or not descriptor["meta"]["simulation"]["name"]
         ):
-            self.communication.show_error(
-                "Scenario is corrupt; did you upload a zip directly?"
-            )
+            if descriptor["status"]["id"] == "processing":
+                self.communication.show_warn(
+                    "Scenario is still processing; please try again later"
+                )
+            else:
+                self.communication.show_error(
+                    "Scenario is corrupt; did you upload a zip directly?"
+                )
             self.download_results_cancelled.emit()
             return
         schematisation_name = descriptor["meta"]["schematisation"]["name"]
