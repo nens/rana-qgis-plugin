@@ -294,6 +294,7 @@ class RanaQgisPlugin:
             self.rana_browser.create_folder_selected.connect(
                 self.loader.create_new_folder_on_rana
             )
+            self.rana_browser.save_revision_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
