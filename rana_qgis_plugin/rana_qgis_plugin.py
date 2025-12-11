@@ -314,10 +314,17 @@ class RanaQgisPlugin:
             )
             self.loader.schematisation_upload_finished.connect(self.rana_browser.enable)
             self.loader.schematisation_upload_failed.connect(self.rana_browser.enable)
-            self.loader.file_deleted.connect(self.rana_browser.refresh)
-            self.loader.rename_finished.connect(self.rana_browser.refresh)
             self.loader.folder_created.connect(self.rana_browser.refresh)
             self.loader.model_deleted.connect(self.rana_browser.refresh)
+            self.loader.file_deleted.connect(
+                self.rana_browser.refresh_after_file_delete
+            )
+            self.loader.rename_aborted.connect(self.rana_browser.refresh)
+            self.loader.rename_finished.connect(
+                self.rana_browser.refresh_after_file_rename
+            )
+            # TODO: handle delete refresh
+            # TODO: handle rename refresh
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
