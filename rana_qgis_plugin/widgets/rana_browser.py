@@ -8,6 +8,7 @@ from typing import Callable, List
 from qgis.PyQt.QtCore import (
     QEvent,
     QModelIndex,
+    QObject,
     QSettings,
     Qt,
     QTimer,
@@ -280,6 +281,18 @@ class RevisionsView(QWidget):
         self.ready.emit()
 
 
+class FileSignals(QObject):
+    file_deletion_requested = pyqtSignal(dict)
+    file_rename_requested = pyqtSignal(dict, str)
+    open_in_qgis_requested = pyqtSignal(dict)
+    upload_file_requested = pyqtSignal(dict)
+    save_vector_styling_requested = pyqtSignal(dict)
+    save_revision_requested = pyqtSignal(dict)
+    open_wms_requested = pyqtSignal(dict)
+    download_file_requested = pyqtSignal(dict)
+    download_results_requested = pyqtSignal(dict)
+
+
 class FileView(QWidget):
     file_showed = pyqtSignal()
     show_revisions_clicked = pyqtSignal(dict, dict)
@@ -448,24 +461,16 @@ class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
     path_changed = pyqtSignal(str)
+    create_folder_requested = pyqtSignal(str)
     busy = pyqtSignal()
     ready = pyqtSignal()
-    file_deletion_requested = pyqtSignal(dict)
-    file_rename_requested = pyqtSignal(dict, str)
-    open_in_qgis_requested = pyqtSignal(dict)
-    upload_file_requested = pyqtSignal(dict)
-    save_vector_styling_requested = pyqtSignal(dict)
-    save_revision_requested = pyqtSignal(dict)
-    open_wms_requested = pyqtSignal(dict)
-    download_file_requested = pyqtSignal(dict)
-    download_results_requested = pyqtSignal(dict)
-    create_folder_requested = pyqtSignal(str)
 
-    def __init__(self, communication, parent=None):
+    def __init__(self, communication, file_signals, parent=None):
         super().__init__(parent)
         self.project = None
         self.communication = communication
         self.selected_item = None
+        self.file_signals = file_signals
         self.setup_ui()
 
     def update_project(self, project: dict):
@@ -531,30 +536,41 @@ class FilesBrowser(QWidget):
         data_type = selected_item.get("data_type")
         # Add delete option files and folders
         actions = [
-            ("Delete", self.file_deletion_requested),
+            ("Delete", self.file_signals.file_deletion_requested),
             ("Rename", lambda selected_item: self.edit_file_name(index, selected_item)),
         ]
         # Add open in QGIS is supported for all supported data types
         if data_type in SUPPORTED_DATA_TYPES:
-            actions.append(("Open in QGIS", self.open_in_qgis_requested))
+            actions.append(("Open in QGIS", self.file_signals.open_in_qgis_requested))
         # Add save only for vector and raster files
         if data_type in ["vector", "raster"]:
-            actions.append(("Save data to Rana", self.upload_file_requested))
+            actions.append(
+                ("Save data to Rana", self.file_signals.upload_file_requested)
+            )
         # Add save vector style only for vector files
         if data_type == "vector":
             actions.append(
-                ("Save vector style to Rana", self.save_vector_styling_requested)
+                (
+                    "Save vector style to Rana",
+                    self.file_signals.save_vector_styling_requested,
+                )
             )
         if data_type == "threedi_schematisation":
             # TODO: only when changed?
-            actions.append(("Save revision to Rana", self.save_revision_requested))
+            actions.append(
+                ("Save revision to Rana", self.file_signals.save_revision_requested)
+            )
         # Add options to open WMS and download file and results only for 3Di scenarios
         if data_type == "scenario":
             descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
             meta = descriptor["meta"] if descriptor else None
             if meta and meta["simulation"]["software"]["id"] == "3Di":
-                actions.append(("Open WMS in QGIS", self.open_wms_requested))
-                actions.append(("Download results", self.download_results_requested))
+                actions.append(
+                    ("Open WMS in QGIS", self.file_signals.open_wms_requested)
+                )
+                actions.append(
+                    ("Download results", self.file_signals.download_results_requested)
+                )
         # populate menu
         menu = QMenu(self)
         for action_label, action_handler in actions:
@@ -580,7 +596,7 @@ class FilesBrowser(QWidget):
         def handle_data_changed(topLeft, bottomRight, roles):
             if topLeft == index:  # Only handle the specific item we're editing
                 new_name = self.files_model.itemFromIndex(topLeft).text()
-                self.file_rename_requested.emit(selected_item, new_name)
+                self.file_signals.file_rename_requested.emit(selected_item, new_name)
                 self.files_model.dataChanged.disconnect(handle_data_changed)
 
         # Connect to dataChanged signal
@@ -1023,10 +1039,13 @@ class RanaBrowser(QWidget):
         layout.addWidget(self.rana_browser)
         self.setLayout(layout)
         # Setup widgets that populate the rana widget
+        file_signals = FileSignals()
         self.projects_browser = ProjectsBrowser(
             communication=self.communication, parent=self
         )
-        self.files_browser = FilesBrowser(communication=self.communication, parent=self)
+        self.files_browser = FilesBrowser(
+            communication=self.communication, file_signals=file_signals, parent=self
+        )
         self.file_view = FileView(communication=self.communication, parent=self)
         self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
@@ -1079,26 +1098,26 @@ class RanaBrowser(QWidget):
         )
         # Connect file browser context menu signals
         context_menu_signals = (
-            (self.files_browser.file_deletion_requested, self.delete_file_selected),
-            (self.files_browser.open_in_qgis_requested, self.open_in_qgis_selected),
-            (self.files_browser.upload_file_requested, self.upload_file_selected),
+            (file_signals.file_deletion_requested, self.delete_file_selected),
+            (file_signals.open_in_qgis_requested, self.open_in_qgis_selected),
+            (file_signals.upload_file_requested, self.upload_file_selected),
             (
-                self.files_browser.save_vector_styling_requested,
+                file_signals.save_vector_styling_requested,
                 self.save_vector_styling_selected,
             ),
-            (self.files_browser.open_wms_requested, self.open_wms_selected),
-            (self.files_browser.download_file_requested, self.download_file_selected),
+            (file_signals.open_wms_requested, self.open_wms_selected),
+            (file_signals.download_file_requested, self.download_file_selected),
             (
-                self.files_browser.download_results_requested,
+                file_signals.download_results_requested,
                 self.download_results_selected,
             ),
-            (self.files_browser.save_revision_requested, self.save_revision_selected),
+            (file_signals.save_revision_requested, self.save_revision_selected),
         )
-        for file_browser_signal, rana_signal in context_menu_signals:
-            file_browser_signal.connect(
+        for file_signal, rana_signal in context_menu_signals:
+            file_signal.connect(
                 lambda file, signal=rana_signal: signal.emit(self.project, file)
             )
-        self.files_browser.file_rename_requested.connect(
+        file_signals.file_rename_requested.connect(
             lambda file, new_name: self.rename_file_selected.emit(
                 self.project, file, new_name
             )
