@@ -8,6 +8,7 @@ class InfoDialog(QDialog):
         super().__init__(parent)
         layout = QVBoxLayout()
         label = QLabel(info_msg)
+        label.setOpenExternalLinks(True)
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         layout.addWidget(label)
         layout.addWidget(button_box)
