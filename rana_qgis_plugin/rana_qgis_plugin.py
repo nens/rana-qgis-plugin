@@ -280,6 +280,9 @@ class RanaQgisPlugin:
             self.rana_browser.create_model_selected_with_revision.connect(
                 self.loader.create_schematisation_revision_3di_model
             )
+            self.rana_browser.delete_model_selected.connect(
+                self.loader.delete_schematisation_revision_3di_model
+            )
             self.rana_browser.open_schematisation_selected_with_revision.connect(
                 self.rana_browser.disable
             )
@@ -314,6 +317,7 @@ class RanaQgisPlugin:
             self.loader.file_deleted.connect(self.rana_browser.refresh)
             self.loader.rename_finished.connect(self.rana_browser.refresh)
             self.loader.folder_created.connect(self.rana_browser.refresh)
+            self.loader.model_deleted.connect(self.rana_browser.refresh)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
