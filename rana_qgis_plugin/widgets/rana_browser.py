@@ -1028,7 +1028,9 @@ class RanaBrowser(QWidget):
         layout.addLayout(top_layout)
         layout.addWidget(self.rana_browser)
         self.setLayout(layout)
-        self.setMinimumWidth(800)
+        self.resize(800, self.height())
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
         # Setup widgets that populate the rana widget
         self.projects_browser = ProjectsBrowser(
             communication=self.communication, parent=self
