@@ -43,7 +43,7 @@ class SchematisationBrowser(QDialog):
             QIcon(":images/themes/default/mIconZoom.svg"), QLineEdit.LeadingPosition
         )
         self.search_le.setPlaceholderText("Search for a schematisation")
-        self.search_le.textChanged.connect(self.populate_table)
+        self.search_le.textEdited.connect(self.populate_table)
         layout.addWidget(self.search_le, 0, 0)
         spacer = QSpacerItem(60, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addItem(spacer, 0, 1, 1, 2)
@@ -88,9 +88,13 @@ class SchematisationBrowser(QDialog):
         self.accept()
 
     def populate_table(self):
+        self.table.clear()
+        self.table.setHorizontalHeaderLabels(["Name", "Updated", "Created by"])
+        self.table.setRowCount(0)
+        self.ok_button.setEnabled(False)
         search_value = self.search_le.text()
 
-        schematisations = get_schematisations(self.communication)
+        schematisations = get_schematisations(self.communication, search_value)
         for i, schematisation in enumerate(schematisations):
             self.table.insertRow(self.table.rowCount())
             name_item = QTableWidgetItem(schematisation["name"])
@@ -107,5 +111,5 @@ class SchematisationBrowser(QDialog):
             self.table.setItem(i, 1, updated_item)
             self.table.setItem(i, 2, creation_by_item)
 
-            for i in range(3):
-                self.table.resizeColumnToContents(i)
+        for i in range(3):
+            self.table.resizeColumnToContents(i)

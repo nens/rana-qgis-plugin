@@ -801,7 +801,7 @@ class Loader(QObject):
                 selected_schematisation["id"],
                 selected_file["id"] + selected_schematisation["name"],
             )
-            self.schematisation_import_finished.emit()
+        self.schematisation_import_finished.emit()
 
     @pyqtSlot(dict)
     def upload_new_schematisation_to_rana(self, project):
