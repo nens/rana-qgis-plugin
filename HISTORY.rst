@@ -20,6 +20,7 @@ History
 - Dynamically fetch client cognito ids from Rana API endpoint
 - Add option to delete models and disable model creation when the max number of models is reached 
 - Add file actions to detail view
+- Show dialogs pointing the user to the Rana HCC when creating a model, uploading a revision and starting a simulation
 
 
 1.1.20 (2025-11-18)
