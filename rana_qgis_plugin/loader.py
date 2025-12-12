@@ -298,7 +298,7 @@ class Loader(QObject):
                     "destination_path": target_path + "/",
                 },
             )
-            msg = f"Unable to rename directory {file['id']}"
+            msg = f"Unable to rename directory {Path(source_path).name} to {Path(target_path).name}"
         else:
             existing_file = get_tenant_project_file(
                 project["id"], {"path": target_path}
@@ -312,7 +312,7 @@ class Loader(QObject):
                 project["id"],
                 params={"source_path": source_path, "destination_path": target_path},
             )
-            msg = f"Unable to rename file {file['id']}"
+            msg = f"Unable to rename file {Path(source_path).name} to {Path(target_path).name}"
         if success:
             self.rename_finished.emit(new_name)
         else:
