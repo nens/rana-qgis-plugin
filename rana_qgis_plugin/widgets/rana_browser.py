@@ -308,16 +308,15 @@ class FileView(QWidget):
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
         self.btn_create_model = QPushButton("Create 3Di Model")
-        # self.btn_show_revisions = QPushButton("Show Revisions")
-        self.btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
-        self.btn_show_revisions.clicked.connect(
+        btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
+        btn_show_revisions.clicked.connect(
             lambda _: self.file_signals.view_all_revisions_requested.emit(
                 self.project, self.selected_file
             )
         )
         button_layout.addWidget(self.btn_start_simulation)
         button_layout.addWidget(self.btn_create_model)
-        button_layout.addWidget(self.btn_show_revisions)
+        button_layout.addWidget(btn_show_revisions)
         file_action_btn_layout = QHBoxLayout()
         self.file_action_btn_dict = self.get_file_action_buttons()
         for btn in self.file_action_btn_dict.values():
@@ -331,6 +330,8 @@ class FileView(QWidget):
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in FileAction:
+            if action == FileAction.VIEW_REVISIONS:
+                continue
             btn = QPushButton(action.value)
             # btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             action_signal = self.file_signals.get_signal(action)
@@ -375,7 +376,9 @@ class FileView(QWidget):
     def update_file_action_buttons(self, selected_file: dict):
         active_actions = get_file_actions_for_data_type(selected_file)
         for action in FileAction:
-            btn = self.file_action_btn_dict[action]
+            btn = self.file_action_btn_dict.get(action)
+            if not btn:
+                continue
             if action in active_actions:
                 btn.show()
             else:
