@@ -61,6 +61,7 @@ from rana_qgis_plugin.utils_qgis import (
 )
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
+from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
     ExistingFileUploadWorker,
@@ -86,6 +87,7 @@ class Loader(QObject):
     download_results_cancelled = pyqtSignal()
     schematisation_upload_cancelled = pyqtSignal()
     schematisation_upload_finished = pyqtSignal()
+    schematisation_import_finished = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
     simulation_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
@@ -788,6 +790,20 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
+
+    @pyqtSlot(dict, dict)
+    def import_schematisation_to_rana(self, project, selected_file):
+        dialog = SchematisationBrowser(self.parent(), self.communication)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_schematisation = dialog.selected_schematisation
+            assert selected_schematisation
+            add_threedi_schematisation(
+                self.communication,
+                project["id"],
+                selected_schematisation["id"],
+                selected_file["id"] + selected_schematisation["name"],
+            )
+        self.schematisation_import_finished.emit()
 
     @pyqtSlot(dict)
     def upload_new_schematisation_to_rana(self, project):

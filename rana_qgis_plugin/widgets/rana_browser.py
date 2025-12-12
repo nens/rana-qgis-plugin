@@ -486,10 +486,12 @@ class FilesBrowser(QWidget):
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.btn_upload)
-        btn_layout.addWidget(btn_create_folder)
-        btn_layout.addWidget(self.btn_new_schematisation)
+        self.btn_import_schematisation = QPushButton("Import schematisation")
+        btn_layout = QGridLayout()
+        btn_layout.addWidget(self.btn_upload, 0, 0)
+        btn_layout.addWidget(btn_create_folder, 0, 1)
+        btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
+        btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
         layout.addLayout(btn_layout)
@@ -959,6 +961,7 @@ class RanaBrowser(QWidget):
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict)
+    import_schematisation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -1109,6 +1112,12 @@ class RanaBrowser(QWidget):
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(self.project)
+        )
+        # Connect import schematisation button
+        self.files_browser.btn_import_schematisation.clicked.connect(
+            lambda _,: self.import_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
         )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(
