@@ -338,8 +338,6 @@ class RanaQgisPlugin:
             self.loader.rename_finished.connect(
                 self.rana_browser.refresh_after_file_rename
             )
-            # TODO: handle delete refresh
-            # TODO: handle rename refresh
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
