@@ -300,8 +300,10 @@ class Loader(QObject):
             )
             msg = f"Unable to rename directory {file['id']}"
         else:
-            file = get_tenant_project_file(project["id"], {"path": target_path})
-            if file:
+            existing_file = get_tenant_project_file(
+                project["id"], {"path": target_path}
+            )
+            if existing_file:
                 QMessageBox.warning(
                     self.parent(), "Warning", f"File {new_name} already exists."
                 )
