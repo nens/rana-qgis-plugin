@@ -256,27 +256,33 @@ class RevisionsView(QWidget):
                 [
                     commit_item,
                     QStandardItem(event),
-                    QStandardItem(""),
                 ]
             )
             for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 2):
                 if btn_data:
-                    # btn_label, btn_func = btn_data
                     btn = QPushButton(btn_data.label)
-                    btn.setFixedWidth(150)
-                    btn.setFixedHeight(25)
+                    btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                     btn.clicked.connect(btn_data.func)
                     btn.setEnabled(btn_data.enabled)
                     if btn_data.tooltip:
                         btn.setToolTip(btn_data.tooltip)
                     container = QWidget()
+                    container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                     layout = QVBoxLayout(container)
                     layout.setContentsMargins(0, 0, 0, 0)
                     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     layout.addWidget(btn)
+                    container.adjustSize()
                     self.revisions_table.setIndexWidget(
                         self.revisions_model.index(i, col_idx), container
                     )
+
+        resize_columns = [0] if not threedi_revision else [0, 2, 3]
+        for col_idx in resize_columns:
+            self.revisions_table.horizontalHeader().setSectionResizeMode(
+                col_idx, QHeaderView.ResizeToContents
+            )
+        self.revisions_table.resizeColumnsToContents()
         self.ready.emit()
 
 
