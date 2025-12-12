@@ -282,7 +282,8 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         self.general_box = QgsCollapsibleGroupBox("General")
         self.general_box.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
         )
 
         # TODO make this a list
@@ -290,6 +291,8 @@ class FileView(QWidget):
         self.general_table_widget.setShowGrid(False)
         self.general_table_widget.horizontalHeader().setVisible(False)
         self.general_table_widget.verticalHeader().setVisible(False)
+        self.general_table_widget.setMaximumHeight(200)
+
         layout = QVBoxLayout(self.general_box)
         layout.addWidget(self.general_table_widget)
         self.more_box = QgsCollapsibleGroupBox("More information")
