@@ -333,6 +333,9 @@ class RanaQgisPlugin:
             self.loader.rename_finished.connect(self.rana_browser.refresh)
             self.loader.folder_created.connect(self.rana_browser.refresh)
             self.loader.model_deleted.connect(self.rana_browser.refresh)
+            self.loader.schematisation_upload_finished.connect(
+                self.rana_browser.refresh
+            )
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
