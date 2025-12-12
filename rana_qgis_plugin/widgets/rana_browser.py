@@ -308,9 +308,12 @@ class FileView(QWidget):
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
         self.btn_create_model = QPushButton("Create 3Di Model")
-        self.btn_show_revisions = QPushButton("Show Revisions")
+        # self.btn_show_revisions = QPushButton("Show Revisions")
+        self.btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
         self.btn_show_revisions.clicked.connect(
-            lambda _: self.show_revisions_clicked.emit(self.project, self.selected_file)
+            lambda _: self.file_signals.view_all_revisions_requested.emit(
+                self.project, self.selected_file
+            )
         )
         button_layout.addWidget(self.btn_start_simulation)
         button_layout.addWidget(self.btn_create_model)
@@ -378,8 +381,11 @@ class FileView(QWidget):
             else:
                 btn.hide()
 
-    def show_selected_file_details(self, selected_file):
+    def update_selected_file(self, selected_file: dict):
         self.selected_file = selected_file
+
+    def show_selected_file_details(self, selected_file):
+        self.update_selected_file(selected_file)
         schematisation_button = None
         self.btn_create_model.hide()
         self.btn_start_simulation.hide()
@@ -599,6 +605,12 @@ class FilesBrowser(QWidget):
                 action.triggered.connect(
                     lambda _, selected_item=selected_item: self.edit_file_name(
                         index, selected_item
+                    )
+                )
+            elif file_action == FileAction.VIEW_REVISIONS:
+                action.triggered.connect(
+                    lambda _, signal=action_signal: signal.emit(
+                        self.project, selected_item
                     )
                 )
             else:
@@ -931,8 +943,10 @@ class BreadCrumbsWidget(QWidget):
             self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, folder_name))
         self.update()
 
-    def add_revisions(self):
+    def add_revisions(self, selected_file):
         # revisions can only be added after a file
+        if self._items[-1].type == BreadcrumbType.FOLDER:
+            self.add_file(selected_file["id"])
         if self._items[-1].type == BreadcrumbType.FILE:
             self._items.append(BreadcrumbItem(BreadcrumbType.REVISIONS, "Revisions"))
         self.update()
@@ -1117,17 +1131,6 @@ class RanaBrowser(QWidget):
         self.files_browser.file_selected.connect(
             self.file_view.show_selected_file_details
         )
-        # Update breadcrumbs when file browser path changes
-        self.projects_browser.project_selected.connect(
-            lambda selected_item: self.breadcrumbs.add_folder(selected_item["name"])
-        )
-        self.files_browser.folder_selected.connect(self.breadcrumbs.add_folder)
-        self.files_browser.file_selected.connect(
-            lambda selected_item: self.breadcrumbs.add_file(
-                selected_item["id"].split("/")[-1]
-            )
-        )
-        self.file_view.show_revisions_clicked.connect(self.breadcrumbs.add_revisions)
         # Connect upload button
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
@@ -1175,8 +1178,12 @@ class RanaBrowser(QWidget):
             lambda path: self.files_browser.select_path(path)
         )
         self.breadcrumbs.file_selected.connect(self.file_view.refresh)
-        self.file_view.show_revisions_clicked.connect(
+        # File view buttons
+        file_signals.view_all_revisions_requested.connect(
             self.revisions_view.show_revisions_for_file
+        )
+        file_signals.view_all_revisions_requested.connect(
+            lambda _, selected_file: self.file_view.update_selected_file(selected_file)
         )
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _: self.start_simulation_selected.emit(
@@ -1206,7 +1213,19 @@ class RanaBrowser(QWidget):
         self.revisions_view.open_schematisation_revision_in_qgis_requested.connect(
             self.open_schematisation_selected_with_revision
         )
-
+        # Update breadcrumbs when file browser path changes
+        self.projects_browser.project_selected.connect(
+            lambda selected_item: self.breadcrumbs.add_folder(selected_item["name"])
+        )
+        self.files_browser.folder_selected.connect(self.breadcrumbs.add_folder)
+        self.files_browser.file_selected.connect(
+            lambda selected_item: self.breadcrumbs.add_file(
+                selected_item["id"].split("/")[-1]
+            )
+        )
+        file_signals.view_all_revisions_requested.connect(
+            lambda _, selected_file: self.breadcrumbs.add_revisions(selected_file)
+        )
         # Ensure correct page is shown - do this last zo all updates are done
         self.projects_browser.projects_refreshed.connect(
             lambda: self.rana_files.setCurrentIndex(0)
@@ -1221,7 +1240,7 @@ class RanaBrowser(QWidget):
             lambda _: self.rana_files.setCurrentIndex(2)
         )
         self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
-        self.file_view.show_revisions_clicked.connect(
+        file_signals.view_all_revisions_requested.connect(
             lambda _: self.rana_files.setCurrentIndex(3)
         )
         self.breadcrumbs.projects_selected.connect(

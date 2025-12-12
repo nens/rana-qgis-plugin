@@ -16,6 +16,7 @@ class FileAction(Enum):
     SAVE_REVISION = "Save revision to Rana"
     OPEN_WMS = "Open WMS in QGIS"
     DOWNLOAD_RESULTS = "Download results"
+    VIEW_REVISIONS = "View all revisions"
 
 
 def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
@@ -31,7 +32,7 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     if data_type == "vector":
         actions.append(FileAction.SAVE_VECTOR_STYLING)
     if data_type == "threedi_schematisation":
-        actions.append(FileAction.SAVE_REVISION)
+        actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
     # Add options to open WMS and download file and results only for 3Di scenarios
     if data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
@@ -51,6 +52,7 @@ class FileActionSignals(QObject):
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
+    view_all_revisions_requested = pyqtSignal(dict, dict)
 
     def get_signal(self, signal_type: FileAction) -> Optional[pyqtSignal]:
         signal_map = {
@@ -62,5 +64,6 @@ class FileActionSignals(QObject):
             FileAction.SAVE_REVISION: self.save_revision_requested,
             FileAction.OPEN_WMS: self.open_wms_requested,
             FileAction.DOWNLOAD_RESULTS: self.download_results_requested,
+            FileAction.VIEW_REVISIONS: self.view_all_revisions_requested,
         }
         return signal_map.get(signal_type)
