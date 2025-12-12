@@ -588,9 +588,11 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        actions = get_file_actions_for_data_type(selected_item)
+        file_actions = get_file_actions_for_data_type(selected_item)
         menu = QMenu(self)
-        for file_action in actions:
+        actions = []
+        # create and connect actions
+        for file_action in file_actions:
             action = QAction(file_action.value, self)
             action_signal = self.file_signals.get_signal(file_action)
             if file_action == FileAction.RENAME:
@@ -603,6 +605,14 @@ class FilesBrowser(QWidget):
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(selected_item)
                 )
+            actions.append(action)
+        # Add delete first
+        if FileAction.DELETE in file_actions:
+            delete_idx = file_actions.index(FileAction.DELETE)
+            menu.addAction(actions[delete_idx])
+            menu.addSeparator()
+            actions.pop(delete_idx)
+        for i, action in enumerate(actions):
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 

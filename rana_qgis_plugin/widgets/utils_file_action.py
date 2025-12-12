@@ -38,7 +38,7 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
         meta = descriptor["meta"] if descriptor else None
         if meta and meta["simulation"]["software"]["id"] == "3Di":
             actions += [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
-    return actions
+    return sorted(actions, key=lambda x: x.value)
 
 
 class FileActionSignals(QObject):
