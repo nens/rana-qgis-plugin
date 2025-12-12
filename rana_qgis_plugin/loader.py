@@ -913,6 +913,7 @@ class Loader(QObject):
             self.communication.show_warn(
                 "Current schematisation not yet stored locally, please download a revision first."
             )
+            self.schematisation_upload_cancelled.emit()
             return
 
         self.organisations = {org.unique_id: org for org in tc.fetch_organisations()}
