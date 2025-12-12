@@ -308,7 +308,7 @@ class Loader(QObject):
                 project["id"],
                 params={"source_path": source_path, "destination_path": target_path},
             )
-            msg = "Unable to rename file {file['id']}"
+            msg = f"Unable to rename file {file['id']}"
         if success:
             self.rename_finished.emit(new_name)
         else:
