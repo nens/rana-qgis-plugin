@@ -285,17 +285,11 @@ class FileView(QWidget):
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
         )
-
-        # TODO make this a list
-        self.general_table_widget = QTableWidget(1, 1)
-        self.general_table_widget.setShowGrid(False)
-        self.general_table_widget.horizontalHeader().setVisible(False)
-        self.general_table_widget.verticalHeader().setVisible(False)
-        self.general_table_widget.setMaximumHeight(200)
-
-        layout = QVBoxLayout(self.general_box)
-        layout.addWidget(self.general_table_widget)
         self.more_box = QgsCollapsibleGroupBox("More information")
+        self.more_box.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
+        )
         self.files_box = QgsCollapsibleGroupBox("Related files")
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
@@ -308,13 +302,33 @@ class FileView(QWidget):
         button_layout.addWidget(self.btn_create_model)
         button_layout.addWidget(self.btn_show_revisions)
         layout = QVBoxLayout(self)
-        # layout.addWidget(self.file_table_widget)
         layout.addWidget(self.general_box)
         layout.addWidget(self.more_box)
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-    def update_general_table(self, selected_file: dict):
+    @staticmethod
+    def clean_collapsible(collapsible):
+        layout = collapsible.layout()
+        if layout:
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                # Handle nested layouts
+                child_layout = item.layout()
+                if child_layout:
+                    # Recursively clean the child layout
+                    while child_layout.count():
+                        child_item = child_layout.takeAt(0)
+                        child_widget = child_item.widget()
+                        if child_widget:
+                            child_widget.setParent(None)
+                            child_widget.deleteLater()
+
+    def update_general_contents(self, selected_file: dict):
         rows = []
         # line 1: icon - filename - size
         file_icon = QgsApplication.getThemeIcon(
@@ -349,28 +363,112 @@ class FileView(QWidget):
             )
         else:
             descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
-            meta = descriptor["meta"] if descriptor else {}
             msg = descriptor.get("description")
             last_modified = convert_to_local_time(selected_file["last_modified"])
         rows.append(
             [user_icon_label, QLabel(username), QLabel(msg), QLabel(last_modified)]
         )
-        self.general_table_widget.clearContents()
-        self.general_table_widget.setRowCount(len(rows))
-        self.general_table_widget.horizontalHeader().setStretchLastSection(True)
-        for i, row in enumerate(rows):
-            layout = QHBoxLayout()
+        # Refresh contents of general box
+        self.clean_collapsible(self.general_box)
+        layout = self.general_box.layout()
+        if layout is None:
+            layout = QVBoxLayout()
+            self.general_box.setLayout(layout)
+        for row in rows:
+            row_layout = QHBoxLayout()
             for item in row[:-1]:
-                layout.addWidget(item)
-            layout.addStretch()
-            layout.addWidget(row[-1])
+                row_layout.addWidget(item)
+            row_layout.addStretch()
+            row_layout.addWidget(row[-1])
+            layout.addLayout(row_layout)
 
-            # Add layout to general_table_widget as a new row
-            container = QWidget()
-            container.setLayout(layout)
-            self.general_table_widget.setCellWidget(i, 0, container)
-        self.general_table_widget.resizeColumnsToContents()
-        self.general_table_widget.resizeRowsToContents()
+    def update_more_info(self, selected_file):
+        descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        meta = descriptor["meta"] if descriptor else None
+        data_type = selected_file.get("data_type")
+        details = [("projection", ""), ("kind", data_type)]
+        if data_type == "scenario" and meta:
+            simulation = meta["simulation"]
+            schematisation = meta["schematisation"]
+            interval = simulation["interval"]
+            if interval:
+                start = convert_to_local_time(interval[0])
+                end = convert_to_local_time(interval[1])
+            else:
+                start = "N/A"
+                end = "N/A"
+            details += [
+                ("Simulation name", simulation["name"]),
+                ("Simulation ID", simulation["id"]),
+                ("Schematisation name", schematisation["name"]),
+                ("Schematisation ID", schematisation["id"]),
+                ("Schematisation version", schematisation["version"]),
+                ("Revision ID", schematisation["revision_id"]),
+                ("Model ID", schematisation["model_id"]),
+                ("Model software", simulation["software"]["id"]),
+                ("Software version", simulation["software"]["version"]),
+                ("Start", start),
+                ("End", end),
+            ]
+        if data_type == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_file["descriptor_id"]
+            )
+            if schematisation:
+                revision = schematisation["latest_revision"]
+                details += [
+                    ("Schematisation ID", schematisation["schematisation"]["id"]),
+                    ("Latest revision ID", revision["id"] if revision else None),
+                    (
+                        "Latest revision number",
+                        revision["number"] if revision else None,
+                    ),
+                ]
+            else:
+                self.communication.show_error("Failed to download 3Di schematisation.")
+        # Refresh contents of more box
+        self.clean_collapsible(self.more_box)
+        layout = self.more_box.layout()
+        if layout is None:
+            layout = QGridLayout()
+            self.more_box.setLayout(layout)
+        for row, (label, value) in enumerate(details):
+            layout.addWidget(QLabel(label), row, 0)
+            layout.addWidget(QLabel(str(value)), row, 1)
+        layout.setColumnStretch(1, 1)
+
+    @staticmethod
+    def update_collapsible(collapsible, rows, stretch_right=True):
+        FileView.clean_collapsible(collapsible)
+        layout = collapsible.layout()
+        if layout is None:
+            layout = QVBoxLayout()
+            collapsible.setLayout(layout)
+        for row in rows:
+            row_layout = QHBoxLayout()
+            for item in row[:-1]:
+                row_layout.addWidget(item)
+            if stretch_right:
+                row_layout.addStretch()
+            row_layout.addWidget(row[-1])
+            layout.addLayout(row_layout)
+
+    def update_general_table(self, selected_file: dict):
+        self.update_general_contents(selected_file)
+        self.update_more_info(selected_file)
+        # self.update_collapsible(self.more_box, self._get_more_contents(selected_file), stretch_right=False)
+        # self.clean_collapsible(self.general_box)
+        # layout = self.general_box.layout()
+        # if layout is None:
+        #     layout = QVBoxLayout()
+        #     self.general_box.setLayout(layout)
+        # for row in rows:
+        #     row_layout = QHBoxLayout()
+        #     for item in row[:-1]:
+        #         row_layout.addWidget(item)
+        #     row_layout.addStretch()
+        #     row_layout.addWidget(row[-1])
+        #     layout.addLayout(row_layout)
 
     def get_more_info_fields(self):
         pass
