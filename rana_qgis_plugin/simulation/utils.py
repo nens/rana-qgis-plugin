@@ -659,18 +659,18 @@ def load_remote_schematisation(
     if isinstance(revision, dict):
         revision = NestedObject(revision)
 
-    downloaded_local_schematisation, custom_geopackage_filepath = (
-        download_required_files(
-            communications,
-            schematisation,
-            revision,
-            False,
-            progress_bar,
-            working_dir,
-            threedi_api,
-        )
+    required_files = download_required_files(
+        communications,
+        schematisation,
+        revision,
+        False,
+        progress_bar,
+        working_dir,
+        threedi_api,
     )
-    if downloaded_local_schematisation is not None:
+
+    if required_files is not None:
+        downloaded_local_schematisation, custom_geopackage_filepath = required_files
         load_local_schematisation(
             communications,
             local_schematisation=downloaded_local_schematisation,
