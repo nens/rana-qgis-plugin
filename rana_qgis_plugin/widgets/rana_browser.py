@@ -586,6 +586,9 @@ class FilesBrowser(QWidget):
         self.communication.clear_message_bar()
 
     def select_path(self, selected_path: str):
+        # Root level path is expected to be None
+        if selected_path in ["", "/", "./"]:
+            selected_path = None
         self.selected_item = {"id": selected_path, "type": "directory"}
         self.fetch_and_populate(self.project, selected_path)
 
@@ -630,13 +633,13 @@ class FilesBrowser(QWidget):
                 )
             actions.append(action)
         # Add delete first
-        if FileAction.DELETE in file_actions:
-            delete_idx = file_actions.index(FileAction.DELETE)
-            menu.addAction(actions[delete_idx])
-            menu.addSeparator()
-            actions.pop(delete_idx)
         for i, action in enumerate(actions):
             menu.addAction(action)
+        if FileAction.DELETE in file_actions:
+            delete_action = actions.pop(file_actions.index(FileAction.DELETE))
+            menu.addSeparator()
+            menu.addAction(delete_action)
+
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):
