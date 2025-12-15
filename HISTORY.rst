@@ -21,6 +21,7 @@ History
 - Add option to delete models and disable model creation when the max number of models is reached 
 - Add file actions to detail view
 - Show dialogs pointing the user to the Rana HCC when creating a model, uploading a revision and starting a simulation
+- Only ask user for revision when saving a revision to Rana that does not have a WIP
 
 
 1.1.20 (2025-11-18)
