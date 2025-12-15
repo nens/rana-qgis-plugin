@@ -335,7 +335,7 @@ class FileView(QWidget):
 
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
-        for action in FileAction:
+        for action in sorted(FileAction):
             if action == FileAction.VIEW_REVISIONS:
                 continue
             btn = QPushButton(action.value)
@@ -348,6 +348,9 @@ class FileView(QWidget):
                     lambda _, signal=action_signal: signal.emit(self.selected_file)
                 )
             btn_dict[action] = btn
+        # move delete to the end
+        delete_btn = btn_dict.pop(FileAction.DELETE)
+        btn_dict[FileAction.DELETE] = delete_btn
         return btn_dict
 
     def edit_file_name(self, selected_item: dict):
