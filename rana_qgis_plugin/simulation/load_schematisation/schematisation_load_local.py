@@ -31,7 +31,7 @@ class SchematisationLoad(uicls, basecls):
         self.setupUi(self)
         self.label.setWordWrap(True)
         self.label.setText(
-            f"No work in progress (WIP) revision was found. Available locally stored revisions are listed below.\n\nPlease choose which one you want to upload. This will set the chosen revision as WIP and make it the latest revision"
+            f"No work in progress (WIP) revision was found. Available locally stored revisions are listed below.\n\nPlease choose which one you want to upload. This will set the chosen revision as WIP and make it the latest revision."
         )
         self.working_dir = working_dir
         self.setWindowTitle("Choose revision to upload as new revision")
@@ -58,8 +58,10 @@ class SchematisationLoad(uicls, basecls):
             number_item.setData(wip_revision, role=Qt.UserRole)
             subdir_item = QStandardItem(wip_revision.sub_dir)
             self.tv_revisions_model.appendRow([number_item, subdir_item])
-        for revision_number, local_revision in reversed(
-            local_schematisation.revisions.items()
+        for revision_number, local_revision in sorted(
+                local_schematisation.revisions.items(),
+                key=lambda x: x[0],
+                reverse=True
         ):
             number_item = QStandardItem(str(revision_number))
             number_item.setData(local_revision, role=Qt.UserRole)

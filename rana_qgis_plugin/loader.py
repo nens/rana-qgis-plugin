@@ -925,8 +925,6 @@ class Loader(QObject):
             )
             self.schematisation_upload_cancelled.emit()
             return
-        # TODO: REMOVE THIS LINE!!!!!!!
-        local_schematisation.wip_revision = None
         if local_schematisation.wip_revision is None:
             # Let the user select a local revision
             load_dialog = SchematisationLoad(
