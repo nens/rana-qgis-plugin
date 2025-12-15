@@ -910,6 +910,8 @@ class Loader(QObject):
         schematisation = tc.fetch_schematisation(
             rana_schematisation["schematisation"]["id"]
         )
+        self.organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        organisation = self.organisations.get(schematisation.owner)
 
         local_schematisations = list_local_schematisations(
             hcc_working_dir(), use_config_for_revisions=False
@@ -923,29 +925,33 @@ class Loader(QObject):
             )
             self.schematisation_upload_cancelled.emit()
             return
-
-        self.organisations = {org.unique_id: org for org in tc.fetch_organisations()}
-        organisation = self.organisations.get(schematisation.owner)
-
-        # Let the user select a local revision
-        load_dialog = SchematisationLoad(
-            hcc_working_dir(), self.communication, local_schematisation, self.parent()
-        )
-        if load_dialog.exec() == QDialog.DialogCode.Accepted:
-            # Upload that revision as new revision
-            local_schematisation = load_dialog.selected_local_schematisation
-            schematisation_filepath = local_schematisation.schematisation_db_filepath
-
-            schema_gpkg_loaded = is_loaded_in_schematisation_editor(
-                schematisation_filepath
+        # TODO: REMOVE THIS LINE!!!!!!!
+        local_schematisation.wip_revision = None
+        if local_schematisation.wip_revision is None:
+            # Let the user select a local revision
+            load_dialog = SchematisationLoad(
+                hcc_working_dir(),
+                self.communication,
+                local_schematisation,
+                self.parent(),
             )
-            if schema_gpkg_loaded is False:
-                question = "Warning: the revision you are about to upload is not loaded in the Rana Schematisation Editor. Do you want to continue?"
-                if not self.communication.ask(
-                    self.parent(), "Warning", question, QMessageBox.Warning
-                ):
-                    self.schematisation_upload_cancelled.emit()
-                    return
+            if load_dialog.exec() == QDialog.DialogCode.Accepted:
+                # Upload that revision as new revision
+                local_schematisation = load_dialog.selected_local_schematisation
+            else:
+                self.schematisation_upload_cancelled.emit()
+                return
+
+        schematisation_filepath = local_schematisation.schematisation_db_filepath
+
+        schema_gpkg_loaded = is_loaded_in_schematisation_editor(schematisation_filepath)
+        if schema_gpkg_loaded is False:
+            question = "Warning: the revision you are about to upload is not loaded in the Rana Schematisation Editor. Do you want to continue?"
+            if not self.communication.ask(
+                self.parent(), "Warning", question, QMessageBox.Warning
+            ):
+                self.schematisation_upload_cancelled.emit()
+                return
 
             upload_dial = UploadWizard(
                 local_schematisation,
