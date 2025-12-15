@@ -19,6 +19,7 @@ History
 - Reactivate plugin when workdir is not set
 - Dynamically fetch client cognito ids from Rana API endpoint
 - Add option to delete models and disable model creation when the max number of models is reached 
+- Add file actions to detail view
 - Show dialogs pointing the user to the Rana HCC when creating a model, uploading a revision and starting a simulation
 
 
