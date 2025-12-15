@@ -29,7 +29,12 @@ class SchematisationLoad(uicls, basecls):
     ):
         super().__init__(parent)
         self.setupUi(self)
+        self.label.setWordWrap(True)
+        self.label.setText(
+            f"No work in progress (WIP) revision was found. Available locally stored revisions are listed below.\n\nPlease choose which one you want to upload. This will set the chosen revision as WIP and make it the latest revision"
+        )
         self.working_dir = working_dir
+        self.setWindowTitle("Choose revision to upload as new revision")
         self.communication = communication
         self.tv_revisions_model = QStandardItemModel()
         self.revisions_tv.setModel(self.tv_revisions_model)
