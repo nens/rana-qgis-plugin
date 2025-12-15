@@ -22,6 +22,7 @@ History
 - Add file actions to detail view
 - Show dialogs pointing the user to the Rana HCC when creating a model, uploading a revision and starting a simulation
 - Only ask user for revision when saving a revision to Rana that does not have a WIP
+- Only show 3Di organisation dropdown if more than 1 organisation is available per tenant
 
 
 1.1.20 (2025-11-18)
