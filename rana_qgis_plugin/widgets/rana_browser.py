@@ -412,7 +412,8 @@ class FileView(QWidget):
         self.file_showed.emit()
 
     def refresh(self):
-        assert self.selected_file
+        if not self.selected_file.get("id"):
+            return
         self.selected_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
