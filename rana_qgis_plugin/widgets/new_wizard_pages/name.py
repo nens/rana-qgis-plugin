@@ -47,11 +47,12 @@ class SchematisationNamePage(QWizardPage):
             "schematisation_description", self.main_widget.le_description
         )
         self.registerField("schematisation_tags", self.main_widget.le_tags)
-        self.registerField(
-            "schematisation_organisation",
-            self.main_widget.cbo_organisations,
-            "currentData",
-        )
+        if len(self.organisations) > 1:
+            self.registerField(
+                "schematisation_organisation",
+                self.main_widget.cbo_organisations,
+                "currentData",
+            )
         self.registerField("rana_path", self.main_widget.le_rana_path)
 
     def update_pages_order(self):
@@ -94,6 +95,7 @@ class SchematisationNameWidget(QWidget):
 
     def __init__(self, organisations, parent):
         super().__init__(parent)
+        self.organisations = organisations
 
         # Set geometry and properties
         self.setWindowTitle("Name")
@@ -135,16 +137,26 @@ class SchematisationNameWidget(QWidget):
         self.le_tags.setPlaceholderText("Comma-separated tags (optional)")
         gridLayout.addWidget(self.le_tags, 4, 2)
 
-        gridLayout.addWidget(QLabel("Organisation:"), 5, 0)
+        # hide dropdown if exactly 1 3Di organisation is available
+        # 0 available organisations should be blocked in the Rana tenant creation menu but add an assert just in case
+        assert len(organisations) > 0
+        if len(organisations) == 1:
+            gridLayout.addItem(
+                QSpacerItem(20, 25, QSizePolicy.Minimum, QSizePolicy.Fixed), 5, 0
+            )
+        else:
+            gridLayout.addWidget(QLabel("3Di Organisation:"), 5, 0)
 
-        self.cbo_organisations = QComboBox()
-        gridLayout.addWidget(self.cbo_organisations, 5, 1, 1, 2)
+            self.cbo_organisations = QComboBox()
+            gridLayout.addWidget(self.cbo_organisations, 5, 1, 1, 2)
 
-        gridLayout.addItem(
-            QSpacerItem(20, 25, QSizePolicy.Minimum, QSizePolicy.Fixed), 6, 0
-        )
+            if len(organisations) > 0:
+                self.populate_organisations()
+                self.cbo_organisations.currentTextChanged.connect(
+                    partial(save_3di_settings, "threedi/last_used_organisation")
+                )
 
-        gridLayout.addWidget(QLabel("GeoPackage:"), 7, 0)
+        gridLayout.addWidget(QLabel("GeoPackage:"), 6, 0)
 
         gridLayout_2 = QGridLayout()
         self.rb_new_geopackage = QRadioButton("Create new GeoPackage")
@@ -168,10 +180,10 @@ class SchematisationNameWidget(QWidget):
 
         gridLayout_2.addLayout(horizontalLayout_2, 2, 0)
 
-        gridLayout.addLayout(gridLayout_2, 7, 2)
+        gridLayout.addLayout(gridLayout_2, 6, 2)
 
         # Rana path label
-        gridLayout.addWidget(QLabel("Rana schematisation directory:"), 8, 0)
+        gridLayout.addWidget(QLabel("Rana schematisation directory:"), 7, 0)
 
         # Rana path input
         self.le_rana_path = QLineEdit()
@@ -180,18 +192,13 @@ class SchematisationNameWidget(QWidget):
         self.le_rana_path.setPlaceholderText(
             "Directory in your Rana project to place the new schematisation in (optional)"
         )
-        gridLayout.addWidget(self.le_rana_path, 8, 2)
+        gridLayout.addWidget(self.le_rana_path, 7, 2)
 
         gridLayout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 9, 0
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 8, 0
         )
 
-        self.organisations = organisations
-        self.populate_organisations()
         self.btn_browse_geopackage.clicked.connect(self.browse_existing_geopackage)
-        self.cbo_organisations.currentTextChanged.connect(
-            partial(save_3di_settings, "threedi/last_used_organisation")
-        )
 
     def populate_organisations(self):
         """Populating organisations."""
