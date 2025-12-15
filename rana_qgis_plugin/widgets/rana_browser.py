@@ -262,27 +262,33 @@ class RevisionsView(QWidget):
                 [
                     commit_item,
                     QStandardItem(event),
-                    QStandardItem(""),
                 ]
             )
             for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 2):
                 if btn_data:
-                    # btn_label, btn_func = btn_data
                     btn = QPushButton(btn_data.label)
-                    btn.setFixedWidth(150)
-                    btn.setFixedHeight(25)
+                    btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                     btn.clicked.connect(btn_data.func)
                     btn.setEnabled(btn_data.enabled)
                     if btn_data.tooltip:
                         btn.setToolTip(btn_data.tooltip)
                     container = QWidget()
+                    container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                     layout = QVBoxLayout(container)
                     layout.setContentsMargins(0, 0, 0, 0)
                     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     layout.addWidget(btn)
+                    container.adjustSize()
                     self.revisions_table.setIndexWidget(
                         self.revisions_model.index(i, col_idx), container
                     )
+
+        resize_columns = [0] if not threedi_revision else [0, 2, 3]
+        for col_idx in resize_columns:
+            self.revisions_table.horizontalHeader().setSectionResizeMode(
+                col_idx, QHeaderView.ResizeToContents
+            )
+        self.revisions_table.resizeColumnsToContents()
         self.ready.emit()
 
 
@@ -558,10 +564,12 @@ class FilesBrowser(QWidget):
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.btn_upload)
-        btn_layout.addWidget(btn_create_folder)
-        btn_layout.addWidget(self.btn_new_schematisation)
+        self.btn_import_schematisation = QPushButton("Import schematisation")
+        btn_layout = QGridLayout()
+        btn_layout.addWidget(self.btn_upload, 0, 0)
+        btn_layout.addWidget(btn_create_folder, 0, 1)
+        btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
+        btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
         layout.addLayout(btn_layout)
@@ -1034,6 +1042,7 @@ class RanaBrowser(QWidget):
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict)
+    import_schematisation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -1097,6 +1106,9 @@ class RanaBrowser(QWidget):
         layout.addLayout(top_layout)
         layout.addWidget(self.rana_browser)
         self.setLayout(layout)
+        self.resize(800, self.height())
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
         # Setup widgets that populate the rana widget
         file_signals = FileActionSignals()
         self.projects_browser = ProjectsBrowser(
@@ -1175,6 +1187,12 @@ class RanaBrowser(QWidget):
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(self.project)
+        )
+        # Connect import schematisation button
+        self.files_browser.btn_import_schematisation.clicked.connect(
+            lambda _,: self.import_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
         )
         # Connect updating folder from breadcrumb
         self.breadcrumbs.folder_selected.connect(

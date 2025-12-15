@@ -252,6 +252,17 @@ class RanaQgisPlugin:
             self.rana_browser.upload_new_schematisation_selected.connect(
                 self.loader.upload_new_schematisation_to_rana
             )
+            self.rana_browser.import_schematisation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.import_schematisation_selected.connect(
+                self.loader.import_schematisation_to_rana
+            )
+            self.loader.schematisation_import_finished.connect(self.rana_browser.enable)
+            self.loader.schematisation_import_finished.connect(
+                self.rana_browser.refresh
+            )
+
             self.loader.loading_cancelled.connect(self.rana_browser.enable)
             self.rana_browser.download_file_selected.connect(self.loader.download_file)
             self.rana_browser.download_results_selected.connect(
@@ -337,6 +348,9 @@ class RanaQgisPlugin:
             self.loader.rename_aborted.connect(self.rana_browser.refresh)
             self.loader.rename_finished.connect(
                 self.rana_browser.refresh_after_file_rename
+            )
+            self.loader.schematisation_upload_finished.connect(
+                self.rana_browser.refresh
             )
 
         self.iface.addTabifiedDockWidget(

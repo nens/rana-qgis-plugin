@@ -434,6 +434,22 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
         return None
 
 
+def get_schematisations(communication, icontains=""):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/threedi-schematisations"
+    network_manager = NetworkManager(url, authcfg_id)
+    params = {"name__icontains": icontains, "limit": 100}
+    status, error = network_manager.fetch(params)
+    if status:
+        response = network_manager.content
+        items = response["results"]
+        return items
+    else:
+        communication.show_error(f"Failed to retrieve schematisation: {error}")
+        return []
+
+
 def get_threedi_schematisation(communication: UICommunication, descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
