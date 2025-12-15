@@ -348,9 +348,6 @@ class FileView(QWidget):
                     lambda _, signal=action_signal: signal.emit(self.selected_file)
                 )
             btn_dict[action] = btn
-        # move delete to the end
-        delete_btn = btn_dict.pop(FileAction.DELETE)
-        btn_dict[FileAction.DELETE] = delete_btn
         return btn_dict
 
     def edit_file_name(self, selected_item: dict):
@@ -635,14 +632,10 @@ class FilesBrowser(QWidget):
                     lambda _, signal=action_signal: signal.emit(selected_item)
                 )
             actions.append(action)
-        # Add delete first
         for i, action in enumerate(actions):
+            if file_actions[i] == FileAction.DELETE:
+                menu.addSeparator()
             menu.addAction(action)
-        if FileAction.DELETE in file_actions:
-            delete_action = actions.pop(file_actions.index(FileAction.DELETE))
-            menu.addSeparator()
-            menu.addAction(delete_action)
-
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):

@@ -8,20 +8,22 @@ from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
 
 
 class FileAction(Enum):
-    DELETE = "Delete"
-    RENAME = "Rename"
     OPEN_IN_QGIS = "Open in QGIS"
-    UPLOAD_FILE = "Save data to Rana"
-    SAVE_VECTOR_STYLING = "Save vector style to Rana"
-    SAVE_REVISION = "Save revision to Rana"
     OPEN_WMS = "Open WMS in QGIS"
-    DOWNLOAD_RESULTS = "Download results"
+    SAVE_REVISION = "Save revision to Rana"
+    SAVE_VECTOR_STYLING = "Save vector style to Rana"
+    UPLOAD_FILE = "Save data to Rana"
     VIEW_REVISIONS = "View all revisions"
+    DOWNLOAD_RESULTS = "Download results"
+    RENAME = "Rename"
+    DELETE = "Delete"
 
     def __lt__(self, other):
-        # make FileAction's sortable by value
+        # sort a list of file actions by order of definition here
         if self.__class__ is other.__class__:
-            return self.value < other.value
+            return self._member_names_.index(self.name) < self._member_names_.index(
+                other.name
+            )
         return NotImplemented
 
 
