@@ -59,4 +59,4 @@ def setup_3di_auth(communication: UICommunication):
     if personal_api_key:
         set_3di_auth(personal_api_key)
     else:
-        communication.show_error("Failed to setup 3Di authentication.")
+        communication.show_error("Failed to setup Rana authentication.")
