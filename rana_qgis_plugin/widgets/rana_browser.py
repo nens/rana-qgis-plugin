@@ -313,7 +313,7 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
-        self.btn_create_model = QPushButton("Create 3Di Model")
+        self.btn_create_model = QPushButton("Create Rana Model")
         btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
         btn_show_revisions.clicked.connect(
             lambda _: self.file_signals.view_all_revisions_requested.emit(
@@ -469,7 +469,7 @@ class FileView(QWidget):
                     schematisation_button = self.btn_create_model
                 file_details.extend(schematisation_details)
             else:
-                self.communication.show_error("Failed to download 3Di schematisation.")
+                self.communication.show_error("Failed to download Rana schematisation.")
         self.update_file_action_buttons(selected_file)
         self.file_table_widget.clearContents()
         self.file_table_widget.setRowCount(len(file_details))

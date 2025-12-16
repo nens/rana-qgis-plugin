@@ -14,5 +14,5 @@ COGNITO_NENS_IDENTITY_PROVIDER = "NelenSchuurmans"
 SUPPORTED_DATA_TYPES = {
     "vector": "vector",
     "raster": "raster",
-    "threedi_schematisation": "3Di schematisation",
+    "threedi_schematisation": "Rana schematisation",
 }
