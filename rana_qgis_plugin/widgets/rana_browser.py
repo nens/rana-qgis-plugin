@@ -314,14 +314,20 @@ class FileView(QWidget):
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
         self.btn_create_model = QPushButton("Create 3Di Model")
+        self.btn_stack = QStackedWidget()
+        self.btn_stack.setFixedHeight(self.btn_start_simulation.sizeHint().height())
+        self.btn_stack.addWidget(QWidget())  # index 0
+        self.btn_stack.addWidget(self.btn_start_simulation)
+        self.btn_stack.addWidget(self.btn_create_model)
         btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
         btn_show_revisions.clicked.connect(
             lambda _: self.file_signals.view_all_revisions_requested.emit(
                 self.project, self.selected_file
             )
         )
-        button_layout.addWidget(self.btn_start_simulation)
-        button_layout.addWidget(self.btn_create_model)
+        self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        button_layout.addWidget(self.btn_stack)
         button_layout.addWidget(btn_show_revisions)
         file_action_btn_layout = QHBoxLayout()
         self.file_action_btn_dict = self.get_file_action_buttons()
@@ -395,9 +401,6 @@ class FileView(QWidget):
 
     def show_selected_file_details(self, selected_file):
         self.update_selected_file(selected_file)
-        schematisation_button = None
-        self.btn_create_model.hide()
-        self.btn_start_simulation.hide()
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
             selected_file["user"]["given_name"]
@@ -464,12 +467,15 @@ class FileView(QWidget):
                     ),
                 ]
                 if revision and revision.get("has_threedimodel"):
-                    schematisation_button = self.btn_start_simulation
+                    self.btn_stack.setCurrentIndex(1)
                 else:
-                    schematisation_button = self.btn_create_model
+                    self.btn_stack.setCurrentIndex(2)
                 file_details.extend(schematisation_details)
             else:
+                self.btn_stack.setCurrentIndex(0)
                 self.communication.show_error("Failed to download 3Di schematisation.")
+        else:
+            self.btn_stack.setCurrentIndex(0)
         self.update_file_action_buttons(selected_file)
         self.file_table_widget.clearContents()
         self.file_table_widget.setRowCount(len(file_details))
@@ -486,11 +492,6 @@ class FileView(QWidget):
             self.file_table_widget.setItem(i, 0, label_item)
             self.file_table_widget.setItem(i, 1, value_item)
         self.file_table_widget.resizeColumnsToContents()
-
-        # Show/hide the buttons based on the file data type
-        if schematisation_button:
-            schematisation_button.show()
-        self.file_showed.emit()
 
     def refresh(self):
         assert self.selected_file
