@@ -966,60 +966,64 @@ class Loader(QObject):
                 self.schematisation_upload_cancelled.emit()
                 return
 
-            upload_dial = UploadWizard(
-                local_schematisation,
-                schematisation,
-                schematisation_filepath,
-                organisation,
-                self.communication,
-                tc,
-                self.parent(),
-            )
-            if upload_dial.exec() == QDialog.DialogCode.Accepted:
-                new_upload = upload_dial.new_upload
-                if not new_upload:
-                    return
-                if new_upload["make_3di_model"]:
-                    user_profile = threedi_api.auth_profile_list()
-                    current_user = {
-                        "username": user_profile.username,
-                        "first_name": user_profile.first_name,
-                        "last_name": user_profile.last_name,
-                    }
-                    deletion_dlg = ModelDeletionDialog(
-                        self.communication,
-                        threedi_api,
-                        local_schematisation,
-                        organisation,
-                        current_user,
-                        self.parent(),
-                    )
-
-                    if deletion_dlg.threedi_models_to_show:
-                        if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
-                            self.communication.bar_warn("Uploading canceled...")
-                            self.schematisation_upload_cancelled.emit()
-                            return
-
-                # Do the actual upload
-                upload_worker = SchematisationUploadProgressWorker(
+        upload_dial = UploadWizard(
+            local_schematisation,
+            schematisation,
+            schematisation_filepath,
+            organisation,
+            self.communication,
+            tc,
+            self.parent(),
+        )
+        if upload_dial.exec() == QDialog.DialogCode.Accepted:
+            new_upload = upload_dial.new_upload
+            if not new_upload:
+                self.schematisation_upload_cancelled.emit()
+                return
+            if new_upload["make_3di_model"]:
+                user_profile = threedi_api.auth_profile_list()
+                current_user = {
+                    "username": user_profile.username,
+                    "first_name": user_profile.first_name,
+                    "last_name": user_profile.last_name,
+                }
+                deletion_dlg = ModelDeletionDialog(
+                    self.communication,
                     threedi_api,
                     local_schematisation,
-                    new_upload,
+                    organisation,
+                    current_user,
+                    self.parent(),
                 )
 
-                upload_worker.signals.thread_finished.connect(
-                    self.schematisation_upload_finished
-                )
-                upload_worker.signals.upload_failed.connect(
-                    self.schematisation_upload_failed
-                )
-                upload_worker.signals.upload_progress.connect(
-                    self.on_schematisation_upload_progress
-                )
+                if deletion_dlg.threedi_models_to_show:
+                    if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
+                        self.communication.bar_warn("Uploading canceled...")
+                        self.schematisation_upload_cancelled.emit()
+                        return
 
-                self.upload_thread_pool.start(upload_worker)
-                self.revision_saved.emit()
+            # Do the actual upload
+            upload_worker = SchematisationUploadProgressWorker(
+                threedi_api,
+                local_schematisation,
+                new_upload,
+            )
+
+            upload_worker.signals.thread_finished.connect(
+                self.schematisation_upload_finished
+            )
+            upload_worker.signals.upload_failed.connect(
+                self.schematisation_upload_failed
+            )
+            upload_worker.signals.upload_progress.connect(
+                self.on_schematisation_upload_progress
+            )
+
+            self.upload_thread_pool.start(upload_worker)
+            self.revision_saved.emit()
+        else:
+            # User presses cancel
+            self.schematisation_upload_cancelled.emit()
 
     def on_schematisation_upload_progress(
         self, task_name, task_progress, total_progress
