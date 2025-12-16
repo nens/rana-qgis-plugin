@@ -249,6 +249,15 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def delete_file(self, project, file):
+        confirm = QMessageBox.question(
+            self.parent(),
+            "Confirm Delete",
+            f"Are you sure you want to delete {file['id']}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if confirm == QMessageBox.StandardButton.No:
+            return
         if file["type"] == "directory":
             if delete_tenant_project_directory(project["id"], {"path": file["id"]}):
                 self.file_deleted.emit()

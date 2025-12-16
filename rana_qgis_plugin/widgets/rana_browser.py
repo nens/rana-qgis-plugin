@@ -335,7 +335,7 @@ class FileView(QWidget):
 
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
-        for action in FileAction:
+        for action in sorted(FileAction):
             if action == FileAction.VIEW_REVISIONS:
                 continue
             btn = QPushButton(action.value)
@@ -586,6 +586,9 @@ class FilesBrowser(QWidget):
         self.communication.clear_message_bar()
 
     def select_path(self, selected_path: str):
+        # Root level path is expected to be None
+        if selected_path in ["", "/", "./"]:
+            selected_path = None
         self.selected_item = {"id": selected_path, "type": "directory"}
         self.fetch_and_populate(self.project, selected_path)
 
@@ -629,13 +632,9 @@ class FilesBrowser(QWidget):
                     lambda _, signal=action_signal: signal.emit(selected_item)
                 )
             actions.append(action)
-        # Add delete first
-        if FileAction.DELETE in file_actions:
-            delete_idx = file_actions.index(FileAction.DELETE)
-            menu.addAction(actions[delete_idx])
-            menu.addSeparator()
-            actions.pop(delete_idx)
         for i, action in enumerate(actions):
+            if file_actions[i] == FileAction.DELETE:
+                menu.addSeparator()
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
