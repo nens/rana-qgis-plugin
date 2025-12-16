@@ -525,6 +525,9 @@ class LizardResultDownloadWorker(QThread):
                             file_link = get_raster_file_link(
                                 descriptor_id=descriptor_id, task_id=raster_tasks[0]
                             )
+                            if not file_link:
+                                continue
+
                             with requests.get(file_link, stream=True) as response:
                                 response.raise_for_status()
                                 total_size = int(
