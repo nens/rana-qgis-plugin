@@ -152,15 +152,18 @@ class Loader(QObject):
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
             _, local_file_path = get_local_file_path(project["slug"], file["id"])
-            if Path(local_file_path).exists():
-                confirm_downlaod = QMessageBox.question(
+            if (
+                file["data_type"] == "threedi_schematisation"
+                and Path(local_file_path).exists()
+            ):
+                confirm_download = QMessageBox.question(
                     self.parent(),
                     "Confirm Download",
                     f"{file['id']} already exists locally. Do you want to download it again?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
-                if confirm_downlaod == QMessageBox.StandardButton.No:
+                if confirm_download == QMessageBox.StandardButton.No:
                     self.on_file_download_finished(
                         project, file, local_file_path, from_thread=False
                     )
@@ -235,9 +238,6 @@ class Loader(QObject):
                 get_tenant_file_descriptor(file["descriptor_id"]),
                 schematisation,
             )
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage(f"Emit file_downloaded_finished", "DEBUG", Qgis.Info)
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
