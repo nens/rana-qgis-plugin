@@ -233,6 +233,7 @@ class RanaQgisPlugin:
 
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
+            self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
@@ -271,7 +272,6 @@ class RanaQgisPlugin:
             self.rana_browser.download_results_selected.connect(
                 self.loader.download_results
             )
-            self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_vector_styling_selected.connect(
                 self.rana_browser.disable
