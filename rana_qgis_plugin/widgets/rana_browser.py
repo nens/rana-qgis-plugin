@@ -1289,7 +1289,10 @@ class RanaBrowser(QWidget):
 
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
-        if self.rana_files.currentIndex() in [1, 2, 3]:
+        if (
+            self.rana_files.currentIndex() in [1, 2, 3]
+            and self.rana_browser.isEnabled()
+        ):
             self.refresh()
 
     @pyqtSlot()
