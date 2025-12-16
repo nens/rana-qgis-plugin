@@ -666,6 +666,7 @@ class Loader(QObject):
                     return
                 else:
                     self.download_results_cancelled.emit()
+                    return
 
         # No lizard-scenario-results in descriptor links
         self.communication.bar_warn("No lizard scenario results found in this scenario")
