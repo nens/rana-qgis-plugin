@@ -1010,7 +1010,7 @@ class Loader(QObject):
             )
 
             upload_worker.signals.thread_finished.connect(
-                self.schematisation_upload_finished
+                self.on_schematisation_upload_finished
             )
             upload_worker.signals.upload_failed.connect(
                 self.schematisation_upload_failed
@@ -1025,13 +1025,18 @@ class Loader(QObject):
             # User presses cancel
             self.schematisation_upload_cancelled.emit()
 
+    def on_schematisation_upload_finished(self):
+        self.communication.bar_info("Revision uploaded")
+        self.communication.clear_message_bar()
+        self.schematisation_upload_finished.emit()
+
     def on_schematisation_upload_progress(
-        self, task_name, task_progress, total_progress
+        self, task_name, task_progress, total_progress, progress_per_task
     ):
         self.communication.progress_bar(
-            f"Uploading revision",
+            f"Uploading revision: ({task_name.lower()})",
             0,
             100,
-            total_progress,
+            int(total_progress + ((task_progress / 100.0) * progress_per_task)),
             clear_msg_bar=True,
         )
