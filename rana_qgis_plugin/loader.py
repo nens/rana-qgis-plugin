@@ -435,10 +435,19 @@ class Loader(QObject):
             self.simulation_started_failed.emit()
             return
 
-        # Retrieve templates
-        current_model = tc.fetch_schematisation_revision_3di_models(
+        # Retrieve models
+        current_models = tc.fetch_schematisation_revision_3di_models(
             schematisation["schematisation"]["id"], revision["id"]
-        )[0]
+        )
+        # Retrieve the active model (Disabled=False)
+        current_model = next(
+            (x for x in current_models if (not x.disabled) and x.is_valid), None
+        )
+        if not current_model:
+            self.communication.show_warn(
+                "No enabled valid model for this schematisation revision"
+            )
+            self.simulation_started_failed.emit()
 
         template_dialog = ModelSelectionDialog(
             self.communication,
