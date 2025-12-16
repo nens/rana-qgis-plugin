@@ -1219,8 +1219,10 @@ class SchematisationUploadProgressWorker(QRunnable):
                 task()
                 self.total_progress = self.progress_per_task * i
             self.current_task = "DONE"
+            self.current_task_progress = 0
             self.total_progress = 100
             self.report_upload_progress()
+            time.sleep(2)
             msg = f"Schematisation '{self.schematisation.name}' (revision: {self.revision.number}) files uploaded"
             self.signals.thread_finished.emit(msg)
         except Exception as e:

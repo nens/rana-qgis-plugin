@@ -1026,7 +1026,6 @@ class Loader(QObject):
             self.schematisation_upload_cancelled.emit()
 
     def on_schematisation_upload_finished(self):
-        self.communication.bar_info("Revision uploaded")
         self.communication.clear_message_bar()
         self.schematisation_upload_finished.emit()
 
