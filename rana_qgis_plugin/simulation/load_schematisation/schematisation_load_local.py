@@ -59,7 +59,9 @@ class SchematisationLoad(uicls, basecls):
             subdir_item = QStandardItem(wip_revision.sub_dir)
             self.tv_revisions_model.appendRow([number_item, subdir_item])
         for revision_number, local_revision in sorted(
-            local_schematisation.revisions.items(), key=lambda x: x[0], reverse=True
+            local_schematisation.revisions.items(),
+            key=lambda x: x[0],
+            reverse=True
         ):
             number_item = QStandardItem(str(revision_number))
             number_item.setData(local_revision, role=Qt.UserRole)

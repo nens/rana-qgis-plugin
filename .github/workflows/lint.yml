@@ -13,5 +13,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Print Ruff version
+        run: ruff --version
+
       - name: Run pre-commit checks
         uses: pre-commit/action@v3.0.1
