@@ -33,10 +33,10 @@ class ResultBrowser(QDialog):
         self.selected_pixelsize = None
         self.selected_crs = None
 
-        results_group = QGroupBox("Results", self)
+        results_group = QGroupBox("Download results", self)
         results_group.setLayout(QGridLayout())
 
-        postprocessed_rasters_group = QGroupBox("Generate raster results", self)
+        postprocessed_rasters_group = QGroupBox("Generate results", self)
         postprocessed_rasters_group.setLayout(QGridLayout())
 
         self.results_table = QTableWidget(self)

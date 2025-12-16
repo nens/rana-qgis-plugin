@@ -637,6 +637,7 @@ class Loader(QObject):
                             if file_overwrite == "Download again":
                                 filtered_result_ids.append(result_id)
                             elif file_overwrite == "Cancel":
+                                self.download_results_cancelled.emit()
                                 return
                         else:
                             filtered_result_ids.append(result_id)
