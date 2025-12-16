@@ -662,8 +662,13 @@ class Loader(QObject):
                         self.on_file_download_progress
                     )
                     self.lizard_result_download_worker.start()
+                    return
                 else:
                     self.download_results_cancelled.emit()
+
+        # No lizard-scenario-results in descriptor links
+        self.communication.bar_warn("No lizard scenario results found in this scenario")
+        self.file_download_failed.emit("No lizard scenario results found")
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):
