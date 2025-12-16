@@ -135,10 +135,22 @@ class SchematisationNameWidget(QWidget):
         self.le_tags.setPlaceholderText("Comma-separated tags (optional)")
         gridLayout.addWidget(self.le_tags, 4, 2)
 
-        gridLayout.addWidget(QLabel("Organisation:"), 5, 0)
-
+        organisations_label = QLabel("3Di Organisation:")
         self.cbo_organisations = QComboBox()
+        gridLayout.addWidget(organisations_label, 5, 0)
         gridLayout.addWidget(self.cbo_organisations, 5, 1, 1, 2)
+        # hide dropdown if exactly 1 3Di organisation is available
+        # 0 available organisations should be blocked in the Rana tenant creation menu but add an assert just in case
+        assert len(organisations) > 0
+        if len(organisations) > 1:
+            self.organisations = organisations
+            self.populate_organisations()
+            self.cbo_organisations.currentTextChanged.connect(
+                partial(save_3di_settings, "threedi/last_used_organisation")
+            )
+        else:
+            organisations_label.hide()
+            self.cbo_organisations.hide()
 
         gridLayout.addItem(
             QSpacerItem(20, 25, QSizePolicy.Minimum, QSizePolicy.Fixed), 6, 0
@@ -165,6 +177,7 @@ class SchematisationNameWidget(QWidget):
         self.btn_browse_geopackage.setEnabled(False)
         self.btn_browse_geopackage.setText("...")
         horizontalLayout_2.addWidget(self.btn_browse_geopackage)
+        self.btn_browse_geopackage.clicked.connect(self.browse_existing_geopackage)
 
         gridLayout_2.addLayout(horizontalLayout_2, 2, 0)
 
@@ -184,13 +197,6 @@ class SchematisationNameWidget(QWidget):
 
         gridLayout.addItem(
             QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 9, 0
-        )
-
-        self.organisations = organisations
-        self.populate_organisations()
-        self.btn_browse_geopackage.clicked.connect(self.browse_existing_geopackage)
-        self.cbo_organisations.currentTextChanged.connect(
-            partial(save_3di_settings, "threedi/last_used_organisation")
         )
 
     def populate_organisations(self):

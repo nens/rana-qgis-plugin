@@ -69,8 +69,11 @@ class NewSchematisationWizard(QWizard):
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.rana_path = None
+        self.available_organisations = organisations
 
-        self.schematisation_name_page = SchematisationNamePage(organisations, self)
+        self.schematisation_name_page = SchematisationNamePage(
+            self.available_organisations, self
+        )
         self.schematisation_explain_page = SchematisationExplainPage(self)
         self.schematisation_settings_page = SchematisationSettingsPage(
             self.communication, self
@@ -109,9 +112,15 @@ class NewSchematisationWizard(QWizard):
         else:
             tags = [tag.strip() for tag in tags.split(",")]
 
-        organisation = self.schematisation_name_page.field(
-            "schematisation_organisation"
-        )
+        # when there is exactly one 3Di organisation available for a tenant
+        # no organisation dropdown is shown in the wizard
+        if len(self.available_organisations) > 1:
+            organisation = self.schematisation_name_page.field(
+                "schematisation_organisation"
+            )
+        else:
+            organisation = self.available_organisations[0]
+
         owner = organisation.unique_id
 
         schematisation_settings = self.schematisation_settings_page.main_widget.collect_new_schematisation_settings()
