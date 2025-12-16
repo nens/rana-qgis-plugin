@@ -200,7 +200,7 @@ class Loader(QObject):
                         if self.communication.ask(
                             self.parent(),
                             "Rana",
-                            "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                            "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
                         ):
                             ra_tool.load_result(result_path, admin_path)
         else:
@@ -637,6 +637,7 @@ class Loader(QObject):
                             if file_overwrite == "Download again":
                                 filtered_result_ids.append(result_id)
                             elif file_overwrite == "Cancel":
+                                self.download_results_cancelled.emit()
                                 return
                         else:
                             filtered_result_ids.append(result_id)
@@ -662,8 +663,13 @@ class Loader(QObject):
                         self.on_file_download_progress
                     )
                     self.lizard_result_download_worker.start()
+                    return
                 else:
                     self.download_results_cancelled.emit()
+
+        # No lizard-scenario-results in descriptor links
+        self.communication.bar_warn("No lizard scenario results found in this scenario")
+        self.file_download_failed.emit("No lizard scenario results found")
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):
@@ -887,7 +893,7 @@ class Loader(QObject):
         )
         if response:
             message = (
-                f"3Di schematisation {new_schematisation.name} added to Rana project"
+                f"Rana schematisation {new_schematisation.name} added to Rana project"
             )
             if rana_path:
                 message += f" in directory {rana_path}"
@@ -895,7 +901,7 @@ class Loader(QObject):
         else:
             self.schematisation_upload_failed.emit()
             self.communication.bar_error(
-                f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
+                f"Could not add Rana schematisation {new_schematisation.name} to Rana project {project['name']}!"
             )
         self.schematisation_upload_finished.emit()
         local_schematisation = new_schematisation_wizard.new_local_schematisation
@@ -960,68 +966,76 @@ class Loader(QObject):
                 self.schematisation_upload_cancelled.emit()
                 return
 
-            upload_dial = UploadWizard(
-                local_schematisation,
-                schematisation,
-                schematisation_filepath,
-                organisation,
-                self.communication,
-                tc,
-                self.parent(),
-            )
-            if upload_dial.exec() == QDialog.DialogCode.Accepted:
-                new_upload = upload_dial.new_upload
-                if not new_upload:
-                    return
-                if new_upload["make_3di_model"]:
-                    user_profile = threedi_api.auth_profile_list()
-                    current_user = {
-                        "username": user_profile.username,
-                        "first_name": user_profile.first_name,
-                        "last_name": user_profile.last_name,
-                    }
-                    deletion_dlg = ModelDeletionDialog(
-                        self.communication,
-                        threedi_api,
-                        local_schematisation,
-                        organisation,
-                        current_user,
-                        self.parent(),
-                    )
-
-                    if deletion_dlg.threedi_models_to_show:
-                        if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
-                            self.communication.bar_warn("Uploading canceled...")
-                            self.schematisation_upload_cancelled.emit()
-                            return
-
-                # Do the actual upload
-                upload_worker = SchematisationUploadProgressWorker(
+        upload_dial = UploadWizard(
+            local_schematisation,
+            schematisation,
+            schematisation_filepath,
+            organisation,
+            self.communication,
+            tc,
+            self.parent(),
+        )
+        if upload_dial.exec() == QDialog.DialogCode.Accepted:
+            new_upload = upload_dial.new_upload
+            if not new_upload:
+                self.schematisation_upload_cancelled.emit()
+                return
+            if new_upload["make_3di_model"]:
+                user_profile = threedi_api.auth_profile_list()
+                current_user = {
+                    "username": user_profile.username,
+                    "first_name": user_profile.first_name,
+                    "last_name": user_profile.last_name,
+                }
+                deletion_dlg = ModelDeletionDialog(
+                    self.communication,
                     threedi_api,
                     local_schematisation,
-                    new_upload,
+                    organisation,
+                    current_user,
+                    self.parent(),
                 )
 
-                upload_worker.signals.thread_finished.connect(
-                    self.schematisation_upload_finished
-                )
-                upload_worker.signals.upload_failed.connect(
-                    self.schematisation_upload_failed
-                )
-                upload_worker.signals.upload_progress.connect(
-                    self.on_schematisation_upload_progress
-                )
+                if deletion_dlg.threedi_models_to_show:
+                    if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
+                        self.communication.bar_warn("Uploading canceled...")
+                        self.schematisation_upload_cancelled.emit()
+                        return
 
-                self.upload_thread_pool.start(upload_worker)
-                self.revision_saved.emit()
+            # Do the actual upload
+            upload_worker = SchematisationUploadProgressWorker(
+                threedi_api,
+                local_schematisation,
+                new_upload,
+            )
+
+            upload_worker.signals.thread_finished.connect(
+                self.on_schematisation_upload_finished
+            )
+            upload_worker.signals.upload_failed.connect(
+                self.schematisation_upload_failed
+            )
+            upload_worker.signals.upload_progress.connect(
+                self.on_schematisation_upload_progress
+            )
+
+            self.upload_thread_pool.start(upload_worker)
+            self.revision_saved.emit()
+        else:
+            # User presses cancel
+            self.schematisation_upload_cancelled.emit()
+
+    def on_schematisation_upload_finished(self):
+        self.communication.clear_message_bar()
+        self.schematisation_upload_finished.emit()
 
     def on_schematisation_upload_progress(
-        self, task_name, task_progress, total_progress
+        self, task_name, task_progress, total_progress, progress_per_task
     ):
         self.communication.progress_bar(
-            f"Uploading revision",
+            f"Uploading revision: ({task_name.lower()})",
             0,
             100,
-            total_progress,
+            int(total_progress + ((task_progress / 100.0) * progress_per_task)),
             clear_msg_bar=True,
         )

@@ -1166,7 +1166,7 @@ class UploadWorkerSignals(QObject):
     thread_finished = pyqtSignal(str)
     upload_failed = pyqtSignal(str)
     upload_progress = pyqtSignal(
-        str, int, int
+        str, int, int, int
     )  # task name, task progress, total progress
     upload_canceled = pyqtSignal(int)
     revision_committed = pyqtSignal()
@@ -1210,17 +1210,19 @@ class SchematisationUploadProgressWorker(QRunnable):
             self.report_upload_progress()
             self.signals.thread_finished.emit("Nothing to upload or process")
             return
-        progress_per_task = int(1 / len(tasks_list) * 100)
+        self.progress_per_task = int(1 / len(tasks_list) * 100)
         try:
             for i, task in enumerate(tasks_list, start=1):
                 if self.upload_canceled:
                     self.signals.upload_canceled.emit()
                     return
                 task()
-                self.total_progress = progress_per_task * i
+                self.total_progress = self.progress_per_task * i
             self.current_task = "DONE"
+            self.current_task_progress = 0
             self.total_progress = 100
             self.report_upload_progress()
+            time.sleep(2)
             msg = f"Schematisation '{self.schematisation.name}' (revision: {self.revision.number}) files uploaded"
             self.signals.thread_finished.emit(msg)
         except Exception as e:
@@ -1400,7 +1402,7 @@ class SchematisationUploadProgressWorker(QRunnable):
 
     def create_3di_model_task(self, inherit_templates=False):
         """Run creation of the new model out of revision data."""
-        self.current_task = "MAKE 3DI MODEL"
+        self.current_task = "MAKE MODEL"
         self.current_task_progress = 0
         self.report_upload_progress()
         # Wait for the 'modelchecker' validations
@@ -1472,7 +1474,10 @@ class SchematisationUploadProgressWorker(QRunnable):
     def report_upload_progress(self):
         """Report upload progress."""
         self.signals.upload_progress.emit(
-            self.current_task, self.current_task_progress, self.total_progress
+            self.current_task,
+            self.current_task_progress,
+            self.total_progress,
+            self.progress_per_task,
         )
 
     def monitor_upload_progress(self, chunk_size, total_size):

@@ -313,7 +313,7 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
-        self.btn_create_model = QPushButton("Create 3Di Model")
+        self.btn_create_model = QPushButton("Create Rana Model")
         self.btn_stack = QStackedWidget()
         self.btn_stack.setFixedHeight(self.btn_start_simulation.sizeHint().height())
         self.btn_stack.addWidget(QWidget())  # index 0
@@ -1290,7 +1290,10 @@ class RanaBrowser(QWidget):
 
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
-        if self.rana_files.currentIndex() in [1, 2, 3]:
+        if (
+            self.rana_files.currentIndex() in [1, 2, 3]
+            and self.rana_browser.isEnabled()
+        ):
             self.refresh()
 
     @pyqtSlot()
