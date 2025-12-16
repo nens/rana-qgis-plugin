@@ -984,7 +984,7 @@ class Loader(QObject):
                         if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
                             self.communication.bar_warn("Uploading canceled...")
                             self.schematisation_upload_cancelled.emit()
-                        return
+                            return
 
                 # Do the actual upload
                 upload_worker = SchematisationUploadProgressWorker(
