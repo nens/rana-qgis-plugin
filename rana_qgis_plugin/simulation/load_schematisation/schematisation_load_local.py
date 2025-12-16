@@ -59,9 +59,7 @@ class SchematisationLoad(uicls, basecls):
             subdir_item = QStandardItem(wip_revision.sub_dir)
             self.tv_revisions_model.appendRow([number_item, subdir_item])
         for revision_number, local_revision in sorted(
-                local_schematisation.revisions.items(),
-                key=lambda x: x[0],
-                reverse=True
+            local_schematisation.revisions.items(), key=lambda x: x[0], reverse=True
         ):
             number_item = QStandardItem(str(revision_number))
             number_item.setData(local_revision, role=Qt.UserRole)
@@ -99,9 +97,7 @@ class SchematisationLoad(uicls, basecls):
         local_revision = self.get_selected_local_revision()
         if not isinstance(local_revision, WIPRevision):
             title = "Pick action"
-            question = (
-                f"Replace your WIP with data from the revision {local_revision.number}?"
-            )
+            question = f"Upload data from revision {local_revision.number}?"
             picked_action_name = self.communication.custom_ask(
                 self, title, question, "Replace", "Cancel"
             )
