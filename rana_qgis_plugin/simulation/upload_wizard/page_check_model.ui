@@ -295,7 +295,7 @@
         </font>
        </property>
        <property name="text">
-        <string>⚠Cannot check schematisation. Please make sure 3Di Results Analysis is installed and activated to fix this.</string>
+        <string>⚠Cannot check schematisation. Please make sure Results Analysis is installed and activated to fix this.</string>
        </property>
        <property name="wordWrap">
         <bool>true</bool>

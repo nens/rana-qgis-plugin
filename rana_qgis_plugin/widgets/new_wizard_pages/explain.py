@@ -36,7 +36,7 @@ class SchematisationExplainWidget(QWidget):
         <p align="justify"><span style=" font-size:14pt;">
         Almost there! To create a valid schematisation, you will have to choose many settings.
         Choosing the right settings is important for a well-working model. This can be quite a challenge,
-        requiring a thorough understanding of the 3Di computational core.</span></p>
+        requiring a thorough understanding of the Rana computational core.</span></p>
         <p align="justify"><br/></p>
         <p align="justify"><span style=" font-size:14pt;">
         This wizard will help you with this as much as possible. After you have completed it,

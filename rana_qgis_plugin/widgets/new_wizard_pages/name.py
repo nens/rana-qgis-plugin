@@ -135,7 +135,7 @@ class SchematisationNameWidget(QWidget):
         self.le_tags.setPlaceholderText("Comma-separated tags (optional)")
         gridLayout.addWidget(self.le_tags, 4, 2)
 
-        organisations_label = QLabel("3Di Organisation:")
+        organisations_label = QLabel("Rana Organisation:")
         self.cbo_organisations = QComboBox()
         gridLayout.addWidget(organisations_label, 5, 0)
         gridLayout.addWidget(self.cbo_organisations, 5, 1, 1, 2)

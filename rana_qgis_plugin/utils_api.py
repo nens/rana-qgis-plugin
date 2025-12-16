@@ -487,7 +487,7 @@ def get_threedi_personal_api_key(
     communication: UICommunication, user_id: str
 ) -> Optional[str]:
     communication.clear_message_bar()
-    communication.bar_info("Getting 3Di personal API key ...")
+    communication.bar_info("Getting Rana personal API key ...")
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/3di-personal-api-keys"
@@ -500,10 +500,10 @@ def get_threedi_personal_api_key(
         if "key" in response:
             return response["key"]
         else:
-            communication.show_error("Failed to retrieve 3Di personal API key.")
+            communication.show_error("Failed to retrieve Rana personal API key.")
             return None
     else:
-        communication.show_error(f"Failed to retrieve 3Di personal api key: {error}")
+        communication.show_error(f"Failed to retrieve Rana personal api key: {error}")
         return None
 
 

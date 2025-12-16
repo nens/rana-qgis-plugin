@@ -200,7 +200,7 @@ class Loader(QObject):
                         if self.communication.ask(
                             self.parent(),
                             "Rana",
-                            "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                            "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
                         ):
                             ra_tool.load_result(result_path, admin_path)
         else:
@@ -893,7 +893,7 @@ class Loader(QObject):
         )
         if response:
             message = (
-                f"3Di schematisation {new_schematisation.name} added to Rana project"
+                f"Rana schematisation {new_schematisation.name} added to Rana project"
             )
             if rana_path:
                 message += f" in directory {rana_path}"
@@ -901,7 +901,7 @@ class Loader(QObject):
         else:
             self.schematisation_upload_failed.emit()
             self.communication.bar_error(
-                f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
+                f"Could not add Rana schematisation {new_schematisation.name} to Rana project {project['name']}!"
             )
         self.schematisation_upload_finished.emit()
         local_schematisation = new_schematisation_wizard.new_local_schematisation
