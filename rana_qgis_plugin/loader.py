@@ -857,33 +857,36 @@ class Loader(QObject):
 
         local_schematisation = new_schematisation_wizard.new_local_schematisation
         new_schematisation = new_schematisation_wizard.new_schematisation
-        if new_schematisation is None:
+        if new_schematisation is None or local_schematisation is None:
             self.communication.bar_error("Schematisation creation failed")
             self.schematisation_upload_failed.emit()
             return
 
-        db_path = new_schematisation_wizard.new_local_schematisation.schematisation_db_filepath
-        raster_dir = (
-            new_schematisation_wizard.new_local_schematisation.wip_revision.raster_dir
-        )
-        rasters = new_schematisation_wizard.get_paths_from_geopackage(db_path)
-        dem_file = rasters["model_settings"]["dem_file"]
-        if dem_file:
-            dem_file = os.path.join(raster_dir, dem_file)
-        friction_coefficient_file = rasters["model_settings"][
-            "friction_coefficient_file"
-        ]
-        if friction_coefficient_file:
-            friction_coefficient_file = os.path.join(
-                raster_dir, friction_coefficient_file
+        db_path = local_schematisation.schematisation_db_filepath
+        if not db_path or not local_schematisation.wip_revision:
+            self.communication.bar_warning(
+                "Revision creation failed; please create one manually later in the Rana browser"
             )
+        else:
+            raster_dir = local_schematisation.wip_revision.raster_dir
+            rasters = new_schematisation_wizard.get_paths_from_geopackage(db_path)
+            dem_file = rasters["model_settings"]["dem_file"]
+            if dem_file:
+                dem_file = os.path.join(raster_dir, dem_file)
+            friction_coefficient_file = rasters["model_settings"][
+                "friction_coefficient_file"
+            ]
+            if friction_coefficient_file:
+                friction_coefficient_file = os.path.join(
+                    raster_dir, friction_coefficient_file
+                )
 
-        self.save_initial_revision(
-            new_schematisation,
-            local_schematisation,
-            dem_file=dem_file,
-            friction_coefficient_file=friction_coefficient_file,
-        )
+            self.save_initial_revision(
+                new_schematisation,
+                local_schematisation,
+                dem_file=dem_file,
+                friction_coefficient_file=friction_coefficient_file,
+            )
 
         rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
         # check if directory path exists, otherwise make it
