@@ -645,7 +645,6 @@ class Loader(QObject):
         else:
             results = {}
             # grid and crs are not used when results is empty
-            # todo: add a check to the workers?
             grid = None
             crs = "EPSG:28992"
         result_browser = ResultBrowser(None, results, crs)
