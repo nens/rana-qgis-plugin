@@ -316,7 +316,6 @@ class FileView(QWidget):
         self.btn_create_model = QPushButton("Create Rana Model")
         self.btn_stack = QStackedWidget()
         self.btn_stack.setFixedHeight(self.btn_start_simulation.sizeHint().height())
-        self.btn_stack.addWidget(QWidget())  # index 0
         self.btn_stack.addWidget(self.btn_start_simulation)
         self.btn_stack.addWidget(self.btn_create_model)
         btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
@@ -467,15 +466,17 @@ class FileView(QWidget):
                     ),
                 ]
                 if revision and revision.get("has_threedimodel"):
-                    self.btn_stack.setCurrentIndex(1)
+                    self.btn_stack.setCurrentIndex(0)
                 else:
-                    self.btn_stack.setCurrentIndex(2)
+                    self.btn_stack.setCurrentIndex(1)
+                self.btn_stack.show()
                 file_details.extend(schematisation_details)
             else:
-                self.btn_stack.setCurrentIndex(0)
+                self.btn_stack.hide()
                 self.communication.show_error("Failed to download 3Di schematisation.")
         else:
-            self.btn_stack.setCurrentIndex(0)
+            self.btn_stack.hide()
+            self.btn_stack.hide()
         self.update_file_action_buttons(selected_file)
         self.file_table_widget.clearContents()
         self.file_table_widget.setRowCount(len(file_details))
