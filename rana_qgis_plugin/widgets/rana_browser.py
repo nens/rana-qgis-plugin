@@ -1049,7 +1049,7 @@ class RanaBrowser(QWidget):
         self.setup_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)
-        self.refresh_timer.start(60000)
+        self.refresh_timer.start(5000)
 
     @property
     def project(self):

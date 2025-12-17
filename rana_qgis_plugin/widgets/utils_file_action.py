@@ -45,8 +45,11 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     if data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         meta = descriptor["meta"] if descriptor else None
-        if meta and meta["simulation"]["software"]["id"] == "3Di":
-            actions += [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
+        if meta:
+            if "id" in meta:
+                actions.append(FileAction.DOWNLOAD_RESULTS)
+            if meta["simulation"]["software"]["id"] == "3Di":
+                actions.append(FileAction.OPEN_WMS)
     return sorted(actions)
 
 

@@ -581,38 +581,49 @@ class Loader(QObject):
             self.download_results_cancelled.emit()
             return
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        if (
-            not descriptor["meta"]
-            or not descriptor["meta"]["simulation"]
-            or not descriptor["meta"]["simulation"]["name"]
-        ):
-            if descriptor["status"]["id"] == "processing":
-                self.communication.show_warn(
-                    "Scenario is still processing; please try again later"
-                )
-            else:
-                self.communication.show_error(
-                    "Scenario is corrupt; did you upload a zip directly?"
-                )
+        meta = descriptor.get("meta", {})
+        if not meta.get("id"):
+            self.communication.show_warn("Post-processing results not yet available")
             self.download_results_cancelled.emit()
             return
-        schematisation_name = descriptor["meta"]["schematisation"]["name"]
-        schematisation_id = descriptor["meta"]["schematisation"]["id"]
-        schematisation_version = descriptor["meta"]["schematisation"]["version"]
-        assert descriptor["data_type"] == "scenario"
+        if descriptor.get("status", {}).get("id") not in ["completed", "processing"]:
+            self.communication.show_warn(f"Post-processing results cannot be retrieved")
+            self.download_results_cancelled.emit()
+            return
+        from qgis.core import Qgis, QgsMessageLog
 
-        # Determine local target folder for simulatuon
+        tc = ThreediCalls(get_threedi_api())
+        QgsMessageLog.logMessage(f"{meta=}", "DEBUG", Qgis.Info)
+        schematisation_name = meta["schematisation"]["name"]
+        schematisation_id = meta["schematisation"]["id"]
+        schematisation_version = meta["schematisation"]["version"]
+        assert descriptor["data_type"] == "scenario"
+        simulation_name = meta["simulation"]["name"]
+        # Simulation name is only set after post-processing is fully finished
+        if not simulation_name:
+            if meta["simulation"].get("id"):
+                simulation_name = tc.fetch_simulation(meta["simulation"].get("id")).name
+            else:
+                self.communication.show_warn(
+                    "Post-processing results not yet available"
+                )
+                self.download_results_cancelled.emit()
+                return
+
+        # Determine local target folder for simulation
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
             schematisation_name.replace("/", "-").replace("\\", "-"),
             schematisation_version,
-            descriptor["meta"]["simulation"]["name"]
-            .replace("/", "-")
-            .replace("\\", "-"),
+            simulation_name.replace("/", "-").replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
-
+        QgsMessageLog.logMessage(
+            f"status = {descriptor.get('status', {}).get('id')}", "DEBUG", Qgis.Info
+        )
+        QgsMessageLog.logMessage(f'{descriptor["links"]=}', "DEBUG", Qgis.Info)
+        QgsMessageLog.logMessage(f"{descriptor=}", "DEBUG", Qgis.Info)
         for link in descriptor["links"]:
             if link["rel"] == "lizard-scenario-results":
                 grid = deepcopy(descriptor["meta"]["grid"])
@@ -676,7 +687,6 @@ class Loader(QObject):
                 else:
                     self.download_results_cancelled.emit()
                     return
-
         # No lizard-scenario-results in descriptor links
         self.communication.bar_warn("No lizard scenario results found in this scenario")
         self.file_download_failed.emit("No lizard scenario results found")
