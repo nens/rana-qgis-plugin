@@ -592,10 +592,8 @@ class Loader(QObject):
             self.communication.show_warn(f"Post-processing results cannot be retrieved")
             self.download_results_cancelled.emit()
             return
-        from qgis.core import Qgis, QgsMessageLog
 
         tc = ThreediCalls(get_threedi_api())
-        QgsMessageLog.logMessage(f"{meta=}", "DEBUG", Qgis.Info)
         schematisation_name = meta["schematisation"]["name"]
         schematisation_id = meta["schematisation"]["id"]
         schematisation_version = meta["schematisation"]["version"]
@@ -621,13 +619,6 @@ class Loader(QObject):
             simulation_name.replace("/", "-").replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
-        QgsMessageLog.logMessage(
-            f"status = {descriptor.get('status', {}).get('id')}", "DEBUG", Qgis.Info
-        )
-        QgsMessageLog.logMessage(f'{descriptor["links"]=}', "DEBUG", Qgis.Info)
-        QgsMessageLog.logMessage(f"{descriptor=}", "DEBUG", Qgis.Info)
-        QgsMessageLog.logMessage(f'{descriptor["meta"]["grid"]=}', "DEBUG", Qgis.Info)
-
         link = next(
             (
                 link
