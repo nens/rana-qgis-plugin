@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QGroupBox,
+    QLabel,
     QLineEdit,
     QTableWidget,
     QTableWidgetItem,
@@ -22,7 +23,7 @@ from rana_qgis_plugin.utils_api import get_filename_from_attachment_url
 
 
 class ResultBrowser(QDialog):
-    def __init__(self, parent, results, scenario_crs):
+    def __init__(self, parent, results: dict, scenario_crs: str):
         super().__init__(parent)
         self.setWindowTitle(PLUGIN_NAME)
         self.setMinimumWidth(400)
@@ -100,20 +101,18 @@ class ResultBrowser(QDialog):
                 self.postprocessed_rasters_table.item(i, 0).checkState()
                 for i in range(self.postprocessed_rasters_table.rowCount())
             ]
-            if any(state == Qt.CheckState.Checked for state in select_states):
-                self.no_data_box.setEnabled(True)
-                self.pixelsize_box.setEnabled(True)
-                self.crs_select_box.setEnabled(True)
-            else:
-                self.no_data_box.setEnabled(False)
-                self.pixelsize_box.setEnabled(False)
-                self.crs_select_box.setEnabled(False)
+            any_selected = (
+                any(state == Qt.CheckState.Checked for state in select_states)
+                and len(select_states) > 0
+            )
+            self.no_data_box.setEnabled(any_selected)
+            self.pixelsize_box.setEnabled(any_selected)
+            self.crs_select_box.setEnabled(any_selected)
 
         self.postprocessed_rasters_table.cellChanged.connect(check_raster_selected)
 
         postprocessed_rasters_group.layout().addWidget(inputs_group)
-
-        for result in [r for r in results if r["attachment_url"]]:
+        for result in [r for r in results if r.get("attachment_url")]:
             if result["name"].lower() in [
                 "raw 3di output",
                 "grid administration",
@@ -142,7 +141,11 @@ class ResultBrowser(QDialog):
         excluded_rasters = ["depth-dtri", "rain-quad", "s1-dtri"]
 
         for i, result in enumerate(
-            [r for r in results if r["raster_id"] and r["code"] not in excluded_rasters]
+            [
+                r
+                for r in results
+                if r.get("raster_id") and r.get("code") not in excluded_rasters
+            ]
         ):
             self.postprocessed_rasters_table.insertRow(
                 self.postprocessed_rasters_table.rowCount()
@@ -159,6 +162,17 @@ class ResultBrowser(QDialog):
             file_name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.postprocessed_rasters_table.setItem(i, 0, type_item)
             self.postprocessed_rasters_table.setItem(i, 1, file_name_item)
+
+        # When Lizard post-processing is still running, results is empty and only raw data can be downloaded
+        if len(results) == 0:
+            warning_label = QLabel(
+                "Post-processing results are not available because they are still being processed."
+            )
+            layout.addWidget(warning_label)
+            self.no_data_box.setEnabled(False)
+            self.pixelsize_box.setEnabled(False)
+            self.crs_select_box.setEnabled(False)
+            self.download_raw_data_bx.setChecked(True)
 
         self.results_table.resizeColumnsToContents()
         layout.addWidget(results_group)

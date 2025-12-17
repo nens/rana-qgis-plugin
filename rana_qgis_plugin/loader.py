@@ -626,77 +626,85 @@ class Loader(QObject):
         )
         QgsMessageLog.logMessage(f'{descriptor["links"]=}', "DEBUG", Qgis.Info)
         QgsMessageLog.logMessage(f"{descriptor=}", "DEBUG", Qgis.Info)
-        for link in descriptor["links"]:
-            if link["rel"] == "lizard-scenario-results":
-                grid = deepcopy(descriptor["meta"]["grid"])
-                results = get_tenant_file_descriptor_view(
-                    file["descriptor_id"], "lizard-scenario-results"
+        QgsMessageLog.logMessage(f'{descriptor["meta"]["grid"]=}', "DEBUG", Qgis.Info)
+
+        link = next(
+            (
+                link
+                for link in descriptor["links"]
+                if link["rel"] == "lizard-scenario-results"
+            ),
+            None,
+        )
+        if link:
+            grid = deepcopy(descriptor["meta"]["grid"])
+            results = get_tenant_file_descriptor_view(
+                file["descriptor_id"], "lizard-scenario-results"
+            )
+            crs = grid["crs"]
+        else:
+            results = {}
+            # grid and crs are not used when results is empty
+            # todo: add a check to the workers?
+            grid = None
+            crs = "EPSG:28992"
+        result_browser = ResultBrowser(None, results, crs)
+        if result_browser.exec() == QDialog.DialogCode.Accepted:
+            result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
+            if len(result_ids) == 0 and not result_browser.get_download_raw_result():
+                self.download_results_cancelled.emit()
+                return
+            filtered_result_ids = []
+            for result_id in result_ids:
+                result = [r for r in results if r.get("id") == result_id][0]
+                file_name = map_result_to_file_name(result)
+                target_file = bypass_max_path_limit(
+                    os.path.join(target_folder, file_name)
                 )
-                result_browser = ResultBrowser(None, results, grid["crs"])
-                if result_browser.exec() == QDialog.DialogCode.Accepted:
-                    result_ids, nodata, pixelsize, crs = (
-                        result_browser.get_selected_results()
+                # Check whether the files already exist locally
+                if os.path.exists(target_file):
+                    file_overwrite = self.communication.custom_ask(
+                        self.parent(),
+                        "File exists",
+                        f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                        "Cancel",
+                        "Download again",
+                        "Continue",
                     )
-                    if (
-                        len(result_ids) == 0
-                        and not result_browser.get_download_raw_result()
-                    ):
+                    if file_overwrite == "Download again":
+                        filtered_result_ids.append(result_id)
+                    elif file_overwrite == "Cancel":
                         self.download_results_cancelled.emit()
                         return
-                    filtered_result_ids = []
-                    for result_id in result_ids:
-                        result = [r for r in results if r["id"] == result_id][0]
-                        file_name = map_result_to_file_name(result)
-                        target_file = bypass_max_path_limit(
-                            os.path.join(target_folder, file_name)
-                        )
-                        # Check whether the files already exist locally
-                        if os.path.exists(target_file):
-                            file_overwrite = self.communication.custom_ask(
-                                self.parent(),
-                                "File exists",
-                                f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
-                                "Cancel",
-                                "Download again",
-                                "Continue",
-                            )
-                            if file_overwrite == "Download again":
-                                filtered_result_ids.append(result_id)
-                            elif file_overwrite == "Cancel":
-                                self.download_results_cancelled.emit()
-                                return
-                        else:
-                            filtered_result_ids.append(result_id)
-
-                    self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        project=project,
-                        file=file,
-                        result_ids=filtered_result_ids,
-                        target_folder=target_folder,
-                        grid=grid,
-                        nodata=nodata,
-                        crs=crs,
-                        pixelsize=pixelsize,
-                        download_raw=result_browser.get_download_raw_result(),
-                    )
-
-                    self.lizard_result_download_worker.finished.connect(
-                        self.on_file_download_finished
-                    )
-                    self.lizard_result_download_worker.failed.connect(
-                        self.on_file_download_failed
-                    )
-                    self.lizard_result_download_worker.progress.connect(
-                        self.on_file_download_progress
-                    )
-                    self.lizard_result_download_worker.start()
-                    return
                 else:
-                    self.download_results_cancelled.emit()
-                    return
-        # No lizard-scenario-results in descriptor links
-        self.communication.bar_warn("No lizard scenario results found in this scenario")
-        self.file_download_failed.emit("No lizard scenario results found")
+                    filtered_result_ids.append(result_id)
+
+            self.lizard_result_download_worker = LizardResultDownloadWorker(
+                project=project,
+                file=file,
+                result_ids=filtered_result_ids,
+                target_folder=target_folder,
+                grid=grid,
+                nodata=nodata,
+                crs=crs,
+                pixelsize=pixelsize,
+                download_raw=result_browser.get_download_raw_result(),
+            )
+
+            self.lizard_result_download_worker.finished.connect(
+                self.on_file_download_finished
+            )
+            self.lizard_result_download_worker.failed.connect(
+                self.on_file_download_failed
+            )
+            self.lizard_result_download_worker.progress.connect(
+                self.on_file_download_progress
+            )
+            self.lizard_result_download_worker.start()
+            return
+        else:
+            self.download_results_cancelled.emit()
+            return
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):
