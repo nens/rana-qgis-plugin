@@ -671,6 +671,10 @@ def load_remote_schematisation(
 
     if required_files is not None:
         downloaded_local_schematisation, custom_geopackage_filepath = required_files
+        if not downloaded_local_schematisation:
+            communications.log_warn("Unable to load local schematisation")
+            return
+
         load_local_schematisation(
             communications,
             local_schematisation=downloaded_local_schematisation,
