@@ -78,6 +78,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
+    get_user_image,
 )
 from rana_qgis_plugin.utils_settings import base_url
 
@@ -349,9 +350,15 @@ class FileView(QWidget):
         )
         rows.append([file_icon_label, QLabel(filename), QLabel(size_str)])
         # line 2: user icon - user name - commit msg - time
-        user_icon = QgsApplication.getThemeIcon("user.svg")
+
+        user_image = get_user_image(self.communication, selected_file)
         user_icon_label = QLabel()
-        user_icon_label.setPixmap(user_icon.pixmap(QSize(32, 32)))
+        if user_image:
+            pixmap = QPixmap.fromImage(user_image)
+            user_icon_label.setPixmap(pixmap.scaled(32, 32))
+        else:
+            user_icon = QgsApplication.getThemeIcon("user.svg")
+            user_icon_label.setPixmap(user_icon.pixmap(QSize(32, 32)))
         username = (
             selected_file["user"]["given_name"]
             + " "

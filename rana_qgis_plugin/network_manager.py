@@ -106,10 +106,16 @@ class NetworkManager(object):
                 self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
                 == 204
             ):
+                from qgis.core import Qgis, QgsMessageLog
+
+                QgsMessageLog.logMessage(f'{self._reply.readAll()=}', "DEBUG", Qgis.Info)
                 self._reply.deleteLater()
                 return status, description
 
             raw_content = self._reply.readAll()
+            from qgis.core import Qgis, QgsMessageLog
+
+            QgsMessageLog.logMessage(f'{raw_content=}', "DEBUG", Qgis.Info)
             self._content = json.loads(str(raw_content, "utf-8"))
 
         self._reply.deleteLater()
