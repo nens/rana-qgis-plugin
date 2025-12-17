@@ -3,7 +3,7 @@ from typing import List
 from qgis.core import QgsCoordinateReferenceSystem
 from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QDoubleValidator
+from qgis.PyQt.QtGui import QDoubleValidator, QIcon
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QTableWidget,
@@ -165,13 +166,26 @@ class ResultBrowser(QDialog):
 
         # When Lizard post-processing is still running, results is empty and only raw data can be downloaded
         if len(results) == 0:
+            # show a warning
+            icon_label = QLabel()
+            icon_label.setPixmap(
+                QIcon(":/images/themes/default/mIconWarning.svg").pixmap(16, 16)
+            )
+            icon_label.setAlignment(Qt.AlignVCenter)
             warning_label = QLabel(
                 "Post-processing results are not available because they are still being processed."
             )
-            layout.addWidget(warning_label)
+            warning_label.setTextFormat(Qt.RichText)
+            warning_layout = QHBoxLayout()
+            warning_layout.addWidget(icon_label)
+            warning_layout.addWidget(warning_label)
+            warning_layout.setAlignment(Qt.AlignVCenter)
+            layout.addLayout(warning_layout)
+            # disable raster settings
             self.no_data_box.setEnabled(False)
             self.pixelsize_box.setEnabled(False)
             self.crs_select_box.setEnabled(False)
+            # check download raw data by default
             self.download_raw_data_bx.setChecked(True)
 
         self.results_table.resizeColumnsToContents()
