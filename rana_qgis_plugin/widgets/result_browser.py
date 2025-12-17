@@ -5,6 +5,7 @@ from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QDoubleValidator
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -33,10 +34,13 @@ class ResultBrowser(QDialog):
         self.selected_pixelsize = None
         self.selected_crs = None
 
-        results_group = QGroupBox("Download results", self)
+        self.download_raw_data_bx = QCheckBox("Download simulation results", self)
+        layout.addWidget(self.download_raw_data_bx)
+
+        results_group = QGroupBox("Download post-processing results", self)
         results_group.setLayout(QGridLayout())
 
-        postprocessed_rasters_group = QGroupBox("Generate results", self)
+        postprocessed_rasters_group = QGroupBox("Generate raster results", self)
         postprocessed_rasters_group.setLayout(QGridLayout())
 
         self.results_table = QTableWidget(self)
@@ -109,7 +113,14 @@ class ResultBrowser(QDialog):
 
         postprocessed_rasters_group.layout().addWidget(inputs_group)
 
-        for i, result in enumerate([r for r in results if r["attachment_url"]]):
+        for result in [r for r in results if r["attachment_url"]]:
+            if result["name"].lower() in [
+                "raw 3di output",
+                "grid administration",
+                "3di bathymetry",
+            ]:
+                continue
+
             self.results_table.insertRow(self.results_table.rowCount())
             type_item = QTableWidgetItem(result["name"])
             type_item.setFlags(
@@ -122,8 +133,10 @@ class ResultBrowser(QDialog):
 
             file_name_item = QTableWidgetItem(file_name)
             file_name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-            self.results_table.setItem(i, 0, type_item)
-            self.results_table.setItem(i, 1, file_name_item)
+            self.results_table.setItem(self.results_table.rowCount() - 1, 0, type_item)
+            self.results_table.setItem(
+                self.results_table.rowCount() - 1, 1, file_name_item
+            )
 
         # timeseries rasters
         excluded_rasters = ["depth-dtri", "rain-quad", "s1-dtri"]
@@ -167,6 +180,9 @@ class ResultBrowser(QDialog):
             self.selected_pixelsize,
             self.selected_crs,
         )
+
+    def get_download_raw_result(self) -> bool:
+        return self.download_raw_data_bx.isChecked()
 
     def accept(self) -> None:
         self.selected_results = []

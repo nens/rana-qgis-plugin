@@ -624,7 +624,11 @@ class Loader(QObject):
                     result_ids, nodata, pixelsize, crs = (
                         result_browser.get_selected_results()
                     )
-                    if len(result_ids) == 0:
+                    if (
+                        len(result_ids) == 0
+                        and not result_browser.get_download_raw_result()
+                    ):
+                        self.download_results_cancelled.emit()
                         return
                     filtered_result_ids = []
                     for result_id in result_ids:
@@ -660,6 +664,7 @@ class Loader(QObject):
                         nodata=nodata,
                         crs=crs,
                         pixelsize=pixelsize,
+                        download_raw=result_browser.get_download_raw_result(),
                     )
 
                     self.lizard_result_download_worker.finished.connect(
