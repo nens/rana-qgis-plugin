@@ -344,6 +344,7 @@ class LizardResultDownloadWorker(QThread):
         nodata: int,
         pixelsize: float,
         crs: str,
+        download_raw: bool,
     ):
         super().__init__()
         self.project = project
@@ -354,9 +355,44 @@ class LizardResultDownloadWorker(QThread):
         self.nodata = nodata
         self.pixelsize = pixelsize
         self.crs = crs
+        self.download_raw = download_raw
 
     @pyqtSlot()
     def run(self):
+        if self.download_raw:
+            project_slug = self.project["slug"]
+            path = self.file["id"]
+            descriptor_id = self.file["descriptor_id"]
+            url = get_tenant_file_url(self.project["id"], {"path": path})
+            local_dir_structure, local_file_path = get_local_file_path(
+                project_slug, path
+            )
+            os.makedirs(local_dir_structure, exist_ok=True)
+            try:
+                with requests.get(url, stream=True) as response:
+                    response.raise_for_status()
+                    total_size = int(response.headers.get("content-length", 0))
+                    downloaded_size = 0
+                    previous_progress = -1
+                    with open(local_file_path, "wb") as file:
+                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                            file.write(chunk)
+                            downloaded_size += len(chunk)
+                            progress = int((downloaded_size / total_size) * 100)
+                            if progress > previous_progress:
+                                self.progress.emit(progress, "Downloading raw data")
+                                previous_progress = progress
+            except requests.exceptions.RequestException as e:
+                self.failed.emit(f"Failed to download file: {str(e)}")
+                return
+            except Exception as e:
+                self.failed.emit(f"An error occurred: {str(e)}")
+                return
+
+            # unzip the raw results in the working directory
+            with zipfile.ZipFile(local_file_path, "r") as zip_ref:
+                zip_ref.extractall(self.target_folder)
+
         descriptor_id = self.file["descriptor_id"]
         task_failed = False
         for result_id in self.result_ids:
