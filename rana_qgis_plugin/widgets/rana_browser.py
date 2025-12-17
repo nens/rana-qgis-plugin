@@ -586,9 +586,9 @@ class FilesBrowser(QWidget):
         self.communication.clear_message_bar()
 
     def select_path(self, selected_path: str):
-        # Root level path is expected to be None
-        if selected_path in ["", "/", "./"]:
-            selected_path = None
+        # Root level path is expected to be ""
+        if selected_path in ["/", "./"]:
+            selected_path = ""
         self.selected_item = {"id": selected_path, "type": "directory"}
         self.fetch_and_populate(self.project, selected_path)
 
