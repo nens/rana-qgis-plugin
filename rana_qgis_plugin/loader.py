@@ -13,7 +13,7 @@ from qgis.PyQt.QtCore import (
     pyqtSlot,
 )
 from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
-from threedi_api_client.openapi import ApiException
+from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.auth import get_authcfg_id
@@ -30,6 +30,8 @@ from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
     BuildOptionActions,
+    UploadFileStatus,
+    UploadFileType,
     extract_error_message,
     load_local_schematisation,
     load_remote_schematisation,
@@ -863,11 +865,39 @@ class Loader(QObject):
             self.schematisation_upload_cancelled.emit()
             return
 
+        local_schematisation = new_schematisation_wizard.new_local_schematisation
         new_schematisation = new_schematisation_wizard.new_schematisation
-        if new_schematisation is None:
+        if new_schematisation is None or local_schematisation is None:
             self.communication.bar_error("Schematisation creation failed")
             self.schematisation_upload_failed.emit()
             return
+
+        db_path = local_schematisation.schematisation_db_filepath
+        if not db_path or not local_schematisation.wip_revision:
+            self.communication.bar_warning(
+                "Revision creation failed; please create one manually later in the Rana browser"
+            )
+        else:
+            raster_dir = local_schematisation.wip_revision.raster_dir
+            rasters = new_schematisation_wizard.get_paths_from_geopackage(db_path)
+            dem_file = rasters["model_settings"]["dem_file"]
+            if dem_file:
+                dem_file = os.path.join(raster_dir, dem_file)
+            friction_coefficient_file = rasters["model_settings"][
+                "friction_coefficient_file"
+            ]
+            if friction_coefficient_file:
+                friction_coefficient_file = os.path.join(
+                    raster_dir, friction_coefficient_file
+                )
+
+            self.save_initial_revision(
+                new_schematisation,
+                local_schematisation,
+                dem_file=dem_file,
+                friction_coefficient_file=friction_coefficient_file,
+            )
+
         rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
         # check if directory path exists, otherwise make it
         path_info = get_tenant_project_files(
@@ -913,8 +943,8 @@ class Loader(QObject):
             self.communication.bar_error(
                 f"Could not add Rana schematisation {new_schematisation.name} to Rana project {project['name']}!"
             )
+            return
         self.schematisation_upload_finished.emit()
-        local_schematisation = new_schematisation_wizard.new_local_schematisation
         load_local_schematisation(
             communication=self.communication,
             local_schematisation=local_schematisation,
@@ -1049,3 +1079,61 @@ class Loader(QObject):
             int(total_progress + ((task_progress / 100.0) * progress_per_task)),
             clear_msg_bar=True,
         )
+
+    @pyqtSlot(dict, dict, dict, dict)
+    def save_initial_revision(
+        self, schematisation, local_schematisation, dem_file, friction_coefficient_file
+    ):
+        selected_files = {
+            "geopackage": {
+                "filepath": local_schematisation.schematisation_db_filepath,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.DB,
+            }
+        }
+        if dem_file:
+            selected_files["dem_file"] = {
+                "filepath": dem_file,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.RASTER,
+            }
+        if friction_coefficient_file:
+            selected_files["friction_coefficient_file"] = {
+                "filepath": friction_coefficient_file,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.RASTER,
+            }
+
+        upload_template = {
+            "schematisation": schematisation,
+            "latest_revision": SchematisationRevision(number=0),
+            "selected_files": selected_files,
+            "commit_message": "Initial commit",
+            "create_revision": True,
+            "make_3di_model": False,
+            "cb_inherit_templates": False,
+        }
+
+        threedi_api = get_threedi_api()
+
+        upload_worker = SchematisationUploadProgressWorker(
+            threedi_api,
+            local_schematisation,
+            upload_template,
+        )
+        upload_worker.signals.thread_finished.connect(
+            self.schematisation_upload_finished
+        )
+        upload_worker.signals.upload_failed.connect(self.schematisation_upload_failed)
+        upload_worker.signals.upload_progress.connect(
+            self.on_schematisation_upload_progress
+        )
+
+        self.upload_thread_pool.start(upload_worker)
+        self.revision_saved.emit()
