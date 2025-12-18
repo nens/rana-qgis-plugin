@@ -1042,7 +1042,7 @@ class RanaBrowser(QWidget):
     delete_file_selected = pyqtSignal(dict, dict)
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
-    upload_new_schematisation_selected = pyqtSignal(dict)
+    upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
@@ -1187,7 +1187,9 @@ class RanaBrowser(QWidget):
         )
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
-            lambda _,: self.upload_new_schematisation_selected.emit(self.project)
+            lambda _,: self.upload_new_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
         )
         # Connect import schematisation button
         self.files_browser.btn_import_schematisation.clicked.connect(
