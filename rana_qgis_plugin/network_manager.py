@@ -2,7 +2,8 @@ import json
 import urllib.parse
 
 from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
-from qgis.PyQt.QtCore import QCoreApplication, QUrl
+from qgis.PyQt.QtCore import QCoreApplication, QJsonDocument, QUrl
+from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 
@@ -106,19 +107,24 @@ class NetworkManager(object):
                 self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
                 == 204
             ):
-                from qgis.core import Qgis, QgsMessageLog
-
-                QgsMessageLog.logMessage(f'{self._reply.readAll()=}', "DEBUG", Qgis.Info)
                 self._reply.deleteLater()
                 return status, description
 
             raw_content = self._reply.readAll()
-            from qgis.core import Qgis, QgsMessageLog
+            content_type = self._reply.header(QNetworkRequest.ContentTypeHeader)
 
-            QgsMessageLog.logMessage(f'{raw_content=}', "DEBUG", Qgis.Info)
-            self._content = json.loads(str(raw_content, "utf-8"))
-
-        self._reply.deleteLater()
+            if content_type.startswith("application/json"):
+                json_doc = QJsonDocument.fromJson(raw_content)
+                if json_doc.isObject():
+                    self._content = (
+                        json_doc.toVariant()
+                    )  # Returns QVariant which can be used like a Python dict
+            elif content_type.startswith("image/"):
+                image = QImage()
+                image.loadFromData(raw_content)
+                self._content = image
+            else:
+                self._content = raw_content.data().decode("utf-8")
 
         return status, description
 
