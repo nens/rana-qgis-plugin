@@ -880,8 +880,15 @@ class Loader(QObject):
         organisations = {
             org.unique_id: org
             for org in tc.fetch_organisations()
-            if org.unique_id in available_organisations
+            if org is not None and org.unique_id in available_organisations
         }
+
+        if len(organisations) == 0:
+            self.communication.show_error(
+                "No 3Di organisations available for this Rana organisation; please make sure your API endpoints are configured."
+            )
+            self.schematisation_upload_failed.emit()
+            return
 
         work_dir = QSettings().value("threedi/working_dir", "")
         new_schematisation_wizard = NewSchematisationWizard(
