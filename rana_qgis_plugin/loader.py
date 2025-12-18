@@ -576,6 +576,7 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def download_results(self, project, file):
+        assert descriptor["data_type"] == "scenario"
         if not QgsSettings().contains("threedi/working_dir"):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
@@ -583,110 +584,129 @@ class Loader(QObject):
             self.download_results_cancelled.emit()
             return
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        if (
-            not descriptor["meta"]
-            or not descriptor["meta"]["simulation"]
-            or not descriptor["meta"]["simulation"]["name"]
-        ):
-            if descriptor["status"]["id"] == "processing":
-                self.communication.show_warn(
-                    "Scenario is still processing; please try again later"
-                )
-            else:
-                self.communication.show_error(
-                    "Scenario is corrupt; did you upload a zip directly?"
-                )
+        meta = descriptor.get("meta", {})
+        if not meta.get("id"):
+            self.communication.show_warn("Post-processing results not yet available")
             self.download_results_cancelled.emit()
             return
-        schematisation_name = descriptor["meta"]["schematisation"]["name"]
-        schematisation_id = descriptor["meta"]["schematisation"]["id"]
-        schematisation_version = descriptor["meta"]["schematisation"]["version"]
-        assert descriptor["data_type"] == "scenario"
+        if descriptor.get("status", {}).get("id") not in ["completed", "processing"]:
+            self.communication.show_warn(f"Post-processing results cannot be retrieved")
+            self.download_results_cancelled.emit()
+            return
 
-        # Determine local target folder for simulatuon
+        tc = ThreediCalls(get_threedi_api())
+        schematisation_name = meta["schematisation"]["name"]
+        schematisation_id = meta["schematisation"]["id"]
+        revision_number = meta["schematisation"]["version"]
+        simulation_name = meta["simulation"]["name"]
+        # Simulation name is only set after post-processing is fully finished
+        if not simulation_name:
+            if meta["simulation"].get("id"):
+                simulation_name = tc.fetch_simulation(meta["simulation"].get("id")).name
+            else:
+                self.communication.show_warn(
+                    "Post-processing results not yet available"
+                )
+                self.download_results_cancelled.emit()
+                return
+        # Revision number is only set after post-processing is fully finished
+        if not revision_number:
+            if meta["schematisation"].get("revision_id"):
+                revision_id = meta["schematisation"]["revision_id"]
+                revision_number = tc.fetch_schematisation_revision(
+                    schematisation_id, revision_id
+                ).number
+            else:
+                self.communication.show_warn(
+                    "Post-processing results not yet available"
+                )
+                self.download_results_cancelled.emit()
+                return
+        # Determine local target folder for simulation
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
             schematisation_name.replace("/", "-").replace("\\", "-"),
-            schematisation_version,
-            descriptor["meta"]["simulation"]["name"]
-            .replace("/", "-")
-            .replace("\\", "-"),
+            revision_number,
+            simulation_name.replace("/", "-").replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
-
-        for link in descriptor["links"]:
-            if link["rel"] == "lizard-scenario-results":
-                grid = deepcopy(descriptor["meta"]["grid"])
-                results = get_tenant_file_descriptor_view(
-                    file["descriptor_id"], "lizard-scenario-results"
+        link = next(
+            (
+                link
+                for link in descriptor["links"]
+                if link["rel"] == "lizard-scenario-results"
+            ),
+            None,
+        )
+        if link:
+            grid = deepcopy(descriptor["meta"]["grid"])
+            results = get_tenant_file_descriptor_view(
+                file["descriptor_id"], "lizard-scenario-results"
+            )
+            crs = grid["crs"]
+        else:
+            results = {}
+            # grid and crs are not used when results is empty
+            grid = None
+            crs = "EPSG:28992"
+        result_browser = ResultBrowser(None, results, crs)
+        if result_browser.exec() == QDialog.DialogCode.Accepted:
+            result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
+            if len(result_ids) == 0 and not result_browser.get_download_raw_result():
+                self.download_results_cancelled.emit()
+                return
+            filtered_result_ids = []
+            for result_id in result_ids:
+                result = [r for r in results if r.get("id") == result_id][0]
+                file_name = map_result_to_file_name(result)
+                target_file = bypass_max_path_limit(
+                    os.path.join(target_folder, file_name)
                 )
-                result_browser = ResultBrowser(None, results, grid["crs"])
-                if result_browser.exec() == QDialog.DialogCode.Accepted:
-                    result_ids, nodata, pixelsize, crs = (
-                        result_browser.get_selected_results()
+                # Check whether the files already exist locally
+                if os.path.exists(target_file):
+                    file_overwrite = self.communication.custom_ask(
+                        self.parent(),
+                        "File exists",
+                        f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                        "Cancel",
+                        "Download again",
+                        "Continue",
                     )
-                    if (
-                        len(result_ids) == 0
-                        and not result_browser.get_download_raw_result()
-                    ):
+                    if file_overwrite == "Download again":
+                        filtered_result_ids.append(result_id)
+                    elif file_overwrite == "Cancel":
                         self.download_results_cancelled.emit()
                         return
-                    filtered_result_ids = []
-                    for result_id in result_ids:
-                        result = [r for r in results if r["id"] == result_id][0]
-                        file_name = map_result_to_file_name(result)
-                        target_file = bypass_max_path_limit(
-                            os.path.join(target_folder, file_name)
-                        )
-                        # Check whether the files already exist locally
-                        if os.path.exists(target_file):
-                            file_overwrite = self.communication.custom_ask(
-                                self.parent(),
-                                "File exists",
-                                f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
-                                "Cancel",
-                                "Download again",
-                                "Continue",
-                            )
-                            if file_overwrite == "Download again":
-                                filtered_result_ids.append(result_id)
-                            elif file_overwrite == "Cancel":
-                                self.download_results_cancelled.emit()
-                                return
-                        else:
-                            filtered_result_ids.append(result_id)
-
-                    self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        project=project,
-                        file=file,
-                        result_ids=filtered_result_ids,
-                        target_folder=target_folder,
-                        grid=grid,
-                        nodata=nodata,
-                        crs=crs,
-                        pixelsize=pixelsize,
-                        download_raw=result_browser.get_download_raw_result(),
-                    )
-
-                    self.lizard_result_download_worker.finished.connect(
-                        self.on_file_download_finished
-                    )
-                    self.lizard_result_download_worker.failed.connect(
-                        self.on_file_download_failed
-                    )
-                    self.lizard_result_download_worker.progress.connect(
-                        self.on_file_download_progress
-                    )
-                    self.lizard_result_download_worker.start()
-                    return
                 else:
-                    self.download_results_cancelled.emit()
-                    return
+                    filtered_result_ids.append(result_id)
 
-        # No lizard-scenario-results in descriptor links
-        self.communication.bar_warn("No lizard scenario results found in this scenario")
-        self.file_download_failed.emit("No lizard scenario results found")
+            self.lizard_result_download_worker = LizardResultDownloadWorker(
+                project=project,
+                file=file,
+                result_ids=filtered_result_ids,
+                target_folder=target_folder,
+                grid=grid,
+                nodata=nodata,
+                crs=crs,
+                pixelsize=pixelsize,
+                download_raw=result_browser.get_download_raw_result(),
+            )
+
+            self.lizard_result_download_worker.finished.connect(
+                self.on_file_download_finished
+            )
+            self.lizard_result_download_worker.failed.connect(
+                self.on_file_download_failed
+            )
+            self.lizard_result_download_worker.progress.connect(
+                self.on_file_download_progress
+            )
+            self.lizard_result_download_worker.start()
+            return
+        else:
+            self.download_results_cancelled.emit()
+            return
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):
