@@ -25,6 +25,7 @@ History
 - Only show 3Di organisation dropdown if more than 1 organisation is available per tenant
 - Add confirmation for delete
 - Create new revision after uploading new schematisation to Rana
+- Handle 0 available organisations with nice error message
 
 
 1.1.20 (2025-11-18)
