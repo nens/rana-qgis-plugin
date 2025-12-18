@@ -846,8 +846,9 @@ class Loader(QObject):
         self.schematisation_import_finished.emit()
 
     @pyqtSlot(dict, dict)
-    def upload_new_schematisation_to_rana(self, project, selected_dir):
-        rana_path = selected_dir["id"]
+    def upload_new_schematisation_to_rana(self, project, selected_item):
+        assert selected_item["type"] == "directory"
+        rana_path = selected_item["id"]
         threedi_api = get_threedi_api()
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
