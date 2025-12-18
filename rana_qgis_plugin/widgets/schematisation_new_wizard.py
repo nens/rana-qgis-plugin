@@ -68,7 +68,6 @@ class NewSchematisationWizard(QWizard):
         self.communication = communication
         self.new_schematisation = None
         self.new_local_schematisation = None
-        self.rana_path = None
         self.available_organisations = organisations
 
         self.schematisation_name_page = SchematisationNamePage(
@@ -197,7 +196,6 @@ class NewSchematisationWizard(QWizard):
             time.sleep(0.5)
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
-            self.rana_path = self.schematisation_name_page.field("rana_path")
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
         except ApiException as e:
@@ -312,7 +310,6 @@ class NewSchematisationWizard(QWizard):
                 return
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
-            self.rana_path = self.schematisation_name_page.field("rana_path")
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
         except ApiException as e:

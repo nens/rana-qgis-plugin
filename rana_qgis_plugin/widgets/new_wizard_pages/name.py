@@ -52,7 +52,6 @@ class SchematisationNamePage(QWizardPage):
             self.main_widget.cbo_organisations,
             "currentData",
         )
-        self.registerField("rana_path", self.main_widget.le_rana_path)
 
     def update_pages_order(self):
         """Check if user wants to use an existing GeoPackage and finalize the wizard, if needed."""
@@ -183,20 +182,8 @@ class SchematisationNameWidget(QWidget):
 
         gridLayout.addLayout(gridLayout_2, 7, 2)
 
-        # Rana path label
-        gridLayout.addWidget(QLabel("Rana schematisation directory:"), 8, 0)
-
-        # Rana path input
-        self.le_rana_path = QLineEdit()
-        self.le_rana_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.le_rana_path.setMaxLength(80)
-        self.le_rana_path.setPlaceholderText(
-            "Directory in your Rana project to place the new schematisation in (optional)"
-        )
-        gridLayout.addWidget(self.le_rana_path, 8, 2)
-
         gridLayout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 9, 0
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 8, 0
         )
 
     def populate_organisations(self):

@@ -845,8 +845,10 @@ class Loader(QObject):
             )
         self.schematisation_import_finished.emit()
 
-    @pyqtSlot(dict)
-    def upload_new_schematisation_to_rana(self, project):
+    @pyqtSlot(dict, dict)
+    def upload_new_schematisation_to_rana(self, project, selected_item):
+        assert selected_item["type"] == "directory"
+        rana_path = selected_item["id"]
         threedi_api = get_threedi_api()
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
@@ -903,31 +905,8 @@ class Loader(QObject):
                 friction_coefficient_file=friction_coefficient_file,
             )
 
-        rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
-        # check if directory path exists, otherwise make it
-        path_info = get_tenant_project_files(
-            communication=self.communication,
-            project_id=project["id"],
-            params={"path": rana_path},
-        )
-        if not path_info:
-            # don't continue if path creation fails for some reason
-            assert create_tenant_project_directory(
-                project_id=project["id"], path=rana_path
-            )
-            path_info = get_tenant_project_files(
-                communication=self.communication,
-                project_id=project["id"],
-                params={"path": rana_path},
-            )
-        if rana_path != "" and path_info[0]["type"] != "directory":
-            self.communication.bar_info(
-                f"Adding schematisation {new_schematisation.name} to main directory in Rana project {project['name']} since specified path is unavailable"
-            )
-            rana_path = ""
-
         if rana_path:
-            file_path = rana_path + "/" + new_schematisation.name
+            file_path = rana_path + new_schematisation.name
         else:
             file_path = new_schematisation.name
         response = add_threedi_schematisation(
