@@ -39,14 +39,18 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     # Add save vector style only for vector files
     if data_type == "vector":
         actions.append(FileAction.SAVE_VECTOR_STYLING)
-    if data_type == "threedi_schematisation":
+    elif data_type == "threedi_schematisation":
         actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
     # Add options to open WMS and download file and results only for 3Di scenarios
-    if data_type == "scenario":
+    elif data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         meta = descriptor["meta"] if descriptor else None
-        if meta and meta["simulation"]["software"]["id"] == "3Di":
-            actions += [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
+        if meta and "id" in meta:
+            actions.append(FileAction.DOWNLOAD_RESULTS)
+            if meta["simulation"]["software"]["id"] == "3Di":
+                actions.append(FileAction.OPEN_WMS)
+        else:
+            actions = []
     return sorted(actions)
 
 
