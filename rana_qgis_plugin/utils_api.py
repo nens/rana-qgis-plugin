@@ -156,6 +156,32 @@ def delete_tenant_project_directory(project_id: str, params: dict):
         return False
 
 
+def move_file(project_id: str, params: dict) -> bool:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/move"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, msg = network_manager.post(params=params)
+
+    if status:
+        return True
+    else:
+        return False
+
+
+def move_directory(project_id: str, params: dict) -> bool:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/move"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, msg = network_manager.post(params)
+    if status:
+        return True
+    else:
+        return False
+
+
 def create_folder(project_id: str, params: dict) -> bool:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -408,6 +434,22 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
         return None
 
 
+def get_schematisations(communication, icontains=""):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/threedi-schematisations"
+    network_manager = NetworkManager(url, authcfg_id)
+    params = {"name__icontains": icontains, "limit": 100}
+    status, error = network_manager.fetch(params)
+    if status:
+        response = network_manager.content
+        items = response["results"]
+        return items
+    else:
+        communication.show_error(f"Failed to retrieve schematisation: {error}")
+        return []
+
+
 def get_threedi_schematisation(communication: UICommunication, descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -445,7 +487,7 @@ def get_threedi_personal_api_key(
     communication: UICommunication, user_id: str
 ) -> Optional[str]:
     communication.clear_message_bar()
-    communication.bar_info("Getting 3Di personal API key ...")
+    communication.bar_info("Getting Rana personal API key ...")
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/3di-personal-api-keys"
@@ -458,10 +500,10 @@ def get_threedi_personal_api_key(
         if "key" in response:
             return response["key"]
         else:
-            communication.show_error("Failed to retrieve 3Di personal API key.")
+            communication.show_error("Failed to retrieve Rana personal API key.")
             return None
     else:
-        communication.show_error(f"Failed to retrieve 3Di personal api key: {error}")
+        communication.show_error(f"Failed to retrieve Rana personal api key: {error}")
         return None
 
 

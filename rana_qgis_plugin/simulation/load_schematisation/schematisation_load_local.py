@@ -29,7 +29,12 @@ class SchematisationLoad(uicls, basecls):
     ):
         super().__init__(parent)
         self.setupUi(self)
+        self.label.setWordWrap(True)
+        self.label.setText(
+            f"No work in progress (WIP) revision was found. Available locally stored revisions are listed below.\n\nPlease choose which one you want to upload. This will set the chosen revision as WIP and make it the latest revision."
+        )
         self.working_dir = working_dir
+        self.setWindowTitle("Choose revision to upload as new revision")
         self.communication = communication
         self.tv_revisions_model = QStandardItemModel()
         self.revisions_tv.setModel(self.tv_revisions_model)
@@ -53,8 +58,8 @@ class SchematisationLoad(uicls, basecls):
             number_item.setData(wip_revision, role=Qt.UserRole)
             subdir_item = QStandardItem(wip_revision.sub_dir)
             self.tv_revisions_model.appendRow([number_item, subdir_item])
-        for revision_number, local_revision in reversed(
-            local_schematisation.revisions.items()
+        for revision_number, local_revision in sorted(
+            local_schematisation.revisions.items(), key=lambda x: x[0], reverse=True
         ):
             number_item = QStandardItem(str(revision_number))
             number_item.setData(local_revision, role=Qt.UserRole)
@@ -92,9 +97,7 @@ class SchematisationLoad(uicls, basecls):
         local_revision = self.get_selected_local_revision()
         if not isinstance(local_revision, WIPRevision):
             title = "Pick action"
-            question = (
-                f"Replace your WIP with data from the revision {local_revision.number}?"
-            )
+            question = f"Upload data from revision {local_revision.number}?"
             picked_action_name = self.communication.custom_ask(
                 self, title, question, "Replace", "Cancel"
             )

@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils import is_writable
+from rana_qgis_plugin.utils_api import get_frontend_settings
 from rana_qgis_plugin.utils_settings import (
     base_url,
     cognito_client_id,
@@ -44,20 +45,6 @@ class SettingsDialog(QDialog):
         auth_group.layout().addWidget(QLabel("Backend URL"), 0, 0)
         self.url_lineedit = QLineEdit(base_url(), auth_group)
         auth_group.layout().addWidget(self.url_lineedit, 0, 1)
-
-        auth_group.layout().addWidget(
-            QLabel("Cognito client ID (for login using identity provider)"), 1, 0
-        )
-        self.cognito_client_id_lineedit = QLineEdit(cognito_client_id(), auth_group)
-        auth_group.layout().addWidget(self.cognito_client_id_lineedit, 1, 1)
-
-        auth_group.layout().addWidget(
-            QLabel("Cognito client ID native (for login using username-password)"), 2, 0
-        )
-        self.cognito_client_id_native_lineedit = QLineEdit(
-            cognito_client_id_native(), auth_group
-        )
-        auth_group.layout().addWidget(self.cognito_client_id_native_lineedit, 2, 1)
 
         layout.addWidget(auth_group)
 
@@ -103,17 +90,25 @@ class SettingsDialog(QDialog):
         return self._authenticationSettingsChanged
 
     def accept(self) -> None:
-        if self.cognito_client_id_lineedit.text() != cognito_client_id():
-            self._authenticationSettingsChanged = True
-            set_cognito_client_id(self.cognito_client_id_lineedit.text())
-
-        if self.cognito_client_id_native_lineedit.text() != cognito_client_id_native():
-            self._authenticationSettingsChanged = True
-            set_cognito_client_id_native(self.cognito_client_id_native_lineedit.text())
-
         if self.url_lineedit.text() != base_url():
             self._authenticationSettingsChanged = True
             set_base_url(self.url_lineedit.text())
+
+            frontend_settings = get_frontend_settings()
+            if (
+                frontend_settings
+                and frontend_settings["default_client_id"]
+                and frontend_settings["native_client_id"]
+            ):
+                set_cognito_client_id(frontend_settings["default_client_id"])
+                set_cognito_client_id_native(frontend_settings["native_client_id"])
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    "Can't fetch settings from this backend URL. Please enter a different URL and try again.",
+                )
+                return
 
         set_hcc_working_dir(self.working_dir_le.text())
         set_rana_cache_dir(self.cache_dir_le.text())

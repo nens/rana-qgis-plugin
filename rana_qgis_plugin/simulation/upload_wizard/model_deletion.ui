@@ -94,7 +94,7 @@
       </font>
      </property>
      <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; color:#ff0000;&quot;&gt;Maximum number of active 3Di models for {} is {} ({} found). Please remove any excess models to continue uploading.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; color:#ff0000;&quot;&gt;Maximum number of active Rana models for {} is {} ({} found). Please remove any excess models to continue uploading.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -123,7 +123,7 @@
    <item row="2" column="2">
     <widget class="QCheckBox" name="cb_filter">
      <property name="text">
-      <string>Only show my own 3Di models</string>
+      <string>Only show my own Rana models</string>
      </property>
     </widget>
    </item>

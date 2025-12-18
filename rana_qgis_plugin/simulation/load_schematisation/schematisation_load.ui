@@ -101,7 +101,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Save</string>
+           <string>Next</string>
           </property>
          </widget>
         </item>
@@ -112,7 +112,7 @@
         <property name="font">
          <font>
           <family>Segoe UI</family>
-          <pointsize>12</pointsize>
+          <pointsize>10</pointsize>
          </font>
         </property>
         <property name="text">

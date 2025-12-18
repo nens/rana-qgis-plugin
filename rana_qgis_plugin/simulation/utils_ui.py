@@ -229,7 +229,7 @@ def ensure_valid_schema(schematisation_filepath, communication):
         if schematisation_filepath.endswith(".gpkg"):
             version_num = threedi_db.schema.get_version()
             if version_num < 300:
-                warn_msg = "The selected file is not a valid 3Di schematisation database.\n\nYou may have selected a geopackage that was created by an older version of the 3Di Schematisation Editor (before version 2.0). In that case, there will probably be a Spatialite (*.sqlite) in the same folder. Please use that file instead."
+                warn_msg = "The selected file is not a valid Rana schematisation database.\n\nYou may have selected a geopackage that was created by an older version of the Rana Schematisation Editor (before version 2.0). In that case, there will probably be a Spatialite (*.sqlite) in the same folder. Please use that file instead."
                 communication.show_error(warn_msg)
                 return False
 
@@ -319,20 +319,6 @@ def migrate_schematisation_schema(schematisation_filepath, progress_callback=Non
     return migration_succeed, migration_feedback_msg
 
 
-def progress_bar_callback_factory(
-    communication, minimum=0, maximum=100, clear_msg_bar=True
-):
-    """Callback function to track schematisation migration progress."""
-
-    def progress_bar_callback(progres_value, message):
-        communication.progress_bar(
-            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
-        )
-        QCoreApplication.processEvents()
-
-    return progress_bar_callback
-
-
 def save_3di_settings(entry_name, value):
     """Save the 3Di settings entry."""
     settings = QSettings()
@@ -362,7 +348,7 @@ def progress_bar_callback_factory(
 
     def progress_bar_callback(progres_value, message):
         communication.progress_bar(
-            message, minimum, maximum, progres_value, clear_msg_bar=clear_msg_bar
+            message, minimum, maximum, int(progres_value), clear_msg_bar=clear_msg_bar
         )
         QCoreApplication.processEvents()
 

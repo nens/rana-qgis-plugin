@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
 )
 
+import rana_qgis_plugin.widgets.info_dialog as info_dialog
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.auth_3di import setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
@@ -118,6 +119,10 @@ class RanaQgisPlugin:
                 self.login()
                 if self.rana_browser:
                     self.rana_browser.refresh()
+
+    def open_info_dialog(self, dialog_class):
+        dialog = dialog_class(self.iface.mainWindow())
+        dialog.exec()
 
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
@@ -247,6 +252,17 @@ class RanaQgisPlugin:
             self.rana_browser.upload_new_schematisation_selected.connect(
                 self.loader.upload_new_schematisation_to_rana
             )
+            self.rana_browser.import_schematisation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.import_schematisation_selected.connect(
+                self.loader.import_schematisation_to_rana
+            )
+            self.loader.schematisation_import_finished.connect(self.rana_browser.enable)
+            self.loader.schematisation_import_finished.connect(
+                self.rana_browser.refresh
+            )
+
             self.loader.loading_cancelled.connect(self.rana_browser.enable)
             self.rana_browser.download_file_selected.connect(self.loader.download_file)
             self.rana_browser.download_results_selected.connect(
@@ -280,6 +296,9 @@ class RanaQgisPlugin:
             self.rana_browser.create_model_selected_with_revision.connect(
                 self.loader.create_schematisation_revision_3di_model
             )
+            self.rana_browser.delete_model_selected.connect(
+                self.loader.delete_schematisation_revision_3di_model
+            )
             self.rana_browser.open_schematisation_selected_with_revision.connect(
                 self.rana_browser.disable
             )
@@ -287,10 +306,21 @@ class RanaQgisPlugin:
                 self.loader.open_schematisation_with_revision
             )
             self.rana_browser.delete_file_selected.connect(self.loader.delete_file)
+            self.rana_browser.rename_file_selected.connect(self.loader.rename_file)
             self.rana_browser.create_folder_selected.connect(
                 self.loader.create_new_folder_on_rana
             )
+            self.rana_browser.save_revision_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
+            self.loader.revision_saved.connect(
+                lambda: self.open_info_dialog(info_dialog.SaveRevisionDialog)
+            )
+            self.loader.model_created.connect(
+                lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
+            )
+            self.loader.simulation_started.connect(
+                lambda: self.open_info_dialog(info_dialog.RunSimulationDialog)
+            )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
@@ -310,8 +340,18 @@ class RanaQgisPlugin:
             )
             self.loader.schematisation_upload_finished.connect(self.rana_browser.enable)
             self.loader.schematisation_upload_failed.connect(self.rana_browser.enable)
-            self.loader.file_deleted.connect(self.rana_browser.refresh)
             self.loader.folder_created.connect(self.rana_browser.refresh)
+            self.loader.model_deleted.connect(self.rana_browser.refresh)
+            self.loader.file_deleted.connect(
+                self.rana_browser.refresh_after_file_delete
+            )
+            self.loader.rename_aborted.connect(self.rana_browser.refresh)
+            self.loader.rename_finished.connect(
+                self.rana_browser.refresh_after_file_rename
+            )
+            self.loader.schematisation_upload_finished.connect(
+                self.rana_browser.refresh
+            )
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True

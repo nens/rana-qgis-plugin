@@ -10,12 +10,21 @@ History
 - Add button to generate threedimodel when missing
 - Replace page specific refresh buttons with single refresh button
 - Refresh files browser, file view and revisions view every 60 seconds
+- Add rename functionality
 - Add support for selecting and uploading multiple files to Rana
 - Add option to create a new folder
 - Add button and dialog from M&S plugin to generate/upload new schematisation to 3Di and Rana
 - Allow user to set file cache directory
 - Rename tenant to organisation in user interfaces
 - Reactivate plugin when workdir is not set
+- Dynamically fetch client cognito ids from Rana API endpoint
+- Add option to delete models and disable model creation when the max number of models is reached 
+- Add file actions to detail view
+- Show dialogs pointing the user to the Rana HCC when creating a model, uploading a revision and starting a simulation
+- Only ask user for revision when saving a revision to Rana that does not have a WIP
+- Only show 3Di organisation dropdown if more than 1 organisation is available per tenant
+- Add confirmation for delete
+- Create new revision after uploading new schematisation to Rana
 
 
 1.1.20 (2025-11-18)
