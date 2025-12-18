@@ -596,7 +596,7 @@ class Loader(QObject):
         tc = ThreediCalls(get_threedi_api())
         schematisation_name = meta["schematisation"]["name"]
         schematisation_id = meta["schematisation"]["id"]
-        schematisation_version = meta["schematisation"]["version"]
+        revision_number = meta["schematisation"]["version"]
         assert descriptor["data_type"] == "scenario"
         simulation_name = meta["simulation"]["name"]
         # Simulation name is only set after post-processing is fully finished
@@ -609,13 +609,25 @@ class Loader(QObject):
                 )
                 self.download_results_cancelled.emit()
                 return
-
+        # Revision number is only set after post-processing is fully finished
+        if not revision_number:
+            if meta["schematisation"].get("revision_id"):
+                revision_id = meta["schematisation"]["revision_id"]
+                revision_number = tc.fetch_schematisation_revision(
+                    schematisation_id, revision_id
+                ).number
+            else:
+                self.communication.show_warn(
+                    "Post-processing results not yet available"
+                )
+                self.download_results_cancelled.emit()
+                return
         # Determine local target folder for simulation
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
             schematisation_name.replace("/", "-").replace("\\", "-"),
-            schematisation_version,
+            revision_number,
             simulation_name.replace("/", "-").replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
