@@ -576,6 +576,7 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def download_results(self, project, file):
+        assert descriptor["data_type"] == "scenario"
         if not QgsSettings().contains("threedi/working_dir"):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
@@ -597,7 +598,6 @@ class Loader(QObject):
         schematisation_name = meta["schematisation"]["name"]
         schematisation_id = meta["schematisation"]["id"]
         revision_number = meta["schematisation"]["version"]
-        assert descriptor["data_type"] == "scenario"
         simulation_name = meta["simulation"]["name"]
         # Simulation name is only set after post-processing is fully finished
         if not simulation_name:
