@@ -49,7 +49,8 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
             actions.append(FileAction.DOWNLOAD_RESULTS)
             if meta["simulation"]["software"]["id"] == "3Di":
                 actions.append(FileAction.OPEN_WMS)
-        else:
+        # remove any interactions for objects that are being processed
+        elif descriptor.get("status", {}).get("id") == "processing":
             actions = []
     return sorted(actions)
 
