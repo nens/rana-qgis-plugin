@@ -25,6 +25,7 @@ History
 - Only show 3Di organisation dropdown if more than 1 organisation is available per tenant
 - Add confirmation for delete
 - Create new revision after uploading new schematisation to Rana
+- Copy processing algorithems from Models and Simulations plugin to Rana desktop interface
 
 
 1.1.20 (2025-11-18)
