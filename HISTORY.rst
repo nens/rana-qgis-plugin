@@ -26,6 +26,7 @@ History
 - Add confirmation for delete
 - Create new revision after uploading new schematisation to Rana
 - Handle 0 available organisations with nice error message
+- Copy processing algorithms from Models and Simulations plugin to Rana desktop client
 
 
 1.1.20 (2025-11-18)
