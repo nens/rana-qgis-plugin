@@ -91,6 +91,12 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
+from rana_qgis_plugin.widgets.utils_icons import (
+    create_user_image,
+    get_icon_from_theme,
+    get_icon_label,
+    get_user_image_from_initials,
+)
 
 
 class RevisionsView(QWidget):
@@ -400,11 +406,8 @@ class FileView(QWidget):
     def update_general_contents(self, selected_file: dict):
         rows = []
         # line 1: icon - filename - size
-        file_icon = QgsApplication.getThemeIcon(
-            get_file_icon_name(selected_file["data_type"])
-        )
-        file_icon_label = QLabel()
-        file_icon_label.setPixmap(file_icon.pixmap(QSize(32, 32)))
+        file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
+        file_icon_label = get_icon_label(file_icon)
         filename = Path(selected_file["id"]).name
         # TODO: retrieve schematisation size
         size_str = (
@@ -414,41 +417,22 @@ class FileView(QWidget):
         )
         rows.append([file_icon_label, QLabel(filename), QLabel(size_str)])
         # line 2: user icon - user name - commit msg - time
-
+        # This is broken (or the stuff above)
         user_image = get_user_image(self.communication, selected_file)
-        user_icon_label = QLabel()
         if user_image:
-            size = 32
-            pixmap = QPixmap.fromImage(user_image)
-            rounded = QPixmap(size, size)
-            rounded.fill(Qt.transparent)
-
-            # Create a path for circular mask
-            path = QPainterPath()
-            path.addEllipse(QRectF(0, 0, size, size))
-
-            # Paint the original pixmap with circular mask
-            painter = QPainter(rounded)
-            painter.setRenderHint(QPainter.Antialiasing)
-            painter.setClipPath(path)
-            painter.drawPixmap(
-                0,
-                0,
-                pixmap.scaled(
-                    size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
-                ),
-            )
-            painter.end()
-
-            user_icon_label.setPixmap(rounded.scaled(32, 32))
+            user_icon_label = get_icon_label(create_user_image(user_image))
         else:
-            user_icon = QgsApplication.getThemeIcon("user.svg")
-            user_icon_label.setPixmap(user_icon.pixmap(QSize(32, 32)))
+            user_icon_label = get_icon_label(get_icon_from_theme("user.svg"))
         username = (
             selected_file["user"]["given_name"]
             + " "
             + selected_file["user"]["family_name"]
         )
+        # user_image = get_user_image_from_initials(
+        #     selected_file["user"]["given_name"][0]
+        #     + selected_file["user"]["family_name"][0]
+        # )
+        # user_icon_label = get_icon_label(user_image)
         if selected_file["data_type"] == "threedi_schematisation":
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
