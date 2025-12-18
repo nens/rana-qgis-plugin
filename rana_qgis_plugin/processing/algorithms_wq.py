@@ -17,13 +17,6 @@ from rana_qgis_plugin.processing.label_dwf import label_dwf
 from rana_qgis_plugin.processing.label_rain_zones import label_rain_zones
 
 
-class MockIFace:
-    """Used to replace iface when instantiating a SettingsDialog in a processing context"""
-
-    def messageBar(message):
-        pass
-
-
 def get_name_wkt_pairs(
     features: QgsProcessingFeatureSource,
     source_crs: QgsCoordinateReferenceSystem,
