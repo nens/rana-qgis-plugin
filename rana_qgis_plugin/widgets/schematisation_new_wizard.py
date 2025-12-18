@@ -118,7 +118,7 @@ class NewSchematisationWizard(QWizard):
                 "schematisation_organisation"
             )
         else:
-            organisation = self.available_organisations[0]
+            organisation = list(self.available_organisations.values())[0]
 
         owner = organisation.unique_id
 

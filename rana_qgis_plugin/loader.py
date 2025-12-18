@@ -885,7 +885,7 @@ class Loader(QObject):
 
         if len(organisations) == 0:
             self.communication.show_error(
-                "No 3Di organisations available for this Rana organisation; please make sure your API endpoints are configured."
+                "No 3Di organisations available for this Rana organisation; please make sure your API endpoint is configured."
             )
             self.schematisation_upload_failed.emit()
             return
