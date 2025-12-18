@@ -34,10 +34,10 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     if data_type in SUPPORTED_DATA_TYPES:
         actions.append(FileAction.OPEN_IN_QGIS)
     # Add save only for vector and raster files
-    elif data_type in ["vector", "raster"]:
+    if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
     # Add save vector style only for vector files
-    elif data_type == "vector":
+    if data_type == "vector":
         actions.append(FileAction.SAVE_VECTOR_STYLING)
     elif data_type == "threedi_schematisation":
         actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
