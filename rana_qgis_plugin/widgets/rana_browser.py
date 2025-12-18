@@ -10,6 +10,7 @@ from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QEvent,
     QModelIndex,
+    QRectF,
     QSettings,
     QSize,
     Qt,
@@ -22,6 +23,9 @@ from qgis.PyQt.QtGui import (
     QAction,
     QDesktopServices,
     QIcon,
+    QImage,
+    QPainter,
+    QPainterPath,
     QPixmap,
     QStandardItem,
     QStandardItemModel,
@@ -354,8 +358,29 @@ class FileView(QWidget):
         user_image = get_user_image(self.communication, selected_file)
         user_icon_label = QLabel()
         if user_image:
+            size = 32
             pixmap = QPixmap.fromImage(user_image)
-            user_icon_label.setPixmap(pixmap.scaled(32, 32))
+            rounded = QPixmap(size, size)
+            rounded.fill(Qt.transparent)
+
+            # Create a path for circular mask
+            path = QPainterPath()
+            path.addEllipse(QRectF(0, 0, size, size))
+
+            # Paint the original pixmap with circular mask
+            painter = QPainter(rounded)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setClipPath(path)
+            painter.drawPixmap(
+                0,
+                0,
+                pixmap.scaled(
+                    size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+                ),
+            )
+            painter.end()
+
+            user_icon_label.setPixmap(rounded.scaled(32, 32))
         else:
             user_icon = QgsApplication.getThemeIcon("user.svg")
             user_icon_label.setPixmap(user_icon.pixmap(QSize(32, 32)))
