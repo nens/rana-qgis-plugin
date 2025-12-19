@@ -576,7 +576,6 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def download_results(self, project, file):
-        assert descriptor["data_type"] == "scenario"
         if not QgsSettings().contains("threedi/working_dir"):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
@@ -584,6 +583,7 @@ class Loader(QObject):
             self.download_results_cancelled.emit()
             return
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        assert descriptor["data_type"] == "scenario"
         meta = descriptor.get("meta", {})
         if not meta.get("id"):
             self.communication.show_warn("Post-processing results not yet available")
