@@ -93,6 +93,12 @@ class NewSchematisationWizard(QWizard):
         )
 
     def create_schematisation(self):
+        schematisation_name = self.schematisation_name_page.field("schematisation_name")
+        if schematisation_name in os.listdir(self.working_dir):
+            self.communication.show_error(
+                f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
+            )
+            return
         if self.schematisation_name_page.field("from_geopackage"):
             self.create_schematisation_from_geopackage()
         else:
