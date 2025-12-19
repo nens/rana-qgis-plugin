@@ -912,25 +912,10 @@ class Loader(QObject):
                 "Revision creation failed; please create one manually later in the Rana browser"
             )
         else:
-            raster_dir = local_schematisation.wip_revision.raster_dir
-            rasters = new_schematisation_wizard.get_paths_from_geopackage(db_path)
-            dem_file = rasters["model_settings"]["dem_file"]
-            if dem_file:
-                dem_file = os.path.join(raster_dir, dem_file)
-            friction_coefficient_file = rasters["model_settings"][
-                "friction_coefficient_file"
-            ]
-            if friction_coefficient_file:
-                friction_coefficient_file = os.path.join(
-                    raster_dir, friction_coefficient_file
-                )
+            # Search GeoPackage database tables for attributes with file paths.
+            paths = new_schematisation_wizard.get_paths_from_geopackage(db_path)
 
-            self.save_initial_revision(
-                new_schematisation,
-                local_schematisation,
-                dem_file=dem_file,
-                friction_coefficient_file=friction_coefficient_file,
-            )
+            self.save_initial_revision(new_schematisation, local_schematisation, paths)
 
         if rana_path:
             file_path = rana_path + new_schematisation.name
@@ -1092,9 +1077,9 @@ class Loader(QObject):
         )
 
     @pyqtSlot(dict, dict, dict, dict)
-    def save_initial_revision(
-        self, schematisation, local_schematisation, dem_file, friction_coefficient_file
-    ):
+    def save_initial_revision(self, schematisation, local_schematisation, raster_paths):
+        raster_dir = local_schematisation.wip_revision.raster_dir
+
         selected_files = {
             "geopackage": {
                 "filepath": local_schematisation.schematisation_db_filepath,
@@ -1104,22 +1089,32 @@ class Loader(QObject):
                 "type": UploadFileType.DB,
             }
         }
-        if dem_file:
-            selected_files["dem_file"] = {
-                "filepath": dem_file,
-                "make_action": True,
-                "remote_raster": None,
-                "status": UploadFileStatus.NEW,
-                "type": UploadFileType.RASTER,
-            }
-        if friction_coefficient_file:
-            selected_files["friction_coefficient_file"] = {
-                "filepath": friction_coefficient_file,
-                "make_action": True,
-                "remote_raster": None,
-                "status": UploadFileStatus.NEW,
-                "type": UploadFileType.RASTER,
-            }
+
+        missing_rasters = []
+        for _, raster_paths_info in raster_paths.items():
+            for raster_name, raster_rel_path in raster_paths_info.items():
+                if not raster_rel_path:
+                    continue
+                raster_full_path = os.path.join(raster_dir, raster_rel_path)
+                if not os.path.exists(raster_full_path):
+                    missing_rasters.append((raster_name, raster_rel_path))
+
+                selected_files[raster_name] = {
+                    "filepath": raster_full_path,
+                    "make_action": True,
+                    "remote_raster": None,
+                    "status": UploadFileStatus.NEW,
+                    "type": UploadFileType.RASTER,
+                }
+
+        if missing_rasters:
+            missing_rasters_string = "\n".join(
+                f"{rname}: {rpath}" for rname, rpath in missing_rasters
+            )
+            warn_msg = f"Warning: the following raster files where not found:\n{missing_rasters_string}"
+            self.communication.show_warn(warn_msg)
+            self.schematisation_upload_failed.emit()
+            return
 
         upload_template = {
             "schematisation": schematisation,
