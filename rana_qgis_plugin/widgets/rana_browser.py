@@ -19,6 +19,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import (
     QAction,
     QDesktopServices,
+    QIcon,
     QPixmap,
     QStandardItem,
     QStandardItemModel,
@@ -82,6 +83,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
+from rana_qgis_plugin.widgets.utils_icons import get_user_image_from_initials
 
 
 class RevisionsView(QWidget):
@@ -781,7 +783,12 @@ class ProjectsBrowser(QWidget):
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            self.contributor_filter.addItem(display_name, userData=user["id"])
+            icon = QIcon(
+                get_user_image_from_initials(
+                    user["given_name"][0] + user["family_name"][0]
+                )
+            )
+            self.contributor_filter.addItem(icon, display_name, userData=user["id"])
 
     def setup_ui(self):
         # Create search box
