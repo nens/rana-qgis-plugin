@@ -5,6 +5,7 @@ develop
 -------------------
 
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Show relative timestamps in files browser, file view and revisions view
 
 
 1.1.21 (unreleased)
