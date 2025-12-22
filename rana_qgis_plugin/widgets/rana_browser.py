@@ -74,7 +74,6 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
-    get_user_image,
     get_user_info,
 )
 from rana_qgis_plugin.utils_settings import base_url
@@ -84,6 +83,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
+    ContributorAvatarsDelegate,
     get_avatar,
     get_icon_from_theme,
 )
@@ -885,8 +885,7 @@ class ProjectsBrowser(QWidget):
             return
         self.populate_projects()
 
-    @staticmethod
-    def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
+    def process_project_item(self, project: dict) -> list[QStandardItem, NumericItem]:
         project_name = project["name"]
         name_item = QStandardItem(project_name)
         name_item.setToolTip(project_name)
@@ -901,14 +900,31 @@ class ProjectsBrowser(QWidget):
         )
         if last_activity_localtime != display_last_activity:
             last_activity_item.setToolTip(last_activity_localtime)
-        return [name_item, last_activity_item]
+        # TODO: clean up mess!
+        contributors_item = QStandardItem()
+        contributors_data = []
+        for contributor in project.get("contributors", []):
+            contributors_data.append(
+                {
+                    "name": contributor["given_name"]
+                    + " "
+                    + contributor["family_name"],
+                    "avatar": get_avatar(contributor, self.communication),
+                }
+            )
+        contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
+        contributors_item.setData(-1, Qt.ItemDataRole.InitialSortOrderRole)
+        return [name_item, contributors_item, last_activity_item]
 
     def populate_projects(self, clear: bool = False):
         if clear:
             self.projects_model.clear()
         self.projects_model.removeRows(0, self.projects_model.rowCount())
-        header = ["Project Name", "Last activity"]
+        header = ["Project Name", "Contributors", "Last activity"]
         self.projects_model.setHorizontalHeaderLabels(header)
+
+        avatar_delegate = ContributorAvatarsDelegate(self.projects_tv)
+        self.projects_tv.setItemDelegateForColumn(1, avatar_delegate)
 
         # Paginate projects
         projects = self.filtered_projects if self.filter_active else self.projects
@@ -918,7 +934,7 @@ class ProjectsBrowser(QWidget):
 
         # Add paginated projects to the project model
         for project in paginated_projects:
-            self.projects_model.appendRow(self._process_project_item(project))
+            self.projects_model.appendRow(self.process_project_item(project))
         for i in range(len(header)):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.setColumnWidth(0, 300)

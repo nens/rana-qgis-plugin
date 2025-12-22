@@ -3,9 +3,9 @@ import time
 from pathlib import Path
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QBuffer, QByteArray, QRectF, QSize, Qt
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QPoint, QRectF, QSize, Qt
 from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPixmap
-from qgis.PyQt.QtWidgets import QApplication, QLabel
+from qgis.PyQt.QtWidgets import QApplication, QLabel, QStyledItemDelegate, QToolTip
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils_api import get_user_image
@@ -172,3 +172,83 @@ class ImageCache:
         """Remove all cached files."""
         for cache_file in self.cache_dir.glob("*.png"):
             cache_file.unlink(missing_ok=True)
+
+
+class ContributorAvatarsDelegate(QStyledItemDelegate):
+    # TODO: read and understand
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.avatar_size = 24
+        self.spacing = 2
+
+    def paint(self, painter: QPainter, option, index):
+        contributors = index.data(Qt.ItemDataRole.UserRole)
+        if not contributors:
+            return
+
+        x = option.rect.x()
+        y = option.rect.y() + (option.rect.height() - self.avatar_size) // 2
+
+        for contributor in contributors:
+            avatar = contributor.get("avatar")
+            if avatar and not avatar.isNull():
+                scaled_avatar = avatar.scaled(
+                    self.avatar_size,
+                    self.avatar_size,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                point = QPoint(x, y)
+                painter.drawPixmap(point, scaled_avatar)
+            x += self.avatar_size + self.spacing
+
+    def sizeHint(self, option, index):
+        contributors = index.data(Qt.ItemDataRole.UserRole)
+        if not contributors:
+            return QSize(0, self.avatar_size)
+        width = len(contributors) * (self.avatar_size + self.spacing) - self.spacing
+        return QSize(width, self.avatar_size)
+
+    def editorEvent(self, event, model, option, index):
+        if event.type() == event.Type.ToolTip:
+            contributors = index.data(Qt.ItemDataRole.UserRole)
+            if not contributors:
+                return False
+
+            # Calculate which avatar was hovered
+            x_pos = event.pos().x() - option.rect.x()
+            avatar_index = x_pos // (self.avatar_size + self.spacing)
+
+            if 0 <= avatar_index < len(contributors):
+                contributor = contributors[avatar_index]
+                tooltip_text = contributor["name"]
+                QToolTip.showText(event.globalPos(), tooltip_text)
+            else:
+                QToolTip.hideText()
+
+        return super().editorEvent(event, model, option, index)
+
+    def helpEvent(self, event, view, option, index):
+        if not event or not view:
+            return False
+
+        # Only show tooltip if we're actually hovering over an avatar
+        contributors = index.data(Qt.ItemDataRole.UserRole)
+        if not contributors:
+            return False
+
+        x = option.rect.x()
+        mouse_pos = event.pos()
+
+        # Find which avatar was clicked based on x position
+        for contributor in contributors:
+            if x <= mouse_pos.x() < x + self.avatar_size:
+                name = contributor.get("name", "")
+                if name:
+                    QToolTip.showText(event.globalPos(), name, view)
+                    return True
+            x += self.avatar_size + self.spacing
+
+        # Hide tooltip if we're not over any avatar
+        QToolTip.hideText()
+        return True
