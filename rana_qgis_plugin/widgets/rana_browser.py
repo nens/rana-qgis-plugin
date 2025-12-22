@@ -73,7 +73,6 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_file_history,
     get_tenant_project_files,
     get_tenant_projects,
-    get_tentant_users,
     get_threedi_schematisation,
     get_user_image,
     get_user_info,
@@ -759,6 +758,7 @@ class ProjectsBrowser(QWidget):
         self.setup_ui()
         self.fetch_projects()
         self.populate_projects()
+        self.populate_contributors()
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
@@ -766,52 +766,16 @@ class ProjectsBrowser(QWidget):
                 self.project = project
                 return
 
-    def populate_contributors(self):
-        # TODO identify current user and put on top
-        # TODO add images
-        users = get_tentant_users(self.communication)
-        # Sort users and put current user on top
-        my_id = get_user_info(self.communication).get("sub")
-        my_index = next(
-            (index for index, user in enumerate(users) if user["id"] == my_id), -1
-        )
-        if my_index != -1:
-            my_user = [users.pop(my_index)]
-        else:
-            my_user = []
-        sorted_users = my_user + sorted(
-            users, key=lambda x: f"{x['given_name']} {x['family_name']}".lower()
-        )
-        # Update items
-        self.contributor_filter.clear()
-        self.contributor_filter.addItem(
-            QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributers"
-        )
-        for user in sorted_users:
-            display_name = f"{user['given_name']} {user['family_name']}"
-            if user["id"] == my_id:
-                display_name += " (You)"
-            remote_image = get_user_image(self.communication, user["id"])
-            if remote_image:
-                icon = QIcon(create_user_image(remote_image))
-            else:
-                icon = QIcon(
-                    get_user_image_from_initials(
-                        user["given_name"][0] + user["family_name"][0]
-                    )
-                )
-            self.contributor_filter.addItem(icon, display_name, userData=user["id"])
-
     def setup_ui(self):
         # Create search box
         self.projects_search = QLineEdit()
         self.projects_search.setPlaceholderText("🔍 Search for project by name")
-        self.projects_search.textChanged.connect(self.filter_projects_by_name)
+        self.projects_search.textChanged.connect(self.filter_projects)
         self.projects_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         # Create filter by contributor box
         self.contributor_filter = QComboBox()
         self.contributor_filter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.populate_contributors()
+        self.contributor_filter.currentIndexChanged.connect(self.filter_projects)
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
         self.projects_tv = QTreeView()
@@ -847,9 +811,8 @@ class ProjectsBrowser(QWidget):
     def refresh(self):
         self.current_page = 1
         self.fetch_projects()
-        search_text = self.projects_search.text()
-        if search_text:
-            self.filter_projects_by_name(search_text, clear=True)
+        if self.filter_active:
+            self.filtered_projects(clear=True)
             return
         # TODO: update filter state
         self.populate_projects(clear=True)
@@ -857,17 +820,56 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.projects_refreshed.emit()
 
-    def filter_projects_by_name(self, text: str, clear: bool = False):
+    @property
+    def filter_active(self):
+        return (
+            self.projects_search.text() or self.contributor_filter.currentIndex() != 0
+        )
+
+    def filter_projects(self, clear: bool = False):
         self.current_page = 1
-        if text:
+        if not self.filter_active:
+            self.filtered_projects = []
+        else:
+            project_filters = [
+                self.get_projects_filtered_by_name,
+                self.get_projects_filtered_by_contributor,
+            ]
+            project_ids = [
+                {project["id"] for project in filter_func()}
+                for filter_func in project_filters
+            ]
+            # Find project ids that are present in all filters
+            common_ids = set.intersection(*project_ids)
             self.filtered_projects = [
+                project for project in self.projects if project["id"] in common_ids
+            ]
+        self.populate_projects(clear=clear)
+
+    def get_projects_filtered_by_name(self):
+        text = self.projects_search.text()
+        if text:
+            return [
                 project
                 for project in self.projects
                 if text.lower() in project["name"].lower()
             ]
         else:
-            self.filtered_projects = []
-        self.populate_projects(clear=clear)
+            return self.projects
+
+    def get_projects_filtered_by_contributor(self):
+        selected_user_id = self.contributor_filter.currentData()
+        if selected_user_id is None:
+            return self.projects
+        else:
+            selected_projects = []
+            for project in self.projects:
+                contributors = [
+                    contributor["id"] for contributor in project.get("contributors", [])
+                ]
+                if selected_user_id in contributors:
+                    selected_projects.append(project)
+            return selected_projects
 
     def sort_projects(self, column_index: int, order: Qt.SortOrder):
         self.current_page = 1
@@ -879,9 +881,8 @@ class ProjectsBrowser(QWidget):
         self.projects.sort(
             key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
         )
-        search_text = self.projects_search.text()
-        if search_text:
-            self.filter_projects_by_name(search_text)
+        if self.active_filter:
+            self.filter_projects(clear=True)
             return
         self.populate_projects()
 
@@ -911,8 +912,7 @@ class ProjectsBrowser(QWidget):
         self.projects_model.setHorizontalHeaderLabels(header)
 
         # Paginate projects
-        search_text = self.projects_search.text()
-        projects = self.filtered_projects if search_text else self.projects
+        projects = self.filtered_projects if self.filter_active else self.projects
         start_index = (self.current_page - 1) * self.items_per_page
         end_index = start_index + self.items_per_page
         paginated_projects = projects[start_index:end_index]
@@ -924,6 +924,43 @@ class ProjectsBrowser(QWidget):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.setColumnWidth(0, 300)
         self.update_pagination(projects)
+
+    def populate_contributors(self):
+        # Collect all unique contributors to the projects
+        all_contributors = {
+            contributor["id"]: contributor
+            for project in self.projects
+            for contributor in project["contributors"]
+        }
+        # Sort users by name, starting with the current user
+        my_id = get_user_info(self.communication).get("sub")
+        if my_id in all_contributors:
+            my_user = [all_contributors.pop(my_id)]
+        else:
+            my_user = []
+        sorted_users = my_user + sorted(
+            all_contributors.values(),
+            key=lambda x: f"{x['given_name']} {x['family_name']}".lower(),
+        )
+        # Update combo box items
+        self.contributor_filter.clear()
+        self.contributor_filter.addItem(
+            QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributers"
+        )
+        for user in sorted_users:
+            display_name = f"{user['given_name']} {user['family_name']}"
+            if user["id"] == my_id:
+                display_name += " (You)"
+            remote_image = get_user_image(self.communication, user["id"])
+            if remote_image:
+                icon = QIcon(create_user_image(remote_image))
+            else:
+                icon = QIcon(
+                    get_user_image_from_initials(
+                        user["given_name"][0] + user["family_name"][0]
+                    )
+                )
+            self.contributor_filter.addItem(icon, display_name, userData=user["id"])
 
     def update_pagination(self, projects: list):
         total_items = len(projects)

@@ -95,21 +95,6 @@ def get_tenant_projects(communication: UICommunication):
         return []
 
 
-def get_tentant_users(communication: UICommunication):
-    authcfg_id = get_authcfg_id()
-    tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/users"
-    params = {"limit": 100}
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-    if status:
-        return network_manager.content["items"]
-    else:
-        communication.show_error(f"Failed to get projects: {error}")
-        return []
-
-
 def get_tenant_project_files(
     communication: UICommunication, project_id: str, params: dict = None
 ):
