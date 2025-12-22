@@ -71,7 +71,9 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_file_history,
     get_tenant_project_files,
     get_tenant_projects,
+    get_tentant_users,
     get_threedi_schematisation,
+    get_user_info,
 )
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.widgets.filtercombobox import FilterComboBox
@@ -80,7 +82,6 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
-from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
 
 class RevisionsView(QWidget):
@@ -758,6 +759,30 @@ class ProjectsBrowser(QWidget):
                 self.project = project
                 return
 
+    def populate_contributors(self):
+        # TODO identify current user and put on top
+        # TODO add images
+        users = get_tentant_users(self.communication)
+        # Sort users and put current user on top
+        my_id = get_user_info(self.communication).get("sub")
+        my_index = next(
+            (index for index, user in enumerate(users) if user["id"] == my_id), -1
+        )
+        if my_index != -1:
+            my_user = [users.pop(my_index)]
+        else:
+            my_user = []
+        sorted_users = my_user + sorted(
+            users, key=lambda x: f"{x['given_name']} {x['family_name']}".lower()
+        )
+        # Update items
+        self.contributor_filter.clear()
+        for user in sorted_users:
+            display_name = f"{user['given_name']} {user['family_name']}"
+            if user["id"] == my_id:
+                display_name += " (You)"
+            self.contributor_filter.addItem(display_name, userData=user["id"])
+
     def setup_ui(self):
         # Create search box
         self.projects_search = QLineEdit()
@@ -768,6 +793,7 @@ class ProjectsBrowser(QWidget):
         self.contributor_filter = FilterComboBox()
         self.contributor_filter.setPlaceholderText("All contributors")
         self.contributor_filter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.populate_contributors()
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
         self.projects_tv = QTreeView()
@@ -807,7 +833,9 @@ class ProjectsBrowser(QWidget):
         if search_text:
             self.filter_projects_by_name(search_text, clear=True)
             return
+        # TODO: update filter state
         self.populate_projects(clear=True)
+        self.populate_contributors()
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.projects_refreshed.emit()
 
