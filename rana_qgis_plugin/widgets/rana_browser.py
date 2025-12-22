@@ -26,6 +26,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -74,16 +75,20 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_projects,
     get_tentant_users,
     get_threedi_schematisation,
+    get_user_image,
     get_user_info,
 )
 from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.widgets.filtercombobox import FilterComboBox
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
     get_file_actions_for_data_type,
 )
-from rana_qgis_plugin.widgets.utils_icons import get_user_image_from_initials
+from rana_qgis_plugin.widgets.utils_icons import (
+    create_user_image,
+    get_icon_from_theme,
+    get_user_image_from_initials,
+)
 
 
 class RevisionsView(QWidget):
@@ -779,15 +784,22 @@ class ProjectsBrowser(QWidget):
         )
         # Update items
         self.contributor_filter.clear()
+        self.contributor_filter.addItem(
+            QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributers"
+        )
         for user in sorted_users:
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            icon = QIcon(
-                get_user_image_from_initials(
-                    user["given_name"][0] + user["family_name"][0]
+            remote_image = get_user_image(self.communication, user["id"])
+            if remote_image:
+                icon = QIcon(create_user_image(remote_image))
+            else:
+                icon = QIcon(
+                    get_user_image_from_initials(
+                        user["given_name"][0] + user["family_name"][0]
+                    )
                 )
-            )
             self.contributor_filter.addItem(icon, display_name, userData=user["id"])
 
     def setup_ui(self):
@@ -797,8 +809,7 @@ class ProjectsBrowser(QWidget):
         self.projects_search.textChanged.connect(self.filter_projects_by_name)
         self.projects_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         # Create filter by contributor box
-        self.contributor_filter = FilterComboBox()
-        self.contributor_filter.setPlaceholderText("All contributors")
+        self.contributor_filter = QComboBox()
         self.contributor_filter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.populate_contributors()
         # Create tree view with project files and model

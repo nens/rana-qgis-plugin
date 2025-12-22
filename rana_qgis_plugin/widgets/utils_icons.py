@@ -34,15 +34,16 @@ def get_user_image_from_initials(initials: str) -> QPixmap:
     theme_text_color = QApplication.palette().text().color()
 
     # Draw circular background
+    painter.setRenderHint(QPainter.Antialiasing)
     painter.setBrush(theme_background_color)
-    painter.setPen(Qt.NoPen)
+    painter.setPen(theme_text_color)
     painter.drawEllipse(QRectF(0, 0, size, size))
 
     # Draw initials
     text_rect = QRectF(0, 0, size, size)
     painter.setPen(theme_text_color)
     font = painter.font()
-    font.setPointSize(12)
+    font.setPointSize(14)
     painter.setFont(font)
     painter.drawText(text_rect, Qt.AlignCenter, initials)
 
@@ -54,23 +55,40 @@ def get_user_image_from_initials(initials: str) -> QPixmap:
 def create_user_image(image):
     size = 32
     pixmap = QPixmap.fromImage(image)
-    # rounded = QPixmap(size, size)
-    # rounded.fill(Qt.transparent)
-    #
-    # # Create a path for circular mask
-    # path = QPainterPath()
-    # path.addEllipse(QRectF(0, 0, size, size))
-    #
-    # # Paint the original pixmap with circular mask
-    # painter = QPainter(rounded)
-    # painter.setRenderHint(QPainter.Antialiasing)
-    # painter.setClipPath(path)
-    # painter.drawPixmap(
-    #     0,
-    #     0,
-    #     pixmap.scaled(
-    #         size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
-    #     ),
-    # )
-    # painter.end()
-    return pixmap.scaled(32, 32)
+    # Scale maintaining aspect ratio
+    scaled_pixmap = pixmap.scaled(
+        size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+    )
+
+    # Calculate offsets to center the image
+    x_offset = max(0, (scaled_pixmap.width() - size) // 2)
+    y_offset = max(0, (scaled_pixmap.height() - size) // 2)
+
+    # Create the target rounded pixmap
+    rounded = QPixmap(size, size)
+    rounded.fill(Qt.transparent)
+
+    # Create a path for circular mask
+    path = QPainterPath()
+    path.addEllipse(QRectF(0, 0, size, size))
+
+    # Paint the original pixmap with circular mask
+    painter = QPainter(rounded)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setClipPath(path)
+
+    # Draw the pixmap from the calculated offset position
+    painter.drawPixmap(
+        0,
+        0,
+        size,
+        size,  # target rectangle
+        scaled_pixmap,  # source pixmap
+        x_offset,
+        y_offset,  # source position
+        size,
+        size,  # source size
+    )
+    painter.end()
+
+    return rounded
