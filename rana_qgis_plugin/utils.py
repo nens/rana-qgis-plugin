@@ -321,3 +321,14 @@ def build_vrt(output_filepath, raster_filepaths, **vrt_options):
     options = gdal.BuildVRTOptions(**vrt_options)
     vrt_ds = gdal.BuildVRT(output_filepath, raster_filepaths, options=options)
     vrt_ds = None
+
+
+def get_timestamp_as_numeric_item(timestamp_str: str) -> NumericItem:
+    timestamp = convert_to_timestamp(timestamp_str)
+    display_timestamp = format_activity_time(timestamp_str)
+    local_timestamp = convert_to_local_time(timestamp_str)
+    item = NumericItem(display_timestamp)
+    item.setData(timestamp, role=Qt.ItemDataRole.UserRole)
+    if display_timestamp != local_timestamp:
+        item.setToolTip(local_timestamp)
+    return item
