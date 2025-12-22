@@ -328,13 +328,21 @@ class FileView(QWidget):
         btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
         button_layout.addWidget(btn_show_revisions)
-        file_action_btn_layout = QHBoxLayout()
         self.file_action_btn_dict = self.get_file_action_buttons()
+        file_action_btn_layout = QHBoxLayout()
+        file_action_btn_layout.setContentsMargins(0, 0, 0, 0)
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
+        # Put file_action_btn_layout in widget so the minimum width can be set
+        file_action_btn_container = QWidget()
+        file_action_btn_container.setSizePolicy(
+            QSizePolicy.Ignored, QSizePolicy.Preferred
+        )
+        file_action_btn_container.setMinimumWidth(0)
+        file_action_btn_container.setLayout(file_action_btn_layout)
         layout = QVBoxLayout(self)
         layout.addWidget(self.file_table_widget)
-        layout.addLayout(file_action_btn_layout)
+        layout.addWidget(file_action_btn_container)
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
@@ -344,7 +352,6 @@ class FileView(QWidget):
             if action == FileAction.VIEW_REVISIONS:
                 continue
             btn = QPushButton(action.value)
-            # btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             action_signal = self.file_signals.get_signal(action)
             if action == FileAction.RENAME:
                 btn.clicked.connect(lambda _: self.edit_file_name(self.selected_file))
