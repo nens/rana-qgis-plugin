@@ -33,7 +33,7 @@ def get_user_image_from_initials(initials: str) -> QPixmap:
     painter.setRenderHint(QPainter.Antialiasing)
 
     # Determine colors based on theme
-    theme_background_color = Qt.transparent
+    theme_background_color = QApplication.palette().window().color()
     theme_text_color = QApplication.palette().text().color()
 
     # Draw circular background
@@ -180,16 +180,17 @@ class ContributorAvatarsDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.avatar_size = 24
         self.spacing = 2
+        self.centers = []
 
     def paint(self, painter: QPainter, option, index):
         contributors = index.data(Qt.ItemDataRole.UserRole)
         if not contributors:
             return
 
-        x = option.rect.x()
+        x = option.rect.x() + (len(contributors) - 1) * (self.avatar_size) // 2
         y = option.rect.y() + (option.rect.height() - self.avatar_size) // 2
 
-        for contributor in contributors:
+        for contributor in contributors[::-1]:
             avatar = contributor.get("avatar")
             if avatar and not avatar.isNull():
                 scaled_avatar = avatar.scaled(
@@ -200,7 +201,11 @@ class ContributorAvatarsDelegate(QStyledItemDelegate):
                 )
                 point = QPoint(x, y)
                 painter.drawPixmap(point, scaled_avatar)
-            x += self.avatar_size + self.spacing
+                self.centers.append(
+                    (x + self.avatar_size // 2, y + self.avatar_size // 2)
+                )
+                x -= self.avatar_size // 2
+        self.centers = self.centers[::-1]
 
     def sizeHint(self, option, index):
         contributors = index.data(Qt.ItemDataRole.UserRole)
@@ -229,25 +234,46 @@ class ContributorAvatarsDelegate(QStyledItemDelegate):
         return super().editorEvent(event, model, option, index)
 
     def helpEvent(self, event, view, option, index):
+        # WOW this works
+        # TODO make it more efficient
         if not event or not view:
             return False
 
-        # Only show tooltip if we're actually hovering over an avatar
         contributors = index.data(Qt.ItemDataRole.UserRole)
         if not contributors:
             return False
 
-        x = option.rect.x()
         mouse_pos = event.pos()
+        radius = self.avatar_size // 2
 
-        # Find which avatar was clicked based on x position
+        # Calculate the starting position (same as in paint method)
+        x = option.rect.x()
+        y = option.rect.y() + (option.rect.height() - self.avatar_size) // 2
+
+        # Convert mouse position to be relative to the cell
+        mouse_x = mouse_pos.x() - option.rect.x()
+        mouse_y = mouse_pos.y() - option.rect.y()
+
+        # Check each avatar from front to back (reverse order of drawing)
         for contributor in contributors:
-            if x <= mouse_pos.x() < x + self.avatar_size:
+            # Calculate center of this avatar
+            center_x = x + radius - option.rect.x()
+            center_y = y + radius - option.rect.y()
+
+            # Calculate distance from mouse to avatar center
+            dx = mouse_x - center_x
+            dy = mouse_y - center_y
+            distance = (dx * dx + dy * dy) ** 0.5
+
+            # If mouse is within the circle
+            if distance <= radius:
                 name = contributor.get("name", "")
                 if name:
                     QToolTip.showText(event.globalPos(), name, view)
                     return True
-            x += self.avatar_size + self.spacing
+
+            # Move to next avatar position (same as in paint method)
+            x += self.avatar_size // 2
 
         # Hide tooltip if we're not over any avatar
         QToolTip.hideText()
