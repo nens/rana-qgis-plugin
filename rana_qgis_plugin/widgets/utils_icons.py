@@ -1,11 +1,14 @@
+import hashlib
+import time
+from pathlib import Path
+
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QRectF, QSize, Qt
-from qgis.PyQt.QtGui import (
-    QPainter,
-    QPainterPath,
-    QPixmap,
-)
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QRectF, QSize, Qt
+from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from qgis.PyQt.QtWidgets import QApplication, QLabel
+
+from rana_qgis_plugin.constant import PLUGIN_NAME
+from rana_qgis_plugin.utils_api import get_user_image
 
 
 def get_icon_from_theme(icon_name: str) -> QPixmap:
@@ -92,3 +95,80 @@ def create_user_image(image):
     painter.end()
 
     return rounded
+
+
+def get_avatar(user, communication):
+    cache = ImageCache(PLUGIN_NAME)
+    image_name = f"avatar_{user['id']}.bin"
+    bin_image = cache.get_cached_image(image_name)
+    if not bin_image:
+        bin_image = get_user_image(communication, user["id"])
+    if bin_image:
+        cache.cache_image(image_name, bin_image)
+        return create_user_image(bin_image)
+    else:
+        return get_user_image_from_initials(
+            user["given_name"][0] + user["family_name"][0]
+        )
+
+
+class ImageCache:
+    def __init__(self, plugin_name: str):
+        # Convert QgsApplication path to Path object and create cache directory
+        self.cache_dir = (
+            Path(QgsApplication.qgisSettingsDirPath()) / "cache" / plugin_name
+        )
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_cached_image(self, url: str) -> Path | None:
+        # Create a unique filename based on URL
+        filename = hashlib.md5(url.encode()).hexdigest() + ".png"
+        cache_path = self.cache_dir / filename
+
+        if cache_path.exists():
+            # Check if cache is not too old (e.g., 7 days)
+            if time.time() - cache_path.stat().st_mtime < 7 * 24 * 3600:
+                return cache_path
+
+        return None
+
+    def cache_image(self, image_name: str, image_data) -> Path:
+        """Cache image data to file.
+
+        Args:
+            image_name: Name to use for the cached file
+            image_data: Either bytes or QImage to cache
+
+        Returns:
+            Path to the cached file
+        """
+        cache_path = self.cache_dir / image_name
+
+        if isinstance(image_data, QImage):
+            # Convert QImage to bytes
+            byte_array = QByteArray()
+            buffer = QBuffer(byte_array)
+            buffer.open(QBuffer.WriteOnly)
+            image_data.save(buffer, "PNG")
+            cache_path.write_bytes(byte_array.data())
+        else:
+            # Assume it's already bytes
+            cache_path.write_bytes(image_data)
+
+        return cache_path
+
+    def clear_old_cache(self, max_age_days: int = 7) -> None:
+        """Clear cache files older than max_age_days."""
+        current_time = time.time()
+        for cache_file in self.cache_dir.glob("*.png"):
+            if current_time - cache_file.stat().st_mtime > max_age_days * 24 * 3600:
+                cache_file.unlink(missing_ok=True)
+
+    def get_cache_size(self) -> int:
+        """Get total size of cached files in bytes."""
+        return sum(f.stat().st_size for f in self.cache_dir.glob("*.png"))
+
+    def clear_all_cache(self) -> None:
+        """Remove all cached files."""
+        for cache_file in self.cache_dir.glob("*.png"):
+            cache_file.unlink(missing_ok=True)

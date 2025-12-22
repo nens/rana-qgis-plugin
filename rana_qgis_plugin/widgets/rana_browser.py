@@ -84,9 +84,8 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
-    create_user_image,
+    get_avatar,
     get_icon_from_theme,
-    get_user_image_from_initials,
 )
 
 
@@ -951,16 +950,10 @@ class ProjectsBrowser(QWidget):
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            remote_image = get_user_image(self.communication, user["id"])
-            if remote_image:
-                icon = QIcon(create_user_image(remote_image))
-            else:
-                icon = QIcon(
-                    get_user_image_from_initials(
-                        user["given_name"][0] + user["family_name"][0]
-                    )
-                )
-            self.contributor_filter.addItem(icon, display_name, userData=user["id"])
+            user_image = get_avatar(user, self.communication)
+            self.contributor_filter.addItem(
+                QIcon(user_image), display_name, userData=user["id"]
+            )
 
     def update_pagination(self, projects: list):
         total_items = len(projects)
