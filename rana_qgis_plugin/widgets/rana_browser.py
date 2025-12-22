@@ -749,7 +749,7 @@ class ProjectsBrowser(QWidget):
         self.setup_ui()
         self.fetch_projects()
         self.populate_projects()
-        self.sort_projects(column_index=1, order=Qt.SortOrder.AscendingOrder)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.DescendingOrder)
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
@@ -801,7 +801,7 @@ class ProjectsBrowser(QWidget):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
-        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.DescendingOrder)
         self.projects_refreshed.emit()
 
     def filter_projects(self, text: str, clear: bool = False):
@@ -815,22 +815,6 @@ class ProjectsBrowser(QWidget):
         else:
             self.filtered_projects = []
         self.populate_projects(clear=clear)
-
-    def sort_projects(self, column_index: int, order: Qt.SortOrder):
-        self.current_page = 1
-        key_funcs = [
-            lambda project: project["name"].lower(),
-            lambda project: -convert_to_timestamp(project["last_activity"]),
-        ]
-        key_func = key_funcs[column_index]
-        self.projects.sort(
-            key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
-        )
-        search_text = self.projects_search.text()
-        if search_text:
-            self.filter_projects(search_text)
-            return
-        self.populate_projects()
 
     @staticmethod
     def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
