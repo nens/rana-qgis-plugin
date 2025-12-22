@@ -63,6 +63,7 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
     format_activity_time,
+    get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
@@ -247,14 +248,9 @@ class RevisionsView(QWidget):
                 self.revisions_model.setHorizontalHeaderLabels(
                     ["Timestamp", "Event", "Simulation", "Rana Model"]
                 )
-            locel_time = convert_to_local_time(commit_date)
+            commit_item = get_timestamp_as_numeric_item(commit_date)
             if latest:
-                locel_time += " (latest)"
-            commit_item = NumericItem(locel_time)
-            # Use numeric timestamp for sorting
-            commit_item.setData(
-                convert_to_timestamp(commit_date), role=Qt.ItemDataRole.UserRole
-            )
+                commit_item.setText(commit_item.text() + " (latest)")
             # We store the revision object for loading specific revisions in menu_requested.
             if threedi_revision:
                 commit_item.setData((threedi_revision, threedi_schematisation))
@@ -399,6 +395,7 @@ class FileView(QWidget):
         self.selected_file = selected_file
 
     def show_selected_file_details(self, selected_file):
+        tooltips = {}
         self.update_selected_file(selected_file)
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
@@ -413,6 +410,9 @@ class FileView(QWidget):
         description = descriptor["description"] if descriptor else None
 
         last_modified = convert_to_local_time(selected_file["last_modified"])
+        display_last_modified = format_activity_time(selected_file["last_modified"])
+        if last_modified != display_last_modified:
+            tooltips["Last modified"] = last_modified
         size = (
             display_bytes(selected_file["size"])
             if data_type != "threedi_schematisation"
@@ -424,7 +424,7 @@ class FileView(QWidget):
             ("File type", selected_file["media_type"]),
             ("Data type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
             ("Added by", username),
-            ("Last modified", last_modified),
+            ("Last modified", display_last_modified),
             ("Description", description),
         ]
         if data_type == "scenario" and meta:
@@ -490,6 +490,8 @@ class FileView(QWidget):
             value_item.setFlags(
                 Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
             )
+            if label in tooltips:
+                value_item.setToolTip(tooltips[label])
             self.file_table_widget.setItem(i, 0, label_item)
             self.file_table_widget.setItem(i, 1, value_item)
         self.file_table_widget.resizeColumnsToContents()
@@ -713,12 +715,7 @@ class FilesBrowser(QWidget):
                 file["size"] if data_type != "threedi_schematisation" else -1,
                 role=Qt.ItemDataRole.UserRole,
             )
-            last_modified = convert_to_local_time(file["last_modified"])
-            last_modified_timestamp = convert_to_timestamp(file["last_modified"])
-            last_modified_item = NumericItem(last_modified)
-            last_modified_item.setData(
-                last_modified_timestamp, role=Qt.ItemDataRole.UserRole
-            )
+            last_modified_item = get_timestamp_as_numeric_item(file["last_modified"])
             # Add items to the model
             self.files_model.appendRow(
                 [name_item, data_type_item, size_item, last_modified_item]
@@ -837,16 +834,7 @@ class ProjectsBrowser(QWidget):
         name_item = QStandardItem(project_name)
         name_item.setToolTip(project_name)
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
-        last_activity = project["last_activity"]
-        last_activity_timestamp = convert_to_timestamp(last_activity)
-        display_last_activity = format_activity_time(last_activity)
-        last_activity_localtime = convert_to_local_time(last_activity)
-        last_activity_item = NumericItem(display_last_activity)
-        last_activity_item.setData(
-            last_activity_timestamp, role=Qt.ItemDataRole.UserRole
-        )
-        if last_activity_localtime != display_last_activity:
-            last_activity_item.setToolTip(last_activity_localtime)
+        last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
         return [name_item, last_activity_item]
 
     def populate_projects(self, clear: bool = False):
