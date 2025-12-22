@@ -5,6 +5,7 @@ develop
 -------------------
 
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Add remove from project file action that shadows delete
 
 
 1.1.21 (unreleased)
