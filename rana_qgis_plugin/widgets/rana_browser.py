@@ -749,6 +749,7 @@ class ProjectsBrowser(QWidget):
         self.setup_ui()
         self.fetch_projects()
         self.populate_projects()
+        self.sort_projects(column_index=1, order=Qt.SortOrder.AscendingOrder)
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
