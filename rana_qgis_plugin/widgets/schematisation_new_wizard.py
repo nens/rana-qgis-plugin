@@ -93,6 +93,12 @@ class NewSchematisationWizard(QWizard):
         )
 
     def create_schematisation(self):
+        schematisation_name = self.schematisation_name_page.field("schematisation_name")
+        if schematisation_name in os.listdir(self.working_dir):
+            self.communication.show_error(
+                f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
+            )
+            return
         if self.schematisation_name_page.field("from_geopackage"):
             self.create_schematisation_from_geopackage()
         else:
@@ -118,7 +124,7 @@ class NewSchematisationWizard(QWizard):
                 "schematisation_organisation"
             )
         else:
-            organisation = self.available_organisations[0]
+            organisation = list(self.available_organisations.values())[0]
 
         owner = organisation.unique_id
 
@@ -255,9 +261,15 @@ class NewSchematisationWizard(QWizard):
             else:
                 tags = [tag.strip() for tag in tags.split(",")]
 
-            organisation = self.schematisation_name_page.field(
-                "schematisation_organisation"
-            )
+            # when there is exactly one 3Di organisation available for a tenant
+            # no organisation dropdown is shown in the wizard
+            if len(self.available_organisations) > 1:
+                organisation = self.schematisation_name_page.field(
+                    "schematisation_organisation"
+                )
+            else:
+                organisation = list(self.available_organisations.values())[0]
+
             owner = organisation.unique_id
 
             schematisation = self.tc.create_schematisation(
