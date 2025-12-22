@@ -74,11 +74,13 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils_settings import base_url
+from rana_qgis_plugin.widgets.filtercombobox import FilterComboBox
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
     get_file_actions_for_data_type,
 )
+from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
 
 class RevisionsView(QWidget):
@@ -760,7 +762,12 @@ class ProjectsBrowser(QWidget):
         # Create search box
         self.projects_search = QLineEdit()
         self.projects_search.setPlaceholderText("🔍 Search for project by name")
-        self.projects_search.textChanged.connect(self.filter_projects)
+        self.projects_search.textChanged.connect(self.filter_projects_by_name)
+        self.projects_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Create filter by contributor box
+        self.contributor_filter = FilterComboBox()
+        self.contributor_filter.setPlaceholderText("All contributors")
+        self.contributor_filter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
         self.projects_tv = QTreeView()
@@ -779,6 +786,7 @@ class ProjectsBrowser(QWidget):
         # Organize widgets in layouts
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.projects_search)
+        top_layout.addWidget(self.contributor_filter)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
         pagination_layout.addWidget(self.label_page_number)
@@ -797,13 +805,13 @@ class ProjectsBrowser(QWidget):
         self.fetch_projects()
         search_text = self.projects_search.text()
         if search_text:
-            self.filter_projects(search_text, clear=True)
+            self.filter_projects_by_name(search_text, clear=True)
             return
         self.populate_projects(clear=True)
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.projects_refreshed.emit()
 
-    def filter_projects(self, text: str, clear: bool = False):
+    def filter_projects_by_name(self, text: str, clear: bool = False):
         self.current_page = 1
         if text:
             self.filtered_projects = [
@@ -827,7 +835,7 @@ class ProjectsBrowser(QWidget):
         )
         search_text = self.projects_search.text()
         if search_text:
-            self.filter_projects(search_text)
+            self.filter_projects_by_name(search_text)
             return
         self.populate_projects()
 
