@@ -17,6 +17,7 @@ class FileAction(Enum):
     DOWNLOAD_RESULTS = "Download results"
     RENAME = "Rename"
     DELETE = "Delete"
+    REMOVE_FROM_PROJECT = "Remove from project"
 
     def __lt__(self, other):
         # sort a list of file actions by order of definition here
@@ -40,6 +41,8 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     if data_type == "vector":
         actions.append(FileAction.SAVE_VECTOR_STYLING)
     elif data_type == "threedi_schematisation":
+        # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
+        actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
         actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
     # Add options to open WMS and download file and results only for 3Di scenarios
     elif data_type == "scenario":
@@ -70,6 +73,7 @@ class FileActionSignals(QObject):
     def get_signal(self, signal_type: FileAction) -> Optional[pyqtSignal]:
         signal_map = {
             FileAction.DELETE: self.file_deletion_requested,
+            FileAction.REMOVE_FROM_PROJECT: self.file_deletion_requested,
             FileAction.RENAME: self.file_rename_requested,
             FileAction.OPEN_IN_QGIS: self.open_in_qgis_requested,
             FileAction.UPLOAD_FILE: self.upload_file_requested,
