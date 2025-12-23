@@ -5,6 +5,7 @@ develop
 -------------------
 
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Add option to filter by contributor and show contributors in project view
 
 
 1.1.21 (unreleased)
