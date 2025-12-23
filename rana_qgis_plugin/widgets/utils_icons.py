@@ -100,16 +100,36 @@ def create_user_image(image):
 def get_avatar(user, communication):
     cache = ImageCache(PLUGIN_NAME)
     image_name = f"avatar_{user['id']}.bin"
-    bin_image = cache.get_cached_image(image_name)
-    if not bin_image:
-        bin_image = get_user_image(communication, user["id"])
+    pixmap_name = f"avatar_{user['id']}.png"
+    cached_pixmap = cache.get_cached_image(pixmap_name)
+    if cached_pixmap:
+        return cached_pixmap
+    bin_image = get_user_image(communication, user["id"])
     if bin_image:
-        cache.cache_image(image_name, bin_image)
-        return create_user_image(bin_image)
+        final_pixmap = create_user_image(bin_image)
     else:
-        return get_user_image_from_initials(
+        final_pixmap = get_user_image_from_initials(
             user["given_name"][0] + user["family_name"][0]
         )
+    # Cache the final pixmap
+    if final_pixmap:
+        cache.cache_image(pixmap_name, final_pixmap)
+
+    return final_pixmap
+
+    #
+    #
+    # bin_image = cache.get_cached_image(image_name)
+    # if not bin_image:
+    #     bin_image = get_user_image(communication, user["id"])
+    #     if bin_image:
+    #         cache.cache_image(image_name, bin_image)
+    # if bin_image:
+    #     return create_user_image(bin_image)
+    # else:
+    #     return get_user_image_from_initials(
+    #         user["given_name"][0] + user["family_name"][0]
+    #     )
 
 
 class ImageCache:
@@ -120,41 +140,37 @@ class ImageCache:
         )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_cached_image(self, url: str) -> Path | None:
-        # Create a unique filename based on URL
-        filename = hashlib.md5(url.encode()).hexdigest() + ".png"
-        cache_path = self.cache_dir / filename
+    def get_cached_image(self, image_name: str) -> QPixmap | None:
+        """Get cached image as QPixmap.
+
+        Args:
+            image_name: Name of the cached file
+
+        Returns:
+            QPixmap if cached file exists and is not too old, None otherwise
+        """
+        cache_path = self.cache_dir / image_name
 
         if cache_path.exists():
             # Check if cache is not too old (e.g., 7 days)
             if time.time() - cache_path.stat().st_mtime < 7 * 24 * 3600:
-                return cache_path
-
+                pixmap = QPixmap()
+                if pixmap.load(str(cache_path)):
+                    return pixmap
         return None
 
-    def cache_image(self, image_name: str, image_data) -> Path:
-        """Cache image data to file.
+    def cache_image(self, image_name: str, pixmap: QPixmap) -> Path:
+        """Cache QPixmap to file.
 
         Args:
             image_name: Name to use for the cached file
-            image_data: Either bytes or QImage to cache
+            pixmap: QPixmap to cache
 
         Returns:
             Path to the cached file
         """
         cache_path = self.cache_dir / image_name
-
-        if isinstance(image_data, QImage):
-            # Convert QImage to bytes
-            byte_array = QByteArray()
-            buffer = QBuffer(byte_array)
-            buffer.open(QBuffer.WriteOnly)
-            image_data.save(buffer, "PNG")
-            cache_path.write_bytes(byte_array.data())
-        else:
-            # Assume it's already bytes
-            cache_path.write_bytes(image_data)
-
+        pixmap.save(str(cache_path), "PNG")
         return cache_path
 
     def clear_old_cache(self, max_age_days: int = 7) -> None:
