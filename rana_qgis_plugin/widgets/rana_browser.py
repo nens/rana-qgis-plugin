@@ -779,7 +779,6 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
-        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.projects_model.setHorizontalHeaderLabels(
             ["Project Name", "Contributors", "Last activity"]
         )
