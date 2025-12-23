@@ -6,6 +6,8 @@ develop
 
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
 - Add option to filter by contributor and show contributors in project view
+- Add remove from project file action that shadows delete
+- Show relative timestamps in files browser, file view and revisions view
 
 
 1.1.21 (unreleased)
