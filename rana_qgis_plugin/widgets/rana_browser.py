@@ -338,7 +338,6 @@ class FileView(QWidget):
         file_action_btn_container.setSizePolicy(
             QSizePolicy.Ignored, QSizePolicy.Preferred
         )
-        file_action_btn_container.setMinimumWidth(0)
         file_action_btn_container.setLayout(file_action_btn_layout)
         layout = QVBoxLayout(self)
         layout.addWidget(self.file_table_widget)
