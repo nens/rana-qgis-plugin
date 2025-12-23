@@ -175,21 +175,16 @@ class ImageCache:
 
 
 class ContributorAvatarsDelegate(QStyledItemDelegate):
-    # TODO: read and understand
     def __init__(self, parent=None):
         super().__init__(parent)
         self.avatar_size = 24
-        self.spacing = 2
-        self.centers = []
 
     def paint(self, painter: QPainter, option, index):
         contributors = index.data(Qt.ItemDataRole.UserRole)
         if not contributors:
             return
-
         x = option.rect.x() + (len(contributors) - 1) * (self.avatar_size) // 2
         y = option.rect.y() + (option.rect.height() - self.avatar_size) // 2
-
         for contributor in contributors[::-1]:
             avatar = contributor.get("avatar")
             if avatar and not avatar.isNull():
@@ -201,80 +196,43 @@ class ContributorAvatarsDelegate(QStyledItemDelegate):
                 )
                 point = QPoint(x, y)
                 painter.drawPixmap(point, scaled_avatar)
-                self.centers.append(
-                    (x + self.avatar_size // 2, y + self.avatar_size // 2)
-                )
                 x -= self.avatar_size // 2
-        self.centers = self.centers[::-1]
 
     def sizeHint(self, option, index):
         contributors = index.data(Qt.ItemDataRole.UserRole)
         if not contributors:
             return QSize(0, self.avatar_size)
-        width = len(contributors) * (self.avatar_size + self.spacing) - self.spacing
+        width = self.avatar_size + (len(contributors) - 1) * self.avatar_size // 2
         return QSize(width, self.avatar_size)
 
-    def editorEvent(self, event, model, option, index):
-        if event.type() == event.Type.ToolTip:
-            contributors = index.data(Qt.ItemDataRole.UserRole)
-            if not contributors:
-                return False
-
-            # Calculate which avatar was hovered
-            x_pos = event.pos().x() - option.rect.x()
-            avatar_index = x_pos // (self.avatar_size + self.spacing)
-
-            if 0 <= avatar_index < len(contributors):
-                contributor = contributors[avatar_index]
-                tooltip_text = contributor["name"]
-                QToolTip.showText(event.globalPos(), tooltip_text)
-            else:
-                QToolTip.hideText()
-
-        return super().editorEvent(event, model, option, index)
-
     def helpEvent(self, event, view, option, index):
-        # WOW this works
-        # TODO make it more efficient
         if not event or not view:
             return False
-
         contributors = index.data(Qt.ItemDataRole.UserRole)
         if not contributors:
             return False
-
         mouse_pos = event.pos()
         radius = self.avatar_size // 2
-
         # Calculate the starting position (same as in paint method)
         x = option.rect.x()
         y = option.rect.y() + (option.rect.height() - self.avatar_size) // 2
-
         # Convert mouse position to be relative to the cell
         mouse_x = mouse_pos.x() - option.rect.x()
         mouse_y = mouse_pos.y() - option.rect.y()
-
+        center_y = y + radius - option.rect.y()
+        dy2 = (mouse_y - center_y) ** 2
+        rad2 = radius**2
         # Check each avatar from front to back (reverse order of drawing)
         for contributor in contributors:
-            # Calculate center of this avatar
             center_x = x + radius - option.rect.x()
-            center_y = y + radius - option.rect.y()
-
-            # Calculate distance from mouse to avatar center
-            dx = mouse_x - center_x
-            dy = mouse_y - center_y
-            distance = (dx * dx + dy * dy) ** 0.5
-
             # If mouse is within the circle
-            if distance <= radius:
+            if ((mouse_x - center_x) ** 2 + dy2) <= rad2:
                 name = contributor.get("name", "")
                 if name:
                     QToolTip.showText(event.globalPos(), name, view)
                     return True
-
             # Move to next avatar position (same as in paint method)
             x += self.avatar_size // 2
-
         # Hide tooltip if we're not over any avatar
         QToolTip.hideText()
         return True

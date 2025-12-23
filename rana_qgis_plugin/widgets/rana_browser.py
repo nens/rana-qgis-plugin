@@ -782,6 +782,11 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
+        self.projects_model.setHorizontalHeaderLabels(
+            ["Project Name", "Contributors", "Last activity"]
+        )
+        avatar_delegate = ContributorAvatarsDelegate(self.projects_tv)
+        self.projects_tv.setItemDelegateForColumn(1, avatar_delegate)
         # self.projects_tv.clicked.connect(self.select_project)
         self.projects_tv.doubleClicked.connect(self.select_project)
         # Create navigation buttons
@@ -810,22 +815,21 @@ class ProjectsBrowser(QWidget):
     def refresh(self):
         self.current_page = 1
         self.fetch_projects()
-        if self.filter_active:
-            self.filtered_projects(clear=True)
+        if not changes:
             return
-        # TODO: update filter state
-        self.populate_projects(clear=True)
+        if self.filter_active:
+            self.filter_projects()
+        else:
+            self.populate_projects()
         self.populate_contributors()
         self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.projects_refreshed.emit()
 
     @property
     def filter_active(self):
-        return (
-            self.projects_search.text() or self.contributor_filter.currentIndex() != 0
-        )
+        return self.projects_search.text() or self.contributor_filter.currentIndex() > 0
 
-    def filter_projects(self, clear: bool = False):
+    def filter_projects(self):
         self.current_page = 1
         if not self.filter_active:
             self.filtered_projects = []
@@ -843,7 +847,7 @@ class ProjectsBrowser(QWidget):
             self.filtered_projects = [
                 project for project in self.projects if project["id"] in common_ids
             ]
-        self.populate_projects(clear=clear)
+        self.populate_projects()
 
     def get_projects_filtered_by_name(self):
         text = self.projects_search.text()
@@ -881,15 +885,19 @@ class ProjectsBrowser(QWidget):
             key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
         )
         if self.active_filter:
-            self.filter_projects(clear=True)
+            self.filter_projects()
             return
         self.populate_projects()
 
-    def process_project_item(self, project: dict) -> list[QStandardItem, NumericItem]:
+    def process_project_item(
+        self, project: dict
+    ) -> list[QStandardItem, QStandardItem, NumericItem]:
         project_name = project["name"]
+        # Process project name into item
         name_item = QStandardItem(project_name)
         name_item.setToolTip(project_name)
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
+        # Process last activity time into item
         last_activity = project["last_activity"]
         last_activity_timestamp = convert_to_timestamp(last_activity)
         display_last_activity = format_activity_time(last_activity)
@@ -900,7 +908,7 @@ class ProjectsBrowser(QWidget):
         )
         if last_activity_localtime != display_last_activity:
             last_activity_item.setToolTip(last_activity_localtime)
-        # TODO: clean up mess!
+        # process list of contributors into items
         contributors_item = QStandardItem()
         contributors_data = []
         for contributor in project.get("contributors", []):
@@ -916,26 +924,22 @@ class ProjectsBrowser(QWidget):
         contributors_item.setData(-1, Qt.ItemDataRole.InitialSortOrderRole)
         return [name_item, contributors_item, last_activity_item]
 
-    def populate_projects(self, clear: bool = False):
-        if clear:
-            self.projects_model.clear()
-        self.projects_model.removeRows(0, self.projects_model.rowCount())
-        header = ["Project Name", "Contributors", "Last activity"]
-        self.projects_model.setHorizontalHeaderLabels(header)
-
-        avatar_delegate = ContributorAvatarsDelegate(self.projects_tv)
-        self.projects_tv.setItemDelegateForColumn(1, avatar_delegate)
-
+    def populate_projects(self):
         # Paginate projects
         projects = self.filtered_projects if self.filter_active else self.projects
         start_index = (self.current_page - 1) * self.items_per_page
         end_index = start_index + self.items_per_page
         paginated_projects = projects[start_index:end_index]
-
-        # Add paginated projects to the project model
-        for project in paginated_projects:
-            self.projects_model.appendRow(self.process_project_item(project))
-        for i in range(len(header)):
+        # Prepare data for adding
+        processed_rows = [
+            self.process_project_item(project) for project in paginated_projects
+        ]
+        # Remove current data just in time
+        self.projects_model.removeRows(0, self.projects_model.rowCount())
+        # Populate model with new data
+        for row in processed_rows:
+            self.projects_model.invisibleRootItem().appendRow(row)
+        for i in range(self.projects_tv.header().count()):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.setColumnWidth(0, 300)
         self.update_pagination(projects)
@@ -958,6 +962,7 @@ class ProjectsBrowser(QWidget):
             key=lambda x: f"{x['given_name']} {x['family_name']}".lower(),
         )
         # Update combo box items
+        self.contributor_filter.blockSignals(True)
         self.contributor_filter.clear()
         self.contributor_filter.addItem(
             QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributers"
@@ -970,6 +975,7 @@ class ProjectsBrowser(QWidget):
             self.contributor_filter.addItem(
                 QIcon(user_image), display_name, userData=user["id"]
             )
+        self.contributor_filter.blockSignals(False)
 
     def update_pagination(self, projects: list):
         total_items = len(projects)
