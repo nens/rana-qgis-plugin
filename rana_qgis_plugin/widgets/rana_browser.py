@@ -938,10 +938,12 @@ class ProjectsBrowser(QWidget):
             for contributor in project["contributors"]
         }
         # Sort users by name, starting with the current user
-        my_id = get_user_info(self.communication).get("sub")
-        if my_id in all_contributors:
+        my_info = get_user_info(self.communication)
+        if my_info and my_info.get("sub") in all_contributors:
+            my_id = my_info["sub"]
             my_user = [all_contributors.pop(my_id)]
         else:
+            my_id = None
             my_user = []
         sorted_users = my_user + sorted(
             all_contributors.values(),
