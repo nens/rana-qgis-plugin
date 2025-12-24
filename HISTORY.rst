@@ -29,6 +29,8 @@ History
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
 - Decrease minimum allowed value for Convergence EPS in simulation wizard settings (#220)
 - Remove threedimodel limit for schematisations in Rana (#3079)
+- Toggle simulation results manager when opening results in the results manager
+
 
 1.1.20 (2025-11-18)
 -------------------
