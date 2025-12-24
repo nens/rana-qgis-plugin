@@ -1,6 +1,3 @@
-import time
-from pathlib import Path
-
 from qgis.core import Qgis, QgsApplication
 from qgis.PyQt.QtCore import (
     QBuffer,
@@ -9,15 +6,16 @@ from qgis.PyQt.QtCore import (
     QPoint,
     QRect,
     QRectF,
+    QRunnable,
     QSize,
     Qt,
     QThread,
+    QThreadPool,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from qgis.PyQt.QtWidgets import QApplication, QLabel, QStyledItemDelegate, QToolTip
 
-from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils_api import get_user_image
 
 
@@ -122,24 +120,27 @@ def get_avatar(
     return final_pixmap
 
 
-class AvatarWorker(QObject):
+# We need a separate signals class since QRunnable cannot have signals
+class AvatarWorkerSignals(QObject):
     finished = pyqtSignal()
     avatar_ready = pyqtSignal(str, "QPixmap")
 
+
+class AvatarWorker(QRunnable):
     def __init__(self, communication, users: list[dict]):
         super().__init__()
         self.communication = communication
         self.users = users
+        self.signals = AvatarWorkerSignals()
 
     def run(self):
         for user in self.users:
-            # Get avatar from API, no need to recreate from initials if not found
             new_avatar = get_avatar(
                 user, self.communication, create_from_initials=False
             )
             if new_avatar:
-                self.avatar_ready.emit(user["id"], new_avatar)
-        self.finished.emit()
+                self.signals.avatar_ready.emit(user["id"], new_avatar)
+        self.signals.finished.emit()
 
 
 class AvatarCache(QObject):
@@ -149,14 +150,12 @@ class AvatarCache(QObject):
         super().__init__()
         self.communication = communication
         self.cache: dict[str, QPixmap] = {}
-        self.worker_thread = None
+        self.thread_pool = QThreadPool()
 
     def get_avatar_from_cache(self, user_id: str) -> QPixmap | None:
-        # Retrieve avatar with just the user_id
         return self.cache.get(user_id, None)
 
     def get_avatar_for_user(self, user: dict) -> QPixmap:
-        # Retrieve avatar for user, and create one on the fly if none was cached
         if user["id"] not in self.cache:
             self.cache[user["id"]] = get_avatar(
                 user, self.communication, try_remote=False
@@ -164,18 +163,9 @@ class AvatarCache(QObject):
         return self.cache[user["id"]]
 
     def update_users_in_thread(self, users: list[dict]):
-        self.worker_thread = QThread()
-        self.worker = AvatarWorker(self.communication, users)  # Now a local variable
-        self.worker.setParent(None)
-        self.worker.moveToThread(self.worker_thread)
-
-        # Connect signals
-        self.worker_thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self.worker_thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
-        self.worker.avatar_ready.connect(self._update_avatar)
-        self.worker_thread.start()
+        worker = AvatarWorker(self.communication, users)
+        worker.signals.avatar_ready.connect(self._update_avatar)
+        self.thread_pool.start(worker)
 
     def _update_avatar(self, user_id: str, new_avatar: QPixmap):
         current_avatar = self.cache.get(user_id, None)
