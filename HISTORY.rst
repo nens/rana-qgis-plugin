@@ -7,6 +7,7 @@ develop
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
+- Toggle simulation results manager when opening results in the results manager
 
 
 1.1.21 (unreleased)
