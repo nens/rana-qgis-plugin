@@ -8,6 +8,7 @@ develop
 - Add option to filter by contributor and show contributors in project view
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
+- Toggle simulation results manager when opening results in the results manager
 
 
 1.1.21 (unreleased)
@@ -36,7 +37,7 @@ develop
 - Create new revision after uploading new schematisation to Rana
 - Handle 0 available organisations with nice error message
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
-
+- Decrease minimum allowed value for Convergence EPS in simulation wizard settings (#220)
 
 1.1.20 (2025-11-18)
 -------------------
