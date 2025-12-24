@@ -536,6 +536,45 @@ class CreateFolderDialog(QDialog):
         return self.input.text().strip()
 
 
+class FileBrowserModel(QStandardItemModel):
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        self.layoutAboutToBeChanged.emit()
+
+        directories = []
+        files = []
+
+        # First separate directories and files
+        while self.rowCount() > 0:
+            row_items = self.takeRow(0)
+            if not row_items:
+                continue
+            item_type = row_items[0].data(Qt.ItemDataRole.UserRole).get("type")
+            if item_type == "directory":
+                sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
+                directories.append((row_items, sort_text))
+            else:
+                sort_text = (
+                    row_items[column].data(Qt.ItemDataRole.DisplayRole)
+                    or row_items[column].data()
+                    or ""
+                )
+                files.append((row_items, sort_text))
+
+        # Sort directories and files separately
+        # only changing on directory name should affect directory sorting
+        if column == 0:
+            directories.sort(
+                key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder)
+            )
+        files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
+        # Always add directories first, then files
+        for row_items, _ in directories:
+            self.appendRow(row_items)
+        for row_items, _ in files:
+            self.appendRow(row_items)
+        self.layoutChanged.emit()
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -561,7 +600,7 @@ class FilesBrowser(QWidget):
         self.files_tv = QTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
-        self.files_model = QStandardItemModel()
+        self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
