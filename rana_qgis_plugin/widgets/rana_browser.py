@@ -81,6 +81,9 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 
+# allow for using specific data just for sorting
+SORT_ROLE = Qt.ItemDataRole.UserRole + 1
+
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
@@ -553,9 +556,10 @@ class FileBrowserModel(QStandardItemModel):
                 sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
                 directories.append((row_items, sort_text))
             else:
+                # try to use SORT_ROLE data before using UserRole data for sorting
                 sort_text = (
-                    row_items[column].data(Qt.ItemDataRole.DisplayRole)
-                    or row_items[column].data()
+                    row_items[column].data(SORT_ROLE)
+                    or row_items[column].data(Qt.ItemDataRole.UserRole)
                     or ""
                 )
                 files.append((row_items, sort_text))
@@ -564,7 +568,8 @@ class FileBrowserModel(QStandardItemModel):
         # only changing on directory name should affect directory sorting
         if column == 0:
             directories.sort(
-                key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder)
+                key=lambda x: x[1],
+                reverse=(order == Qt.SortOrder.DescendingOrder),
             )
         files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
         # Always add directories first, then files
@@ -734,6 +739,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(dir_icon, dir_name)
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(dir_name.lower(), role=SORT_ROLE)
             self.files_model.appendRow([name_item])
 
         # Add files second
@@ -742,6 +748,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(file_name.lower(), role=SORT_ROLE)
             data_type = file["data_type"]
             data_type_item = QStandardItem(
                 SUPPORTED_DATA_TYPES.get(data_type, data_type)
