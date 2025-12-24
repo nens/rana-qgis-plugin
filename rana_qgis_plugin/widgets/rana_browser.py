@@ -84,6 +84,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
+    AvatarCache,
     ContributorAvatarsDelegate,
     get_avatar,
     get_icon_from_theme,
@@ -743,18 +744,28 @@ class ProjectsBrowser(QWidget):
     busy = pyqtSignal()
     ready = pyqtSignal()
 
-    def __init__(self, communication, parent=None):
+    def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
         self.communication = communication
         self.projects = []
+        self.users = []
         self.filtered_projects = []
         self.current_page = 1
         self.items_per_page = 25
         self.project = None
-        self.setup_ui()
+        # TODO consider linking by signals
+        self.avatar_cache = avatar_cache
+        # collect data
         self.fetch_projects()
-        self.populate_projects()
+        self.fetch_users()
+        # initialize avatars, skip api calls to save time
+        self.avatar_cache.reset(self.users)
+        # start thread to retrieve actual avatars
+        self.avatar_cache.avatar_changed.connect(self.update_avatar)
+        self.avatar_cache.update_users_in_thread(self.users)
+        self.setup_ui()
         self.populate_contributors()
+        self.populate_projects()
         self.projects_tv.header().setSortIndicator(2, Qt.SortOrder.DescendingOrder)
 
     def set_project_from_id(self, project_id: str):
@@ -809,9 +820,20 @@ class ProjectsBrowser(QWidget):
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication)
 
+    def fetch_users(self):
+        self.users = list(
+            {
+                contributor["id"]: contributor
+                for project in self.projects
+                for contributor in project["contributors"]
+            }.values()
+        )
+
     def refresh(self):
         self.current_page = 1
         self.fetch_projects()
+        self.fetch_users()
+        self.avatar_cache.update_users_in_thread(self.users)
         if self.filter_active:
             self.filter_projects()
         else:
@@ -897,13 +919,15 @@ class ProjectsBrowser(QWidget):
         # process list of contributors into items
         contributors_item = QStandardItem()
         contributors_data = []
-        for contributor in project.get("contributors", []):
+        for i, contributor in enumerate(project.get("contributors", [])):
+            avatar = self.avatar_cache.get_avatar(contributor["id"]) if i < 3 else None
             contributors_data.append(
                 {
+                    "id": contributor["id"],
                     "name": contributor["given_name"]
                     + " "
                     + contributor["family_name"],
-                    "avatar": get_avatar(contributor, self.communication),
+                    "avatar": avatar,
                 }
             )
         contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
@@ -929,6 +953,30 @@ class ProjectsBrowser(QWidget):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.setColumnWidth(0, 300)
         self.update_pagination(projects)
+
+    def update_avatar(self, user_id: str):
+        avatar = self.avatar_cache.get_avatar(user_id)
+        # Update contributor_filter
+        index = self.contributor_filter.findData(user_id)
+        if index != -1:  # -1 means not found
+            self.contributor_filter.setItemIcon(index, QIcon(avatar))
+        # Update projects model
+        root = self.projects_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            contributors_item = root.child(row, 1)
+            contributors_data = contributors_item.data(Qt.ItemDataRole.UserRole)
+            # Check if any contributors in the data match the updated one
+            match = next(
+                (
+                    contributor
+                    for contributor in contributors_data
+                    if contributor["id"] == user_id
+                ),
+                None,
+            )
+            if match and match["avatar"]:
+                match["avatar"] = avatar
+                contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
 
     def populate_contributors(self):
         # Collect all unique contributors to the projects
@@ -959,7 +1007,8 @@ class ProjectsBrowser(QWidget):
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            user_image = get_avatar(user, self.communication)
+            # user_image = get_avatar(user, self.communication)
+            user_image = self.avatar_cache.get_avatar(user["id"])
             self.contributor_filter.addItem(
                 QIcon(user_image), display_name, userData=user["id"]
             )
@@ -1142,6 +1191,7 @@ class RanaBrowser(QWidget):
     def __init__(self, communication: UICommunication):
         super().__init__()
         self.communication = communication
+        self.avatar_cache = AvatarCache(communication)
         self.setup_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)
@@ -1207,7 +1257,9 @@ class RanaBrowser(QWidget):
         # Setup widgets that populate the rana widget
         file_signals = FileActionSignals()
         self.projects_browser = ProjectsBrowser(
-            communication=self.communication, parent=self
+            communication=self.communication,
+            avatar_cache=self.avatar_cache,
+            parent=self,
         )
         self.files_browser = FilesBrowser(
             communication=self.communication, file_signals=file_signals, parent=self

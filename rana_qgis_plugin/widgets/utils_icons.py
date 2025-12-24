@@ -1,9 +1,21 @@
 import hashlib
 import time
 from pathlib import Path
+from typing import Dict
 
-from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QBuffer, QByteArray, QPoint, QRect, QRectF, QSize, Qt
+from qgis.core import Qgis, QgsApplication, QgsMessageLog
+from qgis.PyQt.QtCore import (
+    QBuffer,
+    QByteArray,
+    QObject,
+    QPoint,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    QThread,
+    pyqtSignal,
+)
 from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from qgis.PyQt.QtWidgets import QApplication, QLabel, QStyledItemDelegate, QToolTip
 
@@ -97,23 +109,26 @@ def create_user_image(image):
     return rounded
 
 
-def get_avatar(user, communication):
+def get_avatar(
+    user, communication, try_remote=True, create_from_initials=True
+) -> QPixmap:
     cache = ImageCache(PLUGIN_NAME)
-    image_name = f"avatar_{user['id']}.bin"
     pixmap_name = f"avatar_{user['id']}.png"
-    cached_pixmap = cache.get_cached_image(pixmap_name)
-    if cached_pixmap:
-        return cached_pixmap
-    bin_image = get_user_image(communication, user["id"])
-    if bin_image:
-        final_pixmap = create_user_image(bin_image)
-    else:
+    # cached_pixmap = cache.get_cached_image(pixmap_name)
+    # if cached_pixmap:
+    #     return cached_pixmap
+    final_pixmap = None
+    if try_remote:
+        bin_image = get_user_image(communication, user["id"])
+        if bin_image:
+            final_pixmap = create_user_image(bin_image)
+    elif create_from_initials:
         final_pixmap = get_user_image_from_initials(
             user["given_name"][0] + user["family_name"][0]
         )
     # Cache the final pixmap
-    if final_pixmap:
-        cache.cache_image(pixmap_name, final_pixmap)
+    # if final_pixmap:
+    #     cache.cache_image(pixmap_name, final_pixmap)
 
     return final_pixmap
 
@@ -130,6 +145,75 @@ def get_avatar(user, communication):
     #     return get_user_image_from_initials(
     #         user["given_name"][0] + user["family_name"][0]
     #     )
+
+
+class AvatarWorker(QObject):
+    finished = pyqtSignal()
+    avatar_ready = pyqtSignal(str, "QPixmap")
+
+    def __init__(self, communication, users: list[dict]):
+        super().__init__()
+        self.communication = communication
+        self.users = users
+
+    def run(self):
+        for user in self.users:
+            # Get avatar from API, no need to recreate from initials if not found
+            new_avatar = get_avatar(
+                user, self.communication, create_from_initials=False
+            )
+            if new_avatar:
+                self.avatar_ready.emit(user["id"], new_avatar)
+        self.finished.emit()
+
+
+class AvatarCache(QObject):
+    avatar_changed = pyqtSignal(str)
+
+    def __init__(self, communication):
+        super().__init__()
+        self.communication = communication
+        self.cache: dict[str, QPixmap] = {}
+        self.worker_thread = None
+
+    def get_avatar(self, user_id: str) -> QPixmap | None:
+        return self.cache.get(user_id, None)
+
+    def update_users_in_thread(self, users: list[dict]):
+        self.worker_thread = QThread()
+        self.worker = AvatarWorker(self.communication, users)  # Now a local variable
+        self.worker.setParent(None)
+        self.worker.moveToThread(self.worker_thread)
+
+        # Connect signals
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.worker_thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker.avatar_ready.connect(self._update_avatar)
+        self.worker_thread.start()
+
+    def _update_avatar(self, user_id: str, new_avatar: QPixmap):
+        current_avatar = self.cache.get(user_id, None)
+        if not new_avatar or new_avatar.isNull():
+            changed = False
+        elif not current_avatar or current_avatar.isNull():
+            changed = True
+        elif new_avatar.toImage() == current_avatar.toImage():
+            changed = False
+        else:
+            changed = True
+        if changed:
+            self.cache[user_id] = new_avatar
+            self.avatar_changed.emit(user_id)
+
+    def reset(self, users: list[dict]):
+        # reset (or initialize) the avatar cache using generated avatars
+        self.cache.clear()
+        for user in users:
+            self.cache[user["id"]] = get_avatar(
+                user, self.communication, try_remote=False
+            )
 
 
 class ImageCache:
