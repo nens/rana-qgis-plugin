@@ -36,7 +36,7 @@ develop
 - Create new revision after uploading new schematisation to Rana
 - Handle 0 available organisations with nice error message
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
-
+- Decrease minimum allowed value for Convergence EPS in simulation wizard settings (#220)
 
 1.1.20 (2025-11-18)
 -------------------

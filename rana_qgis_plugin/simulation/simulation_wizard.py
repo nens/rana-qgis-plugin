@@ -3199,6 +3199,10 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
         self.max_number_of_multi_step.setValue(3)
         self.max_gs_sweep_iterations.setValue(100)
 
+        # Needs to happen here as Designer doesn't support scientific notation
+        self.convergence_eps.setDecimals(11)
+        self.convergence_eps.setMinimum(1e-11)
+
         self.connect_signals()
         self.populate_aggregation_settings()
 
