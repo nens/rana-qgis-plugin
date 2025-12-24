@@ -138,6 +138,7 @@ class NewSchematisationWizard(QWizard):
                 owner,
                 tags=tags,
                 meta={"description": description},
+                threedimodel_limit=32767,  # maximum allowed by api
             )
             local_schematisation = LocalSchematisation(
                 self.working_dir,
@@ -277,6 +278,7 @@ class NewSchematisationWizard(QWizard):
                 owner,
                 tags=tags,
                 meta={"description": description},
+                threedimodel_limit=32767,  # maximum allowed by api
             )
 
             local_schematisation = LocalSchematisation(
