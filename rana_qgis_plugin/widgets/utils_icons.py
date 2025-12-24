@@ -152,12 +152,16 @@ class AvatarCache(QObject):
         self.worker_thread = None
 
     def get_avatar_from_cache(self, user_id: str) -> QPixmap | None:
+        # Retrieve avatar with just the user_id
         return self.cache.get(user_id, None)
 
-    def get_avatar_for_user(self, user: str) -> QPixmap | None:
-        return self.cache.get(
-            user["id"], get_avatar(user, self.communication, try_remote=False)
-        )
+    def get_avatar_for_user(self, user: dict) -> QPixmap:
+        # Retrieve avatar for user, and create one on the fly if none was cached
+        if user["id"] not in self.cache:
+            self.cache[user["id"]] = get_avatar(
+                user, self.communication, try_remote=False
+            )
+        return self.cache[user["id"]]
 
     def update_users_in_thread(self, users: list[dict]):
         self.worker_thread = QThread()
