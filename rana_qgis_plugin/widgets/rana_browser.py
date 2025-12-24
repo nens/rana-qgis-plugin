@@ -754,11 +754,10 @@ class ProjectsBrowser(QWidget):
         self.current_page = 1
         self.items_per_page = 25
         self.project = None
-        # TODO consider linking by signals
         self.avatar_cache = avatar_cache
         # collect data
         self.fetch_projects()
-        self.fetch_users()
+        self.update_users()
         # start thread to retrieve actual avatars
         self.avatar_cache.avatar_changed.connect(self.update_avatar)
         self.avatar_cache.update_users_in_thread(self.users)
@@ -819,7 +818,7 @@ class ProjectsBrowser(QWidget):
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication)
 
-    def fetch_users(self):
+    def update_users(self):
         self.users = list(
             {
                 contributor["id"]: contributor
@@ -831,7 +830,7 @@ class ProjectsBrowser(QWidget):
     def refresh(self):
         self.current_page = 1
         self.fetch_projects()
-        self.fetch_users()
+        self.update_users()
         self.avatar_cache.update_users_in_thread(self.users)
         if self.filter_active:
             self.filter_projects()
