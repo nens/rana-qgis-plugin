@@ -86,7 +86,6 @@ from rana_qgis_plugin.widgets.utils_file_action import (
 from rana_qgis_plugin.widgets.utils_icons import (
     AvatarCache,
     ContributorAvatarsDelegate,
-    get_avatar,
     get_icon_from_theme,
 )
 
@@ -1001,13 +1000,12 @@ class ProjectsBrowser(QWidget):
         self.contributor_filter.blockSignals(True)
         self.contributor_filter.clear()
         self.contributor_filter.addItem(
-            QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributers"
+            QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributors"
         )
         for user in sorted_users:
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            # user_image = get_avatar(user, self.communication)
             user_image = self.avatar_cache.get_avatar(user["id"])
             self.contributor_filter.addItem(
                 QIcon(user_image), display_name, userData=user["id"]

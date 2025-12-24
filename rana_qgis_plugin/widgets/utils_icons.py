@@ -1,9 +1,7 @@
-import hashlib
 import time
 from pathlib import Path
-from typing import Dict
 
-from qgis.core import Qgis, QgsApplication, QgsMessageLog
+from qgis.core import Qgis, QgsApplication
 from qgis.PyQt.QtCore import (
     QBuffer,
     QByteArray,
@@ -112,11 +110,6 @@ def create_user_image(image):
 def get_avatar(
     user, communication, try_remote=True, create_from_initials=True
 ) -> QPixmap:
-    cache = ImageCache(PLUGIN_NAME)
-    pixmap_name = f"avatar_{user['id']}.png"
-    # cached_pixmap = cache.get_cached_image(pixmap_name)
-    # if cached_pixmap:
-    #     return cached_pixmap
     final_pixmap = None
     if try_remote:
         bin_image = get_user_image(communication, user["id"])
@@ -126,25 +119,7 @@ def get_avatar(
         final_pixmap = get_user_image_from_initials(
             user["given_name"][0] + user["family_name"][0]
         )
-    # Cache the final pixmap
-    # if final_pixmap:
-    #     cache.cache_image(pixmap_name, final_pixmap)
-
     return final_pixmap
-
-    #
-    #
-    # bin_image = cache.get_cached_image(image_name)
-    # if not bin_image:
-    #     bin_image = get_user_image(communication, user["id"])
-    #     if bin_image:
-    #         cache.cache_image(image_name, bin_image)
-    # if bin_image:
-    #     return create_user_image(bin_image)
-    # else:
-    #     return get_user_image_from_initials(
-    #         user["given_name"][0] + user["family_name"][0]
-    #     )
 
 
 class AvatarWorker(QObject):
@@ -214,64 +189,6 @@ class AvatarCache(QObject):
             self.cache[user["id"]] = get_avatar(
                 user, self.communication, try_remote=False
             )
-
-
-class ImageCache:
-    def __init__(self, plugin_name: str):
-        # Convert QgsApplication path to Path object and create cache directory
-        self.cache_dir = (
-            Path(QgsApplication.qgisSettingsDirPath()) / "cache" / plugin_name
-        )
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    def get_cached_image(self, image_name: str) -> QPixmap | None:
-        """Get cached image as QPixmap.
-
-        Args:
-            image_name: Name of the cached file
-
-        Returns:
-            QPixmap if cached file exists and is not too old, None otherwise
-        """
-        cache_path = self.cache_dir / image_name
-
-        if cache_path.exists():
-            # Check if cache is not too old (e.g., 7 days)
-            if time.time() - cache_path.stat().st_mtime < 7 * 24 * 3600:
-                pixmap = QPixmap()
-                if pixmap.load(str(cache_path)):
-                    return pixmap
-        return None
-
-    def cache_image(self, image_name: str, pixmap: QPixmap) -> Path:
-        """Cache QPixmap to file.
-
-        Args:
-            image_name: Name to use for the cached file
-            pixmap: QPixmap to cache
-
-        Returns:
-            Path to the cached file
-        """
-        cache_path = self.cache_dir / image_name
-        pixmap.save(str(cache_path), "PNG")
-        return cache_path
-
-    def clear_old_cache(self, max_age_days: int = 7) -> None:
-        """Clear cache files older than max_age_days."""
-        current_time = time.time()
-        for cache_file in self.cache_dir.glob("*.png"):
-            if current_time - cache_file.stat().st_mtime > max_age_days * 24 * 3600:
-                cache_file.unlink(missing_ok=True)
-
-    def get_cache_size(self) -> int:
-        """Get total size of cached files in bytes."""
-        return sum(f.stat().st_size for f in self.cache_dir.glob("*.png"))
-
-    def clear_all_cache(self) -> None:
-        """Remove all cached files."""
-        for cache_file in self.cache_dir.glob("*.png"):
-            cache_file.unlink(missing_ok=True)
 
 
 class ContributorAvatarsDelegate(QStyledItemDelegate):
