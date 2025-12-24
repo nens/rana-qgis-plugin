@@ -521,3 +521,18 @@ def map_result_to_file_name(result: dict) -> str:
             return get_filename_from_attachment_url(result["attachment_url"])
         else:
             return result["code"]
+
+
+def get_user_image(communication: UICommunication, user_id):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        communication.show_error(f"Failed to retrieve schematisation: {error}")
+        return None
