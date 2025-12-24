@@ -757,8 +757,6 @@ class ProjectsBrowser(QWidget):
         # collect data
         self.fetch_projects()
         self.fetch_users()
-        # initialize avatars, skip api calls to save time
-        self.avatar_cache.reset(self.users)
         # start thread to retrieve actual avatars
         self.avatar_cache.avatar_changed.connect(self.update_avatar)
         self.avatar_cache.update_users_in_thread(self.users)
@@ -919,7 +917,9 @@ class ProjectsBrowser(QWidget):
         contributors_item = QStandardItem()
         contributors_data = []
         for i, contributor in enumerate(project.get("contributors", [])):
-            avatar = self.avatar_cache.get_avatar(contributor["id"]) if i < 3 else None
+            avatar = (
+                self.avatar_cache.get_avatar_for_user(contributor) if i < 3 else None
+            )
             contributors_data.append(
                 {
                     "id": contributor["id"],
@@ -954,7 +954,7 @@ class ProjectsBrowser(QWidget):
         self.update_pagination(projects)
 
     def update_avatar(self, user_id: str):
-        avatar = self.avatar_cache.get_avatar(user_id)
+        avatar = self.avatar_cache.get_avatar_from_cache(user_id)
         # Update contributor_filter
         index = self.contributor_filter.findData(user_id)
         if index != -1:  # -1 means not found
@@ -1006,7 +1006,7 @@ class ProjectsBrowser(QWidget):
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            user_image = self.avatar_cache.get_avatar(user["id"])
+            user_image = self.avatar_cache.get_avatar_for_user(user)
             self.contributor_filter.addItem(
                 QIcon(user_image), display_name, userData=user["id"]
             )

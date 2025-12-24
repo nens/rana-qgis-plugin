@@ -151,8 +151,13 @@ class AvatarCache(QObject):
         self.cache: dict[str, QPixmap] = {}
         self.worker_thread = None
 
-    def get_avatar(self, user_id: str) -> QPixmap | None:
+    def get_avatar_from_cache(self, user_id: str) -> QPixmap | None:
         return self.cache.get(user_id, None)
+
+    def get_avatar_for_user(self, user: str) -> QPixmap | None:
+        return self.cache.get(
+            user["id"], get_avatar(user, self.communication, try_remote=False)
+        )
 
     def update_users_in_thread(self, users: list[dict]):
         self.worker_thread = QThread()
@@ -181,14 +186,6 @@ class AvatarCache(QObject):
         if changed:
             self.cache[user_id] = new_avatar
             self.avatar_changed.emit(user_id)
-
-    def reset(self, users: list[dict]):
-        # reset (or initialize) the avatar cache using generated avatars
-        self.cache.clear()
-        for user in users:
-            self.cache[user["id"]] = get_avatar(
-                user, self.communication, try_remote=False
-            )
 
 
 class ContributorAvatarsDelegate(QStyledItemDelegate):
