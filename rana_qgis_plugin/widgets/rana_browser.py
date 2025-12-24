@@ -332,16 +332,11 @@ class FileView(QWidget):
         file_action_btn_layout = QHBoxLayout()
         file_action_btn_layout.setContentsMargins(0, 0, 0, 0)
         for btn in self.file_action_btn_dict.values():
+            btn.hide()  # hide buttons by default to prevent big width in size hint
             file_action_btn_layout.addWidget(btn)
-        # Put file_action_btn_layout in widget so the minimum width can be set
-        file_action_btn_container = QWidget()
-        file_action_btn_container.setSizePolicy(
-            QSizePolicy.Ignored, QSizePolicy.Preferred
-        )
-        file_action_btn_container.setLayout(file_action_btn_layout)
         layout = QVBoxLayout(self)
         layout.addWidget(self.file_table_widget)
-        layout.addWidget(file_action_btn_container)
+        layout.addLayout(file_action_btn_layout)
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
