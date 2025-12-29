@@ -24,6 +24,12 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.simulation.utils_ui import scan_widgets_parameters
 
+HEADER_LAYOUT = """
+QLabel {
+    font-weight: bold;
+    font-size: 18px;
+}"""
+
 
 class SchematisationSettingsPage(QWizardPage):
     """New schematisation settings definition page."""
@@ -128,6 +134,9 @@ class SchematisationSettingsWidget(QWidget):
         self.setPalette(palette)
 
         gridLayout = QGridLayout(self)
+
+        header = QLabel("Schematisation settings")
+        header.setStyleSheet(HEADER_LAYOUT)
 
         # Schematisation settings section
         self.schematisation_settings = QWidget()
@@ -320,8 +329,9 @@ class SchematisationSettingsWidget(QWidget):
         # Simulation / time step settings
         self.simulation_settings = QWidget()
         self.simulation_settings_layout = QGridLayout(self.simulation_settings)
-
-        self.simulation_settings_layout.addWidget(QLabel("Time step settings"), 0, 0)
+        header = QLabel("Time step settings")
+        header.setStyleSheet(HEADER_LAYOUT)
+        self.simulation_settings_layout.addWidget(header, 0, 0)
 
         widget_inner = QWidget()
         inner_layout = QGridLayout(widget_inner)
