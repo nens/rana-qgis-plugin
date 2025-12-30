@@ -865,7 +865,7 @@ class ProjectsBrowser(QWidget):
     def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
         project_name = project["name"]
         name_item = QStandardItem(project_name)
-        name_item.setToolTip(project_name)
+        name_item.setToolTip(project["code"])
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
         last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
         return [name_item, last_activity_item]
