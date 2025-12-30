@@ -10,6 +10,7 @@ from qgis.PyQt.QtCore import (
     QModelIndex,
     QObject,
     QSettings,
+    QSize,
     Qt,
     QTimer,
     QUrl,
@@ -51,7 +52,7 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
+from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon, separator_icon
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
@@ -956,24 +957,35 @@ class BreadCrumbsWidget(QWidget):
 
     def update(self):
         self.clear()
-        for i, item in enumerate(self._items):
-            label = self.get_button(i, item)
-            self.layout.addWidget(label)
-            if i != len(self._items) - 1:
-                separator = QLabel(">")
-                self.layout.addWidget(separator)
+        if len(self._items) >= 6:
+            before_dropdown = self._items[:2]
+            dropdown = self._items[2:-2]
+            after_dropdown = self._items[-2:]
+            # with dropdown
+        else:
+            # without dropdown
+            for i, item in enumerate(self._items):
+                label = self.get_button(i, item)
+                self.layout.addWidget(label)
+                if i != len(self._items) - 1:
+                    separator_pixmap = separator_icon.pixmap(QSize(16, 16))
+                    separator = QLabel()
+                    separator.setPixmap(separator_pixmap)
+                    self.layout.addWidget(separator)
 
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
         label_text = elide_text(self.font(), item.name, 100)
         # Last item cannot be clicked
         if index == len(self._items) - 1:
-            label = QLabel(label_text)
+            label = QLabel(f"<b>{label_text}</b>")
+            label.setTextFormat(Qt.TextFormat.RichText)
         else:
             link = f"<a href='{index}'>{label_text}</a>"
             label = QLabel(link)
             label.setTextFormat(Qt.TextFormat.RichText)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
+        label.setToolTip(item.name)
         return label
 
     def on_click(self, index: int):
