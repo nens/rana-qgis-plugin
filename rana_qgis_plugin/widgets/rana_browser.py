@@ -789,7 +789,7 @@ class ProjectsBrowser(QWidget):
         self.projects = []
         self.filtered_projects = []
         self.current_page = 1
-        self.items_per_page = 25
+        self.items_per_page = 100
         self.project = None
         self.setup_ui()
         self.fetch_projects()
