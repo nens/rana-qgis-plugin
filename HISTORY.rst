@@ -9,6 +9,7 @@ develop
 - Show relative timestamps in files browser, file view and revisions view
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
+- Replace search box in import schematisation search with DebouncedSearchBox which applies the search with a delay
 
 
 1.1.21 (unreleased)
