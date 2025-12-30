@@ -827,7 +827,9 @@ class ProjectsBrowser(QWidget):
         top_layout.addWidget(self.projects_search)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
-        pagination_layout.addWidget(self.label_page_number)
+        pagination_layout.addWidget(
+            self.label_page_number, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         pagination_layout.addWidget(self.btn_next)
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
