@@ -24,7 +24,7 @@ from rana_qgis_plugin.utils_api import get_filename_from_attachment_url
 
 
 class ResultBrowser(QDialog):
-    def __init__(self, parent, results: dict, scenario_crs: str):
+    def __init__(self, parent, results: dict, scenario_crs: str, pixel_size: float):
         super().__init__(parent)
         self.setWindowTitle(PLUGIN_NAME)
         self.setMinimumWidth(400)
@@ -87,7 +87,7 @@ class ResultBrowser(QDialog):
         )
 
         self.no_data_box.setText("-9999.0")
-        self.pixelsize_box.setText("1.00000")
+        self.pixelsize_box.setText(f"{pixel_size:.5f}")
         self.crs_select_box.setCrs(QgsCoordinateReferenceSystem(scenario_crs))
 
         inputs_form.addRow("NO DATA value:", self.no_data_box)
@@ -120,7 +120,6 @@ class ResultBrowser(QDialog):
                 "3di bathymetry",
             ]:
                 continue
-
             self.results_table.insertRow(self.results_table.rowCount())
             type_item = QTableWidgetItem(result["name"])
             type_item.setFlags(
