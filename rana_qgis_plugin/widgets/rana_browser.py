@@ -70,6 +70,7 @@ from rana_qgis_plugin.utils import (
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
     get_tenant_file_descriptor,
+    get_tenant_id,
     get_tenant_project_file,
     get_tenant_project_file_history,
     get_tenant_project_files,
@@ -788,6 +789,8 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
+        self.projects_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.projects_tv.customContextMenuRequested.connect(self.show_context_menu)
         self.projects_model.setHorizontalHeaderLabels(
             ["Project Name", "Contributors", "Last activity"]
         )
@@ -903,6 +906,35 @@ class ProjectsBrowser(QWidget):
             self.filter_projects()
             return
         self.populate_projects()
+
+    def show_context_menu(self, position):
+        # Get the index under the cursor
+        index = self.projects_tv.indexAt(position)
+
+        # Check if we clicked on a valid item and it's in column 0
+        if not index.isValid() or index.column() != 0:
+            return
+
+        # Get the project data
+        project_item = self.projects_model.itemFromIndex(index)
+        project = project_item.data(Qt.ItemDataRole.UserRole)
+
+        # Create context menu
+        menu = QMenu(self)
+
+        # Add menu actions
+        open_in_qgis = menu.addAction("Open project in QGIS")
+        open_in_web = menu.addAction("Open project in Rana Web")
+
+        # Show the menu and get the selected action
+        action = menu.exec(self.projects_tv.viewport().mapToGlobal(position))
+
+        # Handle the selected action
+        if action == open_in_qgis:
+            self.select_project(index)
+        elif action == open_in_web:
+            link = f"{base_url()}/{get_tenant_id()}/projects/{project['code']}"
+            QDesktopServices.openUrl(QUrl(link))
 
     def process_project_item(
         self, project: dict

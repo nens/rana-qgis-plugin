@@ -8,6 +8,7 @@ develop
 - Add option to filter by contributor and show contributors in project view
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
+- Add context menu to projects browser
 
 
 1.1.21 (unreleased)
