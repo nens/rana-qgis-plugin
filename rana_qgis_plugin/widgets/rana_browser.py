@@ -52,7 +52,7 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon, separator_icon
+from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon, separator_icon, ellipsis_icon
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
@@ -955,24 +955,6 @@ class BreadCrumbsWidget(QWidget):
                 self.layout.removeWidget(widget)
                 widget.deleteLater()
 
-    def update(self):
-        self.clear()
-        if len(self._items) >= 6:
-            before_dropdown = self._items[:2]
-            dropdown = self._items[2:-2]
-            after_dropdown = self._items[-2:]
-            # with dropdown
-        else:
-            # without dropdown
-            for i, item in enumerate(self._items):
-                label = self.get_button(i, item)
-                self.layout.addWidget(label)
-                if i != len(self._items) - 1:
-                    separator_pixmap = separator_icon.pixmap(QSize(16, 16))
-                    separator = QLabel()
-                    separator.setPixmap(separator_pixmap)
-                    self.layout.addWidget(separator)
-
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
         label_text = elide_text(self.font(), item.name, 100)
         # Last item cannot be clicked
@@ -987,6 +969,51 @@ class BreadCrumbsWidget(QWidget):
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
         label.setToolTip(item.name)
         return label
+
+    def add_path_widgets(self, items, separator_pixmap, leading_separator=False, trailing_separator=False):
+        def add_separator():
+            separator = QLabel()
+            separator.setPixmap(separator_pixmap)
+            self.layout.addWidget(separator)
+
+        if leading_separator:
+            add_separator()
+        for i, item in items:
+            label = self.get_button(i, item)
+            self.layout.addWidget(label)
+            if (i != items[-1][0]) or trailing_separator:
+                add_separator()
+
+    def add_path_dropdown_widget(self, items):
+        ellipsis = QPushButton()
+        ellipsis.setIcon(ellipsis_icon)
+        ellipsis.setIconSize(QSize(20, 20))
+        context_menu = QMenu()
+        for index, item in items:
+            print(index, item.name)
+            item_text = elide_text(self.font(), item.name, 100)
+            context_menu.addAction(item_text, lambda idx=index: self.on_click(idx))
+        ellipsis.setMenu(context_menu)
+        # avoid triangle image appearing in icon by setting image to nonexistent url
+        ellipsis.setStyleSheet("QPushButton::menu-indicator{ image: url(none.jpg); }");
+        self.layout.addWidget(ellipsis)
+
+    def update(self):
+        self.clear()
+        numbered_items = [[i, item] for i, item in enumerate(self._items)]
+        separator_pixmap = separator_icon.pixmap(QSize(16, 16))
+        if len(self._items) >= 6:
+            # with dropdown
+            before_dropdown_items = numbered_items[:2]
+            dropdown_items = numbered_items[2:-2]
+            after_dropdown_items = numbered_items[-2:]
+            self.add_path_widgets(before_dropdown_items, separator_pixmap, trailing_separator=True)
+            self.add_path_dropdown_widget(dropdown_items)
+            self.add_path_widgets(after_dropdown_items, separator_pixmap, leading_separator=True)
+        else:
+            # without dropdown
+            self.add_path_widgets(numbered_items, separator_pixmap)
+
 
     def on_click(self, index: int):
         # Truncate items to clicked position
