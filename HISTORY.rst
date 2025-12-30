@@ -10,6 +10,7 @@ develop
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
 - Use pixel size from results as default pixel size in results downloader
+- Check specific results by default for downloading
 
 
 1.1.21 (unreleased)

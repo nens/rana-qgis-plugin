@@ -113,19 +113,26 @@ class ResultBrowser(QDialog):
         self.postprocessed_rasters_table.cellChanged.connect(check_raster_selected)
 
         postprocessed_rasters_group.layout().addWidget(inputs_group)
+        alwyas_checked = [
+            "raw 3di output",
+            "grid administration",
+            "max water depth (file)",
+        ]
+        excluded_results = ["raw 3di output", "grid administration", "3di bathymetry"]
         for result in [r for r in results if r.get("attachment_url")]:
-            if result["name"].lower() in [
-                "raw 3di output",
-                "grid administration",
-                "3di bathymetry",
-            ]:
+            if result["name"].lower() in excluded_results:
                 continue
             self.results_table.insertRow(self.results_table.rowCount())
             type_item = QTableWidgetItem(result["name"])
             type_item.setFlags(
                 Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
             )
-            type_item.setCheckState(Qt.CheckState.Unchecked)
+            check_state = (
+                Qt.CheckState.Checked
+                if result["name"].lower() in alwyas_checked
+                else Qt.CheckState.Unchecked
+            )
+            type_item.setCheckState(check_state)
             type_item.setData(Qt.ItemDataRole.UserRole, int(result["id"]))
 
             file_name = get_filename_from_attachment_url(result["attachment_url"])
