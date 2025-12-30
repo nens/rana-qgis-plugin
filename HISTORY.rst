@@ -9,6 +9,7 @@ develop
 - Show relative timestamps in files browser, file view and revisions view
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
+- Reintroduce headers in settings page of new schematisation wizard
 
 
 1.1.21 (unreleased)
