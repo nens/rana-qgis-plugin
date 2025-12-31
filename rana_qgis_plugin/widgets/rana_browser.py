@@ -969,20 +969,21 @@ class BreadCrumbsWidget(QWidget):
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
         label.setToolTip(item.name)
         return label
+    
+    def _add_separator(self):
+        separator_pixmap = separator_icon.pixmap(QSize(16, 16))
+        separator = QLabel()
+        separator.setPixmap(separator_pixmap)
+        self.layout.addWidget(separator)
 
-    def add_path_widgets(self, items, separator_pixmap, leading_separator=False, trailing_separator=False):
-        def add_separator():
-            separator = QLabel()
-            separator.setPixmap(separator_pixmap)
-            self.layout.addWidget(separator)
-
+    def add_path_widgets(self, items, leading_separator=False, trailing_separator=False):
         if leading_separator:
-            add_separator()
+            self._add_separator()
         for i, item in items:
             label = self.get_button(i, item)
             self.layout.addWidget(label)
             if (i != items[-1][0]) or trailing_separator:
-                add_separator()
+                self._add_separator()
 
     def add_path_dropdown_widget(self, items):
         ellipsis = QPushButton()
@@ -1001,18 +1002,17 @@ class BreadCrumbsWidget(QWidget):
     def update(self):
         self.clear()
         numbered_items = [[i, item] for i, item in enumerate(self._items)]
-        separator_pixmap = separator_icon.pixmap(QSize(16, 16))
         if len(self._items) >= 6:
             # with dropdown
             before_dropdown_items = numbered_items[:2]
             dropdown_items = numbered_items[2:-2]
             after_dropdown_items = numbered_items[-2:]
-            self.add_path_widgets(before_dropdown_items, separator_pixmap, trailing_separator=True)
+            self.add_path_widgets(before_dropdown_items, trailing_separator=True)
             self.add_path_dropdown_widget(dropdown_items)
-            self.add_path_widgets(after_dropdown_items, separator_pixmap, leading_separator=True)
+            self.add_path_widgets(after_dropdown_items, leading_separator=True)
         else:
             # without dropdown
-            self.add_path_widgets(numbered_items, separator_pixmap)
+            self.add_path_widgets(numbered_items)
 
 
     def on_click(self, index: int):
