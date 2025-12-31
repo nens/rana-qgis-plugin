@@ -1,5 +1,6 @@
 import math
 import os
+import time
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
@@ -1070,6 +1071,7 @@ class RanaBrowser(QWidget):
 
     def __init__(self, communication: UICommunication):
         super().__init__()
+        self.last_refresh_time = time.time()
         self.communication = communication
         self.setup_ui()
         self.refresh_timer = QTimer()
@@ -1116,6 +1118,7 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         logo_label = banner
         logo_label.installEventFilter(self)
+        self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1304,6 +1307,10 @@ class RanaBrowser(QWidget):
         if event.type() == QEvent.MouseButtonPress:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
+        elif event.type() == QEvent.WindowActivate:
+            # prevent multiple events on window activation to cause multiple refresh actions
+            if time.time() - self.last_refresh_time > 0.1:
+                self.auto_refresh()
         return False
 
     @pyqtSlot()
@@ -1326,6 +1333,7 @@ class RanaBrowser(QWidget):
     def refresh(self):
         if hasattr(self.rana_files.currentWidget(), "refresh"):
             self.rana_files.currentWidget().refresh()
+            self.last_refresh_time = time.time()
         else:
             raise Exception("Attempted refresh on widget without refresh support")
 
