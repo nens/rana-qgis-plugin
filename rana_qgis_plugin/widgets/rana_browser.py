@@ -52,7 +52,14 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon, separator_icon, ellipsis_icon
+from rana_qgis_plugin.icons import (
+    ICONS_DIR,
+    dir_icon,
+    ellipsis_icon,
+    file_icon,
+    refresh_icon,
+    separator_icon,
+)
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
@@ -946,14 +953,29 @@ class BreadCrumbsWidget(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.create_ellipsis()
         self.setLayout(self.layout)
+
+    def create_ellipsis(self):
+        # when deleting and creating this widget on-the-fly qgis crashes with a segfault
+        # to avoid this, it is created on ui setup, and just shown and hidden instead
+        self.ellipsis = QPushButton()
+        self.ellipsis.setIcon(ellipsis_icon)
+        self.ellipsis.setIconSize(QSize(20, 20))
+        self.ellipsis.setStyleSheet(
+            "QPushButton::menu-indicator{ image: url(none.jpg); }"
+        )
+        context_menu = QMenu()
+        self.ellipsis.setMenu(context_menu)
+        self.ellipsis.hide()
 
     def clear(self):
         for i in reversed(range(self.layout.count())):
             widget = self.layout.itemAt(i).widget()
             if widget:
                 self.layout.removeWidget(widget)
-                widget.deleteLater()
+                if widget != self.ellipsis:
+                    widget.deleteLater()
 
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
         label_text = elide_text(self.font(), item.name, 100)
@@ -969,14 +991,16 @@ class BreadCrumbsWidget(QWidget):
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
         label.setToolTip(item.name)
         return label
-    
+
     def _add_separator(self):
         separator_pixmap = separator_icon.pixmap(QSize(16, 16))
         separator = QLabel()
         separator.setPixmap(separator_pixmap)
         self.layout.addWidget(separator)
 
-    def add_path_widgets(self, items, leading_separator=False, trailing_separator=False):
+    def add_path_widgets(
+        self, items, leading_separator=False, trailing_separator=False
+    ):
         if leading_separator:
             self._add_separator()
         for i, item in items:
@@ -986,21 +1010,17 @@ class BreadCrumbsWidget(QWidget):
                 self._add_separator()
 
     def add_path_dropdown_widget(self, items):
-        ellipsis = QPushButton()
-        ellipsis.setIcon(ellipsis_icon)
-        ellipsis.setIconSize(QSize(20, 20))
-        context_menu = QMenu()
+        self.layout.addWidget(self.ellipsis)
+        self.ellipsis.show()
+        context_menu = self.ellipsis.menu()
+        context_menu.clear()
         for index, item in items:
-            print(index, item.name)
             item_text = elide_text(self.font(), item.name, 100)
             context_menu.addAction(item_text, lambda idx=index: self.on_click(idx))
-        ellipsis.setMenu(context_menu)
-        # avoid triangle image appearing in icon by setting image to nonexistent url
-        ellipsis.setStyleSheet("QPushButton::menu-indicator{ image: url(none.jpg); }");
-        self.layout.addWidget(ellipsis)
 
     def update(self):
         self.clear()
+        self.ellipsis.hide()
         numbered_items = [[i, item] for i, item in enumerate(self._items)]
         if len(self._items) >= 6:
             # with dropdown
@@ -1013,7 +1033,6 @@ class BreadCrumbsWidget(QWidget):
         else:
             # without dropdown
             self.add_path_widgets(numbered_items)
-
 
     def on_click(self, index: int):
         # Truncate items to clicked position
