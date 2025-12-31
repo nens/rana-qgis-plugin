@@ -11,6 +11,7 @@ develop
 - Sort folder and file names case insensitive
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
+- Make breadcrumbs widget clearer with dropdown for long paths
 
 
 1.1.21 (unreleased)
