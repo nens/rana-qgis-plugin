@@ -1024,7 +1024,9 @@ class BreadCrumbsWidget(QWidget):
             widget = self.layout.itemAt(i).widget()
             if widget:
                 self.layout.removeWidget(widget)
-                if widget != self.ellipsis:
+                if widget == self.ellipsis:
+                    self.ellipsis.hide()
+                else:
                     widget.deleteLater()
 
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
