@@ -1072,7 +1072,6 @@ class BreadCrumbsWidget(QWidget):
 
     def update(self):
         self.clear()
-        self.ellipsis.hide()
         numbered_items = [[i, item] for i, item in enumerate(self._items)]
         if len(self._items) >= 6:
             # with dropdown
