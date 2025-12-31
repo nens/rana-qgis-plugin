@@ -89,6 +89,9 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 
+# allow for using specific data just for sorting
+SORT_ROLE = Qt.ItemDataRole.UserRole + 1
+
 
 class RevisionsView(QWidget):
     new_simulation_clicked = pyqtSignal(int)
@@ -332,8 +335,8 @@ class FileView(QWidget):
         btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
         button_layout.addWidget(btn_show_revisions)
-        file_action_btn_layout = QHBoxLayout()
         self.file_action_btn_dict = self.get_file_action_buttons()
+        file_action_btn_layout = QHBoxLayout()
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
         layout = QVBoxLayout(self)
@@ -348,7 +351,6 @@ class FileView(QWidget):
             if action == FileAction.VIEW_REVISIONS:
                 continue
             btn = QPushButton(action.value)
-            # btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             action_signal = self.file_signals.get_signal(action)
             if action == FileAction.RENAME:
                 btn.clicked.connect(lambda _: self.edit_file_name(self.selected_file))
@@ -356,6 +358,9 @@ class FileView(QWidget):
                 btn.clicked.connect(
                     lambda _, signal=action_signal: signal.emit(self.selected_file)
                 )
+            # hide buttons by default to prevent big width in size hint
+            # update_file_action_buttons ensures buttons are correctly shown on display
+            btn.hide()
             btn_dict[action] = btn
         return btn_dict
 
@@ -542,6 +547,47 @@ class CreateFolderDialog(QDialog):
         return self.input.text().strip()
 
 
+class FileBrowserModel(QStandardItemModel):
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        self.layoutAboutToBeChanged.emit()
+
+        directories = []
+        files = []
+
+        # First separate directories and files
+        while self.rowCount() > 0:
+            row_items = self.takeRow(0)
+            if not row_items:
+                continue
+            item_type = row_items[0].data(Qt.ItemDataRole.UserRole).get("type")
+            if item_type == "directory":
+                sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
+                directories.append((row_items, sort_text))
+            else:
+                # try to use SORT_ROLE data before using UserRole data for sorting
+                sort_text = (
+                    row_items[column].data(SORT_ROLE)
+                    or row_items[column].data(Qt.ItemDataRole.UserRole)
+                    or ""
+                )
+                files.append((row_items, sort_text))
+
+        # Sort directories and files separately
+        # only changing on directory name should affect directory sorting
+        if column == 0:
+            directories.sort(
+                key=lambda x: x[1],
+                reverse=(order == Qt.SortOrder.DescendingOrder),
+            )
+        files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
+        # Always add directories first, then files
+        for row_items, _ in directories:
+            self.appendRow(row_items)
+        for row_items, _ in files:
+            self.appendRow(row_items)
+        self.layoutChanged.emit()
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -567,7 +613,7 @@ class FilesBrowser(QWidget):
         self.files_tv = QTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
-        self.files_model = QStandardItemModel()
+        self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
@@ -701,6 +747,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(dir_icon, dir_name)
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(dir_name.lower(), role=SORT_ROLE)
             self.files_model.appendRow([name_item])
 
         # Add files second
@@ -709,6 +756,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(file_name.lower(), role=SORT_ROLE)
             data_type = file["data_type"]
             data_type_item = QStandardItem(
                 SUPPORTED_DATA_TYPES.get(data_type, data_type)
@@ -749,7 +797,7 @@ class ProjectsBrowser(QWidget):
         self.projects = []
         self.filtered_projects = []
         self.current_page = 1
-        self.items_per_page = 25
+        self.items_per_page = 100
         self.project = None
         self.setup_ui()
         self.fetch_projects()
@@ -787,7 +835,9 @@ class ProjectsBrowser(QWidget):
         top_layout.addWidget(self.projects_search)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
-        pagination_layout.addWidget(self.label_page_number)
+        pagination_layout.addWidget(
+            self.label_page_number, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         pagination_layout.addWidget(self.btn_next)
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
@@ -825,7 +875,7 @@ class ProjectsBrowser(QWidget):
     def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
         project_name = project["name"]
         name_item = QStandardItem(project_name)
-        name_item.setToolTip(project_name)
+        name_item.setToolTip(project["code"])
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
         last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
         return [name_item, last_activity_item]
