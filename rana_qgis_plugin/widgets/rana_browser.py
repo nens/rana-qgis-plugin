@@ -435,11 +435,6 @@ class FileView(QWidget):
             + " "
             + selected_file["user"]["family_name"]
         )
-        # user_image = get_user_image_from_initials(
-        #     selected_file["user"]["given_name"][0]
-        #     + selected_file["user"]["family_name"][0]
-        # )
-        # user_icon_label = get_icon_label(user_image)
         if selected_file["data_type"] == "threedi_schematisation":
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
@@ -452,8 +447,16 @@ class FileView(QWidget):
             descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
             msg = descriptor.get("description")
             last_modified = convert_to_local_time(selected_file["last_modified"])
+        msg_label = QLabel(msg)
+        msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        msg_label.setWordWrap(True)
         rows.append(
-            [user_icon_label, QLabel(username), QLabel(msg), QLabel(last_modified)]
+            [
+                user_icon_label,
+                QLabel(f"<b>{username}</b>"),
+                msg_label,
+                QLabel(last_modified),
+            ]
         )
         # Refresh contents of general box
         self.clean_collapsible(self.general_box)
