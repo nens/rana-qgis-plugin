@@ -353,12 +353,15 @@ class FileView(QWidget):
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
         )
+        self.general_box.setAlignment(Qt.AlignTop)
+        self.general_box.setContentsMargins(0, 0, 0, 0)
         self.more_box = QgsCollapsibleGroupBox("More information")
         self.more_box.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
         )
-
+        self.more_box.setAlignment(Qt.AlignTop)
+        self.more_box.setContentsMargins(0, 0, 0, 0)
         self.files_box = QgsCollapsibleGroupBox("Related files")
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
@@ -382,6 +385,7 @@ class FileView(QWidget):
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.general_box)
         layout.addWidget(self.more_box)
         layout.addStretch()
