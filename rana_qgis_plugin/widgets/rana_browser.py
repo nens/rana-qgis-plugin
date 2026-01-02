@@ -380,6 +380,7 @@ class FileView(QWidget):
         files_layout.addWidget(self.files_table)
         self.files_box.setLayout(files_layout)
 
+        # put all collabpsibles in a container, this seems to help with correct spacing
         collapsible_container = QWidget()
         collapsible_layout = QVBoxLayout(collapsible_container)
         collapsible_layout.setContentsMargins(0, 0, 0, 0)
@@ -410,11 +411,9 @@ class FileView(QWidget):
         file_action_btn_layout = QHBoxLayout()
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
+
+        # Put everything in the widget layout
         layout = QVBoxLayout(self)
-        # layout.addWidget(self.general_box)
-        # layout.addWidget(self.more_box)
-        # layout.addWidget(self.files_box)
-        # layout.addStretch()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(collapsible_container)
         layout.addLayout(file_action_btn_layout)
@@ -423,6 +422,7 @@ class FileView(QWidget):
 
     @staticmethod
     def clean_collapsible(collapsible):
+        # Remove all contents from a collapsible so new contents can be added
         layout = collapsible.layout()
         if layout:
             while layout.count():
@@ -442,7 +442,7 @@ class FileView(QWidget):
                             child_widget.setParent(None)
                             child_widget.deleteLater()
 
-    def update_general_contents(self, selected_file: dict):
+    def update_general_box(self, selected_file: dict):
         rows = []
         # line 1: icon - filename - size
         file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
@@ -628,7 +628,7 @@ class FileView(QWidget):
             return display_bytes(selected_file["size"])
         return "N/A"
 
-    def update_more_info(self, selected_file):
+    def update_more_box(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
@@ -690,7 +690,7 @@ class FileView(QWidget):
             layout.addWidget(QLabel(str(value)), row, 1)
         layout.setColumnStretch(1, 1)
 
-    def update_files(self, selected_file):
+    def update_files_box(self, selected_file):
         # only show files for schematisation with revision
         if selected_file["data_type"] != "threedi_schematisation":
             self.files_box.hide()
@@ -751,9 +751,9 @@ class FileView(QWidget):
 
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
-        self.update_general_contents(selected_file)
-        self.update_more_info(selected_file)
-        self.update_files(selected_file)
+        self.update_general_box(selected_file)
+        self.update_more_box(selected_file)
+        self.update_files_box(selected_file)
         if selected_file.get("data_type") == "threedi_schematisation":
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
