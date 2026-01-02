@@ -95,6 +95,7 @@ from rana_qgis_plugin.utils_api import (
     get_user_image,
 )
 from rana_qgis_plugin.utils_settings import base_url
+from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
@@ -540,9 +541,21 @@ class FileView(QWidget):
 
     def update_more_info(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
-        meta = descriptor["meta"] if descriptor else None
+        meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
-        details = [("projection", ""), ("kind", data_type)]
+        crs_str = ""
+        bbox = None
+        if data_type == "scenario" and meta:
+            # I don't think this is correct!
+            crs_str = meta.get("grid", {}).get("crs")
+            bbox = tuple(meta.get("envelope"))
+        elif meta.get("extent"):
+            crs_str = meta["extent"].get("crs")
+            bbox = tuple(meta["extent"].get("bbox"))
+        area_str = (
+            f"{get_bbox_area_in_m2(bbox, crs_str):.2f} m²" if bbox and crs_str else ""
+        )
+        details = [("Area", area_str), ("Projection", crs_str), ("Kind", data_type)]
         if data_type == "scenario" and meta:
             simulation = meta["simulation"]
             schematisation = meta["schematisation"]
