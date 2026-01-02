@@ -12,6 +12,8 @@ login_icon = QIcon(os.path.join(ICONS_DIR, "login.svg"))
 logout_icon = QIcon(os.path.join(ICONS_DIR, "logout.svg"))
 refresh_icon = QIcon(os.path.join(ICONS_DIR, "refresh.svg"))
 rana_icon = QIcon(os.path.join(ICONS_DIR, "rana.svg"))
+separator_icon = QIcon(os.path.join(ICONS_DIR, "separator.svg"))
+ellipsis_icon = QIcon(os.path.join(ICONS_DIR, "ellipsis.svg"))
 settings_icon = QgsApplication.getThemeIcon("/processingAlgorithm.svg")
 
 

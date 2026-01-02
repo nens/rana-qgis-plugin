@@ -68,7 +68,6 @@ class NewSchematisationWizard(QWizard):
         self.communication = communication
         self.new_schematisation = None
         self.new_local_schematisation = None
-        self.rana_path = None
         self.available_organisations = organisations
 
         self.schematisation_name_page = SchematisationNamePage(
@@ -94,6 +93,12 @@ class NewSchematisationWizard(QWizard):
         )
 
     def create_schematisation(self):
+        schematisation_name = self.schematisation_name_page.field("schematisation_name")
+        if schematisation_name in os.listdir(self.working_dir):
+            self.communication.show_error(
+                f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
+            )
+            return
         if self.schematisation_name_page.field("from_geopackage"):
             self.create_schematisation_from_geopackage()
         else:
@@ -119,7 +124,7 @@ class NewSchematisationWizard(QWizard):
                 "schematisation_organisation"
             )
         else:
-            organisation = self.available_organisations[0]
+            organisation = list(self.available_organisations.values())[0]
 
         owner = organisation.unique_id
 
@@ -133,6 +138,7 @@ class NewSchematisationWizard(QWizard):
                 owner,
                 tags=tags,
                 meta={"description": description},
+                threedimodel_limit=32767,  # maximum allowed by api
             )
             local_schematisation = LocalSchematisation(
                 self.working_dir,
@@ -197,7 +203,6 @@ class NewSchematisationWizard(QWizard):
             time.sleep(0.5)
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
-            self.rana_path = self.schematisation_name_page.field("rana_path")
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
         except ApiException as e:
@@ -257,9 +262,15 @@ class NewSchematisationWizard(QWizard):
             else:
                 tags = [tag.strip() for tag in tags.split(",")]
 
-            organisation = self.schematisation_name_page.field(
-                "schematisation_organisation"
-            )
+            # when there is exactly one 3Di organisation available for a tenant
+            # no organisation dropdown is shown in the wizard
+            if len(self.available_organisations) > 1:
+                organisation = self.schematisation_name_page.field(
+                    "schematisation_organisation"
+                )
+            else:
+                organisation = list(self.available_organisations.values())[0]
+
             owner = organisation.unique_id
 
             schematisation = self.tc.create_schematisation(
@@ -267,6 +278,7 @@ class NewSchematisationWizard(QWizard):
                 owner,
                 tags=tags,
                 meta={"description": description},
+                threedimodel_limit=32767,  # maximum allowed by api
             )
 
             local_schematisation = LocalSchematisation(
@@ -312,7 +324,6 @@ class NewSchematisationWizard(QWizard):
                 return
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
-            self.rana_path = self.schematisation_name_page.field("rana_path")
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
         except ApiException as e:

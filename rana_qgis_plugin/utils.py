@@ -206,7 +206,7 @@ def format_activity_time(timestamp: str) -> str:
     now = datetime.now(timezone.utc)
     past = parser.isoparse(timestamp)
     delta = relativedelta(now, past)
-    if delta.days < 7:
+    if delta.days < 5 and delta.months == 0:
         return convert_to_relative_time(timestamp)
     else:
         return convert_to_local_time(timestamp)
@@ -331,3 +331,14 @@ def get_file_icon_name(data_type: str) -> str:
         "vector": "mIconVector.svg",
     }
     return icon_map.get(data_type, "mIconFile.svg")
+
+
+def get_timestamp_as_numeric_item(timestamp_str: str) -> NumericItem:
+    timestamp = convert_to_timestamp(timestamp_str)
+    display_timestamp = format_activity_time(timestamp_str)
+    local_timestamp = convert_to_local_time(timestamp_str)
+    item = NumericItem(display_timestamp)
+    item.setData(timestamp, role=Qt.ItemDataRole.UserRole)
+    if display_timestamp != local_timestamp:
+        item.setToolTip(local_timestamp)
+    return item

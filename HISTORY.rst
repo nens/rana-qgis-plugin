@@ -1,6 +1,19 @@
 History
 =======
 
+develop
+-------------------
+
+- Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Add remove from project file action that shadows delete
+- Show relative timestamps in files browser, file view and revisions view
+- Group folders on top in files browser
+- Sort folder and file names case insensitive
+- Reintroduce headers in settings page of new schematisation wizard
+- Run auto refresh on regaining window focus
+- Make breadcrumbs widget clearer with dropdown for long paths
+
+
 1.1.21 (unreleased)
 -------------------
 
@@ -25,6 +38,11 @@ History
 - Only show 3Di organisation dropdown if more than 1 organisation is available per tenant
 - Add confirmation for delete
 - Create new revision after uploading new schematisation to Rana
+- Handle 0 available organisations with nice error message
+- Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Decrease minimum allowed value for Convergence EPS in simulation wizard settings (#220)
+- Remove threedimodel limit for schematisations in Rana (#3079)
+- Toggle simulation results manager when opening results in the results manager
 
 
 1.1.20 (2025-11-18)

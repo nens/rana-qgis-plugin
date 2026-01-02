@@ -17,6 +17,7 @@ class FileAction(Enum):
     DOWNLOAD_RESULTS = "Download results"
     RENAME = "Rename"
     DELETE = "Delete"
+    REMOVE_FROM_PROJECT = "Remove from project"
 
     def __lt__(self, other):
         # sort a list of file actions by order of definition here
@@ -39,14 +40,21 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     # Add save vector style only for vector files
     if data_type == "vector":
         actions.append(FileAction.SAVE_VECTOR_STYLING)
-    if data_type == "threedi_schematisation":
+    elif data_type == "threedi_schematisation":
+        # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
+        actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
         actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
     # Add options to open WMS and download file and results only for 3Di scenarios
-    if data_type == "scenario":
+    elif data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         meta = descriptor["meta"] if descriptor else None
-        if meta and meta["simulation"]["software"]["id"] == "3Di":
-            actions += [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
+        if meta and "id" in meta:
+            actions.append(FileAction.DOWNLOAD_RESULTS)
+            if meta["simulation"]["software"]["id"] == "3Di":
+                actions.append(FileAction.OPEN_WMS)
+        # remove any interactions for objects that are being processed
+        elif descriptor.get("status", {}).get("id") == "processing":
+            actions = []
     return sorted(actions)
 
 
@@ -65,6 +73,7 @@ class FileActionSignals(QObject):
     def get_signal(self, signal_type: FileAction) -> Optional[pyqtSignal]:
         signal_map = {
             FileAction.DELETE: self.file_deletion_requested,
+            FileAction.REMOVE_FROM_PROJECT: self.file_deletion_requested,
             FileAction.RENAME: self.file_rename_requested,
             FileAction.OPEN_IN_QGIS: self.open_in_qgis_requested,
             FileAction.UPLOAD_FILE: self.upload_file_requested,
