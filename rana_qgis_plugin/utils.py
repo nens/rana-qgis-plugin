@@ -329,6 +329,7 @@ def get_file_icon_name(data_type: str) -> str:
         "threedi_schematisation": "mIconDbSchema.svg",
         "raster": "mIconRaster.svg",
         "vector": "mIconVector.svg",
+        "sqlite": "mIconDbSchema.svg",
     }
     return icon_map.get(data_type, "mIconFile.svg")
 

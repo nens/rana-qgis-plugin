@@ -15,4 +15,5 @@ SUPPORTED_DATA_TYPES = {
     "vector": "vector",
     "raster": "raster",
     "threedi_schematisation": "Rana schematisation",
+    "sqlite": "Schematisation database",
 }

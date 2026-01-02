@@ -353,6 +353,18 @@ class FileView(QWidget):
         self.more_box.setAlignment(Qt.AlignTop)
         self.more_box.setContentsMargins(0, 0, 0, 0)
         self.files_box = QgsCollapsibleGroupBox("Related files")
+        self.files_table = QTableView()
+        self.files_table.setSortingEnabled(False)
+        self.files_table.verticalHeader().hide()
+        self.files_model = QStandardItemModel()
+        self.files_table.setModel(self.files_model)
+        self.files_model.setColumnCount(3)
+        self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
+        self.files_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        files_layout = QVBoxLayout()
+        files_layout.addWidget(self.files_table)
+        self.files_box.setLayout(files_layout)
+
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
         self.btn_create_model = QPushButton("Create Rana Model")
@@ -378,6 +390,7 @@ class FileView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.general_box)
         layout.addWidget(self.more_box)
+        layout.addWidget(self.files_box)
         layout.addStretch()
         layout.addLayout(file_action_btn_layout)
         layout.addLayout(button_layout)
@@ -613,6 +626,49 @@ class FileView(QWidget):
             layout.addWidget(QLabel(str(value)), row, 1)
         layout.setColumnStretch(1, 1)
 
+    def update_files(self, selected_file):
+        # only show files for schematisation with revision
+        if selected_file["data_type"] != "threedi_schematisation":
+            self.files_box.hide()
+            return
+        schematisation = get_threedi_schematisation(
+            self.communication, selected_file["descriptor_id"]
+        )
+        if not schematisation:
+            self.files_box.hide()
+            return
+        rows = []
+        revision = schematisation["latest_revision"]
+        sqlite_file = revision.get("sqlite", {}).get("file")
+        if sqlite_file:
+            rows.append(
+                [
+                    sqlite_file.get("filename"),
+                    sqlite_file.get("type"),
+                    sqlite_file.get("size"),
+                ]
+            )
+        rasters = revision.get("rasters", [])
+        for raster in rasters:
+            raster_file = raster.get("file")
+            if raster_file:
+                rows.append(
+                    [raster_file.get("filename"), "raster", raster_file.get("size")]
+                )
+        self.files_model.clear()
+        self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
+        for file_name, data_type, file_size in rows:
+            file_type_icon = get_icon_from_theme(get_file_icon_name(data_type))
+            name_item = QStandardItem(file_name)
+            name_item.setIcon(QIcon(file_type_icon))
+            data_type_item = QStandardItem(
+                SUPPORTED_DATA_TYPES.get(data_type, data_type)
+            )
+            size_item = NumericItem(display_bytes(file_size))
+            size_item.setData(file_size, role=Qt.ItemDataRole.UserRole)
+            self.files_model.appendRow([name_item, data_type_item, size_item])
+        self.files_box.show()
+
     @staticmethod
     def update_collapsible(collapsible, rows, stretch_right=True):
         FileView.clean_collapsible(collapsible)
@@ -633,6 +689,7 @@ class FileView(QWidget):
         self.selected_file = selected_file
         self.update_general_contents(selected_file)
         self.update_more_info(selected_file)
+        self.update_files(selected_file)
         if selected_file.get("data_type") == "threedi_schematisation":
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
