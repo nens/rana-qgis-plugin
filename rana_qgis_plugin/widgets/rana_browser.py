@@ -42,6 +42,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLayout,
     QLineEdit,
     QMenu,
     QPushButton,
@@ -318,6 +319,31 @@ def _clear_layout(layout):
             _clear_layout(item.layout())
 
 
+class EditLabel(QLineEdit):
+    def __init__(self, text, parent=None, start_editable=False):
+        super().__init__(text, parent)
+        if start_editable:
+            self.make_editable()
+        else:
+            self.make_readonly()
+
+    def make_editable(self):
+        self.setReadOnly(False)
+        self.setStyleSheet("")
+        self.setFrame(True)
+
+    def make_readonly(self):
+        self.setReadOnly(True)
+        self.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+        """)
+        self.setFrame(False)
+
+
 class FileView(QWidget):
     file_showed = pyqtSignal()
     show_revisions_clicked = pyqtSignal(dict, dict)
@@ -334,24 +360,13 @@ class FileView(QWidget):
         self.project = project
 
     def setup_ui(self):
-        self.file_table_widget = QTableWidget(1, 2)
-        self.file_table_widget.horizontalHeader().setVisible(False)
-        self.file_table_widget.verticalHeader().setVisible(False)
-
         self.general_box = QgsCollapsibleGroupBox("General")
         self.general_box.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
         )
         self.general_box.setAlignment(Qt.AlignTop)
         self.general_box.setContentsMargins(0, 0, 0, 0)
         self.more_box = QgsCollapsibleGroupBox("More information")
-        self.more_box.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Maximum,  # Changed from Minimum to Maximum
-        )
-        self.more_box.setAlignment(Qt.AlignTop)
-        self.more_box.setContentsMargins(0, 0, 0, 0)
         self.files_box = QgsCollapsibleGroupBox("Related files")
         self.files_table = QTableView()
         self.files_table.setSortingEnabled(False)
@@ -364,6 +379,15 @@ class FileView(QWidget):
         files_layout = QVBoxLayout()
         files_layout.addWidget(self.files_table)
         self.files_box.setLayout(files_layout)
+
+        collapsible_container = QWidget()
+        collapsible_layout = QVBoxLayout(collapsible_container)
+        collapsible_layout.setContentsMargins(0, 0, 0, 0)
+        collapsible_layout.setSpacing(0)
+        collapsible_layout.addWidget(self.general_box)
+        collapsible_layout.addWidget(self.more_box)
+        collapsible_layout.addWidget(self.files_box)
+        collapsible_layout.addStretch()
 
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
@@ -387,11 +411,12 @@ class FileView(QWidget):
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
         layout = QVBoxLayout(self)
+        # layout.addWidget(self.general_box)
+        # layout.addWidget(self.more_box)
+        # layout.addWidget(self.files_box)
+        # layout.addStretch()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.general_box)
-        layout.addWidget(self.more_box)
-        layout.addWidget(self.files_box)
-        layout.addStretch()
+        layout.addWidget(collapsible_container)
         layout.addLayout(file_action_btn_layout)
         layout.addLayout(button_layout)
         self.setLayout(layout)
@@ -429,7 +454,12 @@ class FileView(QWidget):
             if selected_file["data_type"] != "threedi_schematisation"
             else "N/A"
         )
-        rows.append([file_icon_label, QLabel(filename), QLabel(size_str)])
+        self.filename_edit = EditLabel(filename)
+        self.filename_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.filename_edit.show()
+        self.filename_edit.adjustSize()
+
+        rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
         # line 2: user icon - user name - commit msg - time
         # This is broken (or the stuff above)
         user_image = get_user_image(self.communication, selected_file)
@@ -455,7 +485,8 @@ class FileView(QWidget):
             msg = descriptor.get("description")
             last_modified = convert_to_local_time(selected_file["last_modified"])
         msg_label = QLabel(msg)
-        msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
+
         msg_label.setWordWrap(True)
         rows.append(
             [
@@ -477,6 +508,7 @@ class FileView(QWidget):
                 row_layout.addWidget(item)
             row_layout.addStretch()
             row_layout.addWidget(row[-1])
+            row_layout.setSizeConstraint(QLayout.SetMinimumSize)
             layout.addLayout(row_layout)
 
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
@@ -499,33 +531,30 @@ class FileView(QWidget):
         return btn_dict
 
     def edit_file_name(self, selected_item: dict):
-        # Enable editing for the filename in row 0, column 1
-        item = self.file_table_widget.item(0, 1)
-        item.setFlags(
-            Qt.ItemFlag.ItemIsEditable
-            | Qt.ItemFlag.ItemIsEnabled
-            | Qt.ItemFlag.ItemIsSelectable
-        )
+        # since self.filename_edit is made on the fly, make sure that it exists
+        # this should really not happen so just continue silently if that happens
+        if not hasattr(self, "filename_edit") or not isinstance(
+            self.filename_edit, EditLabel
+        ):
+            return
 
-        def handle_data_changed(row, column):
-            if row == 0 and column == 1:  # Ensure changes are in the correct cell
-                new_name = self.file_table_widget.item(row, column).text()
+        current_name = self.filename_edit.text()
+
+        def finish_editing():
+            if current_name != self.filename_edit.text():
                 self.file_signals.get_signal(FileAction.RENAME).emit(
-                    selected_item, new_name
+                    selected_item, self.filename_edit.text()
                 )
-                # disconnect handler if still connected
-                try:
-                    self.file_table_widget.itemChanged.disconnect(handle_data_changed)
-                except:
-                    pass
+            self.filename_edit.make_readonly()
 
-        # Connect to the itemChanged signal
-        self.file_table_widget.itemChanged.connect(
-            lambda item: handle_data_changed(item.row(), item.column())
-        )
+        self.filename_edit.make_editable()
 
-        # Enter editing mode
-        self.file_table_widget.editItem(item)
+        # Connect the editing finished signal
+        self.filename_edit.editingFinished.connect(finish_editing)
+
+        # Set focus to the edit field
+        self.filename_edit.setFocus()
+        self.filename_edit.selectAll()
 
     def update_file_action_buttons(self, selected_file: dict):
         active_actions = get_file_actions_for_data_type(selected_file)
@@ -750,11 +779,6 @@ class FileView(QWidget):
         last_modified_key = (
             f"{self.project['name']}/{self.selected_file['id']}/last_modified"
         )
-        # ensure any signals (from rename) are disconnected before updating data
-        try:
-            self.file_table_widget.itemChanged.disconnect()
-        except TypeError:
-            pass
         QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
         self.show_selected_file_details(self.selected_file)
 
