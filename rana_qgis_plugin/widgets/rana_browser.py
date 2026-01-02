@@ -1286,14 +1286,14 @@ class RanaBrowser(QWidget):
         height = int(original_size.height() / original_size.width() * width)
         banner.setFixedWidth(width)
         banner.setFixedHeight(height)
-        logo_label = banner
-        logo_label.installEventFilter(self)
+        self.logo_label = banner
+        self.logo_label.installEventFilter(self)
         self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         top_layout.addItem(spacer, 0, 3, 1, 1)
-        top_layout.addWidget(logo_label, 0, 4)
+        top_layout.addWidget(self.logo_label, 0, 4)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         top_layout.addItem(spacer, 1, 0, 1, 1)
         top_layout.addWidget(refresh_btn, 1, 4, Qt.AlignRight)
@@ -1474,7 +1474,7 @@ class RanaBrowser(QWidget):
         )
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.MouseButtonPress:
+        if obj == self.logo_label and event.type() == QEvent.MouseButtonPress:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
         elif event.type() == QEvent.WindowActivate:
