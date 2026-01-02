@@ -72,20 +72,17 @@ from rana_qgis_plugin.icons import (
 )
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
-    get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.utils import (
     NumericItem,
     convert_to_local_time,
-    convert_to_timestamp,
     display_bytes,
     elide_text,
-    format_activity_time,
     get_file_icon_name,
+    get_threedi_api,
     get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import (
-    get_frontend_settings,
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_tenant_project_file_history,
@@ -105,7 +102,6 @@ from rana_qgis_plugin.widgets.utils_icons import (
     create_user_image,
     get_icon_from_theme,
     get_icon_label,
-    get_user_image_from_initials,
 )
 
 # allow for using specific data just for sorting
@@ -183,17 +179,11 @@ class RevisionsView(QWidget):
         rows = []
         BTNData = namedtuple("BTNData", ["label", "func", "enabled", "tooltip"])
         if selected_file.get("data_type") == "threedi_schematisation":
-            nof_models = 0
             # retrieve schematisation and revisions
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
             )
-            _, personal_api_token = get_3di_auth()
-            frontend_settings = get_frontend_settings()
-            api_url = frontend_settings["hcc_url"].rstrip("/")
-            threedi_api = get_api_client_with_personal_api_token(
-                personal_api_token, api_url
-            )
+            threedi_api = get_threedi_api()
             tc = ThreediCalls(threedi_api)
             revisions = tc.fetch_schematisation_revisions(
                 schematisation["schematisation"]["id"]
@@ -225,7 +215,6 @@ class RevisionsView(QWidget):
                     tooltip,
                 )
                 if revision.has_threedimodel:
-                    nof_models += 1
                     model_btn_data = BTNData(
                         "Delete",
                         lambda _,
@@ -539,23 +528,43 @@ class FileView(QWidget):
     def update_selected_file(self, selected_file: dict):
         self.selected_file = selected_file
 
+    @staticmethod
+    def _get_area_str(data_type, meta) -> str:
+        crs_str = FileView._get_crs_str(data_type, meta)
+        bbox = None
+        if data_type == "scenario" and meta:
+            # I don't think this is correct!
+            bbox = meta.get("envelope")
+        elif meta.get("extent"):
+            bbox = meta["extent"].get("bbox")
+        if bbox and crs_str:
+            return f"{get_bbox_area_in_m2(bbox, crs_str):.2f} m²"
+        return ""
+
+    @staticmethod
+    def _get_crs_str(data_type, meta) -> str:
+        if data_type == "scenario" and meta:
+            return meta.get("grid", {}).get("crs")
+        elif meta.get("extent"):
+            return meta["extent"].get("crs")
+        return ""
+
+    @staticmethod
+    def _get_size_str(data_type, selected_file) -> str:
+        if data_type != "threedi_schematisation":
+            return display_bytes(selected_file["size"])
+        return "N/A"
+
     def update_more_info(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
-        crs_str = ""
-        bbox = None
-        if data_type == "scenario" and meta:
-            # I don't think this is correct!
-            crs_str = meta.get("grid", {}).get("crs")
-            bbox = tuple(meta.get("envelope"))
-        elif meta.get("extent"):
-            crs_str = meta["extent"].get("crs")
-            bbox = tuple(meta["extent"].get("bbox"))
-        area_str = (
-            f"{get_bbox_area_in_m2(bbox, crs_str):.2f} m²" if bbox and crs_str else ""
-        )
-        details = [("Area", area_str), ("Projection", crs_str), ("Kind", data_type)]
+        details = [
+            ("Area", self._get_area_str(data_type, meta)),
+            ("Projection", self._get_crs_str(data_type, meta)),
+            ("Kind", data_type),
+            ("Storage", self._get_size_str(data_type, selected_file)),
+        ]
         if data_type == "scenario" and meta:
             simulation = meta["simulation"]
             schematisation = meta["schematisation"]
