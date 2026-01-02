@@ -4,7 +4,7 @@ import time
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from qgis.core import Qgis, QgsApplication, QgsMessageLog
 from qgis.gui import QgsCollapsibleGroupBox
@@ -542,25 +542,56 @@ class FileView(QWidget):
         self.selected_file = selected_file
 
     @staticmethod
-    def _get_area_str(data_type, meta) -> str:
-        crs_str = FileView._get_crs_str(data_type, meta)
-        bbox = None
-        if data_type == "scenario" and meta:
-            # I don't think this is correct!
-            bbox = meta.get("envelope")
-        elif meta.get("extent"):
-            bbox = meta["extent"].get("bbox")
-        if bbox and crs_str:
-            return f"{get_bbox_area_in_m2(bbox, crs_str):.2f} m²"
-        return ""
+    def _get_dem_raster_file(revision):
+        if "rasters" in revision:
+            return next(
+                (
+                    raster
+                    for raster in revision["rasters"]
+                    if raster["type"] == "dem_file"
+                ),
+                None,
+            )
 
     @staticmethod
-    def _get_crs_str(data_type, meta) -> str:
+    def _get_bbox(data_type, meta, revision=None) -> Optional[list[float]]:
+        if data_type == "scenario" and meta:
+            # I don't think this is correct!
+            return meta.get("envelope")
+        elif data_type == "threedi_schematisation" and revision:
+            dem = FileView._get_dem_raster_file(revision)
+            if dem:
+                coord = dem["extent"]["coordinates"]
+                return [*coord[0], *coord[1]]
+        elif meta.get("extent"):
+            return meta["extent"].get("bbox")
+
+    @staticmethod
+    def _get_crs_str(data_type, meta, revision) -> str:
         if data_type == "scenario" and meta:
             return meta.get("grid", {}).get("crs")
+        elif data_type == "threedi_schematisation" and revision:
+            dem = FileView._get_dem_raster_file(revision)
+            if dem:
+                return f"EPSG:{dem['epsg_code']}"
         elif meta.get("extent"):
             return meta["extent"].get("crs")
         return ""
+
+    @staticmethod
+    def _get_area_str(data_type, meta, revision):
+        crs_str = FileView._get_crs_str(data_type, meta, revision)
+        bbox = FileView._get_bbox(data_type, meta, revision)
+        if not crs_str or not bbox:
+            return ""
+        pixel_size = 1
+        if data_type == "scenario":
+            pixel_size = abs(meta["grid"]["x"]["cell_size"])
+        elif data_type == "threedi_schematisation":
+            dem = FileView._get_dem_raster_file(revision)
+            if "geotransform" in dem:
+                pixel_size = abs(dem["geotransform"][1])
+        return f"{get_bbox_area_in_m2(bbox, crs_str, pixel_size)} m²"
 
     @staticmethod
     def _get_size_str(data_type, selected_file) -> str:
@@ -572,9 +603,17 @@ class FileView(QWidget):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
+        revision = None
+        if data_type == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_file["descriptor_id"]
+            )
+            if schematisation:
+                revision = schematisation["latest_revision"]
+        crs_str = self._get_crs_str(data_type, meta, revision)
         details = [
-            ("Area", self._get_area_str(data_type, meta)),
-            ("Projection", self._get_crs_str(data_type, meta)),
+            ("Area", self._get_area_str(data_type, meta, revision)),
+            ("Projection", crs_str),
             ("Kind", data_type),
             ("Storage", self._get_size_str(data_type, selected_file)),
         ]
@@ -601,20 +640,16 @@ class FileView(QWidget):
                 ("Start", start),
                 ("End", end),
             ]
-        if data_type == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
-            if schematisation:
-                revision = schematisation["latest_revision"]
-                details += [
-                    ("Schematisation ID", schematisation["schematisation"]["id"]),
-                    ("Latest revision ID", revision["id"] if revision else None),
-                    (
-                        "Latest revision number",
-                        revision["number"] if revision else None,
-                    ),
-                ]
+        if data_type == "threedi_schematisation" and revision:
+            details += [
+                ("Schematisation ID", schematisation["schematisation"]["id"]),
+                ("Latest revision ID", revision["id"] if revision else None),
+                (
+                    "Latest revision number",
+                    revision["number"] if revision else None,
+                ),
+            ]
+
         # Refresh contents of more box
         self.clean_collapsible(self.more_box)
         layout = self.more_box.layout()
@@ -1374,7 +1409,7 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         self.logo_label = banner
         self.logo_label.installEventFilter(self)
-        self.window().installEventFilter(self)
+        # self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
