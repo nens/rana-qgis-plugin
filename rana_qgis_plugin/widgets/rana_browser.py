@@ -1,5 +1,6 @@
 import math
 import os
+import time
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
@@ -10,6 +11,7 @@ from qgis.PyQt.QtCore import (
     QModelIndex,
     QObject,
     QSettings,
+    QSize,
     Qt,
     QTimer,
     QUrl,
@@ -51,7 +53,14 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
+from rana_qgis_plugin.icons import (
+    ICONS_DIR,
+    dir_icon,
+    ellipsis_icon,
+    file_icon,
+    refresh_icon,
+    separator_icon,
+)
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
@@ -789,7 +798,7 @@ class ProjectsBrowser(QWidget):
         self.projects = []
         self.filtered_projects = []
         self.current_page = 1
-        self.items_per_page = 25
+        self.items_per_page = 100
         self.project = None
         self.setup_ui()
         self.fetch_projects()
@@ -827,7 +836,9 @@ class ProjectsBrowser(QWidget):
         top_layout.addWidget(self.projects_search)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
-        pagination_layout.addWidget(self.label_page_number)
+        pagination_layout.addWidget(
+            self.label_page_number, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         pagination_layout.addWidget(self.btn_next)
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
@@ -865,7 +876,7 @@ class ProjectsBrowser(QWidget):
     def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
         project_name = project["name"]
         name_item = QStandardItem(project_name)
-        name_item.setToolTip(project_name)
+        name_item.setToolTip(project["code"])
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
         last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
         return [name_item, last_activity_item]
@@ -993,36 +1004,87 @@ class BreadCrumbsWidget(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.create_ellipsis()
         self.setLayout(self.layout)
+
+    def create_ellipsis(self):
+        # when deleting and creating this widget on-the-fly qgis crashes with a segfault
+        # to avoid this, it is created on ui setup, and just shown and hidden instead
+        self.ellipsis = QPushButton()
+        self.ellipsis.setIcon(ellipsis_icon)
+        self.ellipsis.setIconSize(QSize(20, 20))
+        self.ellipsis.setStyleSheet(
+            "QPushButton::menu-indicator{ image: url(none.jpg); }"
+        )
+        context_menu = QMenu()
+        self.ellipsis.setMenu(context_menu)
+        self.ellipsis.hide()
 
     def clear(self):
         for i in reversed(range(self.layout.count())):
             widget = self.layout.itemAt(i).widget()
             if widget:
                 self.layout.removeWidget(widget)
-                widget.deleteLater()
-
-    def update(self):
-        self.clear()
-        for i, item in enumerate(self._items):
-            label = self.get_button(i, item)
-            self.layout.addWidget(label)
-            if i != len(self._items) - 1:
-                separator = QLabel(">")
-                self.layout.addWidget(separator)
+                if widget == self.ellipsis:
+                    self.ellipsis.hide()
+                else:
+                    widget.deleteLater()
 
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
         label_text = elide_text(self.font(), item.name, 100)
         # Last item cannot be clicked
         if index == len(self._items) - 1:
-            label = QLabel(label_text)
+            label = QLabel(f"<b>{label_text}</b>")
+            label.setTextFormat(Qt.TextFormat.RichText)
         else:
             link = f"<a href='{index}'>{label_text}</a>"
             label = QLabel(link)
             label.setTextFormat(Qt.TextFormat.RichText)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
+        label.setToolTip(item.name)
         return label
+
+    def _add_separator(self):
+        separator_pixmap = separator_icon.pixmap(QSize(16, 16))
+        separator = QLabel()
+        separator.setPixmap(separator_pixmap)
+        self.layout.addWidget(separator)
+
+    def add_path_widgets(
+        self, items, leading_separator=False, trailing_separator=False
+    ):
+        if leading_separator:
+            self._add_separator()
+        for i, item in items:
+            label = self.get_button(i, item)
+            self.layout.addWidget(label)
+            if (i != items[-1][0]) or trailing_separator:
+                self._add_separator()
+
+    def add_path_dropdown_widget(self, items):
+        self.layout.addWidget(self.ellipsis)
+        self.ellipsis.show()
+        context_menu = self.ellipsis.menu()
+        context_menu.clear()
+        for index, item in items:
+            item_text = elide_text(self.font(), item.name, 100)
+            context_menu.addAction(item_text, lambda idx=index: self.on_click(idx))
+
+    def update(self):
+        self.clear()
+        numbered_items = [[i, item] for i, item in enumerate(self._items)]
+        if len(self._items) >= 6:
+            # with dropdown
+            before_dropdown_items = numbered_items[:2]
+            dropdown_items = numbered_items[2:-2]
+            after_dropdown_items = numbered_items[-2:]
+            self.add_path_widgets(before_dropdown_items, trailing_separator=True)
+            self.add_path_dropdown_widget(dropdown_items)
+            self.add_path_widgets(after_dropdown_items, leading_separator=True)
+        else:
+            # without dropdown
+            self.add_path_widgets(numbered_items)
 
     def on_click(self, index: int):
         # Truncate items to clicked position
@@ -1068,6 +1130,7 @@ class RanaBrowser(QWidget):
 
     def __init__(self, communication: UICommunication):
         super().__init__()
+        self.last_refresh_time = time.time()
         self.communication = communication
         self.setup_ui()
         self.refresh_timer = QTimer()
@@ -1114,6 +1177,7 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         logo_label = banner
         logo_label.installEventFilter(self)
+        self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1302,6 +1366,10 @@ class RanaBrowser(QWidget):
         if event.type() == QEvent.MouseButtonPress:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
+        elif event.type() == QEvent.WindowActivate:
+            # prevent multiple events on window activation to cause multiple refresh actions
+            if time.time() - self.last_refresh_time > 0.1:
+                self.auto_refresh()
         return False
 
     @pyqtSlot()
@@ -1324,6 +1392,7 @@ class RanaBrowser(QWidget):
     def refresh(self):
         if hasattr(self.rana_files.currentWidget(), "refresh"):
             self.rana_files.currentWidget().refresh()
+            self.last_refresh_time = time.time()
         else:
             raise Exception("Attempted refresh on widget without refresh support")
 
