@@ -4,7 +4,7 @@ History
 1.2.1 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Bump nens-dependency-loader to 1.2.10.
 
 
 1.2.0 (2026-01-05)
