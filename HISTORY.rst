@@ -12,6 +12,7 @@ develop
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
 - Make breadcrumbs widget clearer with dropdown for long paths
+- Confirm downloading of already downloaded results
 
 
 1.1.21 (unreleased)
