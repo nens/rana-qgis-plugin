@@ -9,6 +9,11 @@ develop
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
 - Add context menu to projects browser
+- Group folders on top in files browser
+- Sort folder and file names case insensitive
+- Reintroduce headers in settings page of new schematisation wizard
+- Run auto refresh on regaining window focus
+- Make breadcrumbs widget clearer with dropdown for long paths
 
 
 1.1.21 (unreleased)
