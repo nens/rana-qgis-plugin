@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from urllib.parse import quote
 
 from qgis.core import QgsSettings
@@ -28,6 +30,13 @@ def initialize_settings():
             f"{RANA_SETTINGS_ENTRY}/base_url", "https://www.ranawaterintelligence.com"
         ),
     )
+
+    documents_folder = os.path.join(os.path.expanduser("~"), "Documents", "Rana")
+    settings.setValue(
+        "threedi/working_dir",
+        settings.value("threedi/working_dir", Path(documents_folder).as_posix()),
+    )
+    os.makedirs(settings.value("threedi/working_dir"), exist_ok=True)
 
 
 def set_tenant_id(tenant: str):
@@ -86,6 +95,7 @@ def hcc_working_dir() -> str:
 def set_hcc_working_dir(working_dir: str) -> str:
     # Backwards compatible to older software
     QgsSettings().setValue("threedi/working_dir", working_dir)
+    os.makedirs(hcc_working_dir(), exist_ok=True)
 
 
 def rana_cache_dir() -> str:

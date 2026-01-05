@@ -18,6 +18,7 @@ from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.loader import Loader
+from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
 from rana_qgis_plugin.utils import parse_url
 from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
 from rana_qgis_plugin.utils_settings import (
@@ -59,6 +60,8 @@ class RanaQgisPlugin:
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
         self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
+        self.provider = RanaQgisPluginProvider()
+        QgsApplication.processingRegistry().addProvider(self.provider)
 
     def login(self, start_tenant_id: str = None) -> bool:
         if not setup_oauth2(self.communication):

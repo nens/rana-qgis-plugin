@@ -13,7 +13,7 @@ from qgis.PyQt.QtCore import (
     pyqtSlot,
 )
 from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
-from threedi_api_client.openapi import ApiException
+from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.auth import get_authcfg_id
@@ -30,6 +30,8 @@ from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
     BuildOptionActions,
+    UploadFileStatus,
+    UploadFileType,
     extract_error_message,
     load_local_schematisation,
     load_remote_schematisation,
@@ -221,9 +223,10 @@ class Loader(QObject):
                         if self.communication.ask(
                             self.parent(),
                             "Rana",
-                            "Do you want to add the results of this simulation to the current project so you can analyse them with 3Di Results Analysis?",
+                            "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
                         ):
                             ra_tool.load_result(result_path, admin_path)
+                            ra_tool.toggle_results_manager.run()
         else:
             schematisation = None
             if file["data_type"] == "threedi_schematisation":
@@ -276,7 +279,7 @@ class Loader(QObject):
         confirm = QMessageBox.question(
             self.parent(),
             "Confirm Delete",
-            f"Are you sure you want to delete {file['id']}",
+            f"Are you sure you want to remove {file['id']}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -456,10 +459,19 @@ class Loader(QObject):
             self.simulation_started_failed.emit()
             return
 
-        # Retrieve templates
-        current_model = tc.fetch_schematisation_revision_3di_models(
+        # Retrieve models
+        current_models = tc.fetch_schematisation_revision_3di_models(
             schematisation["schematisation"]["id"], revision["id"]
-        )[0]
+        )
+        # Retrieve the active model (Disabled=False)
+        current_model = next(
+            (x for x in current_models if (not x.disabled) and x.is_valid), None
+        )
+        if not current_model:
+            self.communication.show_warn(
+                "No enabled valid model for this schematisation revision"
+            )
+            self.simulation_started_failed.emit()
 
         template_dialog = ModelSelectionDialog(
             self.communication,
@@ -593,98 +605,130 @@ class Loader(QObject):
             self.download_results_cancelled.emit()
             return
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        if (
-            not descriptor["meta"]
-            or not descriptor["meta"]["simulation"]
-            or not descriptor["meta"]["simulation"]["name"]
-        ):
-            if descriptor["status"]["id"] == "processing":
-                self.communication.show_warn(
-                    "Scenario is still processing; please try again later"
-                )
-            else:
-                self.communication.show_error(
-                    "Scenario is corrupt; did you upload a zip directly?"
-                )
+        assert descriptor["data_type"] == "scenario"
+        meta = descriptor.get("meta", {})
+        if not meta.get("id"):
+            self.communication.show_warn("Post-processing results not yet available")
             self.download_results_cancelled.emit()
             return
-        schematisation_name = descriptor["meta"]["schematisation"]["name"]
-        schematisation_id = descriptor["meta"]["schematisation"]["id"]
-        schematisation_version = descriptor["meta"]["schematisation"]["version"]
-        assert descriptor["data_type"] == "scenario"
+        if descriptor.get("status", {}).get("id") not in ["completed", "processing"]:
+            self.communication.show_warn(f"Post-processing results cannot be retrieved")
+            self.download_results_cancelled.emit()
+            return
 
-        # Determine local target folder for simulatuon
+        tc = ThreediCalls(get_threedi_api())
+        schematisation_name = meta["schematisation"]["name"]
+        schematisation_id = meta["schematisation"]["id"]
+        revision_number = meta["schematisation"]["version"]
+        simulation_name = meta["simulation"]["name"]
+        # Simulation name is only set after post-processing is fully finished
+        if not simulation_name:
+            if meta["simulation"].get("id"):
+                simulation_name = tc.fetch_simulation(meta["simulation"].get("id")).name
+            else:
+                self.communication.show_warn(
+                    "Post-processing results not yet available"
+                )
+                self.download_results_cancelled.emit()
+                return
+        # Revision number is only set after post-processing is fully finished
+        if not revision_number:
+            if meta["schematisation"].get("revision_id"):
+                revision_id = meta["schematisation"]["revision_id"]
+                revision_number = tc.fetch_schematisation_revision(
+                    schematisation_id, revision_id
+                ).number
+            else:
+                self.communication.show_warn(
+                    "Post-processing results not yet available"
+                )
+                self.download_results_cancelled.emit()
+                return
+        # Determine local target folder for simulation
         target_folder = get_threedi_schematisation_simulation_results_folder(
             QgsSettings().value("threedi/working_dir"),
             schematisation_id,
             schematisation_name.replace("/", "-").replace("\\", "-"),
-            schematisation_version,
-            descriptor["meta"]["simulation"]["name"]
-            .replace("/", "-")
-            .replace("\\", "-"),
+            revision_number,
+            simulation_name.replace("/", "-").replace("\\", "-"),
         )
         os.makedirs(target_folder, exist_ok=True)
-
-        for link in descriptor["links"]:
-            if link["rel"] == "lizard-scenario-results":
-                grid = deepcopy(descriptor["meta"]["grid"])
-                results = get_tenant_file_descriptor_view(
-                    file["descriptor_id"], "lizard-scenario-results"
+        link = next(
+            (
+                link
+                for link in descriptor["links"]
+                if link["rel"] == "lizard-scenario-results"
+            ),
+            None,
+        )
+        if link:
+            grid = deepcopy(descriptor["meta"]["grid"])
+            results = get_tenant_file_descriptor_view(
+                file["descriptor_id"], "lizard-scenario-results"
+            )
+            crs = grid["crs"]
+        else:
+            results = {}
+            # grid and crs are not used when results is empty
+            grid = None
+            crs = "EPSG:28992"
+        result_browser = ResultBrowser(None, results, crs)
+        if result_browser.exec() == QDialog.DialogCode.Accepted:
+            result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
+            if len(result_ids) == 0 and not result_browser.get_download_raw_result():
+                self.download_results_cancelled.emit()
+                return
+            filtered_result_ids = []
+            for result_id in result_ids:
+                result = [r for r in results if r.get("id") == result_id][0]
+                file_name = map_result_to_file_name(result)
+                target_file = bypass_max_path_limit(
+                    os.path.join(target_folder, file_name)
                 )
-                result_browser = ResultBrowser(None, results, grid["crs"])
-                if result_browser.exec() == QDialog.DialogCode.Accepted:
-                    result_ids, nodata, pixelsize, crs = (
-                        result_browser.get_selected_results()
+                # Check whether the files already exist locally
+                if os.path.exists(target_file):
+                    file_overwrite = self.communication.custom_ask(
+                        self.parent(),
+                        "File exists",
+                        f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                        "Cancel",
+                        "Download again",
+                        "Continue",
                     )
-                    if len(result_ids) == 0:
+                    if file_overwrite == "Download again":
+                        filtered_result_ids.append(result_id)
+                    elif file_overwrite == "Cancel":
+                        self.download_results_cancelled.emit()
                         return
-                    filtered_result_ids = []
-                    for result_id in result_ids:
-                        result = [r for r in results if r["id"] == result_id][0]
-                        file_name = map_result_to_file_name(result)
-                        target_file = bypass_max_path_limit(
-                            os.path.join(target_folder, file_name)
-                        )
-                        # Check whether the files already exist locally
-                        if os.path.exists(target_file):
-                            file_overwrite = self.communication.custom_ask(
-                                self.parent(),
-                                "File exists",
-                                f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
-                                "Cancel",
-                                "Download again",
-                                "Continue",
-                            )
-                            if file_overwrite == "Download again":
-                                filtered_result_ids.append(result_id)
-                            elif file_overwrite == "Cancel":
-                                return
-                        else:
-                            filtered_result_ids.append(result_id)
-
-                    self.lizard_result_download_worker = LizardResultDownloadWorker(
-                        project=project,
-                        file=file,
-                        result_ids=filtered_result_ids,
-                        target_folder=target_folder,
-                        grid=grid,
-                        nodata=nodata,
-                        crs=crs,
-                        pixelsize=pixelsize,
-                    )
-
-                    self.lizard_result_download_worker.finished.connect(
-                        self.on_file_download_finished
-                    )
-                    self.lizard_result_download_worker.failed.connect(
-                        self.on_file_download_failed
-                    )
-                    self.lizard_result_download_worker.progress.connect(
-                        self.on_file_download_progress
-                    )
-                    self.lizard_result_download_worker.start()
                 else:
-                    self.download_results_cancelled.emit()
+                    filtered_result_ids.append(result_id)
+
+            self.lizard_result_download_worker = LizardResultDownloadWorker(
+                project=project,
+                file=file,
+                result_ids=filtered_result_ids,
+                target_folder=target_folder,
+                grid=grid,
+                nodata=nodata,
+                crs=crs,
+                pixelsize=pixelsize,
+                download_raw=result_browser.get_download_raw_result(),
+            )
+
+            self.lizard_result_download_worker.finished.connect(
+                self.on_file_download_finished
+            )
+            self.lizard_result_download_worker.failed.connect(
+                self.on_file_download_failed
+            )
+            self.lizard_result_download_worker.progress.connect(
+                self.on_file_download_progress
+            )
+            self.lizard_result_download_worker.start()
+            return
+        else:
+            self.download_results_cancelled.emit()
+            return
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):
@@ -843,8 +887,10 @@ class Loader(QObject):
             )
         self.schematisation_import_finished.emit()
 
-    @pyqtSlot(dict)
-    def upload_new_schematisation_to_rana(self, project):
+    @pyqtSlot(dict, dict)
+    def upload_new_schematisation_to_rana(self, project, selected_item):
+        assert selected_item["type"] == "directory"
+        rana_path = selected_item["id"]
         threedi_api = get_threedi_api()
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
@@ -856,8 +902,15 @@ class Loader(QObject):
         organisations = {
             org.unique_id: org
             for org in tc.fetch_organisations()
-            if org.unique_id in available_organisations
+            if org is not None and org.unique_id in available_organisations
         }
+
+        if len(organisations) == 0:
+            self.communication.show_error(
+                "No 3Di organisations available for this Rana organisation; please make sure your API endpoint is configured."
+            )
+            self.schematisation_upload_failed.emit()
+            return
 
         work_dir = QSettings().value("threedi/working_dir", "")
         new_schematisation_wizard = NewSchematisationWizard(
@@ -868,36 +921,26 @@ class Loader(QObject):
             self.schematisation_upload_cancelled.emit()
             return
 
+        local_schematisation = new_schematisation_wizard.new_local_schematisation
         new_schematisation = new_schematisation_wizard.new_schematisation
-        if new_schematisation is None:
+        if new_schematisation is None or local_schematisation is None:
             self.communication.bar_error("Schematisation creation failed")
             self.schematisation_upload_failed.emit()
             return
-        rana_path = new_schematisation_wizard.rana_path.replace("\\", "/").rstrip("/")
-        # check if directory path exists, otherwise make it
-        path_info = get_tenant_project_files(
-            communication=self.communication,
-            project_id=project["id"],
-            params={"path": rana_path},
-        )
-        if not path_info:
-            # don't continue if path creation fails for some reason
-            assert create_tenant_project_directory(
-                project_id=project["id"], path=rana_path
+
+        db_path = local_schematisation.schematisation_db_filepath
+        if not db_path or not local_schematisation.wip_revision:
+            self.communication.bar_warning(
+                "Revision creation failed; please create one manually later in the Rana browser"
             )
-            path_info = get_tenant_project_files(
-                communication=self.communication,
-                project_id=project["id"],
-                params={"path": rana_path},
-            )
-        if rana_path != "" and path_info[0]["type"] != "directory":
-            self.communication.bar_info(
-                f"Adding schematisation {new_schematisation.name} to main directory in Rana project {project['name']} since specified path is unavailable"
-            )
-            rana_path = ""
+        else:
+            # Search GeoPackage database tables for attributes with file paths.
+            paths = new_schematisation_wizard.get_paths_from_geopackage(db_path)
+
+            self.save_initial_revision(new_schematisation, local_schematisation, paths)
 
         if rana_path:
-            file_path = rana_path + "/" + new_schematisation.name
+            file_path = rana_path + new_schematisation.name
         else:
             file_path = new_schematisation.name
         response = add_threedi_schematisation(
@@ -908,7 +951,7 @@ class Loader(QObject):
         )
         if response:
             message = (
-                f"3Di schematisation {new_schematisation.name} added to Rana project"
+                f"Rana schematisation {new_schematisation.name} added to Rana project"
             )
             if rana_path:
                 message += f" in directory {rana_path}"
@@ -916,10 +959,10 @@ class Loader(QObject):
         else:
             self.schematisation_upload_failed.emit()
             self.communication.bar_error(
-                f"Could not add 3Di schematisation {new_schematisation.name} to Rana project {project['name']}!"
+                f"Could not add Rana schematisation {new_schematisation.name} to Rana project {project['name']}!"
             )
+            return
         self.schematisation_upload_finished.emit()
-        local_schematisation = new_schematisation_wizard.new_local_schematisation
         load_local_schematisation(
             communication=self.communication,
             local_schematisation=local_schematisation,
@@ -981,68 +1024,144 @@ class Loader(QObject):
                 self.schematisation_upload_cancelled.emit()
                 return
 
-            upload_dial = UploadWizard(
-                local_schematisation,
-                schematisation,
-                schematisation_filepath,
-                organisation,
-                self.communication,
-                tc,
-                self.parent(),
-            )
-            if upload_dial.exec() == QDialog.DialogCode.Accepted:
-                new_upload = upload_dial.new_upload
-                if not new_upload:
-                    return
-                if new_upload["make_3di_model"]:
-                    user_profile = threedi_api.auth_profile_list()
-                    current_user = {
-                        "username": user_profile.username,
-                        "first_name": user_profile.first_name,
-                        "last_name": user_profile.last_name,
-                    }
-                    deletion_dlg = ModelDeletionDialog(
-                        self.communication,
-                        threedi_api,
-                        local_schematisation,
-                        organisation,
-                        current_user,
-                        self.parent(),
-                    )
-
-                    if deletion_dlg.threedi_models_to_show:
-                        if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
-                            self.communication.bar_warn("Uploading canceled...")
-                            self.schematisation_upload_cancelled.emit()
-                            return
-
-                # Do the actual upload
-                upload_worker = SchematisationUploadProgressWorker(
+        upload_dial = UploadWizard(
+            local_schematisation,
+            schematisation,
+            schematisation_filepath,
+            organisation,
+            self.communication,
+            tc,
+            self.parent(),
+        )
+        if upload_dial.exec() == QDialog.DialogCode.Accepted:
+            new_upload = upload_dial.new_upload
+            if not new_upload:
+                self.schematisation_upload_cancelled.emit()
+                return
+            if new_upload["make_3di_model"]:
+                user_profile = threedi_api.auth_profile_list()
+                current_user = {
+                    "username": user_profile.username,
+                    "first_name": user_profile.first_name,
+                    "last_name": user_profile.last_name,
+                }
+                deletion_dlg = ModelDeletionDialog(
+                    self.communication,
                     threedi_api,
                     local_schematisation,
-                    new_upload,
+                    organisation,
+                    current_user,
+                    self.parent(),
                 )
 
-                upload_worker.signals.thread_finished.connect(
-                    self.schematisation_upload_finished
-                )
-                upload_worker.signals.upload_failed.connect(
-                    self.schematisation_upload_failed
-                )
-                upload_worker.signals.upload_progress.connect(
-                    self.on_schematisation_upload_progress
-                )
+                if deletion_dlg.threedi_models_to_show:
+                    if deletion_dlg.exec() == QDialog.DialogCode.Rejected:
+                        self.communication.bar_warn("Uploading canceled...")
+                        self.schematisation_upload_cancelled.emit()
+                        return
 
-                self.upload_thread_pool.start(upload_worker)
-                self.revision_saved.emit()
+            # Do the actual upload
+            upload_worker = SchematisationUploadProgressWorker(
+                threedi_api,
+                local_schematisation,
+                new_upload,
+            )
+
+            upload_worker.signals.thread_finished.connect(
+                self.on_schematisation_upload_finished
+            )
+            upload_worker.signals.upload_failed.connect(
+                self.schematisation_upload_failed
+            )
+            upload_worker.signals.upload_progress.connect(
+                self.on_schematisation_upload_progress
+            )
+
+            self.upload_thread_pool.start(upload_worker)
+            self.revision_saved.emit()
+        else:
+            # User presses cancel
+            self.schematisation_upload_cancelled.emit()
+
+    def on_schematisation_upload_finished(self):
+        self.communication.clear_message_bar()
+        self.schematisation_upload_finished.emit()
 
     def on_schematisation_upload_progress(
-        self, task_name, task_progress, total_progress
+        self, task_name, task_progress, total_progress, progress_per_task
     ):
         self.communication.progress_bar(
-            f"Uploading revision",
+            f"Uploading revision: ({task_name.lower()})",
             0,
             100,
-            total_progress,
+            int(total_progress + ((task_progress / 100.0) * progress_per_task)),
             clear_msg_bar=True,
         )
+
+    @pyqtSlot(dict, dict, dict, dict)
+    def save_initial_revision(self, schematisation, local_schematisation, raster_paths):
+        raster_dir = local_schematisation.wip_revision.raster_dir
+
+        selected_files = {
+            "geopackage": {
+                "filepath": local_schematisation.schematisation_db_filepath,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.DB,
+            }
+        }
+
+        missing_rasters = []
+        for _, raster_paths_info in raster_paths.items():
+            for raster_name, raster_rel_path in raster_paths_info.items():
+                if not raster_rel_path:
+                    continue
+                raster_full_path = os.path.join(raster_dir, raster_rel_path)
+                if not os.path.exists(raster_full_path):
+                    missing_rasters.append((raster_name, raster_rel_path))
+
+                selected_files[raster_name] = {
+                    "filepath": raster_full_path,
+                    "make_action": True,
+                    "remote_raster": None,
+                    "status": UploadFileStatus.NEW,
+                    "type": UploadFileType.RASTER,
+                }
+
+        if missing_rasters:
+            missing_rasters_string = "\n".join(
+                f"{rname}: {rpath}" for rname, rpath in missing_rasters
+            )
+            warn_msg = f"Warning: the following raster files where not found:\n{missing_rasters_string}"
+            self.communication.show_warn(warn_msg)
+            self.schematisation_upload_failed.emit()
+            return
+
+        upload_template = {
+            "schematisation": schematisation,
+            "latest_revision": SchematisationRevision(number=0),
+            "selected_files": selected_files,
+            "commit_message": "Initial commit",
+            "create_revision": True,
+            "make_3di_model": False,
+            "cb_inherit_templates": False,
+        }
+
+        threedi_api = get_threedi_api()
+
+        upload_worker = SchematisationUploadProgressWorker(
+            threedi_api,
+            local_schematisation,
+            upload_template,
+        )
+        upload_worker.signals.thread_finished.connect(
+            self.schematisation_upload_finished
+        )
+        upload_worker.signals.upload_failed.connect(self.schematisation_upload_failed)
+        upload_worker.signals.upload_progress.connect(
+            self.on_schematisation_upload_progress
+        )
+
+        self.upload_thread_pool.start(upload_worker)
+        self.revision_saved.emit()

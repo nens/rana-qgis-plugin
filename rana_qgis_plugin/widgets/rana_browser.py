@@ -1,5 +1,6 @@
 import math
 import os
+import time
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
@@ -10,6 +11,7 @@ from qgis.PyQt.QtCore import (
     QModelIndex,
     QObject,
     QSettings,
+    QSize,
     Qt,
     QTimer,
     QUrl,
@@ -51,7 +53,14 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
+from rana_qgis_plugin.icons import (
+    ICONS_DIR,
+    dir_icon,
+    ellipsis_icon,
+    file_icon,
+    refresh_icon,
+    separator_icon,
+)
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
@@ -63,6 +72,7 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
     format_activity_time,
+    get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
@@ -79,6 +89,9 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
+
+# allow for using specific data just for sorting
+SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class RevisionsView(QWidget):
@@ -247,14 +260,9 @@ class RevisionsView(QWidget):
                 self.revisions_model.setHorizontalHeaderLabels(
                     ["Timestamp", "Event", "Simulation", "Rana Model"]
                 )
-            locel_time = convert_to_local_time(commit_date)
+            commit_item = get_timestamp_as_numeric_item(commit_date)
             if latest:
-                locel_time += " (latest)"
-            commit_item = NumericItem(locel_time)
-            # Use numeric timestamp for sorting
-            commit_item.setData(
-                convert_to_timestamp(commit_date), role=Qt.ItemDataRole.UserRole
-            )
+                commit_item.setText(commit_item.text() + " (latest)")
             # We store the revision object for loading specific revisions in menu_requested.
             if threedi_revision:
                 commit_item.setData((threedi_revision, threedi_schematisation))
@@ -313,18 +321,23 @@ class FileView(QWidget):
         self.file_table_widget.verticalHeader().setVisible(False)
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
-        self.btn_create_model = QPushButton("Create 3Di Model")
+        self.btn_create_model = QPushButton("Create Rana Model")
+        self.btn_stack = QStackedWidget()
+        self.btn_stack.setFixedHeight(self.btn_start_simulation.sizeHint().height())
+        self.btn_stack.addWidget(self.btn_start_simulation)
+        self.btn_stack.addWidget(self.btn_create_model)
         btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
         btn_show_revisions.clicked.connect(
             lambda _: self.file_signals.view_all_revisions_requested.emit(
                 self.project, self.selected_file
             )
         )
-        button_layout.addWidget(self.btn_start_simulation)
-        button_layout.addWidget(self.btn_create_model)
+        self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        button_layout.addWidget(self.btn_stack)
         button_layout.addWidget(btn_show_revisions)
-        file_action_btn_layout = QHBoxLayout()
         self.file_action_btn_dict = self.get_file_action_buttons()
+        file_action_btn_layout = QHBoxLayout()
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
         layout = QVBoxLayout(self)
@@ -339,7 +352,6 @@ class FileView(QWidget):
             if action == FileAction.VIEW_REVISIONS:
                 continue
             btn = QPushButton(action.value)
-            # btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             action_signal = self.file_signals.get_signal(action)
             if action == FileAction.RENAME:
                 btn.clicked.connect(lambda _: self.edit_file_name(self.selected_file))
@@ -347,6 +359,9 @@ class FileView(QWidget):
                 btn.clicked.connect(
                     lambda _, signal=action_signal: signal.emit(self.selected_file)
                 )
+            # hide buttons by default to prevent big width in size hint
+            # update_file_action_buttons ensures buttons are correctly shown on display
+            btn.hide()
             btn_dict[action] = btn
         return btn_dict
 
@@ -394,10 +409,8 @@ class FileView(QWidget):
         self.selected_file = selected_file
 
     def show_selected_file_details(self, selected_file):
+        tooltips = {}
         self.update_selected_file(selected_file)
-        schematisation_button = None
-        self.btn_create_model.hide()
-        self.btn_start_simulation.hide()
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
             selected_file["user"]["given_name"]
@@ -411,6 +424,9 @@ class FileView(QWidget):
         description = descriptor["description"] if descriptor else None
 
         last_modified = convert_to_local_time(selected_file["last_modified"])
+        display_last_modified = format_activity_time(selected_file["last_modified"])
+        if last_modified != display_last_modified:
+            tooltips["Last modified"] = last_modified
         size = (
             display_bytes(selected_file["size"])
             if data_type != "threedi_schematisation"
@@ -422,7 +438,7 @@ class FileView(QWidget):
             ("File type", selected_file["media_type"]),
             ("Data type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
             ("Added by", username),
-            ("Last modified", last_modified),
+            ("Last modified", display_last_modified),
             ("Description", description),
         ]
         if data_type == "scenario" and meta:
@@ -464,12 +480,17 @@ class FileView(QWidget):
                     ),
                 ]
                 if revision and revision.get("has_threedimodel"):
-                    schematisation_button = self.btn_start_simulation
+                    self.btn_stack.setCurrentIndex(0)
                 else:
-                    schematisation_button = self.btn_create_model
+                    self.btn_stack.setCurrentIndex(1)
+                self.btn_stack.show()
                 file_details.extend(schematisation_details)
             else:
+                self.btn_stack.hide()
                 self.communication.show_error("Failed to download 3Di schematisation.")
+        else:
+            self.btn_stack.hide()
+            self.btn_stack.hide()
         self.update_file_action_buttons(selected_file)
         self.file_table_widget.clearContents()
         self.file_table_widget.setRowCount(len(file_details))
@@ -483,14 +504,11 @@ class FileView(QWidget):
             value_item.setFlags(
                 Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
             )
+            if label in tooltips:
+                value_item.setToolTip(tooltips[label])
             self.file_table_widget.setItem(i, 0, label_item)
             self.file_table_widget.setItem(i, 1, value_item)
         self.file_table_widget.resizeColumnsToContents()
-
-        # Show/hide the buttons based on the file data type
-        if schematisation_button:
-            schematisation_button.show()
-        self.file_showed.emit()
 
     def refresh(self):
         assert self.selected_file
@@ -530,6 +548,47 @@ class CreateFolderDialog(QDialog):
         return self.input.text().strip()
 
 
+class FileBrowserModel(QStandardItemModel):
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        self.layoutAboutToBeChanged.emit()
+
+        directories = []
+        files = []
+
+        # First separate directories and files
+        while self.rowCount() > 0:
+            row_items = self.takeRow(0)
+            if not row_items:
+                continue
+            item_type = row_items[0].data(Qt.ItemDataRole.UserRole).get("type")
+            if item_type == "directory":
+                sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
+                directories.append((row_items, sort_text))
+            else:
+                # try to use SORT_ROLE data before using UserRole data for sorting
+                sort_text = (
+                    row_items[column].data(SORT_ROLE)
+                    or row_items[column].data(Qt.ItemDataRole.UserRole)
+                    or ""
+                )
+                files.append((row_items, sort_text))
+
+        # Sort directories and files separately
+        # only changing on directory name should affect directory sorting
+        if column == 0:
+            directories.sort(
+                key=lambda x: x[1],
+                reverse=(order == Qt.SortOrder.DescendingOrder),
+            )
+        files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
+        # Always add directories first, then files
+        for row_items, _ in directories:
+            self.appendRow(row_items)
+        for row_items, _ in files:
+            self.appendRow(row_items)
+        self.layoutChanged.emit()
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -555,7 +614,7 @@ class FilesBrowser(QWidget):
         self.files_tv = QTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
-        self.files_model = QStandardItemModel()
+        self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
@@ -586,9 +645,9 @@ class FilesBrowser(QWidget):
         self.communication.clear_message_bar()
 
     def select_path(self, selected_path: str):
-        # Root level path is expected to be None
-        if selected_path in ["", "/", "./"]:
-            selected_path = None
+        # Root level path is expected to be ""
+        if selected_path in ["/", "./"]:
+            selected_path = ""
         self.selected_item = {"id": selected_path, "type": "directory"}
         self.fetch_and_populate(self.project, selected_path)
 
@@ -689,6 +748,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(dir_icon, dir_name)
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(dir_name.lower(), role=SORT_ROLE)
             self.files_model.appendRow([name_item])
 
         # Add files second
@@ -697,6 +757,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(file_name.lower(), role=SORT_ROLE)
             data_type = file["data_type"]
             data_type_item = QStandardItem(
                 SUPPORTED_DATA_TYPES.get(data_type, data_type)
@@ -711,12 +772,7 @@ class FilesBrowser(QWidget):
                 file["size"] if data_type != "threedi_schematisation" else -1,
                 role=Qt.ItemDataRole.UserRole,
             )
-            last_modified = convert_to_local_time(file["last_modified"])
-            last_modified_timestamp = convert_to_timestamp(file["last_modified"])
-            last_modified_item = NumericItem(last_modified)
-            last_modified_item.setData(
-                last_modified_timestamp, role=Qt.ItemDataRole.UserRole
-            )
+            last_modified_item = get_timestamp_as_numeric_item(file["last_modified"])
             # Add items to the model
             self.files_model.appendRow(
                 [name_item, data_type_item, size_item, last_modified_item]
@@ -742,11 +798,12 @@ class ProjectsBrowser(QWidget):
         self.projects = []
         self.filtered_projects = []
         self.current_page = 1
-        self.items_per_page = 25
+        self.items_per_page = 100
         self.project = None
         self.setup_ui()
         self.fetch_projects()
         self.populate_projects()
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.DescendingOrder)
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
@@ -779,7 +836,9 @@ class ProjectsBrowser(QWidget):
         top_layout.addWidget(self.projects_search)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
-        pagination_layout.addWidget(self.label_page_number)
+        pagination_layout.addWidget(
+            self.label_page_number, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         pagination_layout.addWidget(self.btn_next)
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
@@ -798,7 +857,7 @@ class ProjectsBrowser(QWidget):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
-        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.DescendingOrder)
         self.projects_refreshed.emit()
 
     def filter_projects(self, text: str, clear: bool = False):
@@ -813,38 +872,13 @@ class ProjectsBrowser(QWidget):
             self.filtered_projects = []
         self.populate_projects(clear=clear)
 
-    def sort_projects(self, column_index: int, order: Qt.SortOrder):
-        self.current_page = 1
-        key_funcs = [
-            lambda project: project["name"].lower(),
-            lambda project: -convert_to_timestamp(project["last_activity"]),
-        ]
-        key_func = key_funcs[column_index]
-        self.projects.sort(
-            key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
-        )
-        search_text = self.projects_search.text()
-        if search_text:
-            self.filter_projects(search_text)
-            return
-        self.populate_projects()
-
     @staticmethod
     def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
         project_name = project["name"]
         name_item = QStandardItem(project_name)
-        name_item.setToolTip(project_name)
+        name_item.setToolTip(project["code"])
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
-        last_activity = project["last_activity"]
-        last_activity_timestamp = convert_to_timestamp(last_activity)
-        display_last_activity = format_activity_time(last_activity)
-        last_activity_localtime = convert_to_local_time(last_activity)
-        last_activity_item = NumericItem(display_last_activity)
-        last_activity_item.setData(
-            last_activity_timestamp, role=Qt.ItemDataRole.UserRole
-        )
-        if last_activity_localtime != display_last_activity:
-            last_activity_item.setToolTip(last_activity_localtime)
+        last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
         return [name_item, last_activity_item]
 
     def populate_projects(self, clear: bool = False):
@@ -970,36 +1004,87 @@ class BreadCrumbsWidget(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.create_ellipsis()
         self.setLayout(self.layout)
+
+    def create_ellipsis(self):
+        # when deleting and creating this widget on-the-fly qgis crashes with a segfault
+        # to avoid this, it is created on ui setup, and just shown and hidden instead
+        self.ellipsis = QPushButton()
+        self.ellipsis.setIcon(ellipsis_icon)
+        self.ellipsis.setIconSize(QSize(20, 20))
+        self.ellipsis.setStyleSheet(
+            "QPushButton::menu-indicator{ image: url(none.jpg); }"
+        )
+        context_menu = QMenu()
+        self.ellipsis.setMenu(context_menu)
+        self.ellipsis.hide()
 
     def clear(self):
         for i in reversed(range(self.layout.count())):
             widget = self.layout.itemAt(i).widget()
             if widget:
                 self.layout.removeWidget(widget)
-                widget.deleteLater()
-
-    def update(self):
-        self.clear()
-        for i, item in enumerate(self._items):
-            label = self.get_button(i, item)
-            self.layout.addWidget(label)
-            if i != len(self._items) - 1:
-                separator = QLabel(">")
-                self.layout.addWidget(separator)
+                if widget == self.ellipsis:
+                    self.ellipsis.hide()
+                else:
+                    widget.deleteLater()
 
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
         label_text = elide_text(self.font(), item.name, 100)
         # Last item cannot be clicked
         if index == len(self._items) - 1:
-            label = QLabel(label_text)
+            label = QLabel(f"<b>{label_text}</b>")
+            label.setTextFormat(Qt.TextFormat.RichText)
         else:
             link = f"<a href='{index}'>{label_text}</a>"
             label = QLabel(link)
             label.setTextFormat(Qt.TextFormat.RichText)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
+        label.setToolTip(item.name)
         return label
+
+    def _add_separator(self):
+        separator_pixmap = separator_icon.pixmap(QSize(16, 16))
+        separator = QLabel()
+        separator.setPixmap(separator_pixmap)
+        self.layout.addWidget(separator)
+
+    def add_path_widgets(
+        self, items, leading_separator=False, trailing_separator=False
+    ):
+        if leading_separator:
+            self._add_separator()
+        for i, item in items:
+            label = self.get_button(i, item)
+            self.layout.addWidget(label)
+            if (i != items[-1][0]) or trailing_separator:
+                self._add_separator()
+
+    def add_path_dropdown_widget(self, items):
+        self.layout.addWidget(self.ellipsis)
+        self.ellipsis.show()
+        context_menu = self.ellipsis.menu()
+        context_menu.clear()
+        for index, item in items:
+            item_text = elide_text(self.font(), item.name, 100)
+            context_menu.addAction(item_text, lambda idx=index: self.on_click(idx))
+
+    def update(self):
+        self.clear()
+        numbered_items = [[i, item] for i, item in enumerate(self._items)]
+        if len(self._items) >= 6:
+            # with dropdown
+            before_dropdown_items = numbered_items[:2]
+            dropdown_items = numbered_items[2:-2]
+            after_dropdown_items = numbered_items[-2:]
+            self.add_path_widgets(before_dropdown_items, trailing_separator=True)
+            self.add_path_dropdown_widget(dropdown_items)
+            self.add_path_widgets(after_dropdown_items, leading_separator=True)
+        else:
+            # without dropdown
+            self.add_path_widgets(numbered_items)
 
     def on_click(self, index: int):
         # Truncate items to clicked position
@@ -1040,11 +1125,12 @@ class RanaBrowser(QWidget):
     delete_file_selected = pyqtSignal(dict, dict)
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
-    upload_new_schematisation_selected = pyqtSignal(dict)
+    upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
+        self.last_refresh_time = time.time()
         self.communication = communication
         self.setup_ui()
         self.refresh_timer = QTimer()
@@ -1091,6 +1177,7 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         logo_label = banner
         logo_label.installEventFilter(self)
+        self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1185,7 +1272,9 @@ class RanaBrowser(QWidget):
         )
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
-            lambda _,: self.upload_new_schematisation_selected.emit(self.project)
+            lambda _,: self.upload_new_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
         )
         # Connect import schematisation button
         self.files_browser.btn_import_schematisation.clicked.connect(
@@ -1277,6 +1366,10 @@ class RanaBrowser(QWidget):
         if event.type() == QEvent.MouseButtonPress:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
+        elif event.type() == QEvent.WindowActivate:
+            # prevent multiple events on window activation to cause multiple refresh actions
+            if time.time() - self.last_refresh_time > 0.1:
+                self.auto_refresh()
         return False
 
     @pyqtSlot()
@@ -1289,13 +1382,17 @@ class RanaBrowser(QWidget):
 
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
-        if self.rana_files.currentIndex() in [1, 2, 3]:
+        if (
+            self.rana_files.currentIndex() in [1, 2, 3]
+            and self.rana_browser.isEnabled()
+        ):
             self.refresh()
 
     @pyqtSlot()
     def refresh(self):
         if hasattr(self.rana_files.currentWidget(), "refresh"):
             self.rana_files.currentWidget().refresh()
+            self.last_refresh_time = time.time()
         else:
             raise Exception("Attempted refresh on widget without refresh support")
 
