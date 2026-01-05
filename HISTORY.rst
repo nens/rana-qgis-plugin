@@ -1,8 +1,8 @@
 History
 =======
 
-1.1.21 (unreleased)
--------------------
+1.2.0 (2026-01-05)
+------------------
 
 - Add revision view and new simulation button
 - Replace file interaction buttons with context menu
