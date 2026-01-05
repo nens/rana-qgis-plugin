@@ -11,6 +11,9 @@ develop
 - Sort folder and file names case insensitive
 - Use pixel size from results as default pixel size in results downloader
 - Check specific results by default for downloading
+- Reintroduce headers in settings page of new schematisation wizard
+- Run auto refresh on regaining window focus
+- Make breadcrumbs widget clearer with dropdown for long paths
 
 
 1.1.21 (unreleased)

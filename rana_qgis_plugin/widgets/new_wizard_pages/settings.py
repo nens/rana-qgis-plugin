@@ -24,6 +24,12 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.simulation.utils_ui import scan_widgets_parameters
 
+HEADER_LAYOUT = """
+QLabel {
+    font-weight: bold;
+    font-size: 18px;
+}"""
+
 
 class SchematisationSettingsPage(QWizardPage):
     """New schematisation settings definition page."""
@@ -127,11 +133,16 @@ class SchematisationSettingsWidget(QWidget):
         palette.setColor(QPalette.Button, QColor(255, 255, 255))
         self.setPalette(palette)
 
-        gridLayout = QGridLayout(self)
+        main_layout = QGridLayout(self)
+
+        header = QLabel("Schematisation settings")
+        header.setStyleSheet(HEADER_LAYOUT)
+        main_layout.addWidget(header, 0, 0)
 
         # Schematisation settings section
         self.schematisation_settings = QWidget()
         gridLayout_8 = QGridLayout(self.schematisation_settings)
+        gridLayout_8.setContentsMargins(20, 0, 0, 0)
 
         crs_label = QLabel("Coordinate reference system:")
         crs_label.setToolTip("Your schematization's CRS. Must be a projected CRS.")
@@ -315,13 +326,14 @@ class SchematisationSettingsWidget(QWidget):
         gridF.addWidget(self.friction_coefficient, 3, 2)
 
         gridLayout_8.addWidget(self.friction_coefficients_group, 4, 0)
-        gridLayout.addWidget(self.schematisation_settings, 2, 0)
+        main_layout.addWidget(self.schematisation_settings, 2, 0)
 
         # Simulation / time step settings
         self.simulation_settings = QWidget()
         self.simulation_settings_layout = QGridLayout(self.simulation_settings)
-
-        self.simulation_settings_layout.addWidget(QLabel("Time step settings"), 0, 0)
+        header = QLabel("Time step settings")
+        header.setStyleSheet(HEADER_LAYOUT)
+        self.simulation_settings_layout.addWidget(header, 0, 0)
 
         widget_inner = QWidget()
         inner_layout = QGridLayout(widget_inner)
@@ -351,10 +363,10 @@ class SchematisationSettingsWidget(QWidget):
         widget_inner.setLayout(inner_layout)
         self.simulation_settings_layout.addWidget(widget_inner, 1, 0)
 
-        gridLayout.addWidget(self.simulation_settings, 4, 0)
+        main_layout.addWidget(self.simulation_settings, 4, 0)
 
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        gridLayout.addItem(spacer, 5, 0)
+        main_layout.addItem(spacer, 5, 0)
 
     def on_1d_flow_toggled(self, on):
         """Logic for checking/unchecking 1D Flow settings group."""
