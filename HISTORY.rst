@@ -1,7 +1,7 @@
 History
 =======
 
-1.2.1 (unreleased)
+1.2.1 (2026-01-05)
 ------------------
 
 - Bump nens-dependency-loader to 1.2.10.
