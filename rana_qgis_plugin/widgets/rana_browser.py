@@ -1111,6 +1111,28 @@ class BreadCrumbsWidget(QWidget):
         self.update()
 
 
+class TasksBrowser(QWidget):
+    def __init__(self, communication, parent=None):
+        # TODO
+        # - filter
+        # - pagination
+        super().__init__(parent)
+        self.communication = communication
+        self.tasks = []
+        self.setup_ui()
+        # self.fetch_tasks()
+        # self.populate_tasks()
+
+    def setup_ui(self):
+        self.tasks_model = QStandardItemModel()
+        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
+        self.tasks_tv = QTreeView()
+        self.tasks_tv.setModel(self.tasks_model)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.tasks_tv)
+        self.setLayout(layout)
+
+
 class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
@@ -1155,11 +1177,13 @@ class RanaBrowser(QWidget):
 
     def setup_ui(self):
         self.rana_browser = QTabWidget()
-        self.rana_processes = QWidget()
         self.rana_files = QStackedWidget()
+        self.rana_tasks = QStackedWidget()
         self.rana_browser.addTab(self.rana_files, "Files")
         self.rana_browser.setCurrentIndex(0)
-        self.rana_browser.tabBar().setTabVisible(0, False)
+        # self.rana_browser.tabBar().setTabVisible(0, False)
+        # TODO: move refresh
+        self.rana_browser.addTab(self.rana_tasks, "Tasks")
         # Set up breadcrumbs, browser and file view widgets
         self.breadcrumbs = BreadCrumbsWidget(
             communication=self.communication, parent=self
@@ -1225,6 +1249,9 @@ class RanaBrowser(QWidget):
         self.rana_files.addWidget(self.files_browser)
         self.rana_files.addWidget(self.file_view)
         self.rana_files.addWidget(self.revisions_view)
+
+        self.tasks_browser = TasksBrowser(communication=self.communication, parent=self)
+        self.rana_tasks.addWidget(self.tasks_browser)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
