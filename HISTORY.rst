@@ -4,7 +4,7 @@ History
 1.2.2 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Added missing import for Breaches widget.
 
 
 1.2.1 (2026-01-05)
