@@ -248,6 +248,7 @@ class RevisionsView(QWidget):
         latest = False
         threedi_revision = sim_btn_data = model_btn_data = threedi_schematisation = None
         for i, (commit_date, event, *schematisation_related) in enumerate(rows):
+            row = []
             if schematisation_related:
                 (
                     sim_btn_data,
@@ -258,21 +259,20 @@ class RevisionsView(QWidget):
                 ) = schematisation_related
                 self.revisions_model.setColumnCount(4)
                 self.revisions_model.setHorizontalHeaderLabels(
-                    ["Timestamp", "Event", "Simulation", "Rana Model"]
+                    ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
                 )
+                nr_item = NumericItem(str(threedi_revision.number))
+                nr_item.setData(threedi_revision.number, role=Qt.ItemDataRole.UserRole)
+                row.append(nr_item)
             commit_item = get_timestamp_as_numeric_item(commit_date)
             if latest:
                 commit_item.setText(commit_item.text() + " (latest)")
             # We store the revision object for loading specific revisions in menu_requested.
             if threedi_revision:
                 commit_item.setData((threedi_revision, threedi_schematisation))
-            self.revisions_model.appendRow(
-                [
-                    commit_item,
-                    QStandardItem(event),
-                ]
-            )
-            for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 2):
+            row += [commit_item, QStandardItem(event)]
+            self.revisions_model.appendRow(row)
+            for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 3):
                 if btn_data:
                     btn = QPushButton(btn_data.label)
                     btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -291,7 +291,10 @@ class RevisionsView(QWidget):
                         self.revisions_model.index(i, col_idx), container
                     )
 
-        resize_columns = [0] if not threedi_revision else [0, 2, 3]
+        if threedi_revision:
+            resize_columns = [0, 1, 3, 4]
+        else:
+            resize_columns = [0]
         for col_idx in resize_columns:
             self.revisions_table.horizontalHeader().setSectionResizeMode(
                 col_idx, QHeaderView.ResizeToContents
