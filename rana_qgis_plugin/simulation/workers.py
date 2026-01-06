@@ -1060,23 +1060,26 @@ class SimulationRunner(QRunnable):
                     else duration,
                 )
 
-    def start_simulation(self):
-        """Start (or add to queue) given simulation. Or only create a template"""
+    def create_template_sim(self):
         sim_id = self.current_simulation.simulation.id
-        # SIMULATION IS NOW STARTED IN RANA
-        # if self.current_simulation.start_simulation:
-        #     try:
-        #         self.tc.create_simulation_action(sim_id, name="start")
-        #     except ApiException as e:
-        #         if e.status == 429:
-        #             self.tc.create_simulation_action(sim_id, name="queue")
-        #         else:
-        #             raise e
-
+        # Add an additional attribute to now which sim to start later
+        self.current_simulation.simulation.id_to_start = sim_id
         if self.current_simulation.template_name is not None:
             template = self.tc.create_template_from_simulation(
                 self.current_simulation.template_name, str(sim_id)
             )
+            # Build new sim from template (as original simulation became readonly)
+            temp_sim = self.tc.create_simulation_from_template(
+                template=template.id,
+                name=self.current_simulation.name,
+                organisation=self.current_simulation.organisation_uuid,
+                start_datetime=self.current_simulation.start_datetime,
+                duration=self.current_simulation.duration,
+                started_from=self.current_simulation.started_from,
+            )
+
+            # Replace the id to start by Rana
+            self.current_simulation.simulation.id_to_start = temp_sim.id
             return template.id
 
         return None
@@ -1117,7 +1120,7 @@ class SimulationRunner(QRunnable):
                 self.report_progress()
                 self.include_lizard_post_processing()
                 self.report_progress()
-                template_id = self.start_simulation()
+                template_id = self.create_template_sim()
                 self.report_progress(simulation_initialized=True)
             msg = f"Simulations successfully initialized!"
             if template_id:
