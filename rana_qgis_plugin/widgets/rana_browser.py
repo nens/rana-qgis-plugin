@@ -1184,10 +1184,15 @@ class TasksBrowser(QWidget):
             )
         return simulate_tasks
 
+    def refresh(self):
+        # TODO: block UI?
+        self.populate_tasks()
+
     def populate_tasks(self):
         tc = ThreediCalls(get_threedi_api())
         simulate_tasks = self.fetch_simulate_tasks(tc)
         model_tasks = self.fetch_model_tasks(tc)
+        self.tasks_tv.setUpdatesEnabled(False)
         self.tasks_model.clear()
         self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
         simulations_root = QStandardItem("Simulations")
@@ -1223,6 +1228,7 @@ class TasksBrowser(QWidget):
                 col_idx, QHeaderView.ResizeToContents
             )
         self.tasks_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.tasks_tv.setUpdatesEnabled(True)
 
 
 class RanaBrowser(QWidget):
@@ -1253,7 +1259,7 @@ class RanaBrowser(QWidget):
         self.setup_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)
-        self.refresh_timer.start(60000)
+        self.refresh_timer.start(10000)
 
     @property
     def project(self):
@@ -1505,16 +1511,22 @@ class RanaBrowser(QWidget):
 
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
+        if not self.rana_browser.isEnabled():
+            return
         if (
-            self.rana_files.currentIndex() in [1, 2, 3]
-            and self.rana_browser.isEnabled()
-        ):
+            self.rana_browser.currentIndex() == 0
+            and self.rana_files.currentIndex() in [1, 2, 3]
+        ) or self.rana_browser.currentIndex() == 1:
             self.refresh()
 
     @pyqtSlot()
     def refresh(self):
-        if hasattr(self.rana_files.currentWidget(), "refresh"):
-            self.rana_files.currentWidget().refresh()
+        if self.rana_browser.currentIndex() == 0:
+            root_stack = self.rana_files
+        else:
+            root_stack = self.rana_tasks
+        if hasattr(root_stack.currentWidget(), "refresh"):
+            root_stack.currentWidget().refresh()
             self.last_refresh_time = time.time()
         else:
             raise Exception("Attempted refresh on widget without refresh support")
