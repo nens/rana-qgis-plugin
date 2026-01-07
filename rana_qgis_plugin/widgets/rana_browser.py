@@ -299,7 +299,6 @@ class RevisionsView(QWidget):
             self.revisions_table.horizontalHeader().setSectionResizeMode(
                 col_idx, QHeaderView.ResizeToContents
             )
-        self.revisions_table.resizeColumnsToContents()
         self.ready.emit()
 
 
