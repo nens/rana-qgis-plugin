@@ -300,6 +300,10 @@ class ThreediCalls:
             downloads.append((result_file, download))
         return downloads
 
+    def fetch_3di_models_generating(self) -> List[ThreediModel]:
+        logger.debug("Fetching threedimodels that are being generated")
+        return self.threedi_api.threedimodels_list(**{"is_generating": True}).results
+
     def fetch_3di_model(self, threedimodel_id: int) -> ThreediModel:
         """Fetch 3Di model with a given id."""
         logger.debug("Fetching model %s", threedimodel_id)

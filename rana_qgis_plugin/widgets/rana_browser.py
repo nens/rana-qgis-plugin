@@ -84,6 +84,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
+    get_user_by_email,
 )
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -1113,68 +1114,115 @@ class BreadCrumbsWidget(QWidget):
         self.update()
 
 
+TaskItem = namedtuple(
+    "TaskItem", ["name", "user_email", "created", "status", "progress"]
+)
+
+
 class TasksBrowser(QWidget):
     def __init__(self, communication, parent=None):
         # TODO
         # - filter
         # - pagination
+        # - only populate on opening
+        # - ensure only selected organisation is used
+        # - avatars (waiting for prs)
         super().__init__(parent)
         self.communication = communication
         self.tasks = []
         self.setup_ui()
-        # self.fetch_tasks()
         self.populate_tasks()
 
     def setup_ui(self):
         self.tasks_model = QStandardItemModel()
-        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
         self.tasks_tv = QTreeView()
         self.tasks_tv.setModel(self.tasks_model)
+        self.tasks_tv.setEditTriggers(QTreeView.NoEditTriggers)
         layout = QVBoxLayout(self)
         layout.addWidget(self.tasks_tv)
         self.setLayout(layout)
 
-    def populate_tasks(self):
-        api = get_threedi_api()
-        tc = ThreediCalls(api)
-        simulation_progress = tc.fetch_simulations_progresses()
-        for status, progress in simulation_progress:
-            name_item = QStandardItem(status.simulation_name)
-            # TODO: link to rana user and show icon - wait for open PRs
-            who_item = QStandardItem(
-                f"{status.simulation_user_first_name[0]}{status.simulation_user_last_name[0]}"
+    def fetch_model_tasks(self, tc):
+        model_list = tc.fetch_3di_models_generating()
+        model_tasks = []
+        for model in model_list:
+            created_str = (model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),)
+            progress = 50
+            status = "generating"
+            model_tasks.append(
+                TaskItem(
+                    name=model.name,
+                    user_email=model.user_email,
+                    created=created_str,
+                    status=status,
+                    progress=progress,
+                )
             )
-            created_date = status.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            date_item = get_timestamp_as_numeric_item(created_date)
+        return model_tasks
+
+    def fetch_simulate_tasks(self, tc):
+        simulation_progress = tc.fetch_simulations_progresses()
+        simulate_tasks = []
+        for status, progress in simulation_progress:
+            import random
+
+            progress = random.randint(0, 100)
+
+            # TODO: link to rana user and show icon - wait for open PRs
+            user_email = status.simulation_user_email
+            created_str = status.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             status_item = QStandardItem()
             status_item.setData(status.name, Qt.ItemDataRole.UserRole)
-            # Create the progress bar
-            progress_bar = QProgressBar()
-            progress_bar.setValue(progress)
-            progress_bar.setFormat(status.name + " (%p%)")
-            progress_bar.setTextVisible(True)
-            self.tasks_model.appendRow([name_item, who_item, date_item, status_item])
-            self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
+            simulate_tasks.append(
+                TaskItem(
+                    name=status.simulation_name,
+                    user_email=user_email,
+                    created=created_str,
+                    status=status.name,
+                    progress=progress,
+                )
+            )
+        return simulate_tasks
+
+    def populate_tasks(self):
+        tc = ThreediCalls(get_threedi_api())
+        simulate_tasks = self.fetch_simulate_tasks(tc)
+        model_tasks = self.fetch_model_tasks(tc)
+        self.tasks_model.clear()
+        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
+        simulations_root = QStandardItem("Simulations")
+        models_root = QStandardItem("Rana Models")
+        for root, tasks in [
+            (simulations_root, simulate_tasks),
+            (models_root, model_tasks),
+        ]:
+            if len(tasks) == 0:
+                continue
+            self.tasks_model.appendRow(root)
+            self.tasks_tv.setExpanded(self.tasks_model.indexFromItem(root), True)
+            for task in tasks:
+                name_item = QStandardItem(task.name)
+                # TODO: link to rana user and show icon - wait for open PRs
+                user = get_user_by_email(task.user_email)
+                user_str = (
+                    f"{user['given_name'][0]}{user['family_name'][0]}" if user else "?"
+                )
+                who_item = QStandardItem(user_str)
+                date_item = get_timestamp_as_numeric_item(task.created)
+                status_item = QStandardItem()
+                status_item.setData(task.status, Qt.ItemDataRole.UserRole)
+                # Create the progress bar
+                progress_bar = QProgressBar()
+                progress_bar.setValue(task.progress)
+                progress_bar.setFormat(task.status + " (%p%)")
+                progress_bar.setTextVisible(True)
+                root.appendRow([name_item, who_item, date_item, status_item])
+                self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
         for col_idx in [1, 2, 3]:
             self.tasks_tv.header().setSectionResizeMode(
                 col_idx, QHeaderView.ResizeToContents
             )
         self.tasks_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
-
-    def fetch_tasks(self):
-        # TODO: work outside of plugin to test filtering?
-        api = get_threedi_api()
-        tc = ThreediCalls(api)
-        # simulations
-        simulation_progress = tc.fetch_simulations_progresses()
-        # threedimodels: fetch models with: disabled = False; is_valid = False
-        models, _ = tc.fetch_3di_models_with_count(is_valid=False)
-        # process models
-
-        # simulations: ?
-        # rsults: /v3/simulations/post_processing/lizard/queue/
-
-    # def fetch_simulations(self):
 
 
 class RanaBrowser(QWidget):
