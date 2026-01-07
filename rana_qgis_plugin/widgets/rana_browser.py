@@ -243,8 +243,14 @@ class RevisionsView(QWidget):
 
         # Populate table
         self.revisions_model.clear()
-        self.revisions_model.setColumnCount(2)
-        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
+        if selected_file.get("data_type") == "threedi_schematisation":
+            self.revisions_model.setColumnCount(5)
+            self.revisions_model.setHorizontalHeaderLabels(
+                ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
+            )
+        else:
+            self.revisions_model.setColumnCount(2)
+            self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
         latest = False
         threedi_revision = sim_btn_data = model_btn_data = threedi_schematisation = None
         for i, (commit_date, event, *schematisation_related) in enumerate(rows):
@@ -257,10 +263,6 @@ class RevisionsView(QWidget):
                     threedi_schematisation,
                     latest,
                 ) = schematisation_related
-                self.revisions_model.setColumnCount(4)
-                self.revisions_model.setHorizontalHeaderLabels(
-                    ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
-                )
                 nr_item = NumericItem(str(threedi_revision.number))
                 nr_item.setData(threedi_revision.number, role=Qt.ItemDataRole.UserRole)
                 row.append(nr_item)
