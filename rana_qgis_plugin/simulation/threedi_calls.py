@@ -191,12 +191,12 @@ class ThreediCalls:
         name_contains: str = None,
         schematisation_name: str = None,
         schematisation_owner: str = None,
-        show_valid_and_invalid: bool = False,
+        is_valid: bool | str = True,
     ) -> Tuple[List[ThreediModel], int]:
         """Fetch 3Di models available for current user."""
         params = {
             "revision__schematisation__isnull": False,
-            "is_valid": True,
+            "is_valid": is_valid,
             "disabled": False,
         }
         if limit is not None:
@@ -209,8 +209,8 @@ class ThreediCalls:
             params["revision__schematisation__name"] = schematisation_name
         if schematisation_owner is not None:
             params["revision__schematisation__owner__unique_id"] = schematisation_owner
-        if show_valid_and_invalid:
-            params["is_valid"] = ""
+        # if show_valid_and_invalid:
+        #     params["is_valid"] = ""
         logger.debug("Fetching 3di models for current user...")
         response = self.threedi_api.threedimodels_list(**params)
         models_list = response.results

@@ -73,6 +73,7 @@ from rana_qgis_plugin.utils import (
     elide_text,
     format_activity_time,
     get_timestamp_as_numeric_item,
+    get_threedi_api
 )
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
@@ -1131,6 +1132,23 @@ class TasksBrowser(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.tasks_tv)
         self.setLayout(layout)
+
+    def fetch_tasks(self):
+        # TODO: work outside of plugin to test filtering?
+        api = get_threedi_api()
+        tc = ThreediCalls(api)
+        # simulations
+        simulation_progress = tc.fetch_simulations_progresses()
+        # threedimodels: fetch models with: disabled = False; is_valid = False
+        models, _ = tc.fetch_3di_models_with_count(is_valid=False)
+        # process models
+
+        # simulations: ?
+        # rsults: /v3/simulations/post_processing/lizard/queue/
+
+    def fetch_simulations(self):
+
+
 
 
 class RanaBrowser(QWidget):
