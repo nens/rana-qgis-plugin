@@ -36,6 +36,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
@@ -72,8 +73,8 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
     format_activity_time,
+    get_threedi_api,
     get_timestamp_as_numeric_item,
-    get_threedi_api
 )
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
@@ -1122,7 +1123,7 @@ class TasksBrowser(QWidget):
         self.tasks = []
         self.setup_ui()
         # self.fetch_tasks()
-        # self.populate_tasks()
+        self.populate_tasks()
 
     def setup_ui(self):
         self.tasks_model = QStandardItemModel()
@@ -1132,6 +1133,33 @@ class TasksBrowser(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.tasks_tv)
         self.setLayout(layout)
+
+    def populate_tasks(self):
+        api = get_threedi_api()
+        tc = ThreediCalls(api)
+        simulation_progress = tc.fetch_simulations_progresses()
+        for status, progress in simulation_progress:
+            name_item = QStandardItem(status.simulation_name)
+            # TODO: link to rana user and show icon - wait for open PRs
+            who_item = QStandardItem(
+                f"{status.simulation_user_first_name[0]}{status.simulation_user_last_name[0]}"
+            )
+            created_date = status.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            date_item = get_timestamp_as_numeric_item(created_date)
+            status_item = QStandardItem()
+            status_item.setData(status.name, Qt.ItemDataRole.UserRole)
+            # Create the progress bar
+            progress_bar = QProgressBar()
+            progress_bar.setValue(progress)
+            progress_bar.setFormat(status.name + " (%p%)")
+            progress_bar.setTextVisible(True)
+            self.tasks_model.appendRow([name_item, who_item, date_item, status_item])
+            self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
+        for col_idx in [1, 2, 3]:
+            self.tasks_tv.header().setSectionResizeMode(
+                col_idx, QHeaderView.ResizeToContents
+            )
+        self.tasks_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
 
     def fetch_tasks(self):
         # TODO: work outside of plugin to test filtering?
@@ -1146,9 +1174,7 @@ class TasksBrowser(QWidget):
         # simulations: ?
         # rsults: /v3/simulations/post_processing/lizard/queue/
 
-    def fetch_simulations(self):
-
-
+    # def fetch_simulations(self):
 
 
 class RanaBrowser(QWidget):

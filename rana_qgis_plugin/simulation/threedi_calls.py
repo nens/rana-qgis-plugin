@@ -255,38 +255,26 @@ class ThreediCalls:
         )
         return simulations_progress
 
-    def fetch_simulations_progresses(
-        self, simulations_list: List[Simulation]
-    ) -> Dict[int, Tuple[Simulation, CurrentStatus, Progress]]:
+    def fetch_simulations_progresses(self) -> List[Tuple[SimulationStatus, float]]:
         """Get all simulations with statuses and progresses."""
-        progresses = {}
-        if not simulations_list:
-            logger.warning("Simulations list not specified, we grab all simulations! ")
-            simulations_list = self.fetch_simulations()
-        logger.info(
-            "Starting to grab sim statuses for %d simulations", len(simulations_list)
+        allowed_states = (
+            "created, starting, initialized, queued, ended, postprocessing, crashed"
         )
-        for sim in simulations_list:
-            spk = sim.id
-            spk_str = str(spk)
-            logger.debug("Fetching status for simulation %s", spk_str)
-            current_status = self.threedi_api.simulations_status_list(
-                spk_str, limit=self.FETCH_LIMIT
-            )
-            status_name = current_status.name
-            status_time = current_status.time
-            if status_time is None:
-                status_time = 0
-            if status_name == "initialized" and status_time:
-                sim_progress = self.threedi_api.simulations_progress_list(
-                    spk_str, limit=self.FETCH_LIMIT
+        status_list = self.threedi_api.statuses_list(name__in=allowed_states)
+        # TODO: organisation - simulation__organisation__unique_id
+        results = []
+        for status in status_list.results:
+            if status.name == "initialized":
+                progress_response = self.threedi_api.simulations_progress_list(
+                    simulation_pk=status.simulation_id
                 )
-            elif status_name == "postprocessing" or status_name == "finished":
-                sim_progress = Progress(percentage=100, time=status_time)
+                progress = progress_response.percentage
+            elif status.name == "postprocessing":
+                progress = 100
             else:
-                sim_progress = Progress(percentage=0, time=status_time)
-            progresses[spk] = (sim, current_status, sim_progress)
-        return progresses
+                progress = 0
+            results.append((status, progress))
+        return results
 
     def fetch_simulation_results(self, simulation_pk: int) -> List[ResultFile]:
         """Fetch simulation results list."""
