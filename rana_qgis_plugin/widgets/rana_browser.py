@@ -824,7 +824,7 @@ class ProjectsBrowser(QWidget):
         self.setup_ui()
         self.populate_contributors()
         self.populate_projects()
-        self.projects_tv.header().setSortIndicator(2, Qt.SortOrder.DescendingOrder)
+        self.projects_tv.header().setSortIndicator(2, Qt.SortOrder.AscendingOrder)
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
@@ -862,6 +862,7 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.header().setSortIndicatorShown(True)
         self.projects_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.projects_tv.customContextMenuRequested.connect(self.show_context_menu)
+        self.projects_tv.header().sortIndicatorChanged.connect(self.sort_projects)
         self.projects_model.setHorizontalHeaderLabels(
             ["Project Name", "Contributors", "Last activity"]
         )
@@ -928,7 +929,6 @@ class ProjectsBrowser(QWidget):
         )
 
     def filter_projects(self):
-        self.current_page = 1
         if not self.filter_active:
             self.filtered_projects = []
         else:
@@ -976,13 +976,15 @@ class ProjectsBrowser(QWidget):
         self.current_page = 1
         key_funcs = [
             lambda project: project["name"].lower(),
+            None,
             lambda project: -convert_to_timestamp(project["last_activity"]),
         ]
         key_func = key_funcs[column_index]
-        self.projects.sort(
-            key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
-        )
-        if self.active_filter:
+        if key_func:
+            self.projects.sort(
+                key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
+            )
+        if self.filter_active:
             self.filter_projects()
             return
         self.populate_projects()
