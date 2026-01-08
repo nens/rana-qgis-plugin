@@ -841,6 +841,18 @@ class ProjectsBrowser(QWidget):
         # Create filter by contributor box
         self.contributor_filter = QComboBox()
         self.contributor_filter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.contributor_filter.setEditable(True)
+        self.contributor_filter.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        # add auto complete
+        self.contributor_filter.completer().setCaseSensitivity(
+            Qt.CaseSensitivity.CaseInsensitive
+        )
+        # setup placeholder and reset filter on no user selected
+        if self.contributor_filter.lineEdit():
+            self.contributor_filter.lineEdit().setPlaceholderText("All contributors")
+            self.contributor_filter.lineEdit().textChanged.connect(
+                self._on_contributor_filter_text_changed
+            )
         self.contributor_filter.currentIndexChanged.connect(self.filter_projects)
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
@@ -879,6 +891,11 @@ class ProjectsBrowser(QWidget):
         layout.addLayout(pagination_layout)
         self.setLayout(layout)
 
+    def _on_contributor_filter_text_changed(self, text):
+        # reset contribute filter with empty text
+        if not text:
+            self.contributor_filter.setCurrentIndex(-1)
+
     def fetch_projects(self):
         self.projects = get_tenant_projects(self.communication)
 
@@ -906,7 +923,9 @@ class ProjectsBrowser(QWidget):
 
     @property
     def filter_active(self):
-        return self.projects_search.text() or self.contributor_filter.currentIndex() > 0
+        return (
+            self.projects_search.text() or self.contributor_filter.currentIndex() >= 0
+        )
 
     def filter_projects(self):
         self.current_page = 1
@@ -1093,9 +1112,6 @@ class ProjectsBrowser(QWidget):
         # Update combo box items
         self.contributor_filter.blockSignals(True)
         self.contributor_filter.clear()
-        self.contributor_filter.addItem(
-            QIcon(get_icon_from_theme("mActionFilter2.svg")), "All contributors"
-        )
         for user in sorted_users:
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
@@ -1104,6 +1120,7 @@ class ProjectsBrowser(QWidget):
             self.contributor_filter.addItem(
                 QIcon(user_image), display_name, userData=user["id"]
             )
+        self.contributor_filter.setCurrentIndex(-1)
         self.contributor_filter.blockSignals(False)
 
     def update_pagination(self, projects: list):
