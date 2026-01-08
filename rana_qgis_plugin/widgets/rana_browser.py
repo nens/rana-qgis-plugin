@@ -460,7 +460,6 @@ class FileView(QWidget):
         )
         self.filename_edit = EditLabel(filename)
         self.filename_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.filename_edit.show()
         self.filename_edit.adjustSize()
 
         rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
@@ -588,7 +587,7 @@ class FileView(QWidget):
 
     @staticmethod
     def _get_bbox(data_type, meta, revision=None) -> Optional[list[float]]:
-        """ Return bounding box as [x1, y1, x2, y2]"""
+        """Return bounding box as [x1, y1, x2, y2]"""
         if data_type == "scenario" and meta:
             # I don't think this is correct!
             return meta.get("envelope")
