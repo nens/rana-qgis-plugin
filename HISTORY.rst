@@ -11,6 +11,7 @@ develop
 - Add context menu to projects browser
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
+- Replace search box in import schematisation search with DebouncedSearchBox which applies the search with a delay
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
 - Make breadcrumbs widget clearer with dropdown for long paths
