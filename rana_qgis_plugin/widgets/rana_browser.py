@@ -424,28 +424,6 @@ class FileView(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-    @staticmethod
-    def clean_collapsible(collapsible):
-        # Remove all contents from a collapsible so new contents can be added
-        layout = collapsible.layout()
-        if layout:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget:
-                    widget.setParent(None)
-                    widget.deleteLater()
-                # Handle nested layouts
-                child_layout = item.layout()
-                if child_layout:
-                    # Recursively clean the child layout
-                    while child_layout.count():
-                        child_item = child_layout.takeAt(0)
-                        child_widget = child_item.widget()
-                        if child_widget:
-                            child_widget.setParent(None)
-                            child_widget.deleteLater()
-
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in sorted(FileAction):
@@ -619,19 +597,23 @@ class FileView(QWidget):
             ]
         )
         # Refresh contents of general box
-        self.clean_collapsible(self.general_box)
-        layout = self.general_box.layout()
-        if layout is None:
-            layout = QVBoxLayout()
-            self.general_box.setLayout(layout)
+        container = QWidget(self.general_box)
+        layout = QVBoxLayout(container)
         for row in rows:
             row_layout = QHBoxLayout()
             for item in row[:-1]:
+                item.setParent(container)
                 row_layout.addWidget(item)
             row_layout.addStretch()
+            row[-1].setParent(container)
             row_layout.addWidget(row[-1])
             row_layout.setSizeConstraint(QLayout.SetMinimumSize)
             layout.addLayout(row_layout)
+        # assign existing layout to temporary widget
+        # this will be deleted once the scope of this method is over
+        if self.general_box.layout():
+            QWidget().setLayout(self.general_box.layout())
+        self.general_box.setLayout(layout)
 
     def update_more_box(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
@@ -684,16 +666,18 @@ class FileView(QWidget):
                 ),
             ]
 
-        # Refresh contents of more box
-        self.clean_collapsible(self.more_box)
-        layout = self.more_box.layout()
-        if layout is None:
-            layout = QGridLayout()
-            self.more_box.setLayout(layout)
+        # Refresh contents of general box
+        container = QWidget(self.more_box)
+        layout = QGridLayout(container)
         for row, (label, value) in enumerate(details):
-            layout.addWidget(QLabel(label), row, 0)
-            layout.addWidget(QLabel(str(value)), row, 1)
+            layout.addWidget(QLabel(label, parent=container), row, 0)
+            layout.addWidget(QLabel(str(value), parent=container), row, 1)
         layout.setColumnStretch(1, 1)
+        # assign existing layout to temporary widget
+        # this will be deleted once the scope of this method is over
+        if self.more_box.layout():
+            QWidget().setLayout(self.more_box.layout())
+        self.more_box.setLayout(layout)
 
     def update_files_box(self, selected_file):
         # only show files for schematisation with revision
@@ -737,22 +721,6 @@ class FileView(QWidget):
             size_item.setData(file_size, role=Qt.ItemDataRole.UserRole)
             self.files_model.appendRow([name_item, data_type_item, size_item])
         self.files_box.show()
-
-    @staticmethod
-    def update_collapsible(collapsible, rows, stretch_right=True):
-        FileView.clean_collapsible(collapsible)
-        layout = collapsible.layout()
-        if layout is None:
-            layout = QVBoxLayout()
-            collapsible.setLayout(layout)
-        for row in rows:
-            row_layout = QHBoxLayout()
-            for item in row[:-1]:
-                row_layout.addWidget(item)
-            if stretch_right:
-                row_layout.addStretch()
-            row_layout.addWidget(row[-1])
-            layout.addLayout(row_layout)
 
     def show_selected_file_details(self, selected_file):
         self.selected_file = selected_file
