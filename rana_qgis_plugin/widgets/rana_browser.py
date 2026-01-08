@@ -446,74 +446,6 @@ class FileView(QWidget):
                             child_widget.setParent(None)
                             child_widget.deleteLater()
 
-    def update_general_box(self, selected_file: dict):
-        rows = []
-        # line 1: icon - filename - size
-        file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
-        file_icon_label = get_icon_label(file_icon)
-        filename = Path(selected_file["id"]).name
-        # TODO: retrieve schematisation size
-        size_str = (
-            display_bytes(selected_file["size"])
-            if selected_file["data_type"] != "threedi_schematisation"
-            else "N/A"
-        )
-        self.filename_edit = EditLabel(filename)
-        self.filename_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.filename_edit.adjustSize()
-
-        rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
-        # line 2: user icon - user name - commit msg - time
-        # This is broken (or the stuff above)
-        user_image = get_user_image(self.communication, selected_file)
-        if user_image:
-            user_icon_label = get_icon_label(create_user_image(user_image))
-        else:
-            user_icon_label = get_icon_label(get_icon_from_theme("user.svg"))
-        username = (
-            selected_file["user"]["given_name"]
-            + " "
-            + selected_file["user"]["family_name"]
-        )
-        if selected_file["data_type"] == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
-            msg = schematisation["latest_revision"]["commit_message"]
-            last_modified = convert_to_local_time(
-                schematisation["latest_revision"]["commit_date"]
-            )
-        else:
-            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
-            msg = descriptor.get("description")
-            last_modified = convert_to_local_time(selected_file["last_modified"])
-        msg_label = QLabel(msg)
-        msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
-
-        msg_label.setWordWrap(True)
-        rows.append(
-            [
-                user_icon_label,
-                QLabel(f"<b>{username}</b>"),
-                msg_label,
-                QLabel(last_modified),
-            ]
-        )
-        # Refresh contents of general box
-        self.clean_collapsible(self.general_box)
-        layout = self.general_box.layout()
-        if layout is None:
-            layout = QVBoxLayout()
-            self.general_box.setLayout(layout)
-        for row in rows:
-            row_layout = QHBoxLayout()
-            for item in row[:-1]:
-                row_layout.addWidget(item)
-            row_layout.addStretch()
-            row_layout.addWidget(row[-1])
-            row_layout.setSizeConstraint(QLayout.SetMinimumSize)
-            layout.addLayout(row_layout)
-
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in sorted(FileAction):
@@ -632,6 +564,74 @@ class FileView(QWidget):
         if data_type != "threedi_schematisation":
             return display_bytes(selected_file["size"])
         return "N/A"
+
+    def update_general_box(self, selected_file: dict):
+        rows = []
+        # line 1: icon - filename - size
+        file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
+        file_icon_label = get_icon_label(file_icon)
+        filename = Path(selected_file["id"]).name
+        # TODO: retrieve schematisation size
+        size_str = (
+            display_bytes(selected_file["size"])
+            if selected_file["data_type"] != "threedi_schematisation"
+            else "N/A"
+        )
+        self.filename_edit = EditLabel(filename)
+        self.filename_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.filename_edit.adjustSize()
+
+        rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
+        # line 2: user icon - user name - commit msg - time
+        # This is broken (or the stuff above)
+        user_image = get_user_image(self.communication, selected_file)
+        if user_image:
+            user_icon_label = get_icon_label(create_user_image(user_image))
+        else:
+            user_icon_label = get_icon_label(get_icon_from_theme("user.svg"))
+        username = (
+            selected_file["user"]["given_name"]
+            + " "
+            + selected_file["user"]["family_name"]
+        )
+        if selected_file["data_type"] == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_file["descriptor_id"]
+            )
+            msg = schematisation["latest_revision"]["commit_message"]
+            last_modified = convert_to_local_time(
+                schematisation["latest_revision"]["commit_date"]
+            )
+        else:
+            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+            msg = descriptor.get("description")
+            last_modified = convert_to_local_time(selected_file["last_modified"])
+        msg_label = QLabel(msg)
+        msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
+
+        msg_label.setWordWrap(True)
+        rows.append(
+            [
+                user_icon_label,
+                QLabel(f"<b>{username}</b>"),
+                msg_label,
+                QLabel(last_modified),
+            ]
+        )
+        # Refresh contents of general box
+        self.clean_collapsible(self.general_box)
+        layout = self.general_box.layout()
+        if layout is None:
+            layout = QVBoxLayout()
+            self.general_box.setLayout(layout)
+        for row in rows:
+            row_layout = QHBoxLayout()
+            for item in row[:-1]:
+                row_layout.addWidget(item)
+            row_layout.addStretch()
+            row_layout.addWidget(row[-1])
+            row_layout.setSizeConstraint(QLayout.SetMinimumSize)
+            layout.addLayout(row_layout)
 
     def update_more_box(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
