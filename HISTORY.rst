@@ -1,9 +1,11 @@
 History
 =======
 
-develop
--------------------
 
+1.2.2 (unreleased)
+------------------
+
+- Added missing import for Breaches widget.
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
@@ -17,8 +19,14 @@ develop
 - Use `show_authentication` option in activating Rana menu to show authentification related settings
 
 
-1.1.21 (unreleased)
--------------------
+1.2.1 (2026-01-05)
+------------------
+
+- Bump nens-dependency-loader to 1.2.10.
+
+
+1.2.0 (2026-01-05)
+------------------
 
 - Add revision view and new simulation button
 - Replace file interaction buttons with context menu
