@@ -14,6 +14,8 @@ develop
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
 - Make breadcrumbs widget clearer with dropdown for long paths
+- Show revision number in RevisionView
+- Use `show_authentication` option in activating Rana menu to show authentification related settings
 
 
 1.1.21 (unreleased)
