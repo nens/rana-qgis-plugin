@@ -11,9 +11,12 @@ develop
 - Sort folder and file names case insensitive
 - Use pixel size from results as default pixel size in results downloader
 - Check specific results by default for downloading
+- Replace search box in import schematisation search with DebouncedSearchBox which applies the search with a delay
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
 - Make breadcrumbs widget clearer with dropdown for long paths
+- Show revision number in RevisionView
+- Use `show_authentication` option in activating Rana menu to show authentification related settings
 
 
 1.1.21 (unreleased)
