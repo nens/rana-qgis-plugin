@@ -588,6 +588,7 @@ class FileView(QWidget):
 
     @staticmethod
     def _get_bbox(data_type, meta, revision=None) -> Optional[list[float]]:
+        """ Return bounding box as [x1, y1, x2, y2]"""
         if data_type == "scenario" and meta:
             # I don't think this is correct!
             return meta.get("envelope")
@@ -595,6 +596,7 @@ class FileView(QWidget):
             dem = FileView._get_dem_raster_file(revision)
             if dem:
                 coord = dem["extent"]["coordinates"]
+                # re-organize bbox coordinates to match return format
                 return [*coord[0], *coord[1]]
         elif meta.get("extent"):
             return meta["extent"].get("bbox")
@@ -1437,7 +1439,6 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         self.logo_label = banner
         self.logo_label.installEventFilter(self)
-        # self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
