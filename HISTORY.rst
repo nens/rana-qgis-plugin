@@ -5,6 +5,8 @@ History
 ------------------
 
 - Added missing import for Breaches widget.
+- Scenario: zip file containing log files now properly extracted (#3302)
+- Templates are now created and cloned to be compatible with external start by Rana (#3247)
 
 
 1.2.1 (2026-01-05)
