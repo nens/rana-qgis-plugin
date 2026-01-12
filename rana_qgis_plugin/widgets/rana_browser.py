@@ -83,6 +83,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_file_history,
     get_tenant_project_files,
     get_tenant_projects,
+    get_threedi_organisations,
     get_threedi_schematisation,
     get_user_by_email,
 )
@@ -1125,7 +1126,6 @@ class TasksBrowser(QWidget):
         # - filter
         # - pagination
         # - only populate on opening
-        # - ensure only selected organisation is used
         # - avatars (waiting for prs)
         super().__init__(parent)
         self.communication = communication
@@ -1135,24 +1135,34 @@ class TasksBrowser(QWidget):
 
     def setup_ui(self):
         self.tasks_model = QStandardItemModel()
+        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
         self.tasks_tv = QTreeView()
         self.tasks_tv.setModel(self.tasks_model)
         self.tasks_tv.setEditTriggers(QTreeView.NoEditTriggers)
         layout = QVBoxLayout(self)
         layout.addWidget(self.tasks_tv)
         self.setLayout(layout)
+        # create root items, they will be added on populating
+        self.task_groups = {
+            "Simulations": self.fetch_simulate_tasks,
+            "Rana Models": self.fetch_model_tasks,
+        }
+        self.roots = {key: QStandardItem(key) for key in self.task_groups.keys()}
+        for root in self.roots.values():
+            self.tasks_model.appendRow([root])
 
-    def fetch_model_tasks(self, tc):
-        model_list = tc.fetch_3di_models_generating()
+    def fetch_model_tasks(self, tc, organisations: list[str]):
+        # TODO: proper task processing
+        model_list = tc.fetch_3di_models_generating(organisations)
         model_tasks = []
         for model in model_list:
-            created_str = (model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),)
+            created_str = model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             progress = 50
             status = "generating"
             model_tasks.append(
                 TaskItem(
                     name=model.name,
-                    user_email=model.user_email,
+                    user_email=model.user,
                     created=created_str,
                     status=status,
                     progress=progress,
@@ -1160,14 +1170,13 @@ class TasksBrowser(QWidget):
             )
         return model_tasks
 
-    def fetch_simulate_tasks(self, tc):
-        simulation_progress = tc.fetch_simulations_progresses()
+    def fetch_simulate_tasks(self, tc, organisations: list[str]):
+        simulation_progress = tc.fetch_simulations_progresses(organisations)
         simulate_tasks = []
         for status, progress in simulation_progress:
             import random
 
             progress = random.randint(0, 100)
-
             # TODO: link to rana user and show icon - wait for open PRs
             user_email = status.simulation_user_email
             created_str = status.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -1190,20 +1199,19 @@ class TasksBrowser(QWidget):
 
     def populate_tasks(self):
         tc = ThreediCalls(get_threedi_api())
-        simulate_tasks = self.fetch_simulate_tasks(tc)
-        model_tasks = self.fetch_model_tasks(tc)
+        organisations = get_threedi_organisations()
         self.tasks_tv.setUpdatesEnabled(False)
-        self.tasks_model.clear()
-        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
-        simulations_root = QStandardItem("Simulations")
-        models_root = QStandardItem("Rana Models")
-        for root, tasks in [
-            (simulations_root, simulate_tasks),
-            (models_root, model_tasks),
-        ]:
-            if len(tasks) == 0:
-                continue
-            self.tasks_model.appendRow(root)
+        # Clean root items
+        for root in self.roots.values():
+            root.removeRows(0, root.rowCount())
+        for name, func in self.task_groups.items():
+            tasks = func(tc, organisations)
+            root = self.roots[name]
+            # hide or show based on number of tasks
+            root_index = self.tasks_model.indexFromItem(root)
+            self.tasks_tv.setRowHidden(
+                root_index.row(), root_index.parent(), len(tasks) == 0
+            )
             self.tasks_tv.setExpanded(self.tasks_model.indexFromItem(root), True)
             for task in tasks:
                 name_item = QStandardItem(task.name)
@@ -1256,6 +1264,13 @@ class RanaBrowser(QWidget):
         super().__init__()
         self.last_refresh_time = time.time()
         self.communication = communication
+        from qgis.core import Qgis, QgsMessageLog
+
+        from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
+
+        QgsMessageLog.logMessage(f"{api_url()=}", "DEBUG", Qgis.Info)
+        QgsMessageLog.logMessage(f"{get_tenant_id()=}", "DEBUG", Qgis.Info)
+
         self.setup_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)

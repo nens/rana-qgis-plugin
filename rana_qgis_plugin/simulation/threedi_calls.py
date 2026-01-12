@@ -255,25 +255,31 @@ class ThreediCalls:
         )
         return simulations_progress
 
-    def fetch_simulations_progresses(self) -> List[Tuple[SimulationStatus, float]]:
+    def fetch_simulations_progresses(
+        self, organisations
+    ) -> List[Tuple[SimulationStatus, float]]:
         """Get all simulations with statuses and progresses."""
         allowed_states = (
             "created, starting, initialized, queued, ended, postprocessing, crashed"
         )
-        status_list = self.threedi_api.statuses_list(name__in=allowed_states)
-        # TODO: organisation - simulation__organisation__unique_id
         results = []
-        for status in status_list.results:
-            if status.name == "initialized":
-                progress_response = self.threedi_api.simulations_progress_list(
-                    simulation_pk=status.simulation_id
-                )
-                progress = progress_response.percentage
-            elif status.name == "postprocessing":
-                progress = 100
-            else:
-                progress = 0
-            results.append((status, progress))
+        for organisation in organisations:
+            status_list = self.threedi_api.statuses_list(
+                created__date__gt=self.expiration_date,
+                name__in=allowed_states,
+                simulation__organisation__unique_id=organisation,
+            )
+            for status in status_list.results:
+                if status.name == "initialized":
+                    progress_response = self.threedi_api.simulations_progress_list(
+                        simulation_pk=status.simulation_id
+                    )
+                    progress = progress_response.percentage
+                elif status.name == "postprocessing":
+                    progress = 100
+                else:
+                    progress = 0
+                results.append((status, progress))
         return results
 
     def fetch_simulation_results(self, simulation_pk: int) -> List[ResultFile]:
@@ -300,9 +306,18 @@ class ThreediCalls:
             downloads.append((result_file, download))
         return downloads
 
-    def fetch_3di_models_generating(self) -> List[ThreediModel]:
+    def fetch_3di_models_generating(
+        self, organisations: list[str]
+    ) -> List[ThreediModel]:
         logger.debug("Fetching threedimodels that are being generated")
-        return self.threedi_api.threedimodels_list(**{"is_generating": True}).results
+        models = []
+        for org_uuid in organisations:
+            models += self.threedi_api.threedimodels_list(
+                created__date__gt=self.expiration_date,
+                is_generating=True,
+                revision__schematisation__owner__unique_id=org_uuid,
+            ).results
+        return models
 
     def fetch_3di_model(self, threedimodel_id: int) -> ThreediModel:
         """Fetch 3Di model with a given id."""

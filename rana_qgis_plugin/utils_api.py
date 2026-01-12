@@ -534,3 +534,14 @@ def get_user_by_email(email: str) -> dict:
         if len(response) > 0:
             return response[0]
     return
+
+
+def get_threedi_organisations() -> list[str]:
+    url = f"{api_url()}/tenants/{get_tenant_id()}/"
+    network_manager = NetworkManager(url, get_authcfg_id())
+    status, error = network_manager.fetch()
+    if status:
+        return [
+            uuid.replace("-", "")
+            for uuid in network_manager.content["threedi_organisations"]
+        ]
