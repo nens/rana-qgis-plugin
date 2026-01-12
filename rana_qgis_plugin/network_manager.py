@@ -124,8 +124,8 @@ class NetworkManager(object):
                 image.loadFromData(raw_content)
                 self._content = image
             else:
-                self._content = raw_content.data().decode("utf-8")
-
+                self._content = json.loads(str(raw_content, "utf-8"))
+        self._reply.deleteLater()
         return status, description
 
     def fetch_finished(self):
