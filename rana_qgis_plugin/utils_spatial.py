@@ -1,12 +1,15 @@
-from pyproj import CRS
+from functools import partial
+
+from pyproj import CRS, Transformer
 from shapely.geometry import box
+from shapely.ops import transform
 
 
-def get_bbox_area_in_m2(
-    bbox: list[float], crs_str: str, pixel_size: float = 1
-) -> float:
+def get_bbox_area_in_m2(bbox: list[float], crs_str: str) -> float:
     if CRS.from_string(crs_str).axis_info[0].unit_name == "metre":
-        return box(*bbox).area * pixel_size**2
+        return box(*bbox).area
     else:
-        polygon = to_crs(box(*bbox), crs_from=crs_str, crs_to="EPSG:3857")
-        return polygon.area * pixel_size**2
+        transformer = Transformer.from_crs(crs_str, "EPSG:3857", always_xy=True)
+        project = partial(transformer.transform)
+        transformed_geom = transform(project, box(*bbox))
+        return transformed_geom.area

@@ -370,6 +370,8 @@ class FileView(QWidget):
         )
         self.general_box.setAlignment(Qt.AlignTop)
         self.general_box.setContentsMargins(0, 0, 0, 0)
+        # Set filename_edit, this will be replaced on updating the contents of self.general_box
+        self.filename_edit = EditLabel("")
         self.more_box = QgsCollapsibleGroupBox("More information")
         self.files_box = QgsCollapsibleGroupBox("Related files")
         self.files_table = QTableView()
@@ -444,25 +446,21 @@ class FileView(QWidget):
         return btn_dict
 
     def edit_file_name(self, selected_item: dict):
-        # since self.filename_edit is made on the fly, make sure that it exists
         # this should really not happen so just continue silently if that happens
-        if not hasattr(self, "filename_edit") or not isinstance(
-            self.filename_edit, EditLabel
-        ):
-            return
-
         current_name = self.filename_edit.text()
 
         def finish_editing():
+            self.filename_edit.editingFinished.disconnect(finish_editing)
+            self.filename_edit.make_readonly()
             if current_name != self.filename_edit.text():
+                QgsMessageLog.logMessage("Send signal", "DEBUG", Qgis.Info)
                 self.file_signals.get_signal(FileAction.RENAME).emit(
                     selected_item, self.filename_edit.text()
                 )
-            self.filename_edit.make_readonly()
 
         self.filename_edit.make_editable()
 
-        # Connect the editing finished signal
+        # Set up single-shot connection
         self.filename_edit.editingFinished.connect(finish_editing)
 
         # Set focus to the edit field
@@ -528,14 +526,7 @@ class FileView(QWidget):
         bbox = FileView._get_bbox(data_type, meta, revision)
         if not crs_str or not bbox:
             return ""
-        pixel_size = 1
-        if data_type == "scenario":
-            pixel_size = abs(meta["grid"]["x"]["cell_size"])
-        elif data_type == "threedi_schematisation":
-            dem = FileView._get_dem_raster_file(revision)
-            if "geotransform" in dem:
-                pixel_size = abs(dem["geotransform"][1])
-        return f"{get_bbox_area_in_m2(bbox, crs_str, pixel_size)} m²"
+        return f"{get_bbox_area_in_m2(bbox, crs_str)} m²"
 
     @staticmethod
     def _get_size_str(data_type, selected_file) -> str:
@@ -607,7 +598,6 @@ class FileView(QWidget):
             row_layout.addStretch()
             row[-1].setParent(container)
             row_layout.addWidget(row[-1])
-            row_layout.setSizeConstraint(QLayout.SetMinimumSize)
             layout.addLayout(row_layout)
         # assign existing layout to temporary widget
         # this will be deleted once the scope of this method is over
