@@ -258,7 +258,7 @@ class Loader(QObject):
         confirm = QMessageBox.question(
             self.parent(),
             "Confirm Delete",
-            f"Are you sure you want to delete {file['id']}",
+            f"Are you sure you want to remove {file['id']}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )

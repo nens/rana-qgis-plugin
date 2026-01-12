@@ -1,5 +1,6 @@
 import math
 import os
+import time
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
@@ -10,6 +11,7 @@ from qgis.PyQt.QtCore import (
     QModelIndex,
     QObject,
     QSettings,
+    QSize,
     Qt,
     QTimer,
     QUrl,
@@ -51,7 +53,14 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import ICONS_DIR, dir_icon, file_icon, refresh_icon
+from rana_qgis_plugin.icons import (
+    ICONS_DIR,
+    dir_icon,
+    ellipsis_icon,
+    file_icon,
+    refresh_icon,
+    separator_icon,
+)
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
     get_api_client_with_personal_api_token,
@@ -63,6 +72,7 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
     format_activity_time,
+    get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import (
     get_frontend_settings,
@@ -79,6 +89,9 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
+
+# allow for using specific data just for sorting
+SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class RevisionsView(QWidget):
@@ -230,11 +243,18 @@ class RevisionsView(QWidget):
 
         # Populate table
         self.revisions_model.clear()
-        self.revisions_model.setColumnCount(2)
-        self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
+        if selected_file.get("data_type") == "threedi_schematisation":
+            self.revisions_model.setColumnCount(5)
+            self.revisions_model.setHorizontalHeaderLabels(
+                ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
+            )
+        else:
+            self.revisions_model.setColumnCount(2)
+            self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
         latest = False
         threedi_revision = sim_btn_data = model_btn_data = threedi_schematisation = None
         for i, (commit_date, event, *schematisation_related) in enumerate(rows):
+            row = []
             if schematisation_related:
                 (
                     sim_btn_data,
@@ -243,28 +263,18 @@ class RevisionsView(QWidget):
                     threedi_schematisation,
                     latest,
                 ) = schematisation_related
-                self.revisions_model.setColumnCount(4)
-                self.revisions_model.setHorizontalHeaderLabels(
-                    ["Timestamp", "Event", "Simulation", "Rana Model"]
-                )
-            locel_time = convert_to_local_time(commit_date)
+                nr_item = NumericItem(str(threedi_revision.number))
+                nr_item.setData(threedi_revision.number, role=Qt.ItemDataRole.UserRole)
+                row.append(nr_item)
+            commit_item = get_timestamp_as_numeric_item(commit_date)
             if latest:
-                locel_time += " (latest)"
-            commit_item = NumericItem(locel_time)
-            # Use numeric timestamp for sorting
-            commit_item.setData(
-                convert_to_timestamp(commit_date), role=Qt.ItemDataRole.UserRole
-            )
+                commit_item.setText(commit_item.text() + " (latest)")
             # We store the revision object for loading specific revisions in menu_requested.
             if threedi_revision:
                 commit_item.setData((threedi_revision, threedi_schematisation))
-            self.revisions_model.appendRow(
-                [
-                    commit_item,
-                    QStandardItem(event),
-                ]
-            )
-            for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 2):
+            row += [commit_item, QStandardItem(event)]
+            self.revisions_model.appendRow(row)
+            for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 3):
                 if btn_data:
                     btn = QPushButton(btn_data.label)
                     btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -283,12 +293,14 @@ class RevisionsView(QWidget):
                         self.revisions_model.index(i, col_idx), container
                     )
 
-        resize_columns = [0] if not threedi_revision else [0, 2, 3]
+        if threedi_revision:
+            resize_columns = [0, 1, 3, 4]
+        else:
+            resize_columns = [0]
         for col_idx in resize_columns:
             self.revisions_table.horizontalHeader().setSectionResizeMode(
                 col_idx, QHeaderView.ResizeToContents
             )
-        self.revisions_table.resizeColumnsToContents()
         self.ready.emit()
 
 
@@ -401,6 +413,7 @@ class FileView(QWidget):
         self.selected_file = selected_file
 
     def show_selected_file_details(self, selected_file):
+        tooltips = {}
         self.update_selected_file(selected_file)
         filename = os.path.basename(selected_file["id"].rstrip("/"))
         username = (
@@ -415,6 +428,9 @@ class FileView(QWidget):
         description = descriptor["description"] if descriptor else None
 
         last_modified = convert_to_local_time(selected_file["last_modified"])
+        display_last_modified = format_activity_time(selected_file["last_modified"])
+        if last_modified != display_last_modified:
+            tooltips["Last modified"] = last_modified
         size = (
             display_bytes(selected_file["size"])
             if data_type != "threedi_schematisation"
@@ -426,7 +442,7 @@ class FileView(QWidget):
             ("File type", selected_file["media_type"]),
             ("Data type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
             ("Added by", username),
-            ("Last modified", last_modified),
+            ("Last modified", display_last_modified),
             ("Description", description),
         ]
         if data_type == "scenario" and meta:
@@ -492,6 +508,8 @@ class FileView(QWidget):
             value_item.setFlags(
                 Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
             )
+            if label in tooltips:
+                value_item.setToolTip(tooltips[label])
             self.file_table_widget.setItem(i, 0, label_item)
             self.file_table_widget.setItem(i, 1, value_item)
         self.file_table_widget.resizeColumnsToContents()
@@ -534,6 +552,47 @@ class CreateFolderDialog(QDialog):
         return self.input.text().strip()
 
 
+class FileBrowserModel(QStandardItemModel):
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        self.layoutAboutToBeChanged.emit()
+
+        directories = []
+        files = []
+
+        # First separate directories and files
+        while self.rowCount() > 0:
+            row_items = self.takeRow(0)
+            if not row_items:
+                continue
+            item_type = row_items[0].data(Qt.ItemDataRole.UserRole).get("type")
+            if item_type == "directory":
+                sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
+                directories.append((row_items, sort_text))
+            else:
+                # try to use SORT_ROLE data before using UserRole data for sorting
+                sort_text = (
+                    row_items[column].data(SORT_ROLE)
+                    or row_items[column].data(Qt.ItemDataRole.UserRole)
+                    or ""
+                )
+                files.append((row_items, sort_text))
+
+        # Sort directories and files separately
+        # only changing on directory name should affect directory sorting
+        if column == 0:
+            directories.sort(
+                key=lambda x: x[1],
+                reverse=(order == Qt.SortOrder.DescendingOrder),
+            )
+        files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
+        # Always add directories first, then files
+        for row_items, _ in directories:
+            self.appendRow(row_items)
+        for row_items, _ in files:
+            self.appendRow(row_items)
+        self.layoutChanged.emit()
+
+
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
@@ -559,7 +618,7 @@ class FilesBrowser(QWidget):
         self.files_tv = QTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
-        self.files_model = QStandardItemModel()
+        self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
@@ -693,6 +752,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(dir_icon, dir_name)
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(dir_name.lower(), role=SORT_ROLE)
             self.files_model.appendRow([name_item])
 
         # Add files second
@@ -701,6 +761,7 @@ class FilesBrowser(QWidget):
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.ItemDataRole.UserRole)
+            name_item.setData(file_name.lower(), role=SORT_ROLE)
             data_type = file["data_type"]
             data_type_item = QStandardItem(
                 SUPPORTED_DATA_TYPES.get(data_type, data_type)
@@ -715,12 +776,7 @@ class FilesBrowser(QWidget):
                 file["size"] if data_type != "threedi_schematisation" else -1,
                 role=Qt.ItemDataRole.UserRole,
             )
-            last_modified = convert_to_local_time(file["last_modified"])
-            last_modified_timestamp = convert_to_timestamp(file["last_modified"])
-            last_modified_item = NumericItem(last_modified)
-            last_modified_item.setData(
-                last_modified_timestamp, role=Qt.ItemDataRole.UserRole
-            )
+            last_modified_item = get_timestamp_as_numeric_item(file["last_modified"])
             # Add items to the model
             self.files_model.appendRow(
                 [name_item, data_type_item, size_item, last_modified_item]
@@ -746,11 +802,12 @@ class ProjectsBrowser(QWidget):
         self.projects = []
         self.filtered_projects = []
         self.current_page = 1
-        self.items_per_page = 25
+        self.items_per_page = 100
         self.project = None
         self.setup_ui()
         self.fetch_projects()
         self.populate_projects()
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.DescendingOrder)
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
@@ -783,7 +840,9 @@ class ProjectsBrowser(QWidget):
         top_layout.addWidget(self.projects_search)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
-        pagination_layout.addWidget(self.label_page_number)
+        pagination_layout.addWidget(
+            self.label_page_number, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         pagination_layout.addWidget(self.btn_next)
         layout = QVBoxLayout(self)
         layout.addLayout(top_layout)
@@ -802,7 +861,7 @@ class ProjectsBrowser(QWidget):
             self.filter_projects(search_text, clear=True)
             return
         self.populate_projects(clear=True)
-        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
+        self.projects_tv.header().setSortIndicator(1, Qt.SortOrder.DescendingOrder)
         self.projects_refreshed.emit()
 
     def filter_projects(self, text: str, clear: bool = False):
@@ -817,38 +876,13 @@ class ProjectsBrowser(QWidget):
             self.filtered_projects = []
         self.populate_projects(clear=clear)
 
-    def sort_projects(self, column_index: int, order: Qt.SortOrder):
-        self.current_page = 1
-        key_funcs = [
-            lambda project: project["name"].lower(),
-            lambda project: -convert_to_timestamp(project["last_activity"]),
-        ]
-        key_func = key_funcs[column_index]
-        self.projects.sort(
-            key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
-        )
-        search_text = self.projects_search.text()
-        if search_text:
-            self.filter_projects(search_text)
-            return
-        self.populate_projects()
-
     @staticmethod
     def _process_project_item(project: dict) -> list[QStandardItem, NumericItem]:
         project_name = project["name"]
         name_item = QStandardItem(project_name)
-        name_item.setToolTip(project_name)
+        name_item.setToolTip(project["code"])
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
-        last_activity = project["last_activity"]
-        last_activity_timestamp = convert_to_timestamp(last_activity)
-        display_last_activity = format_activity_time(last_activity)
-        last_activity_localtime = convert_to_local_time(last_activity)
-        last_activity_item = NumericItem(display_last_activity)
-        last_activity_item.setData(
-            last_activity_timestamp, role=Qt.ItemDataRole.UserRole
-        )
-        if last_activity_localtime != display_last_activity:
-            last_activity_item.setToolTip(last_activity_localtime)
+        last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
         return [name_item, last_activity_item]
 
     def populate_projects(self, clear: bool = False):
@@ -974,36 +1008,87 @@ class BreadCrumbsWidget(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.create_ellipsis()
         self.setLayout(self.layout)
+
+    def create_ellipsis(self):
+        # when deleting and creating this widget on-the-fly qgis crashes with a segfault
+        # to avoid this, it is created on ui setup, and just shown and hidden instead
+        self.ellipsis = QPushButton()
+        self.ellipsis.setIcon(ellipsis_icon)
+        self.ellipsis.setIconSize(QSize(20, 20))
+        self.ellipsis.setStyleSheet(
+            "QPushButton::menu-indicator{ image: url(none.jpg); }"
+        )
+        context_menu = QMenu()
+        self.ellipsis.setMenu(context_menu)
+        self.ellipsis.hide()
 
     def clear(self):
         for i in reversed(range(self.layout.count())):
             widget = self.layout.itemAt(i).widget()
             if widget:
                 self.layout.removeWidget(widget)
-                widget.deleteLater()
-
-    def update(self):
-        self.clear()
-        for i, item in enumerate(self._items):
-            label = self.get_button(i, item)
-            self.layout.addWidget(label)
-            if i != len(self._items) - 1:
-                separator = QLabel(">")
-                self.layout.addWidget(separator)
+                if widget == self.ellipsis:
+                    self.ellipsis.hide()
+                else:
+                    widget.deleteLater()
 
     def get_button(self, index: int, item: BreadcrumbItem) -> QLabel:
         label_text = elide_text(self.font(), item.name, 100)
         # Last item cannot be clicked
         if index == len(self._items) - 1:
-            label = QLabel(label_text)
+            label = QLabel(f"<b>{label_text}</b>")
+            label.setTextFormat(Qt.TextFormat.RichText)
         else:
             link = f"<a href='{index}'>{label_text}</a>"
             label = QLabel(link)
             label.setTextFormat(Qt.TextFormat.RichText)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
             label.linkActivated.connect(lambda _, idx=index: self.on_click(idx))
+        label.setToolTip(item.name)
         return label
+
+    def _add_separator(self):
+        separator_pixmap = separator_icon.pixmap(QSize(16, 16))
+        separator = QLabel()
+        separator.setPixmap(separator_pixmap)
+        self.layout.addWidget(separator)
+
+    def add_path_widgets(
+        self, items, leading_separator=False, trailing_separator=False
+    ):
+        if leading_separator:
+            self._add_separator()
+        for i, item in items:
+            label = self.get_button(i, item)
+            self.layout.addWidget(label)
+            if (i != items[-1][0]) or trailing_separator:
+                self._add_separator()
+
+    def add_path_dropdown_widget(self, items):
+        self.layout.addWidget(self.ellipsis)
+        self.ellipsis.show()
+        context_menu = self.ellipsis.menu()
+        context_menu.clear()
+        for index, item in items:
+            item_text = elide_text(self.font(), item.name, 100)
+            context_menu.addAction(item_text, lambda idx=index: self.on_click(idx))
+
+    def update(self):
+        self.clear()
+        numbered_items = [[i, item] for i, item in enumerate(self._items)]
+        if len(self._items) >= 6:
+            # with dropdown
+            before_dropdown_items = numbered_items[:2]
+            dropdown_items = numbered_items[2:-2]
+            after_dropdown_items = numbered_items[-2:]
+            self.add_path_widgets(before_dropdown_items, trailing_separator=True)
+            self.add_path_dropdown_widget(dropdown_items)
+            self.add_path_widgets(after_dropdown_items, leading_separator=True)
+        else:
+            # without dropdown
+            self.add_path_widgets(numbered_items)
 
     def on_click(self, index: int):
         # Truncate items to clicked position
@@ -1049,6 +1134,7 @@ class RanaBrowser(QWidget):
 
     def __init__(self, communication: UICommunication):
         super().__init__()
+        self.last_refresh_time = time.time()
         self.communication = communication
         self.setup_ui()
         self.refresh_timer = QTimer()
@@ -1095,6 +1181,7 @@ class RanaBrowser(QWidget):
         banner.setFixedHeight(height)
         logo_label = banner
         logo_label.installEventFilter(self)
+        self.window().installEventFilter(self)
 
         top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
         spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1283,6 +1370,10 @@ class RanaBrowser(QWidget):
         if event.type() == QEvent.MouseButtonPress:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
+        elif event.type() == QEvent.WindowActivate:
+            # prevent multiple events on window activation to cause multiple refresh actions
+            if time.time() - self.last_refresh_time > 0.1:
+                self.auto_refresh()
         return False
 
     @pyqtSlot()
@@ -1305,6 +1396,7 @@ class RanaBrowser(QWidget):
     def refresh(self):
         if hasattr(self.rana_files.currentWidget(), "refresh"):
             self.rana_files.currentWidget().refresh()
+            self.last_refresh_time = time.time()
         else:
             raise Exception("Attempted refresh on widget without refresh support")
 
