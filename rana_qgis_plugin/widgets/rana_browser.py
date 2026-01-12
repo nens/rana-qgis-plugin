@@ -494,21 +494,6 @@ class FileView(QWidget):
             )
 
     @staticmethod
-    def _get_bbox(data_type, meta, revision=None) -> Optional[list[float]]:
-        """Return bounding box as [x1, y1, x2, y2]"""
-        if data_type == "scenario" and meta:
-            # I don't think this is correct!
-            return meta.get("envelope")
-        elif data_type == "threedi_schematisation" and revision:
-            dem = FileView._get_dem_raster_file(revision)
-            if dem:
-                coord = dem["extent"]["coordinates"]
-                # re-organize bbox coordinates to match return format
-                return [*coord[0], *coord[1]]
-        elif meta.get("extent"):
-            return meta["extent"].get("bbox")
-
-    @staticmethod
     def _get_crs_str(data_type, meta, revision) -> str:
         if data_type == "scenario" and meta:
             return meta.get("grid", {}).get("crs")
@@ -522,11 +507,35 @@ class FileView(QWidget):
 
     @staticmethod
     def _get_area_str(data_type, meta, revision):
-        crs_str = FileView._get_crs_str(data_type, meta, revision)
-        bbox = FileView._get_bbox(data_type, meta, revision)
-        if not crs_str or not bbox:
-            return ""
-        return f"{get_bbox_area_in_m2(bbox, crs_str)} m²"
+        """Return bounding box as [x1, y1, x2, y2]"""
+        area = None
+        if data_type == "scenario" and meta:
+            # use grid['x'] and grid['y'] which is always in meters
+            grid = meta.get("grid")
+            if grid:
+                area = (
+                    grid["x"]["cell_size"]
+                    * grid["x"]["size"]
+                    * grid["y"]["size"]
+                    * grid["y"]["cell_size"]
+                )
+        else:
+            if data_type == "threedi_schematisation" and revision:
+                # compute area based on DEM for 2D models and skip for models without dem
+                dem = FileView._get_dem_raster_file(revision)
+                if dem:
+                    coord = dem["extent"]["coordinates"]
+                    # re-organize bbox coordinates to match return format
+                    # extent in threedi-api has a fixed crs
+                    area = get_bbox_area_in_m2([*coord[0], *coord[1]], "EPSG:4326")
+            elif meta.get("extent"):
+                area = get_bbox_area_in_m2(
+                    meta["extent"].get("bbox"),
+                    FileView._get_crs_str(data_type, meta, revision),
+                )
+        if area:
+            return f"{area / 1e6:.2f} km²"
+        return ""
 
     @staticmethod
     def _get_size_str(data_type, selected_file) -> str:
