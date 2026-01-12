@@ -557,7 +557,7 @@ class Loader(QObject):
         for sim in simulations:
             params = {
                 "project_id": project["id"],
-                "inputs": {"simulation_id": sim.simulation.id},
+                "inputs": {"simulation_id": sim.simulation.id_to_start},
                 "outputs": {
                     "results": {
                         "id": f"{output_file_path}{sim.simulation.name}_{sim.simulation.id}_results.zip"

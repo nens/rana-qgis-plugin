@@ -40,7 +40,7 @@ class RanaQgisPlugin:
         self.rana_browser = None
         self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
         self.toolbar.setObjectName(PLUGIN_NAME)
-        self.action = QAction(rana_icon, "Open browser", iface.mainWindow())
+        self.action = QAction(rana_icon, "Open Rana Panel", iface.mainWindow())
         self.action.triggered.connect(self.run)
         self.communication = UICommunication(self.iface, PLUGIN_NAME)
         initialize_settings()
@@ -58,7 +58,7 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
-        self.add_rana_menu(False)
+        self.add_rana_menu(True)
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
@@ -79,7 +79,7 @@ class RanaQgisPlugin:
         self.communication.clear_message_bar()
         remove_authcfg()
         set_tenant_id("")
-        self.add_rana_menu(False)
+        self.add_rana_menu(True)
         self.communication.bar_info("You have been logged out.")
         if self.dock_widget:
             self.dock_widget.close()

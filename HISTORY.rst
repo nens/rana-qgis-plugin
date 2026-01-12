@@ -1,22 +1,35 @@
 History
 =======
 
-develop
--------------------
 
+1.2.2 (unreleased)
+------------------
+
+- Added missing import for Breaches widget.
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
+- Replace search box in import schematisation search with DebouncedSearchBox which applies the search with a delay
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
 - Make breadcrumbs widget clearer with dropdown for long paths
 - Confirm downloading of already downloaded results
+- Show revision number in RevisionView
+- Use `show_authentication` option in activating Rana menu to show authentification related settings
+- Scenario: zip file containing log files now properly extracted (#3302)
+- Templates are now created and cloned to be compatible with external start by Rana (#3247)
 
 
-1.1.21 (unreleased)
--------------------
+1.2.1 (2026-01-05)
+------------------
+
+- Bump nens-dependency-loader to 1.2.10.
+
+
+1.2.0 (2026-01-05)
+------------------
 
 - Add revision view and new simulation button
 - Replace file interaction buttons with context menu
