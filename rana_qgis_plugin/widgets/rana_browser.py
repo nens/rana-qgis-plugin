@@ -930,17 +930,19 @@ class ProjectsBrowser(QWidget):
 
     def filter_projects(self):
         if not self.filter_active:
-            self.filtered_projects = []
+            self.filtered_projects = self.projects
         else:
+            # create all filters
             project_filters = [
                 self.get_projects_filtered_by_name,
                 self.get_projects_filtered_by_contributor,
             ]
+            # collect all project ids that are included in each active filter
             project_ids = [
                 {project["id"] for project in filter_func()}
                 for filter_func in project_filters
             ]
-            # Find project ids that are present in all filters
+            # Find project ids that are included in all filters
             common_ids = set.intersection(*project_ids)
             self.filtered_projects = [
                 project for project in self.projects if project["id"] in common_ids
