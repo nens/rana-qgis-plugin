@@ -61,7 +61,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import (
@@ -93,7 +92,6 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_project_files,
     get_tenant_projects,
     get_threedi_schematisation,
-    get_user_image,
     get_user_info,
 )
 from rana_qgis_plugin.utils_settings import base_url
@@ -106,7 +104,6 @@ from rana_qgis_plugin.widgets.utils_file_action import (
 from rana_qgis_plugin.widgets.utils_icons import (
     AvatarCache,
     ContributorAvatarsDelegate,
-    create_user_image,
     get_icon_from_theme,
     get_icon_label,
 )
@@ -358,10 +355,13 @@ class FileView(QWidget):
     file_showed = pyqtSignal()
     show_revisions_clicked = pyqtSignal(dict, dict)
 
-    def __init__(self, communication, file_signals: FileActionSignals, parent=None):
+    def __init__(
+        self, communication, file_signals: FileActionSignals, avatar_cache, parent=None
+    ):
         super().__init__(parent)
         self.communication = communication
         self.selected_file = None
+        self.avatar_cache = avatar_cache
         self.project = None
         self.file_signals = file_signals
         self.setup_ui()
@@ -567,13 +567,10 @@ class FileView(QWidget):
 
         rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
         # line 2: user icon - user name - commit msg - time
-        # This is broken (or the stuff above)
-        # TODO: use avatar cache or whater should be used
-        user_image = get_user_image(self.communication, selected_file["user"]["id"])
-        if user_image:
-            user_icon_label = get_icon_label(create_user_image(user_image))
-        else:
-            user_icon_label = get_icon_label(get_icon_from_theme("user.svg"))
+        # Note that the avatar is not automatically refreshed!
+        user_icon_label = get_icon_label(
+            self.avatar_cache.get_avatar_for_user(selected_file["user"])
+        )
         username = (
             selected_file["user"]["given_name"]
             + " "
@@ -1650,7 +1647,10 @@ class RanaBrowser(QWidget):
             communication=self.communication, file_signals=file_signals, parent=self
         )
         self.file_view = FileView(
-            communication=self.communication, file_signals=file_signals, parent=self
+            communication=self.communication,
+            file_signals=file_signals,
+            avatar_cache=self.avatar_cache,
+            parent=self,
         )
         self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
@@ -1661,9 +1661,14 @@ class RanaBrowser(QWidget):
         self.avatar_cache.update_users_in_thread(self.projects_browser.users)
 
         # Connect avatar_cache
+        # Note that avatar_cache is only linked to the projects_browser because for now
+        # all widgets that use avatars are loaded after the projects browser is initialized
+        self.projects_browser.users_refreshed.connect(
+            self.avatar_cache.update_users_in_thread
+        )
         self.avatar_cache.avatar_changed.connect(self.projects_browser.update_avatar)
-        self.projects_browser.users_refreshed.connect(self.avatar_cache.update_users_in_thread)
 
+        # self.avatar_cache.avatar_updated.connect(self.file_view.update_avatar)
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
