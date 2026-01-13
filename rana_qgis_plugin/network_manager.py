@@ -2,7 +2,8 @@ import json
 import urllib.parse
 
 from qgis.core import QgsApplication, QgsNetworkAccessManager, QgsProcessingException
-from qgis.PyQt.QtCore import QCoreApplication, QUrl
+from qgis.PyQt.QtCore import QCoreApplication, QJsonDocument, QUrl
+from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 
@@ -110,10 +111,21 @@ class NetworkManager(object):
                 return status, description
 
             raw_content = self._reply.readAll()
-            self._content = json.loads(str(raw_content, "utf-8"))
+            content_type = self._reply.header(QNetworkRequest.ContentTypeHeader)
 
+            if content_type.startswith("application/json"):
+                json_doc = QJsonDocument.fromJson(raw_content)
+                if json_doc.isObject():
+                    self._content = (
+                        json_doc.toVariant()
+                    )  # Returns QVariant which can be used like a Python dict
+            elif content_type.startswith("image/"):
+                image = QImage()
+                image.loadFromData(raw_content)
+                self._content = image
+            else:
+                self._content = json.loads(str(raw_content, "utf-8"))
         self._reply.deleteLater()
-
         return status, description
 
     def fetch_finished(self):

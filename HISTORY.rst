@@ -13,8 +13,10 @@ History
 
 - Added missing import for Breaches widget.
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Add option to filter by contributor and show contributors in project view
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
+- Add context menu to projects browser
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
 - Use pixel size from results as default pixel size in results downloader
