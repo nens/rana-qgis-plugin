@@ -4,7 +4,7 @@ import time
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from qgis.core import Qgis, QgsApplication, QgsMessageLog
 from qgis.gui import QgsCollapsibleGroupBox
@@ -96,14 +96,16 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
+from rana_qgis_plugin.widgets.utils_avatars import (
+    AvatarCache,
+    ContributorAvatarsDelegate,
+)
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
-    AvatarCache,
-    ContributorAvatarsDelegate,
     get_icon_from_theme,
     get_icon_label,
 )
