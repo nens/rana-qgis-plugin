@@ -323,6 +323,17 @@ def build_vrt(output_filepath, raster_filepaths, **vrt_options):
     vrt_ds = None
 
 
+def get_file_icon_name(data_type: str) -> str:
+    icon_map = {
+        "scenario": "mIconTemporalRaster.svg",
+        "threedi_schematisation": "mIconDbSchema.svg",
+        "raster": "mIconRaster.svg",
+        "vector": "mIconVector.svg",
+        "sqlite": "mIconDbSchema.svg",
+    }
+    return icon_map.get(data_type, "mIconFile.svg")
+
+
 def get_timestamp_as_numeric_item(timestamp_str: str) -> NumericItem:
     timestamp = convert_to_timestamp(timestamp_str)
     display_timestamp = format_activity_time(timestamp_str)

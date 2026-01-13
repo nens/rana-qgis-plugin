@@ -534,5 +534,5 @@ def get_user_image(communication: UICommunication, user_id):
         response = network_manager.content
         return response
     else:
-        communication.show_error(f"Failed to retrieve schematisation: {error}")
+        communication.show_error(f"Failed to retrieve user image: {error}")
         return None
