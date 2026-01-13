@@ -314,7 +314,7 @@ class ThreediCalls:
         for org_uuid in organisations:
             models += self.threedi_api.threedimodels_list(
                 created__date__gt=self.expiration_date,
-                is_generating=True,
+                # is_generating=True,
                 revision__schematisation__owner__unique_id=org_uuid,
             ).results
         return models

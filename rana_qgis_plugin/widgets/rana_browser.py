@@ -1115,6 +1115,27 @@ class BreadCrumbsWidget(QWidget):
         self.update()
 
 
+from typing import NamedTuple
+
+
+class ProgressItem(NamedTuple):
+    value: int
+    max: int
+
+
+class PercentageProgress(ProgressItem):
+    def __new__(cls, value: int):
+        return super().__new__(cls, value, 100)
+
+    def __repr__(self):
+        return f"{self.value}%"
+
+
+class StepProgress(ProgressItem):
+    def __repr__(self):
+        return f"{self.value} of {self.max}"
+
+
 TaskItem = namedtuple(
     "TaskItem", ["name", "user_email", "created", "status", "progress"]
 )
@@ -1165,7 +1186,7 @@ class TasksBrowser(QWidget):
                     user_email=model.user,
                     created=created_str,
                     status=status,
-                    progress=progress,
+                    progress=StepProgress(progress, 100),
                 )
             )
         return model_tasks
@@ -1188,7 +1209,7 @@ class TasksBrowser(QWidget):
                     user_email=user_email,
                     created=created_str,
                     status=status.name,
-                    progress=progress,
+                    progress=PercentageProgress(progress),
                 )
             )
         return simulate_tasks
@@ -1226,8 +1247,9 @@ class TasksBrowser(QWidget):
                 status_item.setData(task.status, Qt.ItemDataRole.UserRole)
                 # Create the progress bar
                 progress_bar = QProgressBar()
-                progress_bar.setValue(task.progress)
-                progress_bar.setFormat(task.status + " (%p%)")
+                progress_bar.setValue(task.progress.value)
+                progress_bar.setMaximum(task.progress.max)
+                progress_bar.setFormat(str(task.progress))
                 progress_bar.setTextVisible(True)
                 root.appendRow([name_item, who_item, date_item, status_item])
                 self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
