@@ -113,11 +113,7 @@ class ResultBrowser(QDialog):
         self.postprocessed_rasters_table.cellChanged.connect(check_raster_selected)
 
         postprocessed_rasters_group.layout().addWidget(inputs_group)
-        alwyas_checked = [
-            "raw 3di output",
-            "grid administration",
-            "max water depth (file)",
-        ]
+        always_checked = ["max water depth (file)"]
         excluded_results = ["raw 3di output", "grid administration", "3di bathymetry"]
         for result in [r for r in results if r.get("attachment_url")]:
             if result["name"].lower() in excluded_results:
@@ -129,7 +125,7 @@ class ResultBrowser(QDialog):
             )
             check_state = (
                 Qt.CheckState.Checked
-                if result["name"].lower() in alwyas_checked
+                if result["name"].lower() in always_checked
                 else Qt.CheckState.Unchecked
             )
             type_item.setCheckState(check_state)
