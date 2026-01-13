@@ -119,6 +119,8 @@ class NetworkManager(object):
                     self._content = (
                         json_doc.toVariant()
                     )  # Returns QVariant which can be used like a Python dict
+                else:
+                    self._content = json.loads(str(raw_content, "utf-8"))
             elif content_type.startswith("image/"):
                 image = QImage()
                 image.loadFromData(raw_content)
