@@ -1042,8 +1042,8 @@ class ProjectsBrowser(QWidget):
         self.update_users()
         self.setup_ui()
         self.populate_contributors()
+        self.sort_projects(2, Qt.SortOrder.AscendingOrder, populate=False)
         self.populate_projects()
-        self.projects_tv.header().setSortIndicator(2, Qt.SortOrder.AscendingOrder)
 
     def set_project_from_id(self, project_id: str):
         for project in self.projects:
@@ -1133,12 +1133,12 @@ class ProjectsBrowser(QWidget):
         self.current_page = 1
         self.fetch_projects()
         self.update_users()
+        self.sort_projects(2, Qt.SortOrder.AscendingOrder, populate=False)
         if self.filter_active:
             self.filter_projects()
         else:
             self.populate_projects()
         self.populate_contributors()
-        self.projects_tv.header().setSortIndicator(2, Qt.SortOrder.DescendingOrder)
         self.projects_refreshed.emit()
 
     @property
@@ -1193,7 +1193,11 @@ class ProjectsBrowser(QWidget):
                     selected_projects.append(project)
             return selected_projects
 
-    def sort_projects(self, column_index: int, order: Qt.SortOrder):
+    def sort_projects(self, column_index: int, order: Qt.SortOrder, populate=True):
+        # Ensure indicator is set also on direct call
+        self.projects_tv.header().blockSignals(True)
+        self.projects_tv.header().setSortIndicator(column_index, order)
+        self.projects_tv.header().blockSignals(False)
         self.current_page = 1
         key_funcs = [
             lambda project: project["name"].lower(),
@@ -1205,10 +1209,11 @@ class ProjectsBrowser(QWidget):
             self.projects.sort(
                 key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
             )
-        if self.filter_active:
-            self.filter_projects()
-            return
-        self.populate_projects()
+        if populate:
+            if self.filter_active:
+                self.filter_projects()
+            else:
+                self.populate_projects()
 
     def show_context_menu(self, position):
         # Get the index under the cursor
