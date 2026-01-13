@@ -557,7 +557,6 @@ class FileView(QWidget):
         file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
         file_icon_label = get_icon_label(file_icon)
         filename = Path(selected_file["id"]).name
-        # TODO: retrieve schematisation size
         size_str = (
             display_bytes(selected_file["size"])
             if selected_file["data_type"] != "threedi_schematisation"
@@ -1664,7 +1663,7 @@ class RanaBrowser(QWidget):
         )
 
         # Start getting avatars from loaded users
-        # TODO: nicer soluation?
+        # Consider better solution at some moment
         self.avatar_cache.update_users_in_thread(self.projects_browser.users)
 
         # Connect avatar_cache
