@@ -50,6 +50,7 @@ from qgis.PyQt.QtWidgets import (
     QWizard,
     QWizardPage,
 )
+from qgis.utils import iface
 from threedi_api_client.openapi import ApiException, Threshold
 from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 

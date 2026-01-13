@@ -536,7 +536,7 @@ class Loader(QObject):
         for sim in simulations:
             params = {
                 "project_id": project["id"],
-                "inputs": {"simulation_id": sim.simulation.id},
+                "inputs": {"simulation_id": sim.simulation.id_to_start},
                 "outputs": {
                     "results": {
                         "id": f"{output_file_path}{sim.simulation.name}_{sim.simulation.id}_results.zip"
@@ -649,9 +649,10 @@ class Loader(QObject):
         else:
             results = {}
             # grid and crs are not used when results is empty
-            grid = None
+            grid = {}
             crs = "EPSG:28992"
-        result_browser = ResultBrowser(None, results, crs)
+        pixel_size = grid.get("x", {}).get("cell_size", 1)
+        result_browser = ResultBrowser(None, results, crs, pixel_size)
         if result_browser.exec() == QDialog.DialogCode.Accepted:
             result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
             if len(result_ids) == 0 and not result_browser.get_download_raw_result():

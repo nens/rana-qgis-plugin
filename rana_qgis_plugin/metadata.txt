@@ -8,7 +8,7 @@ name=Rana
 qgisMinimumVersion=3.38
 qgisMaximumVersion=3.99
 description=Rana QGIS plugin
-version=1.1.21
+version=1.2.3
 author=Nelen & Schuurmans
 email=servicedesk@nelen-schuurmans.nl
 
@@ -32,7 +32,7 @@ deprecated=False
 # Since QGIS 3.8, a comma separated list of plugins to be installed
 # (or upgraded) can be specified.
 # Check the documentation for more information.
-plugin_dependencies=Nelen and Schuurmans Dependency Loader==1.2.6
+plugin_dependencies=Nelen and Schuurmans Dependency Loader==1.2.10
 
 Category of the plugin: Raster, Vector, Database or Web
 # category=

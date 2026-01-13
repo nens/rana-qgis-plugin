@@ -21,7 +21,7 @@ uicls, basecls = uic.loadUiType(
 
 logger = logging.getLogger(__name__)
 
-MAX_SCHEMATISATION_MODELS = 3
+MAX_SCHEMATISATION_MODELS = 32767
 
 
 class ModelDeletionDialog(uicls, basecls):

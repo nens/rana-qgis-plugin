@@ -523,10 +523,9 @@ def map_result_to_file_name(result: dict) -> str:
             return result["code"]
 
 
-def get_user_image(communication: UICommunication, selected_file: dict):
+def get_user_image(communication: UICommunication, user_id):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    user_id = selected_file["user"]["id"]
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()

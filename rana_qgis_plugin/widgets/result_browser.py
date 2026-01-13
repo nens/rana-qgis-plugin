@@ -24,7 +24,7 @@ from rana_qgis_plugin.utils_api import get_filename_from_attachment_url
 
 
 class ResultBrowser(QDialog):
-    def __init__(self, parent, results: dict, scenario_crs: str):
+    def __init__(self, parent, results: dict, scenario_crs: str, pixel_size: float):
         super().__init__(parent)
         self.setWindowTitle(PLUGIN_NAME)
         self.setMinimumWidth(400)
@@ -87,7 +87,7 @@ class ResultBrowser(QDialog):
         )
 
         self.no_data_box.setText("-9999.0")
-        self.pixelsize_box.setText("1.00000")
+        self.pixelsize_box.setText(f"{pixel_size:.5f}")
         self.crs_select_box.setCrs(QgsCoordinateReferenceSystem(scenario_crs))
 
         inputs_form.addRow("NO DATA value:", self.no_data_box)
@@ -113,20 +113,22 @@ class ResultBrowser(QDialog):
         self.postprocessed_rasters_table.cellChanged.connect(check_raster_selected)
 
         postprocessed_rasters_group.layout().addWidget(inputs_group)
+        always_checked = ["max water depth (file)"]
+        excluded_results = ["raw 3di output", "grid administration", "3di bathymetry"]
         for result in [r for r in results if r.get("attachment_url")]:
-            if result["name"].lower() in [
-                "raw 3di output",
-                "grid administration",
-                "3di bathymetry",
-            ]:
+            if result["name"].lower() in excluded_results:
                 continue
-
             self.results_table.insertRow(self.results_table.rowCount())
             type_item = QTableWidgetItem(result["name"])
             type_item.setFlags(
                 Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
             )
-            type_item.setCheckState(Qt.CheckState.Unchecked)
+            check_state = (
+                Qt.CheckState.Checked
+                if result["name"].lower() in always_checked
+                else Qt.CheckState.Unchecked
+            )
+            type_item.setCheckState(check_state)
             type_item.setData(Qt.ItemDataRole.UserRole, int(result["id"]))
 
             file_name = get_filename_from_attachment_url(result["attachment_url"])
