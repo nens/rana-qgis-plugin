@@ -1156,7 +1156,6 @@ class TasksBrowser(QWidget):
 
     def setup_ui(self):
         self.tasks_model = QStandardItemModel()
-        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
         self.tasks_tv = QTreeView()
         self.tasks_tv.setModel(self.tasks_model)
         self.tasks_tv.setEditTriggers(QTreeView.NoEditTriggers)
@@ -1168,6 +1167,10 @@ class TasksBrowser(QWidget):
             "Simulations": self.fetch_simulate_tasks,
             "Rana Models": self.fetch_model_tasks,
         }
+        self.setup_model()
+
+    def setup_model(self):
+        self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
         self.roots = {key: QStandardItem(key) for key in self.task_groups.keys()}
         for root in self.roots.values():
             self.tasks_model.appendRow([root])
@@ -1176,17 +1179,30 @@ class TasksBrowser(QWidget):
         # TODO: proper task processing
         model_list = tc.fetch_3di_models_generating(organisations)
         model_tasks = []
+        import time
+
         for model in model_list:
             created_str = model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            progress = 50
             status = "generating"
+            t0 = time.time()
+            tasks = tc.threedi_api.threedimodels_tasks_list(model.id).results
+            from qgis.core import Qgis, QgsMessageLog
+
+            nof_tasks = len(tasks)
+            nof_completed = 0
+            for task in tasks:
+                nof_completed += 1 if task.status == "success" else 0
+            QgsMessageLog.logMessage(
+                f"retrieving tasks took {time.time() - t0} seconds", "DEBUG", Qgis.Info
+            )
             model_tasks.append(
                 TaskItem(
-                    name=model.name,
+                    name=f"{model.name} (id={model.id})",
+                    # name=model.name,
                     user_email=model.user,
                     created=created_str,
                     status=status,
-                    progress=StepProgress(progress, 100),
+                    progress=StepProgress(nof_completed, nof_tasks),
                 )
             )
         return model_tasks
@@ -1221,12 +1237,13 @@ class TasksBrowser(QWidget):
     def populate_tasks(self):
         tc = ThreediCalls(get_threedi_api())
         organisations = get_threedi_organisations()
+        task_map = {
+            name: func(tc, organisations) for name, func in self.task_groups.items()
+        }
         self.tasks_tv.setUpdatesEnabled(False)
-        # Clean root items
-        for root in self.roots.values():
-            root.removeRows(0, root.rowCount())
-        for name, func in self.task_groups.items():
-            tasks = func(tc, organisations)
+        self.tasks_model.clear()
+        self.setup_model()
+        for name, tasks in task_map.items():
             root = self.roots[name]
             # hide or show based on number of tasks
             root_index = self.tasks_model.indexFromItem(root)
@@ -1249,7 +1266,7 @@ class TasksBrowser(QWidget):
                 progress_bar = QProgressBar()
                 progress_bar.setValue(task.progress.value)
                 progress_bar.setMaximum(task.progress.max)
-                progress_bar.setFormat(str(task.progress))
+                progress_bar.setFormat(f"{task.status} ({task.progress})")
                 progress_bar.setTextVisible(True)
                 root.appendRow([name_item, who_item, date_item, status_item])
                 self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
