@@ -144,6 +144,7 @@ class AvatarWorker(QRunnable):
 
 
 class AvatarCache(QObject):
+    # Avatar session cache
     avatar_changed = pyqtSignal(str)
 
     def __init__(self, communication):

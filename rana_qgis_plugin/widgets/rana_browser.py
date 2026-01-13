@@ -1026,6 +1026,7 @@ class ProjectsBrowser(QWidget):
     project_selected = pyqtSignal(dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
+    users_refreshed = pyqtSignal(list)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -1040,9 +1041,6 @@ class ProjectsBrowser(QWidget):
         # collect data
         self.fetch_projects()
         self.update_users()
-        # start thread to retrieve actual avatars
-        self.avatar_cache.avatar_changed.connect(self.update_avatar)
-        self.avatar_cache.update_users_in_thread(self.users)
         self.setup_ui()
         self.populate_contributors()
         self.populate_projects()
@@ -1130,12 +1128,12 @@ class ProjectsBrowser(QWidget):
                 for contributor in project["contributors"]
             }.values()
         )
+        self.users_refreshed.emit(self.users)
 
     def refresh(self):
         self.current_page = 1
         self.fetch_projects()
         self.update_users()
-        self.avatar_cache.update_users_in_thread(self.users)
         if self.filter_active:
             self.filter_projects()
         else:
@@ -1657,6 +1655,15 @@ class RanaBrowser(QWidget):
         self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
         )
+
+        # Start getting avatars from loaded users
+        # TODO: nicer soluation?
+        self.avatar_cache.update_users_in_thread(self.projects_browser.users)
+
+        # Connect avatar_cache
+        self.avatar_cache.avatar_changed.connect(self.projects_browser.update_avatar)
+        self.projects_browser.users_refreshed.connect(self.avatar_cache.update_users_in_thread)
+
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
