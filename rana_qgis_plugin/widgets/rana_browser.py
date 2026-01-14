@@ -1250,7 +1250,8 @@ class ProjectsBrowser(QWidget):
         project_name = project["name"]
         # Process project name into item
         name_item = QStandardItem(project_name)
-        name_item.setToolTip(project["code"])
+        formatted_project_tooltip = f"{project_name}<br><b><code>{project["code"]}</code></b>"
+        name_item.setToolTip(formatted_project_tooltip)
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
         # Process last activity time into item
         last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
