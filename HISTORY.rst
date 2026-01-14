@@ -6,6 +6,7 @@ History
 ------------------
 
 - Show warning when M&S plugin is enabled when Rana plugin is started (#3320)
+- Add numerical diffusion limiter option to substance (#241)
 
 
 1.2.2 (2026-01-12)
