@@ -2,20 +2,31 @@ History
 =======
 
 
-1.2.2 (unreleased)
+1.2.3 (unreleased)
+------------------
+
+- Show warning when M&S plugin is enabled when Rana plugin is started (#3320)
+
+
+1.2.2 (2026-01-12)
 ------------------
 
 - Added missing import for Breaches widget.
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
+- Add option to filter by contributor and show contributors in project view
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
+- Add context menu to projects browser
 - Group folders on top in files browser
 - Sort folder and file names case insensitive
+- Use pixel size from results as default pixel size in results downloader
+- Check specific results by default for downloading
 - Replace search box in import schematisation search with DebouncedSearchBox which applies the search with a delay
 - Reintroduce headers in settings page of new schematisation wizard
 - Run auto refresh on regaining window focus
 - Make breadcrumbs widget clearer with dropdown for long paths
 - Confirm downloading of already downloaded results
+- Reorganize FileView widget with collapsible groups
 - Show revision number in RevisionView
 - Use `show_authentication` option in activating Rana menu to show authentification related settings
 - Scenario: zip file containing log files now properly extracted (#3302)
