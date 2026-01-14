@@ -9,6 +9,7 @@ History
 - Confirm downloading of already downloaded results
 - Reorganize FileView widget with collapsible groups
 - Add option to filter by contributor and show contributors in project view
+- Show Created at column for projects (#3025)
 
 
 1.2.2 (2026-01-12)

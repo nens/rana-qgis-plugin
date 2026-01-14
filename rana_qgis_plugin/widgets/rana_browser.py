@@ -1082,7 +1082,7 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.customContextMenuRequested.connect(self.show_context_menu)
         self.projects_tv.header().sortIndicatorChanged.connect(self.sort_projects)
         self.projects_model.setHorizontalHeaderLabels(
-            ["Project Name", "Contributors", "Last activity"]
+            ["Project Name", "Contributors", "Last activity", "Created at"]
         )
         avatar_delegate = ContributorAvatarsDelegate(self.projects_tv)
         self.projects_tv.setItemDelegateForColumn(1, avatar_delegate)
@@ -1202,6 +1202,7 @@ class ProjectsBrowser(QWidget):
             lambda project: project["name"].lower(),
             None,
             lambda project: -convert_to_timestamp(project["last_activity"]),
+            lambda project: -convert_to_timestamp(project["created_at"]),
         ]
         key_func = key_funcs[column_index]
         if key_func:
@@ -1253,6 +1254,7 @@ class ProjectsBrowser(QWidget):
         name_item.setData(project, role=Qt.ItemDataRole.UserRole)
         # Process last activity time into item
         last_activity_item = get_timestamp_as_numeric_item(project["last_activity"])
+        created_at_item = get_timestamp_as_numeric_item(project["created_at"])
         # process list of contributors into items
         contributors_item = QStandardItem()
         contributors_data = []
@@ -1271,7 +1273,7 @@ class ProjectsBrowser(QWidget):
             )
         contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
         contributors_item.setData(-1, Qt.ItemDataRole.InitialSortOrderRole)
-        return [name_item, contributors_item, last_activity_item]
+        return [name_item, contributors_item, last_activity_item, created_at_item]
 
     def populate_projects(self):
         # Paginate projects
