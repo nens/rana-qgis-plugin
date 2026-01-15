@@ -22,7 +22,7 @@ from threedi_api_client.openapi import ApiException
 
 from ..auth_3di import get_3di_auth
 from ..utils import get_threedi_api
-from ..utils_api import get_frontend_settings, get_threedi_organisations
+from ..utils_api import get_frontend_settings
 from .data_models import simulation_data_models as dm
 from .threedi_calls import ThreediCalls
 from .utils import (
@@ -1510,12 +1510,12 @@ class SimulationMonitorWorker(QThread):
     simulation_updated = pyqtSignal(dict)
     simulation_finished = pyqtSignal(dict)
 
-    def __init__(self, parent=None):
-        # TODO: use or remove unused methods!
+    def __init__(self, organisation_names, parent=None):
+        # TODO: use or remove unused methods and signals!
         super().__init__(parent)
         self.ws_client = None
         self.running_simulations = {}
-        self.organisations = get_threedi_organisations()
+        self.organisation_names = organisation_names
 
     def run(self):
         self.start_listening()
@@ -1600,22 +1600,26 @@ class SimulationMonitorWorker(QThread):
             for sim_id_str, sim_data_str in simulations.items():
                 sim_id = int(sim_id_str)
                 sim_data = json.loads(sim_data_str)
+                if sim_data["organisation_name"] not in self.organisation_names:
+                    continue
                 self.running_simulations[sim_id] = sim_data
                 self.simulation_added.emit(sim_data)
-        #         # TODO: filter by organisation!
         elif data.get("type") == "progress":
             sim_id = int(data["data"]["simulation_id"])
-            progress_percentage = data["data"]["progress"]
+            sim_data = self.running_simulations.get(sim_id)
+            if not sim_data:
+                return
             sim_data = self.running_simulations[sim_id]
-            sim_data["progress"] = progress_percentage
+            sim_data["progress"] = data["data"]["progress"]
             self.simulation_updated.emit(sim_data)
         elif data.get("type") == "status":
             sim_id = int(data["data"]["simulation_id"])
-            status_name = data["data"]["status"]
-            sim_data = self.running_simulations[sim_id]
-            sim_data["status"] = status_name
+            sim_data = self.running_simulations.get(sim_id)
+            if not sim_data:
+                return
+            sim_data["status"] = data["data"]["status"]
             self.simulation_updated.emit(sim_data)
-            if status_name == SimulationStatusName.FINISHED.value:
+            if data["data"]["status"] == SimulationStatusName.FINISHED.value:
                 if sim_data["progress"] == 100:
                     statuses = {
                         status.simulation_id: status

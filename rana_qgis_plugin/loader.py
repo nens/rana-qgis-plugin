@@ -58,6 +58,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_processes,
     get_tenant_project_file,
     get_tenant_project_files,
+    get_threedi_organisations,
     get_threedi_schematisation,
     map_result_to_file_name,
     move_directory,
@@ -1176,7 +1177,12 @@ class Loader(QObject):
 
     @pyqtSlot()
     def start_simulation_monitoring(self):
-        monitor_worker = SimulationMonitorWorker(parent=self)
+        tc = ThreediCalls(get_threedi_api())
+        organisations = tc.fetch_organisations(uuids=get_threedi_organisations())
+        organisation_names = [organisation.name for organisation in organisations]
+        monitor_worker = SimulationMonitorWorker(
+            organisation_names=organisation_names, parent=self
+        )
         monitor_worker.simulation_added.connect(self.simulation_task_added)
         monitor_worker.simulation_updated.connect(self.simulation_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
