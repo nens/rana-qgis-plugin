@@ -36,7 +36,7 @@ from rana_qgis_plugin.simulation.utils import (
     load_local_schematisation,
     load_remote_schematisation,
 )
-from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
+from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker, SimulationMonitorWorker
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_threedi_api,
@@ -73,7 +73,7 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    VectorStyleWorker,
+    VectorStyleWorker
 )
 
 
@@ -106,6 +106,8 @@ class Loader(QObject):
     model_created = pyqtSignal()
     revision_saved = pyqtSignal()
     model_deleted = pyqtSignal()
+    simulation_task_added = pyqtSignal(dict)
+    simulation_task_updated = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -122,6 +124,8 @@ class Loader(QObject):
         # For upload of schematisations
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
+        self.simulation_monitor_thread_pool = QThreadPool()
+        self.simulation_monitor_thread_pool.setMaxThreadCount(1)
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -1144,3 +1148,11 @@ class Loader(QObject):
 
         self.upload_thread_pool.start(upload_worker)
         self.revision_saved.emit()
+
+    @pyqtSlot()
+    def start_simulation_monitoring(self):
+        monitor_worker = SimulationMonitorWorker(parent=self)
+        monitor_worker.simulation_added.connect(self.simulation_task_added)
+        monitor_worker.simulation_updated.connect(self.simulation_task_updated)
+        monitor_worker.failed.connect(self.communication.show_warn)
+        monitor_worker.start()

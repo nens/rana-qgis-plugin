@@ -12,7 +12,12 @@ from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
-from .utils import build_vrt, get_local_file_path, image_to_bytes, split_scenario_extent
+from .utils import (
+    build_vrt,
+    get_local_file_path,
+    image_to_bytes,
+    split_scenario_extent,
+)
 from .utils_api import (
     finish_file_upload,
     get_raster_file_link,
@@ -23,7 +28,7 @@ from .utils_api import (
     get_vector_style_upload_urls,
     map_result_to_file_name,
     request_raster_generate,
-    start_file_upload,
+    start_file_upload
 )
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
@@ -592,3 +597,5 @@ class LizardResultDownloadWorker(QThread):
 
         if not task_failed:
             self.finished.emit(self.project, self.file, self.target_folder)
+
+

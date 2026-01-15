@@ -1142,6 +1142,8 @@ TaskItem = namedtuple(
 
 
 class TasksBrowser(QWidget):
+    start_monitoring_simulations = pyqtSignal()
+
     def __init__(self, communication, parent=None):
         # TODO
         # - filter
@@ -1152,9 +1154,14 @@ class TasksBrowser(QWidget):
         self.communication = communication
         self.tasks = []
         self.setup_ui()
-        self.populate_tasks()
+        # TODO: use a more elegant solution, like a model
+        self.simulation_row_map = {}
+        QTimer.singleShot(0, lambda: self.start_monitoring_simulations.emit())
+
+        # self.populate_tasks()
 
     def setup_ui(self):
+        # TODO: consider using a custom model
         self.tasks_model = QStandardItemModel()
         self.tasks_tv = QTreeView()
         self.tasks_tv.setModel(self.tasks_model)
@@ -1163,17 +1170,59 @@ class TasksBrowser(QWidget):
         layout.addWidget(self.tasks_tv)
         self.setLayout(layout)
         # create root items, they will be added on populating
-        self.task_groups = {
-            "Simulations": self.fetch_simulate_tasks,
-            "Rana Models": self.fetch_model_tasks,
-        }
-        self.setup_model()
-
-    def setup_model(self):
         self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
-        self.roots = {key: QStandardItem(key) for key in self.task_groups.keys()}
-        for root in self.roots.values():
-            self.tasks_model.appendRow([root])
+        self.simulation_root = QStandardItem("Simulations")
+        self.models_root = QStandardItem("Models")
+        self.tasks_model.appendRow([self.simulation_root])
+        self.tasks_model.appendRow([self.models_root])
+        # self.task_groups = {
+        #     "Simulations": self.fetch_simulate_tasks,
+        #     "Rana Models": self.fetch_model_tasks,
+        # }
+        # self.setup_model()
+
+    # def setup_model(self):
+    #     self.roots = {key: QStandardItem(key) for key in self.task_groups.keys()}
+    #     for root in self.roots.values():
+    #         self.tasks_model.appendRow([root])
+
+    def update_simulation_task(self, sim_data):
+        from qgis.core import Qgis, QgsMessageLog
+        QgsMessageLog.logMessage(f'update: {sim_data=}', "DEBUG", Qgis.Info)
+        row = self.simulation_row_map.get(sim_data["uid"])
+        if not row:
+            return
+        status_item = self.simulation_root.child(row, 3)
+        status_item.setData(sim_data["status"], Qt.ItemDataRole.UserRole)
+        progress_bar = self.tasks_tv.indexWidget(status_item.index())
+        progress = int(sim_data["progress"])
+        progress_bar.setValue(progress)
+        progress_bar.setFormat(f"{sim_data['status']} ({progress}%)")
+
+    def add_simulation_task(self, task_data):
+        root = self.simulation_root
+        name_item = QStandardItem(task_data["name"])
+        # TODO: link to rana user and show icon - wait for open PRs
+        user = get_user_by_email(task_data["user_name"])
+        user_str = (
+            f"{user['given_name'][0]}{user['family_name'][0]}" if user else "?"
+        )
+        who_item = QStandardItem(user_str)
+        date_item = get_timestamp_as_numeric_item(task_data["date_created"])
+        status_item = QStandardItem()
+        status_item.setData(task_data["status"], Qt.ItemDataRole.UserRole)
+        # Create the progress bar
+        progress_bar = QProgressBar()
+        progress_bar.setValue(int(task_data["progress"]))
+        progress_bar.setMaximum(100)
+        progress_bar.setFormat(f"{task_data['status']} ({int(task_data['progress'])}%)")
+        progress_bar.setTextVisible(True)
+        row = [name_item, who_item, date_item, status_item]
+        root.appendRow(row)
+        self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
+        self.simulation_row_map[task_data["uid"]] = root.rowCount() - 1
+
+
 
     def fetch_model_tasks(self, tc, organisations: list[str]):
         # TODO: proper task processing
@@ -1231,8 +1280,9 @@ class TasksBrowser(QWidget):
         return simulate_tasks
 
     def refresh(self):
+        pass
         # TODO: block UI?
-        self.populate_tasks()
+        # self.populate_tasks()
 
     def populate_tasks(self):
         tc = ThreediCalls(get_threedi_api())
@@ -1298,18 +1348,14 @@ class RanaBrowser(QWidget):
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
+    request_monitoring_simulations = pyqtSignal()
+    simulation_task_added = pyqtSignal(dict)
+    simulation_task_updated = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
         self.last_refresh_time = time.time()
         self.communication = communication
-        from qgis.core import Qgis, QgsMessageLog
-
-        from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
-
-        QgsMessageLog.logMessage(f"{api_url()=}", "DEBUG", Qgis.Info)
-        QgsMessageLog.logMessage(f"{get_tenant_id()=}", "DEBUG", Qgis.Info)
-
         self.setup_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)
@@ -1404,6 +1450,9 @@ class RanaBrowser(QWidget):
 
         self.tasks_browser = TasksBrowser(communication=self.communication, parent=self)
         self.rana_tasks.addWidget(self.tasks_browser)
+        self.tasks_browser.start_monitoring_simulations.connect(lambda : self.request_monitoring_simulations.emit())
+        self.simulation_task_added.connect(self.tasks_browser.add_simulation_task)
+        self.simulation_task_updated.connect(self.tasks_browser.update_simulation_task)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path

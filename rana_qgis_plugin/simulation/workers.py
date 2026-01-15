@@ -1,15 +1,28 @@
 # 3Di Models and Simulations for QGIS, licensed under GPLv2 or (at your option) any later version
 # Copyright (C) 2023 by Lutra Consulting for 3Di Water Management
-
+import base64
+import json
 import logging
 import os
 import time
 from functools import partial
 
-from qgis.PyQt.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import (
+    QByteArray,
+    QObject,
+    QRunnable,
+    QThread,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
+from qgis.PyQt.QtNetwork import QNetworkRequest
 from threedi_api_client.files import upload_file
 from threedi_api_client.openapi import ApiException
 
+from ..auth_3di import get_3di_auth
+from ..utils import get_threedi_api
+from ..utils_api import get_frontend_settings, get_threedi_organisations
 from .data_models import simulation_data_models as dm
 from .threedi_calls import ThreediCalls
 from .utils import (
@@ -1485,3 +1498,135 @@ class SchematisationUploadProgressWorker(QRunnable):
         upload_progress = int(chunk_size / total_size * 100)
         self.current_task_progress = upload_progress
         self.report_upload_progress()
+
+
+class SimulationMonitorWorker(QThread):
+    thread_finished = pyqtSignal(str)
+    failed = pyqtSignal(str)
+    simulation_added = pyqtSignal(dict)
+    simulation_updated = pyqtSignal(dict)
+    simulation_finished = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        # TODO: use or remove unused methods!
+        super().__init__(parent)
+        self.ws_client = None
+        self.running_simulations = {}
+        self.organisations = get_threedi_organisations()
+
+    def run(self):
+        self.start_listening()
+        # start event loop when the websocket is opened
+        if self.ws_client:
+            self.exec_()
+
+    def stop(self):
+        if self.ws_client:
+            self.ws_client.close()
+        self.quit()
+        self.wait()
+
+    @staticmethod
+    def _get_auth_token() -> str:
+        identifier = "Basic"
+        _, personal_api_key = get_3di_auth()
+        api_key = base64.b64encode(f"__key__:{personal_api_key}".encode()).decode()
+        return f"{identifier} {api_key}"
+
+    @staticmethod
+    def _get_url() -> QUrl:
+        api_version = get_threedi_api().version
+        frontend_settings = get_frontend_settings()
+        wss_url = (
+            frontend_settings["hcc_url"]
+            .rstrip("/")
+            .replace("https:", "wss:")
+            .replace("http:", "ws:")
+        )
+        return QUrl(f"{wss_url}/{api_version}/active-simulations/")
+
+    def start_listening(self):
+        """Start listening of active simulations websocket."""
+        basic_auth_token = self._get_auth_token()
+        request_url = self._get_url()
+        ws_request = QNetworkRequest(request_url)
+        ws_request.setRawHeader(
+            QByteArray().append("Authorization"), QByteArray().append(basic_auth_token)
+        )
+        # TODO handle different qt versions!
+        try:
+            from PyQt5 import QtWebSockets
+        except ImportError:
+            self.failed.emit(
+                "Cannot load simulation monitor working becuase QtWebSockets is not found"
+            )
+            return
+        self.ws_client = QtWebSockets.QWebSocket(
+            version=QtWebSockets.QWebSocketProtocol.VersionLatest
+        )
+        self.ws_client.textMessageReceived.connect(
+            self.all_simulations_progress_web_socket
+        )
+        self.ws_client.error.connect(self.websocket_error)
+        self.ws_client.open(ws_request)
+
+    def stop_listening(self, be_quite=False):
+        """Close websocket client."""
+        if self.ws_client is not None:
+            self.ws_client.textMessageReceived.disconnect(
+                self.all_simulations_progress_web_socket
+            )
+            self.ws_client.error.disconnect(self.websocket_error)
+            self.ws_client.close()
+            if be_quite is False:
+                stop_message = "Checking running simulation stopped."
+                self.thread_finished.emit(stop_message)
+
+    def websocket_error(self, error_code):
+        """Report errors from websocket."""
+        error_string = self.ws_client.errorString()
+        error_msg = f"Websocket error ({error_code}): {error_string}"
+        self.failed.emit(error_msg)
+        self.stop()
+
+    def all_simulations_progress_web_socket(self, data):
+        """Get all simulations progresses through the websocket."""
+        data = json.loads(data)
+        if data.get("type") in ["active-simulations", "active-simulation"]:
+            simulations = data.get("data")
+            for sim_id_str, sim_data_str in simulations.items():
+                sim_id = int(sim_id_str)
+                sim_data = json.loads(sim_data_str)
+                self.running_simulations[sim_id] = sim_data
+                self.simulation_added.emit(sim_data)
+        #         # TODO: filter by organisation!
+        elif data.get("type") == "progress":
+            sim_id = int(data["data"]["simulation_id"])
+            progress_percentage = data["data"]["progress"]
+            sim_data = self.running_simulations[sim_id]
+            sim_data["progress"] = progress_percentage
+            self.simulation_updated.emit(sim_data)
+        elif data.get("type") == "status":
+            sim_id = int(data["data"]["simulation_id"])
+            status_name = data["data"]["status"]
+            sim_data = self.running_simulations[sim_id]
+            sim_data["status"] = status_name
+            self.simulation_updated.emit(sim_data)
+            if status_name == SimulationStatusName.FINISHED.value:
+                if sim_data["progress"] == 100:
+                    statuses = {
+                        status.simulation_id: status
+                        for status in self.tc.fetch_simulation_statuses()
+                    }
+                    sim_status = statuses[sim_id]
+                    sim_data["status"] = SimulationStatusName.FINISHED.value
+                    sim_data["simulation_user_first_name"] = (
+                        sim_status.simulation_user_first_name
+                    )
+                    sim_data["simulation_user_last_name"] = (
+                        sim_status.simulation_user_last_name
+                    )
+                    self.simulation_finished.emit({sim_id: sim_data})
+                else:
+                    sim_data["status"] = SimulationStatusName.STOPPED.value
+        # TODO: clean up old simulations?

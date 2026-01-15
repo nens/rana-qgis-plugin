@@ -234,6 +234,9 @@ class RanaQgisPlugin:
             self.dock_widget.setWidget(self.rana_browser)
             self.loader = Loader(self.communication, self.rana_browser)
 
+            self.rana_browser.request_monitoring_simulations.connect(self.loader.start_simulation_monitoring)
+            self.loader.simulation_task_added.connect(self.rana_browser.simulation_task_added.emit)
+            self.loader.simulation_task_updated.connect(self.rana_browser.simulation_task_updated.emit)
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
