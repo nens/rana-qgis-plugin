@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QDialog,
     QDockWidget,
+    QMessageBox,
     QRadioButton,
     QSizePolicy,
 )
@@ -21,6 +22,7 @@ from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
 from rana_qgis_plugin.utils import parse_url
 from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
+from rana_qgis_plugin.utils_qgis import get_plugin_instance
 from rana_qgis_plugin.utils_settings import (
     get_tenant_id,
     initialize_settings,
@@ -49,7 +51,6 @@ class RanaQgisPlugin:
 
     def check_arguments(self):
         # sys.argv does not seem to be filled yet when starting the plugin
-        # self.communication.show_info(str(sys.argv))
         for arg in QgsApplication.arguments():
             if arg.startswith("rana://"):
                 QTimer.singleShot(
@@ -209,6 +210,14 @@ class RanaQgisPlugin:
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
+
+        if get_plugin_instance("threedi_models_and_simulations"):
+            QMessageBox.warning(
+                None,
+                "M&S plugin detected",
+                "The Models & simulation plugin is still active, but it's replaced by the Rana plugin. Please disable the Models & Simulation plugin.",
+            )
+
         if start_url:
             path_params, query_params = parse_url(start_url)
             if not self.login(path_params["tenant_id"]):
@@ -234,11 +243,18 @@ class RanaQgisPlugin:
             self.dock_widget.setWidget(self.rana_browser)
             self.loader = Loader(self.communication, self.rana_browser)
 
-            self.rana_browser.request_monitoring_simulations.connect(self.loader.start_simulation_monitoring)
-            self.loader.simulation_task_added.connect(self.rana_browser.simulation_task_added.emit)
-            self.loader.simulation_task_updated.connect(self.rana_browser.simulation_task_updated.emit)
+            self.rana_browser.request_monitoring_simulations.connect(
+                self.loader.start_simulation_monitoring
+            )
+            self.loader.simulation_task_added.connect(
+                self.rana_browser.simulation_task_added.emit
+            )
+            self.loader.simulation_task_updated.connect(
+                self.rana_browser.simulation_task_updated.emit
+            )
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
+            self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
@@ -277,7 +293,6 @@ class RanaQgisPlugin:
             self.rana_browser.download_results_selected.connect(
                 self.loader.download_results
             )
-            self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_vector_styling_selected.connect(
                 self.rana_browser.disable

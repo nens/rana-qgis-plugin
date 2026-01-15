@@ -1485,7 +1485,7 @@ class ThreediCalls:
         name: str,
         organisation: str,
         start_datetime: str,
-        end_datetime: str,
+        duration: float,
         **data,
     ) -> Simulation:
         """Create simulation out of the simulation template."""
@@ -1495,7 +1495,7 @@ class ThreediCalls:
                 "template": template,
                 "organisation": organisation,
                 "start_datetime": start_datetime,
-                "end_datetime": end_datetime,
+                "duration": duration,
             }
         )
         simulation = self.threedi_api.simulations_from_template(data)

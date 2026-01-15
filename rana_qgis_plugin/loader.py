@@ -36,9 +36,13 @@ from rana_qgis_plugin.simulation.utils import (
     load_local_schematisation,
     load_remote_schematisation,
 )
-from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker, SimulationMonitorWorker
+from rana_qgis_plugin.simulation.workers import (
+    SchematisationUploadProgressWorker,
+    SimulationMonitorWorker,
+)
 from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
+    get_local_file_path,
     get_threedi_api,
     get_threedi_schematisation_simulation_results_folder,
 )
@@ -73,7 +77,7 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    VectorStyleWorker
+    VectorStyleWorker,
 )
 
 
@@ -156,6 +160,23 @@ class Loader(QObject):
         """Start the worker to download and open files in QGIS"""
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
+            _, local_file_path = get_local_file_path(project["slug"], file["id"])
+            if (
+                file["data_type"] == "threedi_schematisation"
+                and Path(local_file_path).exists()
+            ):
+                confirm_download = QMessageBox.question(
+                    self.parent(),
+                    "Confirm Download",
+                    f"{file['id']} already exists locally. Do you want to download it again?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if confirm_download == QMessageBox.StandardButton.No:
+                    self.on_file_download_finished(
+                        project, file, local_file_path, from_thread=False
+                    )
+                    return
             self.initialize_file_download_worker(project, file)
             self.file_download_worker.start()
         else:
@@ -183,14 +204,17 @@ class Loader(QObject):
         )
         self.file_download_finished.emit(None)
 
-    def on_file_download_finished(self, project, file, local_file_path: str):
+    def on_file_download_finished(
+        self, project, file, local_file_path: str, from_thread=True
+    ):
         self.communication.clear_message_bar()
         self.communication.bar_info(
             f"File(s) downloaded to: {local_file_path}", dur=240
         )
-        sender = self.sender()
-        assert isinstance(sender, QThread)
-        sender.wait()
+        if from_thread:
+            sender = self.sender()
+            assert isinstance(sender, QThread)
+            sender.wait()
 
         if file["data_type"] == "scenario":
             # if zip file, do nothing, else try to load in results analysis
@@ -540,7 +564,7 @@ class Loader(QObject):
         for sim in simulations:
             params = {
                 "project_id": project["id"],
-                "inputs": {"simulation_id": sim.simulation.id},
+                "inputs": {"simulation_id": sim.simulation.id_to_start},
                 "outputs": {
                     "results": {
                         "id": f"{output_file_path}{sim.simulation.name}_{sim.simulation.id}_results.zip"
@@ -653,9 +677,10 @@ class Loader(QObject):
         else:
             results = {}
             # grid and crs are not used when results is empty
-            grid = None
+            grid = {}
             crs = "EPSG:28992"
-        result_browser = ResultBrowser(None, results, crs)
+        pixel_size = grid.get("x", {}).get("cell_size", 1)
+        result_browser = ResultBrowser(None, results, crs, pixel_size)
         if result_browser.exec() == QDialog.DialogCode.Accepted:
             result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
             if len(result_ids) == 0 and not result_browser.get_download_raw_result():

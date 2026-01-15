@@ -1,5 +1,4 @@
 from functools import partial
-from typing import List
 
 from qgis.core import QgsCoordinateReferenceSystem
 from qgis.gui import QgsProjectionSelectionWidget
@@ -11,7 +10,6 @@ from qgis.PyQt.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QGroupBox,
-    QLineEdit,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
@@ -20,12 +18,11 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
-from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils import format_activity_time
 from rana_qgis_plugin.utils_api import (
-    get_filename_from_attachment_url,
     get_schematisations,
 )
+from rana_qgis_plugin.widgets.utils_search import DebouncedSearchBox
 
 
 class SchematisationBrowser(QDialog):
@@ -38,12 +35,14 @@ class SchematisationBrowser(QDialog):
         self.setLayout(layout)
         self.selected_schematisation = None
 
-        self.search_le = QLineEdit(self)
-        self.search_le.addAction(
-            QIcon(":images/themes/default/mIconZoom.svg"), QLineEdit.LeadingPosition
+        self.search_le = DebouncedSearchBox(
+            parent=self,
+            delay_ms=500,
+            min_chars=0,
+            placeholder="Search for a schematisation",
         )
-        self.search_le.setPlaceholderText("Search for a schematisation")
-        self.search_le.textEdited.connect(self.populate_table)
+        self.search_le.searchChanged.connect(self.populate_table)
+
         layout.addWidget(self.search_le, 0, 0)
         spacer = QSpacerItem(60, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         layout.addItem(spacer, 0, 1, 1, 2)
@@ -93,7 +92,6 @@ class SchematisationBrowser(QDialog):
         self.table.setRowCount(0)
         self.ok_button.setEnabled(False)
         search_value = self.search_le.text()
-
         schematisations = get_schematisations(self.communication, search_value)
         for i, schematisation in enumerate(schematisations):
             self.table.insertRow(self.table.rowCount())

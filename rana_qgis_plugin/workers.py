@@ -8,7 +8,7 @@ from typing import List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
-from qgis.core import QgsProject
+from qgis.core import Qgis, QgsMessageLog, QgsProject
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
@@ -21,6 +21,7 @@ from .utils import (
 from .utils_api import (
     finish_file_upload,
     get_raster_file_link,
+    get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
     get_tenant_project_file,
@@ -28,7 +29,7 @@ from .utils_api import (
     get_vector_style_upload_urls,
     map_result_to_file_name,
     request_raster_generate,
-    start_file_upload
+    start_file_upload,
 )
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
@@ -397,6 +398,26 @@ class LizardResultDownloadWorker(QThread):
             # unzip the raw results in the working directory
             with zipfile.ZipFile(local_file_path, "r") as zip_ref:
                 zip_ref.extractall(self.target_folder)
+                # check if there is a zip containing log files, these need to be extracted as well
+                descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
+                try:
+                    sim_id = descriptor["meta"]["simulation"]["id"]
+                    log_zip_path = os.path.join(
+                        self.target_folder, f"log_files_sim_{sim_id}.zip"
+                    )
+                    if os.path.isfile(log_zip_path):
+                        with zipfile.ZipFile(log_zip_path, "r") as log_zip_ref:
+                            log_zip_ref.extractall(self.target_folder)
+                    else:
+                        QgsMessageLog.logMessage(
+                            "Subarchive containing log files not present, ignoring.",
+                            level=Qgis.MessageLevel.Warning,
+                        )
+                except KeyError:
+                    QgsMessageLog.logMessage(
+                        "Subarchive info missing, ignoring.",
+                        level=Qgis.MessageLevel.Critical,
+                    )
 
         descriptor_id = self.file["descriptor_id"]
         task_failed = False
@@ -597,5 +618,3 @@ class LizardResultDownloadWorker(QThread):
 
         if not task_failed:
             self.finished.emit(self.project, self.file, self.target_folder)
-
-
