@@ -307,14 +307,19 @@ class ThreediCalls:
         return downloads
 
     def fetch_3di_models_generating(
-        self, organisations: list[str]
+        self, organisations: Optional[list[str]] = None
     ) -> List[ThreediModel]:
         logger.debug("Fetching threedimodels that are being generated")
+        if not organisations:
+            return self.threedi_api.threedimodels_list(
+                created__date__gt=self.expiration_date,
+                is_generating=True,
+            ).results
         models = []
         for org_uuid in organisations:
             models += self.threedi_api.threedimodels_list(
                 created__date__gt=self.expiration_date,
-                # is_generating=True,
+                is_generating=True,
                 revision__schematisation__owner__unique_id=org_uuid,
             ).results
         return models

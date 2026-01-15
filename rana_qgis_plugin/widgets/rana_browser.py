@@ -465,7 +465,6 @@ class FileView(QWidget):
             self.filename_edit.editingFinished.disconnect(finish_editing)
             self.filename_edit.make_readonly()
             if current_name != self.filename_edit.text():
-                QgsMessageLog.logMessage("Send signal", "DEBUG", Qgis.Info)
                 self.file_signals.get_signal(FileAction.RENAME).emit(
                     selected_item, self.filename_edit.text()
                 )
@@ -1591,6 +1590,7 @@ TaskItem = namedtuple(
 
 class TasksBrowser(QWidget):
     start_monitoring_simulations = pyqtSignal()
+    start_monitoring_model_generation = pyqtSignal()
 
     def __init__(self, communication, parent=None):
         # TODO
@@ -1604,8 +1604,9 @@ class TasksBrowser(QWidget):
         self.setup_ui()
         # TODO: use a more elegant solution, like a model
         self.simulation_row_map = {}
+        self.model_row_map = {}
         QTimer.singleShot(0, lambda: self.start_monitoring_simulations.emit())
-
+        QTimer.singleShot(0, lambda: self.start_monitoring_model_generation.emit())
         # self.populate_tasks()
 
     def setup_ui(self):
@@ -1623,30 +1624,17 @@ class TasksBrowser(QWidget):
         self.models_root = QStandardItem("Models")
         self.tasks_model.appendRow([self.simulation_root])
         self.tasks_model.appendRow([self.models_root])
-        # self.task_groups = {
-        #     "Simulations": self.fetch_simulate_tasks,
-        #     "Rana Models": self.fetch_model_tasks,
-        # }
-        # self.setup_model()
 
-    # def setup_model(self):
-    #     self.roots = {key: QStandardItem(key) for key in self.task_groups.keys()}
-    #     for root in self.roots.values():
-    #         self.tasks_model.appendRow([root])
-
-    def update_simulation_task(self, sim_data):
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage(f"update: {sim_data=}", "DEBUG", Qgis.Info)
-        row = self.simulation_row_map.get(sim_data["uid"])
+    def update_simulation_task(self, task_data):
+        row = self.simulation_row_map.get(task_data["uid"])
         if not row:
             return
         status_item = self.simulation_root.child(row, 3)
-        status_item.setData(sim_data["status"], Qt.ItemDataRole.UserRole)
+        status_item.setData(task_data["status"], Qt.ItemDataRole.UserRole)
         progress_bar = self.tasks_tv.indexWidget(status_item.index())
-        progress = int(sim_data["progress"])
+        progress = int(task_data["progress"])
         progress_bar.setValue(progress)
-        progress_bar.setFormat(f"{sim_data['status']} ({progress}%)")
+        progress_bar.setFormat(f"{task_data['status']} ({progress}%)")
 
     def add_simulation_task(self, task_data):
         root = self.simulation_root
@@ -1669,108 +1657,41 @@ class TasksBrowser(QWidget):
         self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
         self.simulation_row_map[task_data["uid"]] = root.rowCount() - 1
 
-    def fetch_model_tasks(self, tc, organisations: list[str]):
-        # TODO: proper task processing
-        model_list = tc.fetch_3di_models_generating(organisations)
-        model_tasks = []
-        import time
+    def add_model_task(self, task_data):
+        root = self.models_root
+        name_item = QStandardItem(task_data["name"])
+        # TODO: link to rana user and show icon - wait for open PRs
+        user = get_user_by_email(task_data["user_email"])
+        user_str = f"{user['given_name'][0]}{user['family_name'][0]}" if user else "?"
+        who_item = QStandardItem(user_str)
+        date_item = get_timestamp_as_numeric_item(task_data["created"])
+        status_item = QStandardItem()
+        status_item.setData(task_data["status"], Qt.ItemDataRole.UserRole)
+        # Create the progress bar
+        progress_bar = QProgressBar()
+        progress_bar.setValue(int(task_data["finished_tasks"]))
+        progress_bar.setMaximum(int(task_data["total_tasks"]))
+        progress_bar.setFormat(
+            f"{task_data['status']} ({progress_bar.value()} of {progress_bar.maximum()})"
+        )
+        progress_bar.setTextVisible(True)
+        row = [name_item, who_item, date_item, status_item]
+        root.appendRow(row)
+        self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
+        self.model_row_map[task_data["id"]] = root.rowCount() - 1
 
-        for model in model_list:
-            created_str = model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            status = "generating"
-            t0 = time.time()
-            tasks = tc.threedi_api.threedimodels_tasks_list(model.id).results
-            from qgis.core import Qgis, QgsMessageLog
-
-            nof_tasks = len(tasks)
-            nof_completed = 0
-            for task in tasks:
-                nof_completed += 1 if task.status == "success" else 0
-            QgsMessageLog.logMessage(
-                f"retrieving tasks took {time.time() - t0} seconds", "DEBUG", Qgis.Info
-            )
-            model_tasks.append(
-                TaskItem(
-                    name=f"{model.name} (id={model.id})",
-                    # name=model.name,
-                    user_email=model.user,
-                    created=created_str,
-                    status=status,
-                    progress=StepProgress(nof_completed, nof_tasks),
-                )
-            )
-        return model_tasks
-
-    def fetch_simulate_tasks(self, tc, organisations: list[str]):
-        simulation_progress = tc.fetch_simulations_progresses(organisations)
-        simulate_tasks = []
-        for status, progress in simulation_progress:
-            import random
-
-            progress = random.randint(0, 100)
-            # TODO: link to rana user and show icon - wait for open PRs
-            user_email = status.simulation_user_email
-            created_str = status.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            status_item = QStandardItem()
-            status_item.setData(status.name, Qt.ItemDataRole.UserRole)
-            simulate_tasks.append(
-                TaskItem(
-                    name=status.simulation_name,
-                    user_email=user_email,
-                    created=created_str,
-                    status=status.name,
-                    progress=PercentageProgress(progress),
-                )
-            )
-        return simulate_tasks
-
-    def refresh(self):
-        pass
-        # TODO: block UI?
-        # self.populate_tasks()
-
-    def populate_tasks(self):
-        tc = ThreediCalls(get_threedi_api())
-        organisations = get_threedi_organisations()
-        task_map = {
-            name: func(tc, organisations) for name, func in self.task_groups.items()
-        }
-        self.tasks_tv.setUpdatesEnabled(False)
-        self.tasks_model.clear()
-        self.setup_model()
-        for name, tasks in task_map.items():
-            root = self.roots[name]
-            # hide or show based on number of tasks
-            root_index = self.tasks_model.indexFromItem(root)
-            self.tasks_tv.setRowHidden(
-                root_index.row(), root_index.parent(), len(tasks) == 0
-            )
-            self.tasks_tv.setExpanded(self.tasks_model.indexFromItem(root), True)
-            for task in tasks:
-                name_item = QStandardItem(task.name)
-                # TODO: link to rana user and show icon - wait for open PRs
-                user = get_user_by_email(task.user_email)
-                user_str = (
-                    f"{user['given_name'][0]}{user['family_name'][0]}" if user else "?"
-                )
-                who_item = QStandardItem(user_str)
-                date_item = get_timestamp_as_numeric_item(task.created)
-                status_item = QStandardItem()
-                status_item.setData(task.status, Qt.ItemDataRole.UserRole)
-                # Create the progress bar
-                progress_bar = QProgressBar()
-                progress_bar.setValue(task.progress.value)
-                progress_bar.setMaximum(task.progress.max)
-                progress_bar.setFormat(f"{task.status} ({task.progress})")
-                progress_bar.setTextVisible(True)
-                root.appendRow([name_item, who_item, date_item, status_item])
-                self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
-        for col_idx in [1, 2, 3]:
-            self.tasks_tv.header().setSectionResizeMode(
-                col_idx, QHeaderView.ResizeToContents
-            )
-        self.tasks_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.tasks_tv.setUpdatesEnabled(True)
+    def update_model_task(self, task_data):
+        row = self.model_row_map.get(task_data["id"], -1)
+        if row < 0:
+            return
+        status_item = self.models_root.child(row, 3)
+        status_item.setData(task_data["status"], Qt.ItemDataRole.UserRole)
+        progress_bar = self.tasks_tv.indexWidget(status_item.index())
+        progress_bar.setValue(int(task_data["finished_tasks"]))
+        progress_bar.setMaximum(int(task_data["total_tasks"]))
+        progress_bar.setFormat(
+            f"{task_data['status']} ({progress_bar.value()} of {progress_bar.maximum()})"
+        )
 
 
 class RanaBrowser(QWidget):
@@ -1796,6 +1717,9 @@ class RanaBrowser(QWidget):
     request_monitoring_simulations = pyqtSignal()
     simulation_task_added = pyqtSignal(dict)
     simulation_task_updated = pyqtSignal(dict)
+    request_monitoring_model_generation = pyqtSignal()
+    model_task_added = pyqtSignal(dict)
+    model_task_updated = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -1917,8 +1841,13 @@ class RanaBrowser(QWidget):
         self.tasks_browser.start_monitoring_simulations.connect(
             lambda: self.request_monitoring_simulations.emit()
         )
+        self.tasks_browser.start_monitoring_model_generation.connect(
+            self.request_monitoring_model_generation.emit
+        )
         self.simulation_task_added.connect(self.tasks_browser.add_simulation_task)
         self.simulation_task_updated.connect(self.tasks_browser.update_simulation_task)
+        self.model_task_added.connect(self.tasks_browser.add_model_task)
+        self.model_task_updated.connect(self.tasks_browser.update_model_task)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
@@ -2090,12 +2019,10 @@ class RanaBrowser(QWidget):
 
     @pyqtSlot()
     def refresh(self):
-        if self.rana_browser.currentIndex() == 0:
-            root_stack = self.rana_files
-        else:
-            root_stack = self.rana_tasks
+        if self.rana_browser.currentIndex() == 1:
+            return
         if hasattr(root_stack.currentWidget(), "refresh"):
-            root_stack.currentWidget().refresh()
+            self.rana_files.currentWidget().refresh()
             self.last_refresh_time = time.time()
         else:
             raise Exception("Attempted refresh on widget without refresh support")

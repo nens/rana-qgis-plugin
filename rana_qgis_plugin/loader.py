@@ -37,6 +37,7 @@ from rana_qgis_plugin.simulation.utils import (
     load_remote_schematisation,
 )
 from rana_qgis_plugin.simulation.workers import (
+    ModelGenerationMonitorWorker,
     SchematisationUploadProgressWorker,
     SimulationMonitorWorker,
 )
@@ -113,6 +114,8 @@ class Loader(QObject):
     model_deleted = pyqtSignal()
     simulation_task_added = pyqtSignal(dict)
     simulation_task_updated = pyqtSignal(dict)
+    model_task_added = pyqtSignal(dict)
+    model_task_updated = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -1185,5 +1188,16 @@ class Loader(QObject):
         )
         monitor_worker.simulation_added.connect(self.simulation_task_added)
         monitor_worker.simulation_updated.connect(self.simulation_task_updated)
+        monitor_worker.failed.connect(self.communication.show_warn)
+        monitor_worker.start()
+
+    @pyqtSlot()
+    def start_model_generation_monitoring(self):
+        organisation_uuids = get_threedi_organisations()
+        monitor_worker = ModelGenerationMonitorWorker(
+            organisation_uuids=organisation_uuids, parent=self
+        )
+        monitor_worker.model_added.connect(self.model_task_added)
+        monitor_worker.model_updated.connect(self.model_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
         monitor_worker.start()

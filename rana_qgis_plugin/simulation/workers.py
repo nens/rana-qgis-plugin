@@ -1593,6 +1593,7 @@ class SimulationMonitorWorker(QThread):
         self.stop()
 
     def all_simulations_progress_web_socket(self, data):
+        # TODO: organize this code an use unified format for returned data
         """Get all simulations progresses through the websocket."""
         data = json.loads(data)
         if data.get("type") in ["active-simulations", "active-simulation"]:
@@ -1637,3 +1638,83 @@ class SimulationMonitorWorker(QThread):
                 else:
                     sim_data["status"] = SimulationStatusName.STOPPED.value
         # TODO: clean up old simulations?
+
+
+class ModelGenerationMonitorWorker(QThread):
+    failed = pyqtSignal(str)
+    model_added = pyqtSignal(dict)
+    model_updated = pyqtSignal(dict)
+    model_finished = pyqtSignal(dict)
+
+    def __init__(self, organisation_uuids, parent=None):
+        # TODO: remove finished from list
+        super().__init__(parent)
+        self.active_models = {}
+        self.tc = ThreediCalls(get_threedi_api())
+        self.organisation_uuids = organisation_uuids
+        self._stop_flag = False
+
+    def run(self):
+        while True:
+            self.update_tasks()
+            # TODO consider sleep interval
+            QThread.sleep(5)
+
+    def stop(self):
+        """Gracefully stop the worker"""
+        self._stop_flag = True
+        self.wait()
+
+    def update_tasks(self):
+        fetched_models = self.tc.fetch_3di_models_generating(self.organisation_uuids)
+        generating_models = {model.id: model for model in fetched_models}
+        # clean up active models
+        inactive_model_ids = set(self.active_models.keys()).difference(
+            generating_models.keys()
+        )
+        for model_id in inactive_model_ids:
+            model = self.active_models.pop(model_id)
+            model["finished_tasks"] = model["total_tasks"]
+            self.model_updated.emit(model)
+            # TODO: use this signal (?)
+            self.model_finished.emit(model)
+
+        # add new models
+        new_model_ids = set(generating_models.keys()).difference(
+            self.active_models.keys()
+        )
+        for model_id in new_model_ids:
+            model = generating_models[model_id]
+            self._add_model(model)
+            self.model_added.emit(self.active_models[model.id])
+        # update active models
+        for model_id in self.active_models:
+            changed = self._update_model(model_id)
+            if changed:
+                self.model_updated.emit(self.active_models[model_id])
+
+    def _add_model(self, model):
+        self.active_models[model.id] = {
+            "id": model.id,
+            "created": model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "name": model.name,
+            "user_email": model.user,
+            "status": "generating",
+            "total_tasks": None,
+            "finished_tasks": None,
+        }
+        self._update_model(model.id)
+
+    def _update_model(self, model_id) -> bool:
+        tasks = self.tc.fetch_3di_model_tasks(model_id)
+        nof_completed = 0
+        for task in tasks:
+            nof_completed += 1 if task.status == "success" else 0
+        changed = False
+        if nof_completed != self.active_models[model_id]["finished_tasks"]:
+            self.active_models[model_id]["finished_tasks"] = nof_completed
+            changed = True
+        if len(tasks) != self.active_models[model_id]["total_tasks"]:
+            self.active_models[model_id]["total_tasks"] = len(tasks)
+            changed = True
+        return changed
