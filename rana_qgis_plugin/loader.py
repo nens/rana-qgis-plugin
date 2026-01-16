@@ -114,7 +114,7 @@ class Loader(QObject):
     model_deleted = pyqtSignal()
     simulation_tasks_added = pyqtSignal(list)
     simulation_task_updated = pyqtSignal(dict)
-    model_task_added = pyqtSignal(dict)
+    model_tasks_added = pyqtSignal(list)
     model_task_updated = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
@@ -1194,7 +1194,7 @@ class Loader(QObject):
         monitor_worker = ModelGenerationMonitorWorker(
             organisation_uuids=organisation_uuids, parent=self
         )
-        monitor_worker.model_added.connect(self.model_task_added)
+        monitor_worker.models_added.connect(self.model_tasks_added)
         monitor_worker.model_updated.connect(self.model_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
         monitor_worker.start()

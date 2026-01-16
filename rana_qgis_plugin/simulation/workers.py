@@ -1512,6 +1512,7 @@ class SimulationMonitorWorker(QThread):
     simulation_finished = pyqtSignal(dict)
 
     def __init__(self, organisation_uuids, parent=None):
+        # TODO: reconsider internal data tracking and format
         # TODO: use or remove unused methods and signals!
         super().__init__(parent)
         self.ws_client = None
@@ -1671,7 +1672,7 @@ class SimulationMonitorWorker(QThread):
 
 class ModelGenerationMonitorWorker(QThread):
     failed = pyqtSignal(str)
-    model_added = pyqtSignal(dict)
+    models_added = pyqtSignal(list)
     model_updated = pyqtSignal(dict)
     model_finished = pyqtSignal(dict)
 
@@ -1684,6 +1685,7 @@ class ModelGenerationMonitorWorker(QThread):
         self._stop_flag = False
 
     def run(self):
+        self.fetch_finished_tasks()
         while True:
             self.update_tasks()
             # TODO consider sleep interval
@@ -1694,8 +1696,23 @@ class ModelGenerationMonitorWorker(QThread):
         self._stop_flag = True
         self.wait()
 
+    def fetch_finished_tasks(self):
+        fetched_models = self.tc.fetch_3di_models(
+            organisation_uuids=self.organisation_uuids, use_is_generating=False
+        )
+        model_dicts = []
+        for model in fetched_models:
+            model_dict = self._get_model_dict(model)
+            model_dict["status"] = "finished" if model.is_valid else "failed"
+            model_dict["finished_tasks"] = 1
+            model_dict["total_tasks"] = 1
+            model_dicts.append(model_dict)
+        self.models_added.emit(model_dicts)
+
     def update_tasks(self):
-        fetched_models = self.tc.fetch_3di_models_generating(self.organisation_uuids)
+        fetched_models = self.tc.fetch_3di_models(
+            organisation_uuids=self.organisation_uuids, use_is_generating=True
+        )
         generating_models = {model.id: model for model in fetched_models}
         # clean up active models
         inactive_model_ids = set(self.active_models.keys()).difference(
@@ -1713,26 +1730,29 @@ class ModelGenerationMonitorWorker(QThread):
             self.active_models.keys()
         )
         for model_id in new_model_ids:
-            model = generating_models[model_id]
-            self._add_model(model)
-            self.model_added.emit(self.active_models[model.id])
+            self.active_models[model.id] = self._get_model_dict(
+                generating_models[model_id]
+            )
+            self._update_model(model.id)
+        self.models_added.emit(
+            [self.active_models[model_id] for model_id in new_model_ids]
+        )
         # update active models
         for model_id in self.active_models:
             changed = self._update_model(model_id)
             if changed:
                 self.model_updated.emit(self.active_models[model_id])
 
-    def _add_model(self, model):
-        self.active_models[model.id] = {
+    def _get_model_dict(self, model):
+        return {
             "id": model.id,
             "created": model.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "name": model.name,
             "user_email": model.user,
             "status": "generating",
-            "total_tasks": None,
-            "finished_tasks": None,
+            "total_tasks": 0,
+            "finished_tasks": 0,
         }
-        self._update_model(model.id)
 
     def _update_model(self, model_id) -> bool:
         tasks = self.tc.fetch_3di_model_tasks(model_id)

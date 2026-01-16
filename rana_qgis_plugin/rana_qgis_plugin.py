@@ -256,8 +256,8 @@ class RanaQgisPlugin:
             self.rana_browser.request_monitoring_model_generation.connect(
                 self.loader.start_model_generation_monitoring
             )
-            self.loader.model_task_added.connect(
-                self.rana_browser.model_task_added.emit
+            self.loader.model_tasks_added.connect(
+                self.rana_browser.model_tasks_added.emit
             )
             self.loader.model_task_updated.connect(
                 self.rana_browser.model_task_updated.emit

@@ -306,22 +306,35 @@ class ThreediCalls:
             downloads.append((result_file, download))
         return downloads
 
+    def fetch_3di_models(
+        self,
+        organisation_uuids: Optional[list[str]] = None,
+        use_is_generating: bool = False,
+    ) -> List[ThreediModel]:
+        """Fetch 3Di models available for current user."""
+        params = {"created__date__gt": self.expiration_date}
+        if use_is_generating:
+            params["is_generating"] = True
+        if organisation_uuids is None:
+            return self.paginated_fetch(self.threedi_api.threedimodels_list, **params)
+        models = []
+        for organisation_uuid in organisation_uuids:
+            params["revision__schematisation__owner__unique_id"] = organisation_uuid
+            models += self.paginated_fetch(
+                self.threedi_api.threedimodels_list, **params
+            )
+        return models
+
     def fetch_3di_models_generating(
         self, organisations: Optional[list[str]] = None
     ) -> List[ThreediModel]:
-        logger.debug("Fetching threedimodels that are being generated")
-        if not organisations:
-            return self.threedi_api.threedimodels_list(
-                created__date__gt=self.expiration_date,
-                is_generating=True,
-            ).results
+        if organisations is None:
+            return self.fetch_3di_models(use_is_generating=True)
         models = []
-        for org_uuid in organisations:
-            models += self.threedi_api.threedimodels_list(
-                created__date__gt=self.expiration_date,
-                is_generating=True,
-                revision__schematisation__owner__unique_id=org_uuid,
-            ).results
+        for organisation_uuid in organisations:
+            models += self.fetch_3di_models(
+                use_is_generating=True, organisation_uuid=organisation_uuid
+            )
         return models
 
     def fetch_3di_model(self, threedimodel_id: int) -> ThreediModel:

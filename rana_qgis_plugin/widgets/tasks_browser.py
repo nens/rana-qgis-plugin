@@ -72,7 +72,10 @@ class ModelTaskData(TaskData):
         )
 
     def progress_str(self):
-        return f"{self.status} ({self.progress} of {self.max_progress})"
+        if self.max_progress == self.progress:
+            return self.status
+        else:
+            return f"{self.status} ({self.progress} of {self.max_progress})"
 
 
 class TasksBrowser(QWidget):
@@ -172,10 +175,11 @@ class TasksBrowser(QWidget):
                 self.simulation_row_map,
             )
 
-    def add_model_task(self, task_data):
-        self.add_task(
-            ModelTaskData.from_dict(task_data), self.models_root, self.model_row_map
-        )
+    def add_model_tasks(self, task_dicts):
+        for task_data in task_dicts:
+            self.add_task(
+                ModelTaskData.from_dict(task_data), self.models_root, self.model_row_map
+            )
 
     def update_task(self, task, root, row_map):
         row = row_map.get(task.id, -1)

@@ -1609,7 +1609,7 @@ class RanaBrowser(QWidget):
     simulation_tasks_added = pyqtSignal(list)
     simulation_task_updated = pyqtSignal(dict)
     request_monitoring_model_generation = pyqtSignal()
-    model_task_added = pyqtSignal(dict)
+    model_tasks_added = pyqtSignal(list)
     model_task_updated = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
@@ -1741,7 +1741,7 @@ class RanaBrowser(QWidget):
         )
         self.simulation_tasks_added.connect(self.tasks_browser.add_simulation_tasks)
         self.simulation_task_updated.connect(self.tasks_browser.update_simulation_task)
-        self.model_task_added.connect(self.tasks_browser.add_model_task)
+        self.model_tasks_added.connect(self.tasks_browser.add_model_tasks)
         self.model_task_updated.connect(self.tasks_browser.update_model_task)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
