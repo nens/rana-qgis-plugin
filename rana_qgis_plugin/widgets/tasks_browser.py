@@ -164,12 +164,13 @@ class TasksBrowser(QWidget):
         progress_bar.setMaximum(task.max_progress)
         progress_bar.setFormat(task.progress_str())
 
-    def add_simulation_task(self, task_data):
-        self.add_task(
-            SimulationTaskData.from_dict(task_data),
-            self.simulation_root,
-            self.simulation_row_map,
-        )
+    def add_simulation_tasks(self, task_dicts):
+        for task_data in task_dicts:
+            self.add_task(
+                SimulationTaskData.from_dict(task_data),
+                self.simulation_root,
+                self.simulation_row_map,
+            )
 
     def add_model_task(self, task_data):
         self.add_task(

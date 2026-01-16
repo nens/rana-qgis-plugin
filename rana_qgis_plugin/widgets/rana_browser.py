@@ -1606,7 +1606,7 @@ class RanaBrowser(QWidget):
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
     request_monitoring_simulations = pyqtSignal()
-    simulation_task_added = pyqtSignal(dict)
+    simulation_tasks_added = pyqtSignal(list)
     simulation_task_updated = pyqtSignal(dict)
     request_monitoring_model_generation = pyqtSignal()
     model_task_added = pyqtSignal(dict)
@@ -1739,7 +1739,7 @@ class RanaBrowser(QWidget):
         self.tasks_browser.start_monitoring_model_generation.connect(
             self.request_monitoring_model_generation.emit
         )
-        self.simulation_task_added.connect(self.tasks_browser.add_simulation_task)
+        self.simulation_tasks_added.connect(self.tasks_browser.add_simulation_tasks)
         self.simulation_task_updated.connect(self.tasks_browser.update_simulation_task)
         self.model_task_added.connect(self.tasks_browser.add_model_task)
         self.model_task_updated.connect(self.tasks_browser.update_model_task)

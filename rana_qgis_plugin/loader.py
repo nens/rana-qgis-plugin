@@ -112,7 +112,7 @@ class Loader(QObject):
     model_created = pyqtSignal()
     revision_saved = pyqtSignal()
     model_deleted = pyqtSignal()
-    simulation_task_added = pyqtSignal(dict)
+    simulation_tasks_added = pyqtSignal(list)
     simulation_task_updated = pyqtSignal(dict)
     model_task_added = pyqtSignal(dict)
     model_task_updated = pyqtSignal(dict)
@@ -1180,13 +1180,10 @@ class Loader(QObject):
 
     @pyqtSlot()
     def start_simulation_monitoring(self):
-        tc = ThreediCalls(get_threedi_api())
-        organisations = tc.fetch_organisations(uuids=get_threedi_organisations())
-        organisation_names = [organisation.name for organisation in organisations]
         monitor_worker = SimulationMonitorWorker(
-            organisation_names=organisation_names, parent=self
+            organisation_uuids=get_threedi_organisations(), parent=self
         )
-        monitor_worker.simulation_added.connect(self.simulation_task_added)
+        monitor_worker.simulations_added.connect(self.simulation_tasks_added)
         monitor_worker.simulation_updated.connect(self.simulation_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
         monitor_worker.start()

@@ -247,8 +247,8 @@ class RanaQgisPlugin:
             self.rana_browser.request_monitoring_simulations.connect(
                 self.loader.start_simulation_monitoring
             )
-            self.loader.simulation_task_added.connect(
-                self.rana_browser.simulation_task_added.emit
+            self.loader.simulation_tasks_added.connect(
+                self.rana_browser.simulation_tasks_added.emit
             )
             self.loader.simulation_task_updated.connect(
                 self.rana_browser.simulation_task_updated.emit

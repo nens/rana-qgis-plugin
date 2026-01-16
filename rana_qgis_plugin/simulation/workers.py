@@ -24,6 +24,7 @@ from ..auth_3di import get_3di_auth
 from ..utils import get_threedi_api
 from ..utils_api import get_frontend_settings
 from .data_models import simulation_data_models as dm
+from .data_models.enumerators import SimulationStatusName
 from .threedi_calls import ThreediCalls
 from .utils import (
     BOUNDARY_CONDITIONS_TEMPLATE,
@@ -1506,18 +1507,24 @@ class SchematisationUploadProgressWorker(QRunnable):
 class SimulationMonitorWorker(QThread):
     thread_finished = pyqtSignal(str)
     failed = pyqtSignal(str)
-    simulation_added = pyqtSignal(dict)
+    simulations_added = pyqtSignal(list)
     simulation_updated = pyqtSignal(dict)
     simulation_finished = pyqtSignal(dict)
 
-    def __init__(self, organisation_names, parent=None):
+    def __init__(self, organisation_uuids, parent=None):
         # TODO: use or remove unused methods and signals!
         super().__init__(parent)
         self.ws_client = None
         self.running_simulations = {}
-        self.organisation_names = organisation_names
+        self.tc = ThreediCalls(get_threedi_api())
+        self.organisation_uuids = organisation_uuids
+        self.organisation_names = [
+            organisation.name
+            for organisation in self.tc.fetch_organisations(uuids=organisation_uuids)
+        ]
 
     def run(self):
+        self.fetch_finished_simulations()
         self.start_listening()
         # start event loop when the websocket is opened
         if self.ws_client:
@@ -1528,6 +1535,26 @@ class SimulationMonitorWorker(QThread):
             self.ws_client.close()
         self.quit()
         self.wait()
+
+    def fetch_finished_simulations(self):
+        finished_simulations_data = []
+        for organisation_uuid in self.organisation_uuids:
+            finished_simulations_statuses = self.tc.fetch_simulation_statuses(
+                name=SimulationStatusName.FINISHED.value,
+                simulation__organisation__unique_id=organisation_uuid,
+            )
+            finished_simulations_data += [
+                {
+                    "date_created": status.created.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                    "name": status.simulation_name,
+                    "progress": 100,
+                    "status": status.name,
+                    "user_name": status.simulation_user_email,
+                    "uid": status.simulation_id,
+                }
+                for status in finished_simulations_statuses
+            ]
+        self.simulations_added.emit(finished_simulations_data)
 
     @staticmethod
     def _get_auth_token() -> str:
@@ -1598,19 +1625,21 @@ class SimulationMonitorWorker(QThread):
         data = json.loads(data)
         if data.get("type") in ["active-simulations", "active-simulation"]:
             simulations = data.get("data")
+            new_simulations = []
             for sim_id_str, sim_data_str in simulations.items():
                 sim_id = int(sim_id_str)
                 sim_data = json.loads(sim_data_str)
                 if sim_data["organisation_name"] not in self.organisation_names:
                     continue
                 self.running_simulations[sim_id] = sim_data
-                self.simulation_added.emit(sim_data)
+                new_simulations.append(sim_data)
+            self.simulations_added.emit(new_simulations)
+        # self.simulation_added.emit(sim_data)
         elif data.get("type") == "progress":
             sim_id = int(data["data"]["simulation_id"])
             sim_data = self.running_simulations.get(sim_id)
             if not sim_data:
                 return
-            sim_data = self.running_simulations[sim_id]
             sim_data["progress"] = data["data"]["progress"]
             self.simulation_updated.emit(sim_data)
         elif data.get("type") == "status":
