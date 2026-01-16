@@ -226,7 +226,9 @@ class Loader(QObject):
                             "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
                         ):
                             ra_tool.load_result(result_path, admin_path)
-                            ra_tool.toggle_results_manager.run()
+                            if not ra_tool.dockwidget.isVisible():
+                                ra_tool.toggle_results_manager.run()  # also does some initialisation
+
         else:
             schematisation = None
             if file["data_type"] == "threedi_schematisation":

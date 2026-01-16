@@ -10,6 +10,7 @@ History
 - Reorganize FileView widget with collapsible groups
 - Add option to filter by contributor and show contributors in project view
 - Show Created at column for projects (#3025)
+- Ensured Results Analysis Tool window remains visible when scenarios are loaded. (#3350)
 
 
 1.2.2 (2026-01-12)
