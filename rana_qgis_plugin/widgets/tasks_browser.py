@@ -18,6 +18,10 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.utils import get_timestamp_as_numeric_item
 from rana_qgis_plugin.utils_api import get_user_by_email
+from rana_qgis_plugin.widgets.utils_avatars import (
+    ContributorAvatarsDelegate,
+    get_user_image_from_initials,
+)
 
 
 @dataclass
@@ -74,14 +78,14 @@ class TasksBrowser(QWidget):
     start_monitoring_simulations = pyqtSignal()
     start_monitoring_model_generation = pyqtSignal()
 
-    def __init__(self, communication, parent=None):
+    def __init__(self, communication, avatar_cache, parent=None):
         # TODO
         # - filter
         # - pagination
         # - only populate on opening
-        # - avatars (waiting for prs)
         super().__init__(parent)
         self.communication = communication
+        self.avatar_cache = avatar_cache
         self.tasks = []
         self.setup_ui()
         self.simulation_row_map = {}
@@ -104,13 +108,30 @@ class TasksBrowser(QWidget):
         self.models_root = QStandardItem("Models")
         self.tasks_model.appendRow([self.simulation_root])
         self.tasks_model.appendRow([self.models_root])
+        avatar_delegate = ContributorAvatarsDelegate(self.tasks_tv)
+        self.tasks_tv.setItemDelegateForColumn(1, avatar_delegate)
 
     def add_task(self, task, root, row_map):
         name_item = QStandardItem(task.name)
-        # TODO: link to rana user and show icon - wait for open PRs
         user = get_user_by_email(task.user_email)
-        user_str = f"{user['given_name'][0]}{user['family_name'][0]}" if user else "?"
-        who_item = QStandardItem(user_str)
+        if user:
+            user_data = [
+                {
+                    "id": user["id"],
+                    "name": user["given_name"] + " " + user["family_name"],
+                    "avatar": self.avatar_cache.get_avatar_for_user(user),
+                }
+            ]
+        else:
+            user_data = [
+                {
+                    "id": None,
+                    "name": "unknown user",
+                    "avatar": get_user_image_from_initials("?"),
+                }
+            ]
+        who_item = QStandardItem()
+        who_item.setData(user_data, Qt.ItemDataRole.UserRole)
         date_item = get_timestamp_as_numeric_item(task.created)
         status_item = QStandardItem()
         status_item.setData(task.status, Qt.ItemDataRole.UserRole)

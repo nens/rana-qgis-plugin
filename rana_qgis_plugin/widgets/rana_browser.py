@@ -1727,7 +1727,11 @@ class RanaBrowser(QWidget):
         self.rana_files.addWidget(self.file_view)
         self.rana_files.addWidget(self.revisions_view)
 
-        self.tasks_browser = TasksBrowser(communication=self.communication, parent=self)
+        self.tasks_browser = TasksBrowser(
+            communication=self.communication,
+            avatar_cache=self.avatar_cache,
+            parent=self,
+        )
         self.rana_tasks.addWidget(self.tasks_browser)
         self.tasks_browser.start_monitoring_simulations.connect(
             lambda: self.request_monitoring_simulations.emit()
