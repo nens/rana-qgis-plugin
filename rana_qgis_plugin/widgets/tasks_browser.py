@@ -10,6 +10,7 @@ from qgis.PyQt.QtGui import (
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
+    QHeaderView,
     QProgressBar,
     QTreeView,
     QVBoxLayout,
@@ -104,12 +105,22 @@ class TasksBrowser(QWidget):
         self.setLayout(layout)
         # create root items, they will be added on populating
         self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
+
         self.simulation_root = QStandardItem("Simulations")
         self.models_root = QStandardItem("Models")
         self.tasks_model.appendRow([self.simulation_root])
         self.tasks_model.appendRow([self.models_root])
+        self.tasks_tv.expandAll()
         avatar_delegate = ContributorAvatarsDelegate(self.tasks_tv)
         self.tasks_tv.setItemDelegateForColumn(1, avatar_delegate)
+        # TODO: handle this better!
+        self.tasks_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.tasks_tv.header().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.tasks_tv.header().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.tasks_tv.header().setSectionResizeMode(3, QHeaderView.Fixed)
+        self.tasks_tv.setColumnWidth(1, 50)
+        self.tasks_tv.setColumnWidth(2, 100)
+        self.tasks_tv.setColumnWidth(3, 10)
 
     def add_task(self, task, root, row_map):
         name_item = QStandardItem(task.name)
@@ -137,12 +148,15 @@ class TasksBrowser(QWidget):
         status_item.setData(task.status, Qt.ItemDataRole.UserRole)
         # Create the progress bar
         progress_bar = QProgressBar()
+        progress_bar.setFixedWidth(200)
         self.update_pb_progress(progress_bar, task)
         progress_bar.setTextVisible(True)
         row = [name_item, who_item, date_item, status_item]
         root.appendRow(row)
         self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
         row_map[task.id] = root.rowCount() - 1
+        self.tasks_tv.resizeColumnToContents(0)
+        self.tasks_tv.resizeColumnToContents(3)
 
     @staticmethod
     def update_pb_progress(progress_bar, task):
