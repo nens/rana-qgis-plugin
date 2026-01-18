@@ -161,7 +161,7 @@ class BreachSourceType(Enum):
     FLOWLINES = "1D2D Flowlines"
 
 
-numerical_diffusion_limiter_to_int = {"Off": 0, "Standard": 1, "Pulse conserving": 2}
+numerical_diffusion_limiter_to_int = {"Off": 0, "Standard": 1}
 int_to_numerical_diffusion_limiter = {
     v: k for (k, v) in numerical_diffusion_limiter_to_int.items()
 }
