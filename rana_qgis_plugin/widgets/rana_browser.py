@@ -749,15 +749,18 @@ class FileView(QWidget):
         self.update_file_action_buttons(selected_file)
 
     def refresh(self):
-        assert self.selected_file
-        self.selected_file = get_tenant_project_file(
+        # Get fresh object to retrieve correct last_modified
+        updated_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
-        last_modified_key = (
-            f"{self.project['name']}/{self.selected_file['id']}/last_modified"
-        )
-        QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
-        self.show_selected_file_details(self.selected_file)
+        # Only update if new file is still there
+        if updated_file:
+            self.selected_file = updated_file
+            last_modified_key = (
+                f"{self.project['name']}/{self.selected_file['id']}/last_modified"
+            )
+            QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
+            self.show_selected_file_details(self.selected_file)
 
 
 class CreateFolderDialog(QDialog):
