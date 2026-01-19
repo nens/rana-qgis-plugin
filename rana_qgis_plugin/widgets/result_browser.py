@@ -37,6 +37,7 @@ class ResultBrowser(QDialog):
         self.selected_crs = None
 
         self.download_raw_data_bx = QCheckBox("Download simulation results", self)
+        self.download_raw_data_bx.setChecked(True)
         layout.addWidget(self.download_raw_data_bx)
 
         results_group = QGroupBox("Download post-processing results", self)
@@ -188,7 +189,6 @@ class ResultBrowser(QDialog):
             self.pixelsize_box.setEnabled(False)
             self.crs_select_box.setEnabled(False)
             # check download raw data by default
-            self.download_raw_data_bx.setChecked(True)
 
         self.results_table.resizeColumnsToContents()
         layout.addWidget(results_group)
