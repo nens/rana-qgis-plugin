@@ -461,10 +461,10 @@ class FileView(QWidget):
             self.filename_edit.editingFinished.disconnect(finish_editing)
             self.filename_edit.make_readonly()
             if current_name != self.filename_edit.text():
-                QgsMessageLog.logMessage("Send signal", "DEBUG", Qgis.Info)
                 self.file_signals.get_signal(FileAction.RENAME).emit(
                     selected_item, self.filename_edit.text()
                 )
+                self.selected_file["id"] = self.filename_edit.text()
 
         self.filename_edit.make_editable()
 
