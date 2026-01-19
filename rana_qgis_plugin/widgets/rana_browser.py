@@ -562,7 +562,7 @@ class FileView(QWidget):
             if selected_file["data_type"] != "threedi_schematisation"
             else "N/A"
         )
-        self.filename_edit = EditLabel(filename)
+        self.filename_edit.setText(filename)
         self.filename_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.filename_edit.adjustSize()
 
