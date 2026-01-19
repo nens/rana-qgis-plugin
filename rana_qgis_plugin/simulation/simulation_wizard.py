@@ -45,6 +45,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QSpinBox,
+    QTableView,
     QTableWidgetItem,
     QWidget,
     QWizard,
@@ -324,6 +325,7 @@ class SubstancesWidget(uicls_substances, basecls_substances):
             self.NUMERICAL_DIFFUSION_LIMITER_COLUMN,
             EnumDelegate(self.tw_substances, numerical_diffusion_limiter_to_int.keys()),
         )
+        self.tw_substances.setEditTriggers(QTableView.AllEditTriggers)
 
     def prepopulate_substances_table(self, substances):
         self.tw_substances.setRowCount(0)
