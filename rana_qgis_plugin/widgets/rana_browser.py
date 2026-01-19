@@ -367,6 +367,7 @@ class FileView(QWidget):
         self.project = None
         self.file_signals = file_signals
         self.setup_ui()
+        self.no_refresh = False
 
     def update_project(self, project: dict):
         self.project = project
@@ -456,6 +457,7 @@ class FileView(QWidget):
     def edit_file_name(self, selected_item: dict):
         # this should really not happen so just continue silently if that happens
         current_name = self.filename_edit.text()
+        self.no_refresh = True
 
         def finish_editing():
             self.filename_edit.editingFinished.disconnect(finish_editing)
@@ -465,7 +467,10 @@ class FileView(QWidget):
                     selected_item, self.filename_edit.text()
                 )
                 self.selected_file["id"] = self.filename_edit.text()
+            self.file_action_btn_dict[FileAction.RENAME].setEnabled(True)
+            self.no_refresh = False
 
+        self.file_action_btn_dict[FileAction.RENAME].setEnabled(False)
         self.filename_edit.make_editable()
 
         # Set up single-shot connection
@@ -749,6 +754,9 @@ class FileView(QWidget):
         self.update_file_action_buttons(selected_file)
 
     def refresh(self):
+        # Skip refresh because user is interacting with state of the file
+        if self.no_refresh:
+            return
         # Get fresh object to retrieve correct last_modified
         updated_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
