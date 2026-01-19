@@ -1,17 +1,16 @@
 from dataclasses import dataclass
 
-from qgis.PyQt.QtCore import (
-    Qt,
-    QTimer,
-    pyqtSignal,
-)
-from qgis.PyQt.QtGui import (
-    QStandardItem,
-    QStandardItemModel,
-)
+from qgis.PyQt.QtCore import QEvent, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel, QTextDocument
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QHeaderView,
     QProgressBar,
+    QSizePolicy,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QToolTip,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -23,6 +22,42 @@ from rana_qgis_plugin.widgets.utils_avatars import (
     ContributorAvatarsDelegate,
     get_user_image_from_initials,
 )
+
+
+class WordWrapDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        options = QStyleOptionViewItem(option)
+        self.initStyleOption(options, index)
+        options.features |= QStyleOptionViewItem.WrapText
+        style = (
+            QApplication.style() if options.widget is None else options.widget.style()
+        )
+        style.drawControl(QStyle.CE_ItemViewItem, options, painter)
+
+    def sizeHint(self, option, index):
+        options = QStyleOptionViewItem(option)
+        self.initStyleOption(options, index)
+        options.features |= QStyleOptionViewItem.WrapText
+
+        # Calculate required size with wrapping
+        doc = QTextDocument()
+        doc.setHtml(options.text)
+        doc.setTextWidth(option.rect.width())
+
+        # Convert float height to int using round or int
+        return QSize(option.rect.width(), int(doc.size().height()))
+
+    def helpEvent(self, event, view, option, index):
+        """Handle tooltip events to show the full text when hovering."""
+        if not event or not view or event.type() != QEvent.ToolTip:
+            return super().helpEvent(event, view, option, index)
+
+        text = index.data(Qt.DisplayRole)
+        if not text:
+            return super().helpEvent(event, view, option, index)
+
+        QToolTip.showText(event.globalPos(), text)
+        return True
 
 
 @dataclass
@@ -85,8 +120,6 @@ class TasksBrowser(QWidget):
     def __init__(self, communication, avatar_cache, parent=None):
         # TODO
         # - filter
-        # - pagination
-        # - only populate on opening
         super().__init__(parent)
         self.communication = communication
         self.avatar_cache = avatar_cache
@@ -116,14 +149,20 @@ class TasksBrowser(QWidget):
         self.tasks_tv.expandAll()
         avatar_delegate = ContributorAvatarsDelegate(self.tasks_tv)
         self.tasks_tv.setItemDelegateForColumn(1, avatar_delegate)
-        # TODO: handle this better!
+        name_delegate = WordWrapDelegate(self.tasks_tv)
+        self.tasks_tv.setItemDelegateForColumn(0, name_delegate)
+        self.tasks_tv.setWordWrap(True)
+        self.tasks_tv.setUniformRowHeights(False)
+        self.tasks_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.tasks_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tasks_tv.header().setSectionResizeMode(1, QHeaderView.Fixed)
         self.tasks_tv.header().setSectionResizeMode(2, QHeaderView.Fixed)
         self.tasks_tv.header().setSectionResizeMode(3, QHeaderView.Fixed)
         self.tasks_tv.setColumnWidth(1, 50)
-        self.tasks_tv.setColumnWidth(2, 100)
-        self.tasks_tv.setColumnWidth(3, 10)
+        self.tasks_tv.setColumnWidth(2, 150)
+        self.tasks_tv.setColumnWidth(3, 160)
+        self.tasks_tv.header().setStretchLastSection(False)
 
     def add_task(self, task, root, row_map):
         name_item = QStandardItem(task.name)
@@ -151,7 +190,7 @@ class TasksBrowser(QWidget):
         status_item.setData(task.status, Qt.ItemDataRole.UserRole)
         # Create the progress bar
         progress_bar = QProgressBar()
-        progress_bar.setFixedWidth(200)
+        progress_bar.setFixedWidth(160)
         self.update_pb_progress(progress_bar, task)
         progress_bar.setTextVisible(True)
         row = [name_item, who_item, date_item, status_item]
@@ -159,7 +198,6 @@ class TasksBrowser(QWidget):
         self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
         row_map[task.id] = root.rowCount() - 1
         self.tasks_tv.resizeColumnToContents(0)
-        self.tasks_tv.resizeColumnToContents(3)
 
     @staticmethod
     def update_pb_progress(progress_bar, task):
