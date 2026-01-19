@@ -100,6 +100,10 @@ class UICommunication:
         clicked_button_text = clicked_button.text()
         return clicked_button_text
 
+    @staticmethod
+    def input_ask(parent, title, label):
+        return QInputDialog.getText(parent, title, label)
+
     def pick_item(self, title, message, parent=None, *items):
         """Getting item from list of items."""
         if self.iface is None:

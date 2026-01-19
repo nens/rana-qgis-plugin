@@ -65,7 +65,7 @@ class RanaQgisPlugin:
         QgsApplication.processingRegistry().addProvider(self.provider)
 
     def login(self, start_tenant_id: str = None) -> bool:
-        if not setup_oauth2(self.communication):
+        if not setup_oauth2(self.communication, start_tenant_id):
             return False
         self.add_rana_menu(True)
         if not self.set_tenant(start_tenant_id):
@@ -92,7 +92,7 @@ class RanaQgisPlugin:
                 return True
             if not self.tenants:
                 return False
-
+            # Take first
             tenant_id = self.tenants[0]["id"]
         else:
             # Extra check to see whether requested tenant is in list.
@@ -223,7 +223,8 @@ class RanaQgisPlugin:
             if not self.login(path_params["tenant_id"]):
                 return
         else:
-            self.login()
+            if not self.login():
+                return
         if not self.dock_widget:
             # Setup GUI
             self.dock_widget = QDockWidget(PLUGIN_NAME, self.iface.mainWindow())
@@ -374,3 +375,5 @@ class RanaQgisPlugin:
                 project_id=path_params["project_id"],
                 online_path=query_params["path"][0],
             )
+
+        self.rana_browser.refresh()
