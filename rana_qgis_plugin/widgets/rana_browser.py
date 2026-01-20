@@ -1893,6 +1893,8 @@ class RanaBrowser(QWidget):
                 project_id, {"path": online_path}
             )
         if self.files_browser.selected_item:
+            self.files_browser.project = self.projects_browser.project
+            self.file_view.project = self.projects_browser.project
             paths = [self.projects_browser.project["name"]] + online_path.split("/")[
                 :-1
             ]
