@@ -1916,7 +1916,7 @@ class RanaBrowser(QWidget):
     def refresh(self):
         if self.rana_browser.currentIndex() == 1:
             return
-        if hasattr(root_stack.currentWidget(), "refresh"):
+        if hasattr(self.rana_browser.currentWidget(), "refresh"):
             self.rana_files.currentWidget().refresh()
             self.last_refresh_time = time.time()
         else:

@@ -207,6 +207,8 @@ class RanaQgisPlugin:
         if self.dock_widget:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
+        if hasattr(self, "loader"):
+            self.loader.stop_background_workers()
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""

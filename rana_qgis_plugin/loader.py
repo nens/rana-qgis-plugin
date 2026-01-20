@@ -132,8 +132,14 @@ class Loader(QObject):
         # For upload of schematisations
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
-        self.simulation_monitor_thread_pool = QThreadPool()
-        self.simulation_monitor_thread_pool.setMaxThreadCount(1)
+
+        # Track QThread based background workers
+        self.background_workers: list[QThread] = []
+
+    def stop_background_workers(self):
+        for worker in self.background_workers:
+            worker.stop()
+        self.background_workers.clear()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -1186,7 +1192,8 @@ class Loader(QObject):
         monitor_worker.simulations_added.connect(self.simulation_tasks_added)
         monitor_worker.simulation_updated.connect(self.simulation_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
-        monitor_worker.start()
+        monitor_worker.fetch_finished_simulations()
+        monitor_worker.start_listening()
 
     @pyqtSlot()
     def start_model_generation_monitoring(self):
@@ -1198,3 +1205,4 @@ class Loader(QObject):
         monitor_worker.model_updated.connect(self.model_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
         monitor_worker.start()
+        self.background_workers.append(monitor_worker)

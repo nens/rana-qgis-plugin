@@ -1504,8 +1504,8 @@ class SchematisationUploadProgressWorker(QRunnable):
         self.report_upload_progress()
 
 
-class SimulationMonitorWorker(QThread):
-    thread_finished = pyqtSignal(str)
+class SimulationMonitorWorker(QObject):
+    thread_finished = pyqtSignal()
     failed = pyqtSignal(str)
     simulations_added = pyqtSignal(list)
     simulation_updated = pyqtSignal(dict)
@@ -1523,19 +1523,16 @@ class SimulationMonitorWorker(QThread):
             organisation.name
             for organisation in self.tc.fetch_organisations(uuids=organisation_uuids)
         ]
+        self.thread_finished.connect(self._close_socket)
 
-    def run(self):
-        self.fetch_finished_simulations()
-        self.start_listening()
-        # start event loop when the websocket is opened
+    def _close_socket(self):
         if self.ws_client:
-            self.exec_()
-
-    def stop(self):
-        if self.ws_client:
+            self.ws_client.textMessageReceived.disconnect(
+                self.all_simulations_progress_web_socket
+            )
+            self.ws_client.error.disconnect(self.websocket_error)
             self.ws_client.close()
-        self.quit()
-        self.wait()
+            self.ws_client = None
 
     def fetch_finished_simulations(self):
         finished_simulations_data = []
@@ -1578,12 +1575,6 @@ class SimulationMonitorWorker(QThread):
 
     def start_listening(self):
         """Start listening of active simulations websocket."""
-        basic_auth_token = self._get_auth_token()
-        request_url = self._get_url()
-        ws_request = QNetworkRequest(request_url)
-        ws_request.setRawHeader(
-            QByteArray().append("Authorization"), QByteArray().append(basic_auth_token)
-        )
         # TODO handle different qt versions!
         try:
             from PyQt5 import QtWebSockets
@@ -1592,6 +1583,14 @@ class SimulationMonitorWorker(QThread):
                 "Cannot load simulation monitor working becuase QtWebSockets is not found"
             )
             return
+
+        # set up websocket
+        basic_auth_token = self._get_auth_token()
+        request_url = self._get_url()
+        ws_request = QNetworkRequest(request_url)
+        ws_request.setRawHeader(
+            QByteArray().append("Authorization"), QByteArray().append(basic_auth_token)
+        )
         self.ws_client = QtWebSockets.QWebSocket(
             version=QtWebSockets.QWebSocketProtocol.VersionLatest
         )
@@ -1600,18 +1599,6 @@ class SimulationMonitorWorker(QThread):
         )
         self.ws_client.error.connect(self.websocket_error)
         self.ws_client.open(ws_request)
-
-    def stop_listening(self, be_quite=False):
-        """Close websocket client."""
-        if self.ws_client is not None:
-            self.ws_client.textMessageReceived.disconnect(
-                self.all_simulations_progress_web_socket
-            )
-            self.ws_client.error.disconnect(self.websocket_error)
-            self.ws_client.close()
-            if be_quite is False:
-                stop_message = "Checking running simulation stopped."
-                self.thread_finished.emit(stop_message)
 
     def websocket_error(self, error_code):
         """Report errors from websocket."""
@@ -1667,7 +1654,6 @@ class SimulationMonitorWorker(QThread):
                     self.simulation_finished.emit({sim_id: sim_data})
                 else:
                     sim_data["status"] = SimulationStatusName.STOPPED.value
-        # TODO: clean up old simulations?
 
 
 class ModelGenerationMonitorWorker(QThread):
@@ -1686,7 +1672,7 @@ class ModelGenerationMonitorWorker(QThread):
 
     def run(self):
         self.fetch_finished_tasks()
-        while True:
+        while not self._stop_flag:
             self.update_tasks()
             # TODO consider sleep interval
             QThread.sleep(5)
