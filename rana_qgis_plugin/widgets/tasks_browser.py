@@ -17,7 +17,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeric_item
-from rana_qgis_plugin.utils_api import get_user_by_email
+from rana_qgis_plugin.utils_api import get_project_jobs, get_user_by_email
 from rana_qgis_plugin.widgets.utils_avatars import (
     ContributorAvatarsDelegate,
     get_user_image_from_initials,
@@ -71,7 +71,7 @@ class TaskData:
     max_progress: int
 
     def progress_str(self):
-        raise NotImplementedError
+        return f"{self.status} ({self.progress}%)"
 
     @property
     def created_timestamp(self):
@@ -122,17 +122,15 @@ class TasksBrowser(QWidget):
     start_monitoring_model_generation = pyqtSignal()
 
     def __init__(self, communication, avatar_cache, parent=None):
-        # TODO
-        # - filter
         super().__init__(parent)
         self.communication = communication
         self.avatar_cache = avatar_cache
         self.tasks = []
         self.setup_ui()
-        self.simulation_row_map = {}
-        self.model_row_map = {}
-        QTimer.singleShot(0, lambda: self.start_monitoring_simulations.emit())
-        QTimer.singleShot(0, lambda: self.start_monitoring_model_generation.emit())
+        self.row_map = {}
+        self.get_rana_jobs()
+        # QTimer.singleShot(0, lambda: self.start_monitoring_simulations.emit())
+        # QTimer.singleShot(0, lambda: self.start_monitoring_model_generation.emit())
 
     def setup_ui(self):
         # TODO: consider using a custom model
@@ -145,12 +143,6 @@ class TasksBrowser(QWidget):
         self.setLayout(layout)
         # create root items, they will be added on populating
         self.tasks_model.setHorizontalHeaderLabels(["Name", "Who", "Started", "Status"])
-
-        self.simulation_root = QStandardItem("Simulations")
-        self.models_root = QStandardItem("Models")
-        self.tasks_model.appendRow([self.simulation_root])
-        self.tasks_model.appendRow([self.models_root])
-        self.tasks_tv.expandAll()
         avatar_delegate = ContributorAvatarsDelegate(self.tasks_tv)
         self.tasks_tv.setItemDelegateForColumn(1, avatar_delegate)
         name_delegate = WordWrapDelegate(self.tasks_tv)
@@ -168,7 +160,7 @@ class TasksBrowser(QWidget):
         self.tasks_tv.setColumnWidth(3, 160)
         self.tasks_tv.header().setStretchLastSection(False)
 
-    def add_task(self, task, root, row_map):
+    def add_task(self, task):
         name_item = QStandardItem(task.name)
         user = get_user_by_email(task.user_email)
         if user:
@@ -198,12 +190,11 @@ class TasksBrowser(QWidget):
         self.update_pb_progress(progress_bar, task)
         progress_bar.setTextVisible(True)
         row = [name_item, who_item, date_item, status_item]
-        root.insertRow(0, row)
+        self.tasks_model.insertRow(0, row)
         self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
-        # TODO: why are there no more models?
-        for id in row_map:
-            row_map[id] += 1
-        row_map[task.id] = 0
+        for id in self.row_map:
+            self.row_map[id] += 1
+        self.row_map[task.id] = 0
         self.tasks_tv.resizeColumnToContents(0)
 
     @staticmethod
@@ -212,45 +203,36 @@ class TasksBrowser(QWidget):
         progress_bar.setMaximum(task.max_progress)
         progress_bar.setFormat(task.progress_str())
 
-    def add_tasks(self, tasks: list[TaskData]):
-        tasks = sorted(tasks, key=lambda task: task.created_timestamp)
-        for task in tasks:
-            self.add_task(task, self.simulation_root, self.simulation_row_map)
+    def get_rana_jobs(self):
+        project_id = "zBmCQhv3"
+        jobs = get_project_jobs(self.communication, project_id)["items"]
+        for job in jobs:
+            # TODO: note that email should be replaced by id
+            self.add_task(
+                TaskData(
+                    id=job["id"],
+                    name=job["name"],
+                    user_email=job["creator"]["email"],
+                    created=job["created_at"],
+                    status=job["state"]["type"],
+                    progress=int(100 * job["state"]["progress"]),
+                    max_progress=100,
+                )
+            )
 
-    def add_simulation_tasks(self, task_dicts):
-        self.add_tasks(
-            [SimulationTaskData.from_dict(task_data) for task_data in task_dicts]
+    def update_task(self, task_data):
+        task = TaskData(
+            id=job["id"],
+            name=job["name"],
+            user_email=job["creator"]["email"],
+            created=job["created_at"],
+            status=job["state"]["type"],
+            progress=int(100 * job["state"]["progress"]),
+            max_progress=100,
         )
-        # for task_data in task_dicts:
-        #     self.add_task(
-        #         SimulationTaskData.from_dict(task_data),
-        #         self.simulation_root,
-        #         self.simulation_row_map,
-        #     )
-
-    def add_model_tasks(self, task_dicts):
-        self.add_tasks([ModelTaskData.from_dict(task_data) for task_data in task_dicts])
-        # for task_data in task_dicts:
-        #     self.add_task(
-        #         ModelTaskData.from_dict(task_data), self.models_root, self.model_row_map
-        #     )
-
-    def update_task(self, task, root, row_map):
-        row = row_map.get(task.id, -1)
+        row = self.row_map.get(task.id, -1)
         if row < 0:
             return
-        status_item = root.child(row, 3)
+        status_item = self.tasks_model.child(row, 3)
         status_item.setData(task.status, Qt.ItemDataRole.UserRole)
         self.update_pb_progress(self.tasks_tv.indexWidget(status_item.index()), task)
-
-    def update_simulation_task(self, task_data):
-        self.update_task(
-            SimulationTaskData.from_dict(task_data),
-            self.simulation_root,
-            self.simulation_row_map,
-        )
-
-    def update_model_task(self, task_data):
-        self.update_task(
-            ModelTaskData.from_dict(task_data), self.models_root, self.model_row_map
-        )

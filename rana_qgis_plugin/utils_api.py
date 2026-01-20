@@ -560,3 +560,18 @@ def get_user_image(communication: UICommunication, user_id):
     else:
         communication.show_error(f"Failed to retrieve user image: {error}")
         return None
+
+
+def get_project_jobs(communication: UICommunication, project_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    # TODO: consider pagination!
+    params = {"project_id": project_id, "limit": 100}
+    url = f"{api_url()}/tenants/{tenant}/jobs"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+    if status:
+        return network_manager.content
+    else:
+        communication.show_error(f"Failed to retrieve jobs: {error}")
+        return None
