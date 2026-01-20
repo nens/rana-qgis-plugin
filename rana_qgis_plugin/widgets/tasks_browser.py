@@ -16,7 +16,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.utils import get_timestamp_as_numeric_item
+from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeric_item
 from rana_qgis_plugin.utils_api import get_user_by_email
 from rana_qgis_plugin.widgets.utils_avatars import (
     ContributorAvatarsDelegate,
@@ -72,6 +72,10 @@ class TaskData:
 
     def progress_str(self):
         raise NotImplementedError
+
+    @property
+    def created_timestamp(self):
+        return convert_to_timestamp(self.created)
 
 
 @dataclass
@@ -194,9 +198,12 @@ class TasksBrowser(QWidget):
         self.update_pb_progress(progress_bar, task)
         progress_bar.setTextVisible(True)
         row = [name_item, who_item, date_item, status_item]
-        root.appendRow(row)
+        root.insertRow(0, row)
         self.tasks_tv.setIndexWidget(status_item.index(), progress_bar)
-        row_map[task.id] = root.rowCount() - 1
+        # TODO: why are there no more models?
+        for id in row_map:
+            row_map[id] += 1
+        row_map[task.id] = 0
         self.tasks_tv.resizeColumnToContents(0)
 
     @staticmethod
@@ -205,19 +212,28 @@ class TasksBrowser(QWidget):
         progress_bar.setMaximum(task.max_progress)
         progress_bar.setFormat(task.progress_str())
 
+    def add_tasks(self, tasks: list[TaskData]):
+        tasks = sorted(tasks, key=lambda task: task.created_timestamp)
+        for task in tasks:
+            self.add_task(task, self.simulation_root, self.simulation_row_map)
+
     def add_simulation_tasks(self, task_dicts):
-        for task_data in task_dicts:
-            self.add_task(
-                SimulationTaskData.from_dict(task_data),
-                self.simulation_root,
-                self.simulation_row_map,
-            )
+        self.add_tasks(
+            [SimulationTaskData.from_dict(task_data) for task_data in task_dicts]
+        )
+        # for task_data in task_dicts:
+        #     self.add_task(
+        #         SimulationTaskData.from_dict(task_data),
+        #         self.simulation_root,
+        #         self.simulation_row_map,
+        #     )
 
     def add_model_tasks(self, task_dicts):
-        for task_data in task_dicts:
-            self.add_task(
-                ModelTaskData.from_dict(task_data), self.models_root, self.model_row_map
-            )
+        self.add_tasks([ModelTaskData.from_dict(task_data) for task_data in task_dicts])
+        # for task_data in task_dicts:
+        #     self.add_task(
+        #         ModelTaskData.from_dict(task_data), self.models_root, self.model_row_map
+        #     )
 
     def update_task(self, task, root, row_map):
         row = row_map.get(task.id, -1)

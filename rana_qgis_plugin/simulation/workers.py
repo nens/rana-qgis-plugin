@@ -1509,7 +1509,6 @@ class SimulationMonitorWorker(QObject):
     failed = pyqtSignal(str)
     simulations_added = pyqtSignal(list)
     simulation_updated = pyqtSignal(dict)
-    simulation_finished = pyqtSignal(dict)
 
     def __init__(self, organisation_uuids, parent=None):
         # TODO: reconsider internal data tracking and format
@@ -1651,7 +1650,6 @@ class SimulationMonitorWorker(QObject):
                     sim_data["simulation_user_last_name"] = (
                         sim_status.simulation_user_last_name
                     )
-                    self.simulation_finished.emit({sim_id: sim_data})
                 else:
                     sim_data["status"] = SimulationStatusName.STOPPED.value
 
