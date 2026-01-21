@@ -13,6 +13,7 @@ History
 - Show Created at column for projects (#3025)
 - Ensured Results Analysis Tool window remains visible when scenarios are loaded. (#3350)
 - Don't show authentication related menu items on startup.
+- Increase limit for fetching files in file view to 1000
 
 
 1.2.2 (2026-01-12)

@@ -977,11 +977,10 @@ class FilesBrowser(QWidget):
         self.ready.emit()
 
     def fetch_and_populate(self, project: dict, path: str = None):
-        self.files = get_tenant_project_files(
-            self.communication,
-            project["id"],
-            {"path": path} if path else None,
-        )
+        params = {"limit": 1000}
+        if path:
+            params["path"] = path
+        self.files = get_tenant_project_files(self.communication, project["id"], params)
         sort_column = self.files_tv.header().sortIndicatorSection()
         sort_order = self.files_tv.header().sortIndicatorOrder()
         self.files_model.clear()
