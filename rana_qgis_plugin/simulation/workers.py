@@ -1,17 +1,12 @@
 # 3Di Models and Simulations for QGIS, licensed under GPLv2 or (at your option) any later version
 # Copyright (C) 2023 by Lutra Consulting for 3Di Water Management
+
 import logging
 import os
 import time
 from functools import partial
 
-from qgis.PyQt.QtCore import (
-    QObject,
-    QRunnable,
-    pyqtSignal,
-    pyqtSlot,
-)
-from qgis.PyQt.QtNetwork import QNetworkRequest
+from qgis.PyQt.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 from threedi_api_client.files import upload_file
 from threedi_api_client.openapi import ApiException
 

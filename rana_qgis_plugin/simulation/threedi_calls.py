@@ -3,7 +3,7 @@
 import logging
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from threedi_api_client import ThreediApi
 from threedi_api_client.openapi import (
@@ -191,12 +191,12 @@ class ThreediCalls:
         name_contains: str = None,
         schematisation_name: str = None,
         schematisation_owner: str = None,
-        is_valid: bool | str = True,
+        show_valid_and_invalid: bool = False,
     ) -> Tuple[List[ThreediModel], int]:
         """Fetch 3Di models available for current user."""
         params = {
             "revision__schematisation__isnull": False,
-            "is_valid": is_valid,
+            "is_valid": True,
             "disabled": False,
         }
         if limit is not None:
@@ -209,8 +209,8 @@ class ThreediCalls:
             params["revision__schematisation__name"] = schematisation_name
         if schematisation_owner is not None:
             params["revision__schematisation__owner__unique_id"] = schematisation_owner
-        # if show_valid_and_invalid:
-        #     params["is_valid"] = ""
+        if show_valid_and_invalid:
+            params["is_valid"] = ""
         logger.debug("Fetching 3di models for current user...")
         response = self.threedi_api.threedimodels_list(**params)
         models_list = response.results
@@ -256,31 +256,37 @@ class ThreediCalls:
         return simulations_progress
 
     def fetch_simulations_progresses(
-        self, organisations
-    ) -> List[Tuple[SimulationStatus, float]]:
+        self, simulations_list: List[Simulation]
+    ) -> Dict[int, Tuple[Simulation, CurrentStatus, Progress]]:
         """Get all simulations with statuses and progresses."""
-        allowed_states = (
-            "created, starting, initialized, queued, ended, postprocessing, crashed"
+        progresses = {}
+        if not simulations_list:
+            logger.warning("Simulations list not specified, we grab all simulations! ")
+            simulations_list = self.fetch_simulations()
+        logger.info(
+            "Starting to grab sim statuses for %d simulations", len(simulations_list)
         )
-        results = []
-        for organisation in organisations:
-            status_list = self.threedi_api.statuses_list(
-                created__date__gt=self.expiration_date,
-                name__in=allowed_states,
-                simulation__organisation__unique_id=organisation,
+        for sim in simulations_list:
+            spk = sim.id
+            spk_str = str(spk)
+            logger.debug("Fetching status for simulation %s", spk_str)
+            current_status = self.threedi_api.simulations_status_list(
+                spk_str, limit=self.FETCH_LIMIT
             )
-            for status in status_list.results:
-                if status.name == "initialized":
-                    progress_response = self.threedi_api.simulations_progress_list(
-                        simulation_pk=status.simulation_id
-                    )
-                    progress = progress_response.percentage
-                elif status.name == "postprocessing":
-                    progress = 100
-                else:
-                    progress = 0
-                results.append((status, progress))
-        return results
+            status_name = current_status.name
+            status_time = current_status.time
+            if status_time is None:
+                status_time = 0
+            if status_name == "initialized" and status_time:
+                sim_progress = self.threedi_api.simulations_progress_list(
+                    spk_str, limit=self.FETCH_LIMIT
+                )
+            elif status_name == "postprocessing" or status_name == "finished":
+                sim_progress = Progress(percentage=100, time=status_time)
+            else:
+                sim_progress = Progress(percentage=0, time=status_time)
+            progresses[spk] = (sim, current_status, sim_progress)
+        return progresses
 
     def fetch_simulation_results(self, simulation_pk: int) -> List[ResultFile]:
         """Fetch simulation results list."""
@@ -305,37 +311,6 @@ class ThreediCalls:
             )
             downloads.append((result_file, download))
         return downloads
-
-    def fetch_3di_models(
-        self,
-        organisation_uuids: Optional[list[str]] = None,
-        use_is_generating: bool = False,
-    ) -> List[ThreediModel]:
-        """Fetch 3Di models available for current user."""
-        params = {"created__date__gt": self.expiration_date}
-        if use_is_generating:
-            params["is_generating"] = True
-        if organisation_uuids is None:
-            return self.paginated_fetch(self.threedi_api.threedimodels_list, **params)
-        models = []
-        for organisation_uuid in organisation_uuids:
-            params["revision__schematisation__owner__unique_id"] = organisation_uuid
-            models += self.paginated_fetch(
-                self.threedi_api.threedimodels_list, **params
-            )
-        return models
-
-    def fetch_3di_models_generating(
-        self, organisations: Optional[list[str]] = None
-    ) -> List[ThreediModel]:
-        if organisations is None:
-            return self.fetch_3di_models(use_is_generating=True)
-        models = []
-        for organisation_uuid in organisations:
-            models += self.fetch_3di_models(
-                use_is_generating=True, organisation_uuid=organisation_uuid
-            )
-        return models
 
     def fetch_3di_model(self, threedimodel_id: int) -> ThreediModel:
         """Fetch 3Di model with a given id."""
@@ -485,12 +460,9 @@ class ThreediCalls:
         revision_models_list = self.threedi_api.revisions_threedimodels(rev_id)
         return revision_models_list
 
-    def fetch_organisations(self, uuids: Optional[List] = None) -> List[Organisation]:
+    def fetch_organisations(self) -> List[Organisation]:
         """Fetch all Organisations available for current user."""
-        kwargs = {"unique_id__in": ",".join(uuids)} if uuids else {}
-        organisations = self.paginated_fetch(
-            self.threedi_api.organisations_list, **kwargs
-        )
+        organisations = self.paginated_fetch(self.threedi_api.organisations_list)
         return organisations
 
     def fetch_lateral_files(self, simulation_pk: int) -> List[FileLateral]:
