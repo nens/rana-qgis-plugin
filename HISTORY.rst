@@ -11,6 +11,7 @@ History
 - Add option to filter by contributor and show contributors in project view
 - Show Created at column for projects (#3025)
 - Ensured Results Analysis Tool window remains visible when scenarios are loaded. (#3350)
+- Don't show authentication related menu items on startup.
 
 
 1.2.2 (2026-01-12)

@@ -59,7 +59,7 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
-        self.add_rana_menu(True)
+        self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
@@ -80,7 +80,7 @@ class RanaQgisPlugin:
         self.communication.clear_message_bar()
         remove_authcfg()
         set_tenant_id("")
-        self.add_rana_menu(True)
+        self.add_rana_menu(False)
         self.communication.bar_info("You have been logged out.")
         if self.dock_widget:
             self.dock_widget.close()
