@@ -435,6 +435,11 @@ class FileView(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
+    def toggle_interactions(self, enabled: bool):
+        buttons = self.findChildren(QPushButton)
+        for button in buttons:
+            button.setEnabled(enabled)
+
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in sorted(FileAction):
@@ -466,10 +471,10 @@ class FileView(QWidget):
                     selected_item, self.filename_edit.text()
                 )
                 self.selected_file["id"] = self.filename_edit.text()
-            self.file_action_btn_dict[FileAction.RENAME].setEnabled(True)
+            self.toggle_interactions(True)
             self.no_refresh = False
 
-        self.file_action_btn_dict[FileAction.RENAME].setEnabled(False)
+        self.toggle_interactions(False)
         self.filename_edit.make_editable()
 
         # Set up single-shot connection
