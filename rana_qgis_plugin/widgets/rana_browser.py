@@ -1584,12 +1584,15 @@ class RanaBrowser(QWidget):
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
+    request_monitoring_project_jobs = pyqtSignal(str)
     request_monitoring_simulations = pyqtSignal()
     simulation_tasks_added = pyqtSignal(list)
     simulation_task_updated = pyqtSignal(dict)
     request_monitoring_model_generation = pyqtSignal()
     model_tasks_added = pyqtSignal(list)
     model_task_updated = pyqtSignal(dict)
+    project_jobs_added = pyqtSignal(list)
+    project_job_updated = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -1706,6 +1709,12 @@ class RanaBrowser(QWidget):
         self.revisions_view.ready.connect(lambda: self.enable)
         self.files_browser.busy.connect(lambda: self.disable)
         self.files_browser.ready.connect(lambda: self.enable)
+
+        self.tasks_browser.start_monitoring_project_jobs.connect(
+            self.request_monitoring_project_jobs.emit
+        )
+        self.project_jobs_added.connect(self.tasks_browser.add_processes)
+        self.project_job_updated.connect(self.tasks_browser.update_process_state)
 
         # self.tasks_browser.start_monitoring_simulations.connect(
         #     lambda: self.request_monitoring_simulations.emit()

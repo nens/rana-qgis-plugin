@@ -20,6 +20,7 @@ from .utils import (
 )
 from .utils_api import (
     finish_file_upload,
+    get_project_jobs,
     get_raster_file_link,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -618,3 +619,49 @@ class LizardResultDownloadWorker(QThread):
 
         if not task_failed:
             self.finished.emit(self.project, self.file, self.target_folder)
+
+
+class ProjectJobMonitorWorker(QThread):
+    failed = pyqtSignal(str)
+    jobs_added = pyqtSignal(list)
+    job_updated = pyqtSignal(dict)
+
+    def __init__(self, project_id, parent=None):
+        super().__init__(parent)
+        super().__init__(parent)
+        self.active_jobs = {}
+        self.project_id = project_id
+        self._stop_flag = False
+
+    def run(self):
+        # initialize active jobs
+        self.update_jobs()
+        while not self._stop_flag:
+            self.update_jobs()
+            # TODO consider sleep interval
+            QThread.sleep(5)
+
+    def stop(self):
+        """Gracefully stop the worker"""
+        self._stop_flag = True
+        self.wait()
+
+    def update_jobs(self):
+        # TODO: handle problems?
+        response = get_project_jobs(self.project_id)
+        if not response:
+            return
+        current_jobs = response["items"]
+        # TODO: consider max time
+        new_jobs = {
+            job["id"]: job for job in current_jobs if job["id"] not in self.active_jobs
+        }
+        self.jobs_added.emit(list(new_jobs.values()))
+        self.active_jobs.update(new_jobs)
+        for job in current_jobs:
+            if job["id"] in new_jobs:
+                # new job cannot be updated
+                continue
+            if job["state"] != self.active_jobs[job["id"]]["state"]:
+                self.job_updated.emit(job)
+                self.active_jobs[job["id"]] = job

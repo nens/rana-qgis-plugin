@@ -246,24 +246,33 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # TODO: find nice place for this
-            self.rana_browser.request_monitoring_simulations.connect(
-                self.loader.start_simulation_monitoring
+            self.rana_browser.request_monitoring_project_jobs.connect(
+                self.loader.start_project_job_monitoring
             )
-            self.loader.simulation_tasks_added.connect(
-                self.rana_browser.simulation_tasks_added.emit
+            self.loader.project_jobs_added.connect(
+                self.rana_browser.project_jobs_added.emit
             )
-            self.loader.simulation_task_updated.connect(
-                self.rana_browser.simulation_task_updated.emit
+            self.loader.project_job_updated.connect(
+                self.rana_browser.project_job_updated.emit
             )
-            self.rana_browser.request_monitoring_model_generation.connect(
-                self.loader.start_model_generation_monitoring
-            )
-            self.loader.model_tasks_added.connect(
-                self.rana_browser.model_tasks_added.emit
-            )
-            self.loader.model_task_updated.connect(
-                self.rana_browser.model_task_updated.emit
-            )
+            # self.rana_browser.request_monitoring_simulations.connect(
+            #     self.loader.start_simulation_monitoring
+            # )
+            # self.loader.simulation_tasks_added.connect(
+            #     self.rana_browser.simulation_tasks_added.emit
+            # )
+            # self.loader.simulation_task_updated.connect(
+            #     self.rana_browser.simulation_task_updated.emit
+            # )
+            # self.rana_browser.request_monitoring_model_generation.connect(
+            #     self.loader.start_model_generation_monitoring
+            # )
+            # self.loader.model_tasks_added.connect(
+            #     self.rana_browser.model_tasks_added.emit
+            # )
+            # self.loader.model_task_updated.connect(
+            #     self.rana_browser.model_task_updated.emit
+            # )
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)

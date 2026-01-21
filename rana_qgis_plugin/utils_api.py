@@ -562,7 +562,7 @@ def get_user_image(communication: UICommunication, user_id):
         return None
 
 
-def get_project_jobs(communication: UICommunication, project_id: str):
+def get_project_jobs(project_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     # TODO: consider pagination!
@@ -573,5 +573,4 @@ def get_project_jobs(communication: UICommunication, project_id: str):
     if status:
         return network_manager.content
     else:
-        communication.show_error(f"Failed to retrieve jobs: {error}")
         return None

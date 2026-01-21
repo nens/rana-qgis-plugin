@@ -120,6 +120,7 @@ class ModelTaskData(TaskData):
 class TasksBrowser(QWidget):
     start_monitoring_simulations = pyqtSignal()
     start_monitoring_model_generation = pyqtSignal()
+    start_monitoring_project_jobs = pyqtSignal(str)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -132,9 +133,11 @@ class TasksBrowser(QWidget):
         # QTimer.singleShot(0, lambda: self.start_monitoring_model_generation.emit())
 
     def update_project(self, project: dict):
-        # TODO: this should start a thread for this project
-
-        self.get_rana_jobs(project["id"])
+        # Remove cached data
+        self.tasks_model.removeRows(0, self.tasks_model.rowCount())
+        self.row_map.clear()
+        # Start monitor jobs for the selected project
+        self.start_monitoring_project_jobs.emit(project["id"])
 
     def setup_ui(self):
         # TODO: consider using a custom model
@@ -226,7 +229,22 @@ class TasksBrowser(QWidget):
                 )
             )
 
-    def update_task(self, task_data):
+    def add_processes(self, job_list: list[dict]):
+        for job in job_list:
+            # TODO: note that email should be replaced by id
+            self.add_task(
+                TaskData(
+                    id=job["id"],
+                    name=job["name"],
+                    user_email=job["creator"]["email"],
+                    created=job["created_at"],
+                    status=job["state"]["type"],
+                    progress=int(100 * job["state"]["progress"]),
+                    max_progress=100,
+                )
+            )
+
+    def update_process_state(self, job_dict: dict):
         task = TaskData(
             id=job["id"],
             name=job["name"],
