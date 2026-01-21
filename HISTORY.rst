@@ -9,6 +9,7 @@ History
 - Confirm downloading of already downloaded results
 - Reorganize FileView widget with collapsible groups
 - Add option to filter by contributor and show contributors in project view
+- Add option to login via other SSO identity providers (#3303)
 - Show Created at column for projects (#3025)
 - Ensured Results Analysis Tool window remains visible when scenarios are loaded. (#3350)
 - Don't show authentication related menu items on startup.
