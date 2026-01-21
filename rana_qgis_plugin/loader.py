@@ -137,13 +137,8 @@ class Loader(QObject):
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
 
-        # Track QThread based background workers
-        self.background_workers: list[QThread] = []
-
-    def stop_background_workers(self):
-        for worker in self.background_workers:
-            worker.stop()
-        self.background_workers.clear()
+    def __del__(self):
+        self.stop_project_job_monitoring()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -1209,7 +1204,6 @@ class Loader(QObject):
         monitor_worker.model_updated.connect(self.model_task_updated)
         monitor_worker.failed.connect(self.communication.show_warn)
         monitor_worker.start()
-        self.background_workers.append(monitor_worker)
 
     def stop_project_job_monitoring(self):
         if self.project_monitor:
