@@ -178,10 +178,11 @@ class TasksBrowser(QWidget):
             self.add_task(TaskData.from_job_dict(job))
 
     def update_process_state(self, job_dict: dict):
+        
         task = TaskData.from_job_dict(job_dict)
         row = self.row_map.get(task.id, -1)
         if row < 0:
             return
-        status_item = self.tasks_model.child(row, 3)
+        status_item = self.tasks_model.item(row, 3)
         status_item.setData(task.status, Qt.ItemDataRole.UserRole)
         self.update_pb_progress(self.tasks_tv.indexWidget(status_item.index()), task)
