@@ -96,7 +96,7 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
-from rana_qgis_plugin.widgets.tasks_browser import TasksBrowser
+from rana_qgis_plugin.widgets.processes_browser import ProcessesBrowser
 from rana_qgis_plugin.widgets.utils_avatars import (
     AvatarCache,
     ContributorAvatarsDelegate,
@@ -1631,7 +1631,7 @@ class RanaBrowser(QWidget):
         self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
         )
-        self.tasks_browser = TasksBrowser(
+        self.processes_browser = ProcessesBrowser(
             communication=self.communication,
             avatar_cache=self.avatar_cache,
             parent=self,
@@ -1659,9 +1659,9 @@ class RanaBrowser(QWidget):
         self.project_widget.addTab(self.rana_files, "Files")
         self.project_widget.setCurrentIndex(0)
         # Create stacked widget for processes
-        self.rana_tasks = QStackedWidget()
-        self.rana_tasks.addWidget(self.tasks_browser)
-        self.project_widget.addTab(self.rana_tasks, "Tasks")
+        self.rana_processes = QStackedWidget()
+        self.rana_processes.addWidget(self.processes_browser)
+        self.project_widget.addTab(self.rana_processes, "Processes")
 
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
@@ -1704,11 +1704,11 @@ class RanaBrowser(QWidget):
         self.files_browser.busy.connect(lambda: self.disable)
         self.files_browser.ready.connect(lambda: self.enable)
 
-        self.tasks_browser.start_monitoring_project_jobs.connect(
+        self.processes_browser.start_monitoring_project_jobs.connect(
             self.request_monitoring_project_jobs.emit
         )
-        self.project_jobs_added.connect(self.tasks_browser.add_processes)
-        self.project_job_updated.connect(self.tasks_browser.update_process_state)
+        self.project_jobs_added.connect(self.processes_browser.add_processes)
+        self.project_job_updated.connect(self.processes_browser.update_process_state)
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
@@ -1719,7 +1719,7 @@ class RanaBrowser(QWidget):
             self.files_browser.update_project
         )
         self.projects_browser.project_selected.connect(
-            self.tasks_browser.update_project
+            self.processes_browser.update_project
         )
         self.projects_browser.project_selected.connect(self.file_view.update_project)
         # Show file details on selecting file
