@@ -647,12 +647,10 @@ class ProjectJobMonitorWorker(QThread):
         self.wait()
 
     def update_jobs(self):
-        # TODO: handle problems?
         response = get_project_jobs(self.project_id)
         if not response:
             return
         current_jobs = response["items"]
-        # TODO: consider max time
         new_jobs = {
             job["id"]: job for job in current_jobs if job["id"] not in self.active_jobs
         }

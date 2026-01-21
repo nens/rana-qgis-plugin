@@ -552,7 +552,6 @@ def get_user_image(communication: UICommunication, user_id):
 def get_project_jobs(project_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    # TODO: consider pagination!
     params = {"project_id": project_id, "limit": 100}
     url = f"{api_url()}/tenants/{tenant}/jobs"
     network_manager = NetworkManager(url, authcfg_id)
