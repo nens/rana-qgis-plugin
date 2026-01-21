@@ -1,4 +1,5 @@
 import json
+import re
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
@@ -6,12 +7,33 @@ from qgis.PyQt.QtCore import QSettings
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
-    COGNITO_NENS_IDENTITY_PROVIDER,
     COGNITO_TOKEN_ENDPOINT,
     RANA_AUTHCFG_ENTRY,
     RANA_SETTINGS_ENTRY,
 )
-from rana_qgis_plugin.utils_settings import cognito_client_id, cognito_client_id_native
+from rana_qgis_plugin.network_manager import NetworkManager
+from rana_qgis_plugin.utils_settings import (
+    api_url,
+    cognito_client_id,
+    cognito_client_id_native,
+    get_tenant_id,
+    set_tenant_id,
+)
+
+
+# Moved from utils_api to prevent circular import
+def get_tenant_identity_providers(communication, tenant_id: str):
+    url = f"{api_url()}/tenants/{tenant_id}/identity-providers"
+    communication.log_info(str(url))
+    network_manager = NetworkManager(url)
+    status, _ = network_manager.fetch()
+
+    if status:
+        response = network_manager.content
+        items = response["items"]
+        return items
+    else:
+        return []
 
 
 def get_authcfg_id():
@@ -28,7 +50,7 @@ def remove_authcfg():
     settings.remove(RANA_AUTHCFG_ENTRY)
 
 
-def setup_oauth2(communication: UICommunication) -> bool:
+def setup_oauth2(communication: UICommunication, start_tenant_id) -> bool:
     settings = QSettings()
     auth_manager = QgsApplication.authManager()
     auth_manager.setMasterPassword()
@@ -47,20 +69,52 @@ def setup_oauth2(communication: UICommunication) -> bool:
         settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
         return True
 
+    tenant_id = get_tenant_id() if not start_tenant_id else start_tenant_id
+    if not tenant_id:
+        tenant_id, okPressed = UICommunication.input_ask(
+            None, "Authentication", "Please provide your tenant code."
+        )
+        if not tenant_id or not okPressed:
+            return False
+
+    # Retrieve the identity provider for this tenant
+    ident_providers = get_tenant_identity_providers(communication, tenant_id)
+    if not ident_providers:
+        communication.show_error(
+            f"Unable to retrieve identity providers for tenant {tenant_id}"
+        )
+        return False
+
+    # Escape the standard button mnemonic character
+    sso_str = "Sign in with your SSO"
+    ident_providers_options = [
+        f"{sso_str} ({prov['name']})".replace("&", "&&")
+        for prov in ident_providers
+        if prov["type"] != "rana"
+    ]
+    ident_providers_options.append("Sign in with your username and password")
+    ident_providers_options.append("Cancel")
+
     sign_in_method = communication.custom_ask(
         None,
         "Authentication",
         "How would you like to sign in?",
-        "Sign in with your SSO (Nelen && Schuurmans)",
-        "Sign in with your username and password",
-        "Cancel",
+        *ident_providers_options,
     )
 
-    if sign_in_method.startswith("Sign in with your SSO"):
-        communication.log_info(
-            f"Setting identity provider to {COGNITO_NENS_IDENTITY_PROVIDER}"
+    if not sign_in_method:
+        return False
+
+    # Restore escaped character
+    sign_in_method = sign_in_method.replace("&&", "&")
+    if sign_in_method.startswith(sso_str):
+        m = re.search(r"\(([^)]*)\)", sign_in_method)
+        ident_provider_id = next(
+            (d["id"] for d in ident_providers if d.get("name") == m.group(1)), None
         )
-        queryPairs = {"identity_provider": COGNITO_NENS_IDENTITY_PROVIDER}
+        assert ident_provider_id
+        communication.log_info(f"Setting identity provider to {ident_provider_id}")
+        queryPairs = {"identity_provider": ident_provider_id}
         client_id = cognito_client_id()
     elif sign_in_method == "Cancel":
         return False
@@ -99,5 +153,7 @@ def setup_oauth2(communication: UICommunication) -> bool:
     else:
         communication.log_warn("Failed to create OAuth2 configuration")
         return False
+
+    set_tenant_id(tenant_id)
 
     return True
