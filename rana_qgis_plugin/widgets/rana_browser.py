@@ -367,6 +367,7 @@ class FileView(QWidget):
         self.project = None
         self.file_signals = file_signals
         self.setup_ui()
+        self.no_refresh = False
 
     def update_project(self, project: dict):
         self.project = project
@@ -434,6 +435,11 @@ class FileView(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
+    def toggle_interactions(self, enabled: bool):
+        buttons = self.findChildren(QPushButton)
+        for button in buttons:
+            button.setEnabled(enabled)
+
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in sorted(FileAction):
@@ -454,18 +460,21 @@ class FileView(QWidget):
         return btn_dict
 
     def edit_file_name(self, selected_item: dict):
-        # this should really not happen so just continue silently if that happens
         current_name = self.filename_edit.text()
+        self.no_refresh = True
 
         def finish_editing():
             self.filename_edit.editingFinished.disconnect(finish_editing)
             self.filename_edit.make_readonly()
             if current_name != self.filename_edit.text():
-                QgsMessageLog.logMessage("Send signal", "DEBUG", Qgis.Info)
                 self.file_signals.get_signal(FileAction.RENAME).emit(
                     selected_item, self.filename_edit.text()
                 )
+                self.selected_file["id"] = self.filename_edit.text()
+            self.toggle_interactions(True)
+            self.no_refresh = False
 
+        self.toggle_interactions(False)
         self.filename_edit.make_editable()
 
         # Set up single-shot connection
@@ -749,15 +758,21 @@ class FileView(QWidget):
         self.update_file_action_buttons(selected_file)
 
     def refresh(self):
-        assert self.selected_file
-        self.selected_file = get_tenant_project_file(
+        # Skip refresh because user is interacting with state of the file
+        if self.no_refresh:
+            return
+        # Get fresh object to retrieve correct last_modified
+        updated_file = get_tenant_project_file(
             self.project["id"], {"path": self.selected_file["id"]}
         )
-        last_modified_key = (
-            f"{self.project['name']}/{self.selected_file['id']}/last_modified"
-        )
-        QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
-        self.show_selected_file_details(self.selected_file)
+        # Only update if new file is still there
+        if updated_file:
+            self.selected_file = updated_file
+            last_modified_key = (
+                f"{self.project['name']}/{self.selected_file['id']}/last_modified"
+            )
+            QSettings().setValue(last_modified_key, self.selected_file["last_modified"])
+            self.show_selected_file_details(self.selected_file)
 
 
 class CreateFolderDialog(QDialog):
