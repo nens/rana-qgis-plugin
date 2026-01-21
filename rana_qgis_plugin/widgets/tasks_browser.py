@@ -17,11 +17,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeric_item
-from rana_qgis_plugin.utils_api import get_project_jobs, get_user_by_email
-from rana_qgis_plugin.widgets.utils_avatars import (
-    ContributorAvatarsDelegate,
-    get_user_image_from_initials,
-)
+from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
 
 
 class WordWrapDelegate(QStyledItemDelegate):
@@ -64,7 +60,7 @@ class WordWrapDelegate(QStyledItemDelegate):
 class TaskData:
     id: int
     name: str
-    user_email: str
+    user: str
     created: str
     status: str
     progress: int
@@ -77,44 +73,21 @@ class TaskData:
     def created_timestamp(self):
         return convert_to_timestamp(self.created)
 
+    @property
+    def user_name(self):
+        return self.user["given_name"] + " " + self.user["family_name"]
 
-@dataclass
-class SimulationTaskData(TaskData):
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_job_dict(cls, job: dict):
         return cls(
-            id=data["uid"],
-            name=data["name"],
-            user_email=data["user_name"],
-            created=data["date_created"],
-            status=data["status"],
-            progress=int(data["progress"]),
+            id=job["id"],
+            name=job["name"],
+            user=job["creator"],
+            created=job["created_at"],
+            status=job["state"]["type"],
+            progress=int(100 * job["state"]["progress"]),
             max_progress=100,
         )
-
-    def progress_str(self):
-        return f"{self.status} ({self.progress}%)"
-
-
-@dataclass
-class ModelTaskData(TaskData):
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls(
-            id=data["id"],
-            name=data["name"],
-            user_email=data["user_email"],
-            created=data["created"],
-            status=data["status"],
-            progress=int(data["finished_tasks"]),
-            max_progress=int(data["total_tasks"]),
-        )
-
-    def progress_str(self):
-        if self.max_progress == self.progress:
-            return self.status
-        else:
-            return f"{self.status} ({self.progress} of {self.max_progress})"
 
 
 class TasksBrowser(QWidget):
@@ -129,8 +102,6 @@ class TasksBrowser(QWidget):
         self.tasks = []
         self.setup_ui()
         self.row_map = {}
-        # QTimer.singleShot(0, lambda: self.start_monitoring_simulations.emit())
-        # QTimer.singleShot(0, lambda: self.start_monitoring_model_generation.emit())
 
     def update_project(self, project: dict):
         # Remove cached data
@@ -169,25 +140,17 @@ class TasksBrowser(QWidget):
 
     def add_task(self, task):
         name_item = QStandardItem(task.name)
-        user = get_user_by_email(task.user_email)
-        if user:
-            user_data = [
-                {
-                    "id": user["id"],
-                    "name": user["given_name"] + " " + user["family_name"],
-                    "avatar": self.avatar_cache.get_avatar_for_user(user),
-                }
-            ]
-        else:
-            user_data = [
-                {
-                    "id": None,
-                    "name": "unknown user",
-                    "avatar": get_user_image_from_initials("?"),
-                }
-            ]
         who_item = QStandardItem()
-        who_item.setData(user_data, Qt.ItemDataRole.UserRole)
+        who_item.setData(
+            [
+                {
+                    "id": task.user["id"],
+                    "name": task.user_name,
+                    "avatar": self.avatar_cache.get_avatar_for_user(task.user),
+                }
+            ],
+            Qt.ItemDataRole.UserRole,
+        )
         date_item = get_timestamp_as_numeric_item(task.created)
         status_item = QStandardItem()
         status_item.setData(task.status, Qt.ItemDataRole.UserRole)
@@ -210,50 +173,12 @@ class TasksBrowser(QWidget):
         progress_bar.setMaximum(task.max_progress)
         progress_bar.setFormat(task.progress_str())
 
-    def get_rana_jobs(self, project_id):
-        self.tasks_model.removeRows(0, self.tasks_model.rowCount())
-
-        # project_id = "zBmCQhv3"
-        jobs = get_project_jobs(self.communication, project_id)["items"]
-        for job in jobs:
-            # TODO: note that email should be replaced by id
-            self.add_task(
-                TaskData(
-                    id=job["id"],
-                    name=job["name"],
-                    user_email=job["creator"]["email"],
-                    created=job["created_at"],
-                    status=job["state"]["type"],
-                    progress=int(100 * job["state"]["progress"]),
-                    max_progress=100,
-                )
-            )
-
     def add_processes(self, job_list: list[dict]):
         for job in job_list:
-            # TODO: note that email should be replaced by id
-            self.add_task(
-                TaskData(
-                    id=job["id"],
-                    name=job["name"],
-                    user_email=job["creator"]["email"],
-                    created=job["created_at"],
-                    status=job["state"]["type"],
-                    progress=int(100 * job["state"]["progress"]),
-                    max_progress=100,
-                )
-            )
+            self.add_task(TaskData.from_job_dict(job))
 
     def update_process_state(self, job_dict: dict):
-        task = TaskData(
-            id=job["id"],
-            name=job["name"],
-            user_email=job["creator"]["email"],
-            created=job["created_at"],
-            status=job["state"]["type"],
-            progress=int(100 * job["state"]["progress"]),
-            max_progress=100,
-        )
+        task = TaskData.from_job_dict(job_dict)
         row = self.row_map.get(task.id, -1)
         if row < 0:
             return

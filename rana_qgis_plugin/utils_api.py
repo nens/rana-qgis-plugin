@@ -523,19 +523,6 @@ def map_result_to_file_name(result: dict) -> str:
             return result["code"]
 
 
-def get_user_by_email(email: str) -> dict:
-    tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/users"
-    params = {"search": email}
-    network_manager = NetworkManager(url, get_authcfg_id())
-    status, error = network_manager.fetch(params)
-    if status:
-        response = network_manager.content["items"]
-        if len(response) > 0:
-            return response[0]
-    return
-
-
 def get_threedi_organisations() -> list[str]:
     url = f"{api_url()}/tenants/{get_tenant_id()}/"
     network_manager = NetworkManager(url, get_authcfg_id())

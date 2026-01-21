@@ -1585,12 +1585,6 @@ class RanaBrowser(QWidget):
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
     request_monitoring_project_jobs = pyqtSignal(str)
-    request_monitoring_simulations = pyqtSignal()
-    simulation_tasks_added = pyqtSignal(list)
-    simulation_task_updated = pyqtSignal(dict)
-    request_monitoring_model_generation = pyqtSignal()
-    model_tasks_added = pyqtSignal(list)
-    model_task_updated = pyqtSignal(dict)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
 
@@ -1715,17 +1709,6 @@ class RanaBrowser(QWidget):
         )
         self.project_jobs_added.connect(self.tasks_browser.add_processes)
         self.project_job_updated.connect(self.tasks_browser.update_process_state)
-
-        # self.tasks_browser.start_monitoring_simulations.connect(
-        #     lambda: self.request_monitoring_simulations.emit()
-        # )
-        # self.tasks_browser.start_monitoring_model_generation.connect(
-        #     self.request_monitoring_model_generation.emit
-        # )
-        # self.simulation_tasks_added.connect(self.tasks_browser.add_simulation_tasks)
-        # self.simulation_task_updated.connect(self.tasks_browser.update_simulation_task)
-        # self.model_tasks_added.connect(self.tasks_browser.add_model_tasks)
-        # self.model_task_updated.connect(self.tasks_browser.update_model_task)
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
