@@ -455,7 +455,6 @@ class FileView(QWidget):
         return btn_dict
 
     def edit_file_name(self, selected_item: dict):
-        # this should really not happen so just continue silently if that happens
         current_name = self.filename_edit.text()
         self.no_refresh = True
 
