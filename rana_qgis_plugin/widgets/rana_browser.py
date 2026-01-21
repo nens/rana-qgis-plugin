@@ -1666,6 +1666,7 @@ class RanaBrowser(QWidget):
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
         self.project_widget.setCornerWidget(refresh_btn)
+        self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Create stacked widget for file browsing
         self.rana_files = QStackedWidget()
         self.rana_files.addWidget(self.files_browser)
@@ -1893,6 +1894,12 @@ class RanaBrowser(QWidget):
     @pyqtSlot()
     def disable(self):
         self.rana_browser.setEnabled(False)
+
+    def on_project_tab_changed(self, index):
+        if index == 0:
+            self.project_widget.cornerWidget().show()
+        else:
+            self.project_widget.cornerWidget().hide()
 
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
