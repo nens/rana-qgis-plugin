@@ -128,9 +128,13 @@ class TasksBrowser(QWidget):
         self.tasks = []
         self.setup_ui()
         self.row_map = {}
-        self.get_rana_jobs()
         # QTimer.singleShot(0, lambda: self.start_monitoring_simulations.emit())
         # QTimer.singleShot(0, lambda: self.start_monitoring_model_generation.emit())
+
+    def update_project(self, project: dict):
+        # TODO: this should start a thread for this project
+
+        self.get_rana_jobs(project["id"])
 
     def setup_ui(self):
         # TODO: consider using a custom model
@@ -203,8 +207,10 @@ class TasksBrowser(QWidget):
         progress_bar.setMaximum(task.max_progress)
         progress_bar.setFormat(task.progress_str())
 
-    def get_rana_jobs(self):
-        project_id = "zBmCQhv3"
+    def get_rana_jobs(self, project_id):
+        self.tasks_model.removeRows(0, self.tasks_model.rowCount())
+
+        # project_id = "zBmCQhv3"
         jobs = get_project_jobs(self.communication, project_id)["items"]
         for job in jobs:
             # TODO: note that email should be replaced by id

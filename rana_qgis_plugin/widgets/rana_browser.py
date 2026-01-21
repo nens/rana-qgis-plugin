@@ -1094,10 +1094,15 @@ class ProjectsBrowser(QWidget):
         self.btn_next = QPushButton(">")
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
+        # Refresh button
+        self.refresh_btn = QToolButton()
+        self.refresh_btn.setToolTip("Refresh")
+        self.refresh_btn.setIcon(refresh_icon)
         # Organize widgets in layouts
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.projects_search)
         top_layout.addWidget(self.contributor_filter)
+        top_layout.addWidget(self.refresh_btn)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
         pagination_layout.addWidget(
@@ -1609,59 +1614,14 @@ class RanaBrowser(QWidget):
         return self.files_browser.selected_item
 
     def setup_ui(self):
-        self.rana_browser = QTabWidget()
-        self.rana_files = QStackedWidget()
-        self.rana_tasks = QStackedWidget()
-        self.rana_browser.addTab(self.rana_files, "Files")
-        self.rana_browser.setCurrentIndex(0)
-        # self.rana_browser.tabBar().setTabVisible(0, False)
-        # TODO: move refresh
-        self.rana_browser.addTab(self.rana_tasks, "Tasks")
-        # Set up breadcrumbs, browser and file view widgets
-        self.breadcrumbs = BreadCrumbsWidget(
-            communication=self.communication, parent=self
-        )
-        refresh_btn = QToolButton()
-        refresh_btn.setToolTip("Refresh")
-        refresh_btn.setIcon(refresh_icon)
-        refresh_btn.clicked.connect(self.refresh)
-
-        # Setup top layout with logo and breadcrumbs
-        top_layout = QGridLayout()
-
-        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
-        renderer = banner.renderer()
-        original_size = renderer.defaultSize()  # QSize
-        width = 150
-        height = int(original_size.height() / original_size.width() * width)
-        banner.setFixedWidth(width)
-        banner.setFixedHeight(height)
-        self.logo_label = banner
-        self.logo_label.installEventFilter(self)
-        self.window().installEventFilter(self)
-        top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        top_layout.addItem(spacer, 0, 3, 1, 1)
-        top_layout.addWidget(self.logo_label, 0, 4)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        top_layout.addItem(spacer, 1, 0, 1, 1)
-        top_layout.addWidget(refresh_btn, 1, 4, Qt.AlignRight)
-
-        # Add components to the layout
-        layout = QVBoxLayout(self)
-        layout.addLayout(top_layout)
-        layout.addWidget(self.rana_browser)
-        self.setLayout(layout)
-        self.resize(800, self.height())
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-        # Setup widgets that populate the rana widget
-        file_signals = FileActionSignals()
+        # Setup widgets
         self.projects_browser = ProjectsBrowser(
             communication=self.communication,
             avatar_cache=self.avatar_cache,
             parent=self,
         )
+        self.avatar_cache.update_users_in_thread(self.projects_browser.users)
+        file_signals = FileActionSignals()
         self.files_browser = FilesBrowser(
             communication=self.communication, file_signals=file_signals, parent=self
         )
@@ -1674,10 +1634,62 @@ class RanaBrowser(QWidget):
         self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
         )
+        self.tasks_browser = TasksBrowser(
+            communication=self.communication,
+            avatar_cache=self.avatar_cache,
+            parent=self,
+        )
+        self.breadcrumbs = BreadCrumbsWidget(
+            communication=self.communication, parent=self
+        )
 
-        # Start getting avatars from loaded users
-        # Consider better solution at some moment
-        self.avatar_cache.update_users_in_thread(self.projects_browser.users)
+        # Organize widgets in stacks and tabs
+        self.rana_browser = QStackedWidget()
+        self.rana_browser.addWidget(self.projects_browser)
+        # Create tab widget for project related actions
+        self.project_widget = QTabWidget()
+        self.rana_browser.addWidget(self.project_widget)
+        self.rana_browser.setCurrentIndex(0)
+        refresh_btn = QToolButton()
+        refresh_btn.setToolTip("Refresh")
+        refresh_btn.setIcon(refresh_icon)
+        self.project_widget.setCornerWidget(refresh_btn)
+        # Create stacked widget for file browsing
+        self.rana_files = QStackedWidget()
+        self.rana_files.addWidget(self.files_browser)
+        self.rana_files.addWidget(self.file_view)
+        self.rana_files.addWidget(self.revisions_view)
+        self.project_widget.addTab(self.rana_files, "Files")
+        self.project_widget.setCurrentIndex(0)
+        # Create stacked widget for processes
+        self.rana_tasks = QStackedWidget()
+        self.rana_tasks.addWidget(self.tasks_browser)
+        self.project_widget.addTab(self.rana_tasks, "Tasks")
+
+        # Setup top layout with logo and breadcrumbs
+        top_layout = QHBoxLayout()
+        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
+        renderer = banner.renderer()
+        original_size = renderer.defaultSize()  # QSize
+        width = 150
+        height = int(original_size.height() / original_size.width() * width)
+        banner.setFixedWidth(width)
+        banner.setFixedHeight(height)
+        self.logo_label = banner
+        self.logo_label.installEventFilter(self)
+        self.window().installEventFilter(self)
+        top_layout.addWidget(self.breadcrumbs)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        top_layout.addItem(spacer)
+        top_layout.addWidget(self.logo_label)
+
+        # Add components to the layout
+        layout = QVBoxLayout(self)
+        layout.addLayout(top_layout)
+        layout.addWidget(self.rana_browser)
+        self.setLayout(layout)
+        self.resize(800, self.height())
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         # Connect avatar_cache
         # Note that avatar_cache is only linked to the projects_browser because for now
@@ -1687,7 +1699,6 @@ class RanaBrowser(QWidget):
         )
         self.avatar_cache.avatar_changed.connect(self.projects_browser.update_avatar)
 
-        # self.avatar_cache.avatar_updated.connect(self.file_view.update_avatar)
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
@@ -1695,19 +1706,7 @@ class RanaBrowser(QWidget):
         self.revisions_view.ready.connect(lambda: self.enable)
         self.files_browser.busy.connect(lambda: self.disable)
         self.files_browser.ready.connect(lambda: self.enable)
-        # Add browsers and file view to rana widget
-        self.rana_files.addWidget(self.projects_browser)
-        self.rana_files.addWidget(self.files_browser)
-        self.rana_files.addWidget(self.file_view)
-        self.rana_files.addWidget(self.revisions_view)
 
-        self.tasks_browser = TasksBrowser(
-            communication=self.communication,
-            avatar_cache=self.avatar_cache,
-            parent=self,
-        )
-        # self.tasks_browser.get_rana_jobs()
-        self.rana_tasks.addWidget(self.tasks_browser)
         # self.tasks_browser.start_monitoring_simulations.connect(
         #     lambda: self.request_monitoring_simulations.emit()
         # )
@@ -1718,11 +1717,17 @@ class RanaBrowser(QWidget):
         # self.simulation_task_updated.connect(self.tasks_browser.update_simulation_task)
         # self.model_tasks_added.connect(self.tasks_browser.add_model_tasks)
         # self.model_task_updated.connect(self.tasks_browser.update_model_task)
+        # Connect refresh buttons
+        self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
+        refresh_btn.clicked.connect(self.refresh_project_widget)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
         self.projects_browser.project_selected.connect(
             self.files_browser.update_project
+        )
+        self.projects_browser.project_selected.connect(
+            self.tasks_browser.update_project
         )
         self.projects_browser.project_selected.connect(self.file_view.update_project)
         # Show file details on selecting file
@@ -1832,32 +1837,37 @@ class RanaBrowser(QWidget):
         file_signals.view_all_revisions_requested.connect(
             lambda _, selected_file: self.breadcrumbs.add_revisions(selected_file)
         )
-        # Ensure correct page is shown - do this last zo all updates are done
-        self.projects_browser.projects_refreshed.connect(
-            lambda: self.rana_files.setCurrentIndex(0)
-        )
+        # Ensure correct page is shown - do this last so all updates are done
+        self.projects_browser.projects_refreshed.connect(self.show_projects_browser)
         self.projects_browser.project_selected.connect(
-            lambda _: self.rana_files.setCurrentIndex(1)
-        )
-        self.files_browser.folder_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(1)
+            lambda _: self.show_project_data(self.project_widget.currentWidget(), 0)
         )
         self.files_browser.file_selected.connect(
-            lambda _: self.rana_files.setCurrentIndex(2)
+            lambda _: self.show_project_data(self.rana_files, 1)
         )
-        self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
+        self.files_browser.folder_selected.connect(
+            lambda: self.show_project_data(self.rana_files, 0)
+        )
+        self.file_view.file_showed.connect(
+            lambda: self.show_project_data(self.rana_files, 2)
+        )
         file_signals.view_all_revisions_requested.connect(
-            lambda _: self.rana_files.setCurrentIndex(3)
+            lambda _: self.show_project_data(self.rana_files, 3)
         )
-        self.breadcrumbs.projects_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(0)
-        )
+        self.breadcrumbs.projects_selected.connect(self.show_projects_browser)
         self.breadcrumbs.folder_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(1)
+            lambda: self.show_project_data(self.rana_files, 0)
         )
         self.breadcrumbs.file_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(2)
+            lambda: self.show_project_data(self.rana_files, 1)
         )
+
+    def show_projects_browser(self):
+        self.rana_browser.setCurrentIndex(0)
+
+    def show_project_data(self, parent, index):
+        self.rana_browser.setCurrentIndex(1)
+        parent.setCurrentIndex(index)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.MouseButtonPress and obj == self.logo_label:
@@ -1887,15 +1897,25 @@ class RanaBrowser(QWidget):
         ) or self.rana_browser.currentIndex() == 1:
             self.refresh()
 
+    def refresh_projects_browser(self):
+        self.projects_browser.refresh()
+        self.last_refresh_time = time.time()
+
+    def refresh_project_widget(self):
+        current_widget = self.project_widget.currentIndex()
+        if isinstance(current_widget, QStackedWidget):
+            current_widget = current_widget.currentWidget()
+        if current_widget and hasattr(current_widget, "refresh"):
+            current_widget.refresh()
+            self.last_refresh_time = time.time()
+
     @pyqtSlot()
     def refresh(self):
-        if self.rana_browser.currentIndex() == 1:
-            return
-        if hasattr(self.rana_browser.currentWidget(), "refresh"):
-            self.rana_files.currentWidget().refresh()
-            self.last_refresh_time = time.time()
-        else:
-            raise Exception("Attempted refresh on widget without refresh support")
+        current_widget = None
+        if self.rana_browser.currentIndex() == 0:
+            self.refresh_projects_browser()
+        elif self.rana_browser.currentIndex() == 1:
+            self.refresh_project_widget()
 
     def refresh_after_file_delete(self):
         if self.rana_files.currentIndex() == 2:
