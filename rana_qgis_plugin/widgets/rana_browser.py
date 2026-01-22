@@ -641,9 +641,9 @@ class FileView(QWidget):
                 revision = schematisation["latest_revision"]
         crs_str = self._get_crs_str(data_type, meta, revision)
         details = [
-            ("Area", self._get_area_str(data_type, meta, revision)),
+            # ("Area", self._get_area_str(data_type, meta, revision)),
             ("Projection", crs_str),
-            ("Kind", data_type),
+            ("Type", data_type),
             ("Storage", self._get_size_str(data_type, selected_file)),
         ]
         if data_type == "scenario" and meta:
