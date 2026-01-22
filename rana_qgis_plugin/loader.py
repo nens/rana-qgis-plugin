@@ -97,7 +97,7 @@ class Loader(QObject):
     schematisation_import_finished = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
     simulation_cancelled = pyqtSignal()
-    simulation_started = pyqtSignal(int)
+    simulation_started = pyqtSignal(list)
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
     rename_finished = pyqtSignal(str)
@@ -556,7 +556,7 @@ class Loader(QObject):
 
         # Store the result in the same folder as the file
         output_file_path = file["id"].rpartition("/")[0] + file["id"].rpartition("/")[1]
-
+        simids = []
         for sim in simulations:
             params = {
                 "project_id": project["id"],
@@ -570,9 +570,8 @@ class Loader(QObject):
             }
             response = start_tenant_process(self.communication, track_process, params)
             job = get_tenant_job(response["job_id"])
-            simid = job["inputs"]["simulation_id"]
-
-        self.simulation_started.emit(simid)
+            simids.append(job["inputs"]["simulation_id"])
+        self.simulation_started.emit(simids)
 
     def get_simulation_data_from_template(self, tc, template):
         simulation, settings_overview, events, lizard_post_processing_overview = (

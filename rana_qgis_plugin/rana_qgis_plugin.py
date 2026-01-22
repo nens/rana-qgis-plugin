@@ -332,8 +332,8 @@ class RanaQgisPlugin:
                 lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
             )
             self.loader.simulation_started.connect(
-                lambda simid: self.open_info_dialog(
-                    info_dialog.RunSimulationDialog, simid=simid
+                lambda simids: self.open_info_dialog(
+                    info_dialog.RunSimulationDialog, simids=simids
                 )
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)

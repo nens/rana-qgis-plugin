@@ -46,9 +46,17 @@ class SaveRevisionDialog(InfoDialog):
 
 
 class RunSimulationDialog(InfoDialog):
-    def __init__(self, simid=None, parent=None):
-        if simid:
-            info_msg = f"Rana simulation started. Follow progress here: {get_hcc_url(f'simulations/{simid}')}"
+    def __init__(self, simids: Optional[list] = None, parent=None):
+        if simids:
+            if len(simids) == 1:
+                info_msg = f"Rana simulation started. Follow progress here: {get_hcc_url(f'simulations/{simids[0]}')}"
+            else:
+                sim_urls = [get_hcc_url(f"simulations/{simid}") for simid in simids]
+                info_msg = (
+                    f"Rana simulations started. Follow progress here:<ul>"
+                    + "".join(f"<li>{url}</li>" for url in sim_urls)
+                    + "</ul>"
+                )
         else:
             info_msg = f"Rana simulation started. Follow progress here: {get_hcc_url(f'simulations')}"
         super().__init__(
