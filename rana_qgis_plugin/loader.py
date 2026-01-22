@@ -52,6 +52,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
+    get_tenant_job,
     get_tenant_processes,
     get_tenant_project_file,
     get_tenant_project_files,
@@ -96,7 +97,7 @@ class Loader(QObject):
     schematisation_import_finished = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
     simulation_cancelled = pyqtSignal()
-    simulation_started = pyqtSignal()
+    simulation_started = pyqtSignal(int)
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
     rename_finished = pyqtSignal(str)
@@ -567,9 +568,11 @@ class Loader(QObject):
                 },
                 "name": f"simulation_tracker_{sim.simulation.name}",
             }
-            _ = start_tenant_process(self.communication, track_process, params)
+            response = start_tenant_process(self.communication, track_process, params)
+            job = get_tenant_job(response["job_id"])
+            simid = job["inputs"]["simulation_id"]
 
-        self.simulation_started.emit()
+        self.simulation_started.emit(simid)
 
     def get_simulation_data_from_template(self, tc, template):
         simulation, settings_overview, events, lizard_post_processing_overview = (

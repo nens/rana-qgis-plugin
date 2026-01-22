@@ -124,8 +124,8 @@ class RanaQgisPlugin:
                 if self.rana_browser:
                     self.rana_browser.refresh()
 
-    def open_info_dialog(self, dialog_class):
-        dialog = dialog_class(self.iface.mainWindow())
+    def open_info_dialog(self, dialog_class, *args, **kwargs):
+        dialog = dialog_class(parent=self.iface.mainWindow(), *args, **kwargs)
         dialog.exec()
 
     def open_tenant_selection_dialog(self):
@@ -332,7 +332,9 @@ class RanaQgisPlugin:
                 lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
             )
             self.loader.simulation_started.connect(
-                lambda: self.open_info_dialog(info_dialog.RunSimulationDialog)
+                lambda simid: self.open_info_dialog(
+                    info_dialog.RunSimulationDialog, simid=simid
+                )
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
@@ -345,7 +347,7 @@ class RanaQgisPlugin:
             self.loader.vector_style_finished.connect(self.rana_browser.enable)
             self.loader.vector_style_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
-            self.loader.simulation_started.connect(self.rana_browser.enable)
+            self.loader.simulation_started.connect(lambda _: self.rana_browser.enable())
             self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
             self.loader.schematisation_upload_cancelled.connect(
