@@ -59,13 +59,13 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
-        self.add_rana_menu(True)
+        self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
 
     def login(self, start_tenant_id: str = None) -> bool:
-        if not setup_oauth2(self.communication):
+        if not setup_oauth2(self.communication, start_tenant_id):
             return False
         self.add_rana_menu(True)
         if not self.set_tenant(start_tenant_id):
@@ -80,7 +80,7 @@ class RanaQgisPlugin:
         self.communication.clear_message_bar()
         remove_authcfg()
         set_tenant_id("")
-        self.add_rana_menu(True)
+        self.add_rana_menu(False)
         self.communication.bar_info("You have been logged out.")
         if self.dock_widget:
             self.dock_widget.close()
@@ -92,7 +92,7 @@ class RanaQgisPlugin:
                 return True
             if not self.tenants:
                 return False
-
+            # Take first
             tenant_id = self.tenants[0]["id"]
         else:
             # Extra check to see whether requested tenant is in list.
@@ -223,7 +223,8 @@ class RanaQgisPlugin:
             if not self.login(path_params["tenant_id"]):
                 return
         else:
-            self.login()
+            if not self.login():
+                return
         if not self.dock_widget:
             # Setup GUI
             self.dock_widget = QDockWidget(PLUGIN_NAME, self.iface.mainWindow())
@@ -245,6 +246,7 @@ class RanaQgisPlugin:
 
             # Connect signals
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
+            self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
@@ -283,7 +285,6 @@ class RanaQgisPlugin:
             self.rana_browser.download_results_selected.connect(
                 self.loader.download_results
             )
-            self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_vector_styling_selected.connect(
                 self.rana_browser.disable
@@ -374,3 +375,5 @@ class RanaQgisPlugin:
                 project_id=path_params["project_id"],
                 online_path=query_params["path"][0],
             )
+
+        self.rana_browser.refresh()

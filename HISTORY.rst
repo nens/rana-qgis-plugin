@@ -7,6 +7,14 @@ History
 
 - Show warning when M&S plugin is enabled when Rana plugin is started (#3320)
 - Add numerical diffusion limiter option to substance (#241)
+- Confirm downloading of already downloaded results
+- Reorganize FileView widget with collapsible groups
+- Add option to filter by contributor and show contributors in project view
+- Add option to login via other SSO identity providers (#3303)
+- Show Created at column for projects (#3025)
+- Ensured Results Analysis Tool window remains visible when scenarios are loaded. (#3350)
+- Don't show authentication related menu items on startup.
+- Increase limit for fetching files in file view to 1000
 
 
 1.2.2 (2026-01-12)
@@ -14,7 +22,6 @@ History
 
 - Added missing import for Breaches widget.
 - Copy processing algorithms from Models and Simulations plugin to Rana desktop client
-- Add option to filter by contributor and show contributors in project view
 - Add remove from project file action that shadows delete
 - Show relative timestamps in files browser, file view and revisions view
 - Add context menu to projects browser

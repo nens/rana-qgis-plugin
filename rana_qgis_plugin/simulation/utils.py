@@ -908,7 +908,9 @@ def load_local_schematisation(
     action=BuildOptionActions.LOADED,
     custom_geopackage_filepath=None,
 ):
-    if local_schematisation and local_schematisation.schematisation_db_filepath:
+    if local_schematisation and (
+        custom_geopackage_filepath or local_schematisation.schematisation_db_filepath
+    ):
         try:
             geopackage_filepath = (
                 local_schematisation.schematisation_db_filepath
