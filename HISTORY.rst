@@ -6,6 +6,7 @@ History
 ------------------
 
 - Show warning when M&S plugin is enabled when Rana plugin is started (#3320)
+- Add numerical diffusion limiter option to substance (#241)
 - Confirm downloading of already downloaded results
 - Reorganize FileView widget with collapsible groups
 - Add option to filter by contributor and show contributors in project view

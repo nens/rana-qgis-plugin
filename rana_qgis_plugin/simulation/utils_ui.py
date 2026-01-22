@@ -4,10 +4,11 @@ import os
 import re
 import shutil
 import warnings
+from typing import List
 from uuid import uuid4
 
 from qgis.gui import QgsFileWidget, QgsProjectionSelectionWidget
-from qgis.PyQt.QtCore import QCoreApplication, QDate, QLocale, QSettings, QTime
+from qgis.PyQt.QtCore import QCoreApplication, QDate, QLocale, QSettings, QTime, QTimer
 from qgis.PyQt.QtGui import QColor, QDoubleValidator, QIcon
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
@@ -20,6 +21,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QRadioButton,
     QSpinBox,
+    QStyledItemDelegate,
     QTimeEdit,
     QWidget,
 )
@@ -330,6 +332,28 @@ def read_3di_settings(entry_name, default_value=""):
     settings = QSettings()
     value_from_settings = settings.value(f"threedi/{entry_name}", default_value)
     return value_from_settings
+
+
+class EnumDelegate(QStyledItemDelegate):
+    def __init__(self, parent: QWidget, options: List[str]):
+        super().__init__(parent)
+        self.options = options
+
+    def createEditor(self, parent: QWidget, option, index) -> QWidget:
+        editor = QComboBox(parent)
+        editor.addItems(self.options)
+        # Requires one click less
+        QTimer.singleShot(0, editor.showPopup)
+        return editor
+
+    def setEditorData(self, editor: QWidget, index):
+        enum_name = index.model().data(index)
+        combo_index = editor.findText(enum_name)
+        assert combo_index != -1
+        editor.setCurrentIndex(combo_index)
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText())
 
 
 class NumericDelegate(QItemDelegate):
