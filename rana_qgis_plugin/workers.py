@@ -638,8 +638,8 @@ class ProjectJobMonitorWorker(QThread):
         self.update_jobs()
         while not self._stop_flag:
             self.update_jobs()
-            # TODO consider sleep interval
-            QThread.sleep(5)
+            # Process contains a single api call, so every second should be fine
+            QThread.sleep(1)
 
     def stop(self):
         """Gracefully stop the worker"""
