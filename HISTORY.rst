@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.3 (unreleased)
+1.2.3 (2026-01-23)
 ------------------
 
 - Show warning when M&S plugin is enabled when Rana plugin is started (#3320)
