@@ -1857,10 +1857,10 @@ class RanaBrowser(QWidget):
             lambda: self.show_project_data(self.rana_files, 0)
         )
         self.file_view.file_showed.connect(
-            lambda: self.show_project_data(self.rana_files, 2)
+            lambda: self.show_project_data(self.rana_files, 1)
         )
         file_signals.view_all_revisions_requested.connect(
-            lambda _: self.show_project_data(self.rana_files, 3)
+            lambda _: self.show_project_data(self.rana_files, 2)
         )
         self.breadcrumbs.projects_selected.connect(self.show_projects_browser)
         self.breadcrumbs.folder_selected.connect(
