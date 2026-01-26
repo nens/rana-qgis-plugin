@@ -1,7 +1,13 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
-from qgis.PyQt.QtCore import QEvent, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel, QTextDocument
+from qgis.PyQt.QtCore import QEvent, QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import (
+    QDesktopServices,
+    QStandardItem,
+    QStandardItemModel,
+    QTextDocument,
+)
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QHeaderView,
@@ -17,6 +23,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeric_item
+from rana_qgis_plugin.utils_api import get_tenant_id
+from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
 
 
@@ -101,11 +109,13 @@ class ProcessesBrowser(QWidget):
         self.avatar_cache = avatar_cache
         self.setup_ui()
         self.row_map = {}
+        self.project = {}
 
     def update_project(self, project: dict):
         # Remove cached data
         self.processes_model.removeRows(0, self.processes_model.rowCount())
         self.row_map.clear()
+        self.project = project
         # Start monitor jobs for the selected project
         self.start_monitoring_project_jobs.emit(project["id"])
 
@@ -138,9 +148,28 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setColumnWidth(2, 150)
         self.processes_tv.setColumnWidth(3, 160)
         self.processes_tv.header().setStretchLastSection(False)
+        self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
+        self.processes_tv.clicked.connect(self.handle_item_click)
+
+    def handle_item_click(self, index):
+        if index.column() != 0:
+            return
+        process = self.processes_model.itemFromIndex(index).data(
+            Qt.ItemDataRole.UserRole
+        )
+        created_dt = datetime.fromtimestamp(
+            convert_to_timestamp(process.created), tz=timezone.utc
+        )
+        # Links are only available for recent items
+        # TODO: ensure this is the correct cut off time!
+        if (datetime.now(timezone.utc) - created_dt) > timedelta(weeks=2):
+            return
+        process_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['code']}?tab=2&job={process.id}"
+        QDesktopServices.openUrl(QUrl(process_url))
 
     def add_process(self, process):
         name_item = QStandardItem(process.name)
+        name_item.setData(process, Qt.ItemDataRole.UserRole)
         who_item = QStandardItem()
         who_item.setData(
             [
