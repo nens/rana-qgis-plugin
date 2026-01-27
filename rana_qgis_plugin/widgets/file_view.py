@@ -347,13 +347,12 @@ class FileView(QWidget):
         data_type = selected_file.get("data_type")
         revision = None
         if data_type == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
+            schematisation_base = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
             )
-            if schematisation:
-                revision = schematisation["latest_revision"]
+            if schematisation_base:
+                revision = schematisation_base["latest_revision"]
         crs_str = self._get_crs_str(data_type, meta, revision)
-
         details = [
             # ("Area", self._get_area_str(data_type, meta, revision)),
             ("Projection", crs_str),
@@ -385,9 +384,29 @@ class FileView(QWidget):
                 ("End", end),
             ]
         if data_type == "threedi_schematisation" and revision:
+            schematisation = schematisation_base["schematisation"]
             details += [
-                ("Schematisation ID", schematisation["schematisation"]["id"]),
-                ("Latest revision ID", revision["id"] if revision else None),
+                ("Schematisation name", schematisation["name"]),
+                ("Schematisation ID", schematisation["id"]),
+                (
+                    "Schematisation description",
+                    schematisation["meta"].get("description"),
+                ),
+                (
+                    "Schematisation created by",
+                    schematisation["created_by_first_name"]
+                    + " "
+                    + schematisation["created_by_last_name"],
+                ),
+                (
+                    "Schematisation created on",
+                    convert_to_local_time(schematisation["created"]),
+                ),
+                (
+                    "Schematisation tags",
+                    "; ".join(schematisation["tags"]) if schematisation["tags"] else "",
+                ),
+                ("Latest revision ID", revision["id"] if revision else ""),
                 (
                     "Latest revision number",
                     revision["number"] if revision else None,
