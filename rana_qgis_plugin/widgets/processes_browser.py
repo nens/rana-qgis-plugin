@@ -81,7 +81,6 @@ class ProcessesBrowser(QWidget):
         self.start_monitoring_project_jobs.emit(project["id"])
 
     def setup_ui(self):
-        # TODO: consider using a custom model
         self.processes_model = QStandardItemModel()
         self.processes_tv = QTreeView()
         self.processes_tv.setModel(self.processes_model)

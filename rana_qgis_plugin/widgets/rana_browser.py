@@ -1109,7 +1109,6 @@ class ProjectsBrowser(QWidget):
         self.btn_next = QPushButton(">")
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
-        # Refresh button
         self.refresh_btn = QToolButton()
         self.refresh_btn.setToolTip("Refresh")
         self.refresh_btn.setIcon(refresh_icon)

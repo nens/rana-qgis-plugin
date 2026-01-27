@@ -628,7 +628,6 @@ class ProjectJobMonitorWorker(QThread):
 
     def __init__(self, project_id, parent=None):
         super().__init__(parent)
-        super().__init__(parent)
         self.active_jobs = {}
         self.project_id = project_id
         self._stop_flag = False
