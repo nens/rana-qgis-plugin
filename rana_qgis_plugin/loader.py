@@ -1,8 +1,8 @@
 import os
 from copy import deepcopy
+from datetime import datetime
 from functools import partial
 from pathlib import Path
-from datetime import datetime
 
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt.QtCore import (
@@ -63,12 +63,12 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import (
+    COLOR_RAMP_OCEAN_HALINE,
+    apply_gradient_ramp,
+    color_ramp_from_data,
     get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
     multiband_raster_min_max,
-    color_ramp_from_data,
-    apply_gradient_ramp,
-    COLOR_RAMP_OCEAN_HALINE,
 )
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
@@ -201,7 +201,7 @@ class Loader(QObject):
             get_threedi_api(),
         )
         self.file_download_finished.emit(None)
-    
+
     def apply_style(self, layer):
         # Water level styling
         min_value, max_value = multiband_raster_min_max(layer)
@@ -211,7 +211,7 @@ class Loader(QObject):
             color_ramp=color_ramp,
             min_value=min_value,
             max_value=max_value,
-            band=1
+            band=1,
         )
 
     def on_file_download_finished(
@@ -248,14 +248,14 @@ class Loader(QObject):
                                 ra_tool.toggle_results_manager.run()  # also does some initialisation
                             if os.path.exists(waterdepth_path):
                                 # we only download non-temporal rasters, so always pick the first band
-                                waterdepth_layer = QgsRasterLayer(waterdepth_path, "max_waterdepth.tif", "gdal")
+                                waterdepth_layer = QgsRasterLayer(
+                                    waterdepth_path, "max_waterdepth.tif", "gdal"
+                                )
                                 self.apply_style(waterdepth_layer)
                                 if hasattr(waterdepth_layer.renderer(), "setBand"):
                                     waterdepth_layer.renderer().setBand(1)
                                 waterdepth_layer.setName("max_waterdepth.tif")
                                 QgsProject.instance().addMapLayer(waterdepth_layer)
-                                
-                                
 
         else:
             schematisation = None

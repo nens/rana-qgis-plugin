@@ -1,18 +1,17 @@
 import os
 from collections import namedtuple
 
-from qgis.utils import plugins
 from qgis.core import (
-    QgsRasterBandStats,
-    QgsRasterLayer,
-    QgsRasterShader,
     QgsColorRampShader,
     QgsGradientColorRamp,
     QgsGradientStop,
+    QgsRasterBandStats,
+    QgsRasterLayer,
+    QgsRasterShader,
     QgsSingleBandPseudoColorRenderer,
 )
 from qgis.PyQt.QtGui import QColor
-
+from qgis.utils import plugins
 
 ColorRampData = namedtuple("ColorRampData", ["name", "colors", "info"])
 
@@ -119,8 +118,7 @@ def multiband_raster_min_max(layer):
 
     for band in range(1, band_count + 1):
         stats = provider.bandStatistics(
-            band,
-            QgsRasterBandStats.Min | QgsRasterBandStats.Max
+            band, QgsRasterBandStats.Min | QgsRasterBandStats.Max
         )
         global_min = min(global_min, stats.minimumValue)
         global_max = max(global_max, stats.maximumValue)
@@ -143,11 +141,11 @@ def color_ramp_from_data(data: ColorRampData):
 
 
 def apply_gradient_ramp(
-        layer: QgsRasterLayer,
-        color_ramp: QgsGradientColorRamp,
-        min_value: float,
-        max_value: float,
-        band: int = 1
+    layer: QgsRasterLayer,
+    color_ramp: QgsGradientColorRamp,
+    min_value: float,
+    max_value: float,
+    band: int = 1,
 ):
     """
     Apply a gradient color ramp to a raster layer, stretched over given min/max values.
