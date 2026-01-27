@@ -272,12 +272,6 @@ class FileView(QWidget):
             return f"{area / 1e6:.2f} km²"
         return ""
 
-    @staticmethod
-    def _get_size_str(data_type, selected_file) -> str:
-        if data_type != "threedi_schematisation":
-            return display_bytes(selected_file["size"])
-        return "N/A"
-
     def update_general_box(self, selected_file: dict):
         rows = []
         # line 1: icon - filename - size
@@ -363,8 +357,9 @@ class FileView(QWidget):
             # ("Area", self._get_area_str(data_type, meta, revision)),
             ("Projection", crs_str),
             ("Type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
-            ("Storage", self._get_size_str(data_type, selected_file)),
         ]
+        if data_type != "threedi_schematisation":
+            details.append(("Storage", display_bytes(selected_file["size"])))
         if data_type == "scenario" and meta:
             simulation = meta["simulation"]
             schematisation = meta["schematisation"]
