@@ -104,6 +104,7 @@ class FileView(QWidget):
         self.files_table = QTableView()
         self.files_table.setSortingEnabled(False)
         self.files_table.verticalHeader().hide()
+        self.files_table.setEditTriggers(QTableView.NoEditTriggers)
         self.files_model = QStandardItemModel()
         self.files_table.setModel(self.files_model)
         self.files_model.setColumnCount(3)

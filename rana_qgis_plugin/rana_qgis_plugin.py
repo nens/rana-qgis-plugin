@@ -377,8 +377,3 @@ class RanaQgisPlugin:
             )
 
         self.rana_browser.refresh()
-        # TODO: remove this
-        model_index = self.rana_browser.projects_browser.projects_model.index(5, 0)
-        self.rana_browser.projects_browser.select_project(model_index)
-        file_index = self.rana_browser.files_browser.files_model.index(11, 0)
-        self.rana_browser.files_browser.select_file_or_directory(file_index)
