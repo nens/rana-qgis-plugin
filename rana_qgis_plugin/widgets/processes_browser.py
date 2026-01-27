@@ -1,22 +1,16 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from qgis.PyQt.QtCore import QEvent, QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
     QDesktopServices,
     QStandardItem,
     QStandardItemModel,
-    QTextDocument,
 )
 from qgis.PyQt.QtWidgets import (
-    QApplication,
     QHeaderView,
     QProgressBar,
     QSizePolicy,
-    QStyle,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
-    QToolTip,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -26,42 +20,7 @@ from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeri
 from rana_qgis_plugin.utils_api import get_tenant_id
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
-
-
-class WordWrapDelegate(QStyledItemDelegate):
-    def paint(self, painter, option, index):
-        options = QStyleOptionViewItem(option)
-        self.initStyleOption(options, index)
-        options.features |= QStyleOptionViewItem.WrapText
-        style = (
-            QApplication.style() if options.widget is None else options.widget.style()
-        )
-        style.drawControl(QStyle.CE_ItemViewItem, options, painter)
-
-    def sizeHint(self, option, index):
-        options = QStyleOptionViewItem(option)
-        self.initStyleOption(options, index)
-        options.features |= QStyleOptionViewItem.WrapText
-
-        # Calculate required size with wrapping
-        doc = QTextDocument()
-        doc.setHtml(options.text)
-        doc.setTextWidth(option.rect.width())
-
-        # Convert float height to int using round or int
-        return QSize(option.rect.width(), int(doc.size().height()))
-
-    def helpEvent(self, event, view, option, index):
-        """Handle tooltip events to show the full text when hovering."""
-        if not event or not view or event.type() != QEvent.ToolTip:
-            return super().helpEvent(event, view, option, index)
-
-        text = index.data(Qt.DisplayRole)
-        if not text:
-            return super().helpEvent(event, view, option, index)
-
-        QToolTip.showText(event.globalPos(), text)
-        return True
+from rana_qgis_plugin.widgets.utils_delegates import WordWrapDelegate
 
 
 @dataclass
