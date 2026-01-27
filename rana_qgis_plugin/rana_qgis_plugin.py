@@ -344,7 +344,7 @@ class RanaQgisPlugin:
                 lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
             )
             self.loader.simulation_started.connect(
-                lambda: self.open_info_dialog(info_dialog.RunSimulationDialog)
+                self.rana_browser.show_processes_overview
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)

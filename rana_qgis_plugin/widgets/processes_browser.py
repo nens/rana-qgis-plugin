@@ -26,7 +26,7 @@ from rana_qgis_plugin.widgets.utils_delegates import (
 
 
 @dataclass
-class ProcessData:
+class JobData:
     id: int
     name: str
     user: str
@@ -34,6 +34,7 @@ class ProcessData:
     status: str
     progress: int
     max_progress: int
+    process_id: int | None
 
     def progress_str(self):
         return f"{self.status} ({self.progress}%)"
@@ -48,15 +49,22 @@ class ProcessData:
 
     @classmethod
     def from_job_dict(cls, job: dict):
-        return cls(
-            id=job["id"],
-            name=job["name"],
-            user=job["creator"],
-            created=job["created_at"],
-            status=job["state"]["type"],
-            progress=int(100 * job["state"]["progress"]),
-            max_progress=100,
-        )
+        from qgis.core import Qgis, QgsMessageLog
+
+        try:
+            return cls(
+                id=job["id"],
+                name=job["name"],
+                user=job["creator"],
+                created=job["created_at"],
+                status=job["state"]["type"],
+                progress=int(100 * job["state"]["progress"]),
+                max_progress=100,
+                process_id=job["process"].get("id") if job["process"] else None,
+            )
+        except Exception as e:
+            QgsMessageLog.logMessage(f"create job {job=}", "DEBUG", Qgis.Info)
+            raise e
 
 
 class ProcessesBrowser(QWidget):
@@ -114,66 +122,63 @@ class ProcessesBrowser(QWidget):
     def handle_item_click(self, index):
         if index.column() != 0:
             return
-        process = self.processes_model.itemFromIndex(index).data(
-            Qt.ItemDataRole.UserRole
-        )
+        job = self.processes_model.itemFromIndex(index).data(Qt.ItemDataRole.UserRole)
         created_dt = datetime.fromtimestamp(
-            convert_to_timestamp(process.created), tz=timezone.utc
+            convert_to_timestamp(job.created), tz=timezone.utc
         )
         # Links are only available for recent items
         # TODO: ensure this is the correct cut off time!
-        if (datetime.now(timezone.utc) - created_dt) > timedelta(weeks=2):
+        if not job.process_id:
+            # if (datetime.now(timezone.utc) - created_dt) > timedelta(weeks=2):
             return
-        process_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['code']}?tab=2&job={process.id}"
-        QDesktopServices.openUrl(QUrl(process_url))
+        job_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['code']}?tab=2&job={job.id}"
+        QDesktopServices.openUrl(QUrl(job_url))
 
-    def add_process(self, process):
-        name_item = QStandardItem(process.name)
-        name_item.setData(process, Qt.ItemDataRole.UserRole)
+    def add_item(self, job):
+        name_item = QStandardItem(job.name)
+        name_item.setData(job, Qt.ItemDataRole.UserRole)
         who_item = QStandardItem()
         who_item.setData(
             [
                 {
-                    "id": process.user["id"],
-                    "name": process.user_name,
-                    "avatar": self.avatar_cache.get_avatar_for_user(process.user),
+                    "id": job.user["id"],
+                    "name": job.user_name,
+                    "avatar": self.avatar_cache.get_avatar_for_user(job.user),
                 }
             ],
             Qt.ItemDataRole.UserRole,
         )
-        date_item = get_timestamp_as_numeric_item(process.created)
+        date_item = get_timestamp_as_numeric_item(job.created)
         status_item = QStandardItem()
-        status_item.setData(process.status, Qt.ItemDataRole.UserRole)
+        status_item.setData(job.status, Qt.ItemDataRole.UserRole)
         # Create the progress bar
         progress_bar = QProgressBar()
         progress_bar.setFixedWidth(160)
-        self.update_pb_progress(progress_bar, process)
+        self.update_pb_progress(progress_bar, job)
         progress_bar.setTextVisible(True)
         row = [name_item, who_item, date_item, status_item]
         self.processes_model.insertRow(0, row)
         self.processes_tv.setIndexWidget(status_item.index(), progress_bar)
         for id in self.row_map:
             self.row_map[id] += 1
-        self.row_map[process.id] = 0
+        self.row_map[job.id] = 0
         self.processes_tv.resizeColumnToContents(0)
 
     @staticmethod
-    def update_pb_progress(progress_bar, process):
-        progress_bar.setValue(process.progress)
-        progress_bar.setMaximum(process.max_progress)
-        progress_bar.setFormat(process.progress_str())
+    def update_pb_progress(progress_bar, job):
+        progress_bar.setValue(job.progress)
+        progress_bar.setMaximum(job.max_progress)
+        progress_bar.setFormat(job.progress_str())
 
-    def add_processes(self, job_list: list[dict]):
+    def add_items(self, job_list: list[dict]):
         for job in job_list:
-            self.add_process(ProcessData.from_job_dict(job))
+            self.add_item(JobData.from_job_dict(job))
 
-    def update_process_state(self, job_dict: dict):
-        process = ProcessData.from_job_dict(job_dict)
-        row = self.row_map.get(process.id, -1)
+    def update_job_state(self, job_dict: dict):
+        job = JobData.from_job_dict(job_dict)
+        row = self.row_map.get(job.id, -1)
         if row < 0:
             return
         status_item = self.processes_model.item(row, 3)
-        status_item.setData(process.status, Qt.ItemDataRole.UserRole)
-        self.update_pb_progress(
-            self.processes_tv.indexWidget(status_item.index()), process
-        )
+        status_item.setData(job.status, Qt.ItemDataRole.UserRole)
+        self.update_pb_progress(self.processes_tv.indexWidget(status_item.index()), job)

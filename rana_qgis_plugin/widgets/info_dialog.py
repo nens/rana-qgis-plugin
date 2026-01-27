@@ -34,12 +34,3 @@ class SaveRevisionDialog(InfoDialog):
             window_title="Revision being saved",
             parent=parent,
         )
-
-
-class RunSimulationDialog(InfoDialog):
-    def __init__(self, parent=None):
-        super().__init__(
-            info_msg=f"Rana revision simulation started. Follow progress here: {rana_hcc_url}",
-            window_title="Revision simulation started",
-            parent=parent,
-        )

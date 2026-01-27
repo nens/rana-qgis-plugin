@@ -1747,8 +1747,8 @@ class RanaBrowser(QWidget):
         self.processes_browser.start_monitoring_project_jobs.connect(
             self.request_monitoring_project_jobs.emit
         )
-        self.project_jobs_added.connect(self.processes_browser.add_processes)
-        self.project_job_updated.connect(self.processes_browser.update_process_state)
+        self.project_jobs_added.connect(self.processes_browser.add_items)
+        self.project_job_updated.connect(self.processes_browser.update_job_state)
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
@@ -1917,6 +1917,13 @@ class RanaBrowser(QWidget):
     def show_project_data(self, parent, index):
         self.rana_browser.setCurrentIndex(1)
         parent.setCurrentIndex(index)
+
+    def show_processes_overview(self):
+        if self.rana_browser.currentIndex() != 1:
+            # going to the processes view can only happen when the project widget is shown
+            return
+        self.project_widget.setCurrentIndex(1)
+        self.rana_processes.setCurrentIndex(0)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.MouseButtonPress and obj == self.logo_label:
