@@ -46,7 +46,7 @@ class ProjectsBrowser(QWidget):
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
         self.communication = communication
-        self.projects = []
+        self.tenant_projects = []
         self.users = []
         self.filtered_projects = []
         self.current_page = 1
@@ -62,7 +62,7 @@ class ProjectsBrowser(QWidget):
         self.populate_projects()
 
     def set_project_from_id(self, project_id: str):
-        for project in self.projects:
+        for project in self.tenant_projects:
             if project["id"] == project_id:
                 self.project = project
                 return
@@ -103,8 +103,12 @@ class ProjectsBrowser(QWidget):
         )
         avatar_delegate = ContributorAvatarsDelegate(self.projects_tv)
         self.projects_tv.setItemDelegateForColumn(1, avatar_delegate)
-        # self.projects_tv.clicked.connect(self.select_project)
         self.projects_tv.doubleClicked.connect(self.select_project)
+        layout = QVBoxLayout(self.projects_tv.viewport())
+        layout.setContentsMargins(0, 0, 0, 0)
+        # Create placeholder for cases with no projects and put it in a layout so it can be shown
+        self.empty_label = self.get_empty_placeholder()
+        layout.addWidget(self.empty_label)
         # Create navigation buttons
         self.btn_previous = QPushButton("<")
         self.label_page_number = QLabel("Page 1/1")
@@ -127,19 +131,41 @@ class ProjectsBrowser(QWidget):
         layout.addLayout(pagination_layout)
         self.setLayout(layout)
 
+    def get_empty_placeholder(self) -> QLabel:
+        # Create placeholder for when no projects are available
+        new_project_url = f"{base_url()}/{get_tenant_id()}/projects-new"
+        empty_label = QLabel(
+            f"""
+                <div style="text-align:center;">
+                    <h2 style="font-weight:600; margin-bottom:12px;">
+                        No projects found
+                    </h2>
+                    <br><br> 
+                    <a href="{new_project_url}" style="display:inline-block; margin-top:4px;">
+                        Create a project
+                    </a>
+                </div>
+            """,
+            self.projects_tv.viewport(),
+        )
+        empty_label.setOpenExternalLinks(True)
+        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.hide()
+        return empty_label
+
     def _on_contributor_filter_text_changed(self, text):
         # reset contribute filter with empty text
         if not text:
             self.contributor_filter.setCurrentIndex(-1)
 
     def fetch_projects(self):
-        self.projects = get_tenant_projects(self.communication)
+        self.tenant_projects = get_tenant_projects(self.communication)
 
     def update_users(self):
         self.users = list(
             {
                 contributor["id"]: contributor
-                for project in self.projects
+                for project in self.tenant_projects
                 for contributor in project["contributors"]
             }.values()
         )
@@ -165,7 +191,7 @@ class ProjectsBrowser(QWidget):
 
     def filter_projects(self):
         if not self.filter_active:
-            self.filtered_projects = self.projects
+            self.filtered_projects = self.tenant_projects
         else:
             # create all filters
             project_filters = [
@@ -180,7 +206,9 @@ class ProjectsBrowser(QWidget):
             # Find project ids that are included in all filters
             common_ids = set.intersection(*project_ids)
             self.filtered_projects = [
-                project for project in self.projects if project["id"] in common_ids
+                project
+                for project in self.tenant_projects
+                if project["id"] in common_ids
             ]
         self.populate_projects()
 
@@ -189,19 +217,19 @@ class ProjectsBrowser(QWidget):
         if text:
             return [
                 project
-                for project in self.projects
+                for project in self.tenant_projects
                 if text.lower() in project["name"].lower()
             ]
         else:
-            return self.projects
+            return self.tenant_projects
 
     def get_projects_filtered_by_contributor(self):
         selected_user_id = self.contributor_filter.currentData()
         if selected_user_id is None:
-            return self.projects
+            return self.tenant_projects
         else:
             selected_projects = []
-            for project in self.projects:
+            for project in self.tenant_projects:
                 contributors = [
                     contributor["id"] for contributor in project.get("contributors", [])
                 ]
@@ -223,7 +251,7 @@ class ProjectsBrowser(QWidget):
         ]
         key_func = key_funcs[column_index]
         if key_func:
-            self.projects.sort(
+            self.tenant_projects.sort(
                 key=key_func, reverse=(order == Qt.SortOrder.DescendingOrder)
             )
         if populate:
@@ -296,8 +324,16 @@ class ProjectsBrowser(QWidget):
         return [name_item, contributors_item, last_activity_item, created_at_item]
 
     def populate_projects(self):
+        # clean table
+        self.projects_model.removeRows(0, self.projects_model.rowCount())
+        if not self.tenant_projects:
+            self.empty_label.show()
+            return
+        self.empty_label.hide()
         # Paginate projects
-        projects = self.filtered_projects if self.filter_active else self.projects
+        projects = (
+            self.filtered_projects if self.filter_active else self.tenant_projects
+        )
         start_index = (self.current_page - 1) * self.items_per_page
         end_index = start_index + self.items_per_page
         paginated_projects = projects[start_index:end_index]
@@ -305,8 +341,6 @@ class ProjectsBrowser(QWidget):
         processed_rows = [
             self.process_project_item(project) for project in paginated_projects
         ]
-        # Remove current data just in time
-        self.projects_model.removeRows(0, self.projects_model.rowCount())
         # Populate model with new data
         for row in processed_rows:
             self.projects_model.invisibleRootItem().appendRow(row)
@@ -343,7 +377,7 @@ class ProjectsBrowser(QWidget):
         # Collect all unique contributors to the projects
         all_contributors = {
             contributor["id"]: contributor
-            for project in self.projects
+            for project in self.tenant_projects
             for contributor in project["contributors"]
         }
         # Sort users by name, starting with the current user
