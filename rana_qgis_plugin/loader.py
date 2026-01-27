@@ -743,13 +743,13 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     def upload_new_file_to_rana(self, project, file):
         """Upload a local (new) file to Rana"""
-        last_saved_dir = QSettings().value(
-            f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
-        )
+        workdir = QgsProject.instance().homePath()
+        if not workdir:
+            workdir = QSettings().value(f"{RANA_SETTINGS_ENTRY}/last_upload_folder", "")
         local_paths, _ = QFileDialog.getOpenFileNames(
             None,
             "Open file(s)",
-            last_saved_dir,
+            workdir,
             "All supported files (*.tif *.tiff *.gpkg *.sqlite);;"
             "Rasters (*.tif *.tiff);;"
             "Vector files (*.gpkg *.sqlite)",
