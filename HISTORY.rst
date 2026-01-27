@@ -5,7 +5,7 @@ History
 1.2.4 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Show a link to creating a new project when no projects are available (#3398)
 
 
 1.2.3 (2026-01-23)
