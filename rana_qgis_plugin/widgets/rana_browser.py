@@ -99,8 +99,8 @@ from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
 from rana_qgis_plugin.widgets.processes_browser import ProcessesBrowser
 from rana_qgis_plugin.widgets.utils_avatars import (
     AvatarCache,
-    ContributorAvatarsDelegate,
 )
+from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,

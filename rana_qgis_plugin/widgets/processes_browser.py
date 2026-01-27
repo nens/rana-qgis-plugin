@@ -19,8 +19,10 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeric_item
 from rana_qgis_plugin.utils_api import get_tenant_id
 from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
-from rana_qgis_plugin.widgets.utils_delegates import WordWrapDelegate
+from rana_qgis_plugin.widgets.utils_delegates import (
+    ContributorAvatarsDelegate,
+    WordWrapDelegate,
+)
 
 
 @dataclass
