@@ -2,10 +2,17 @@ History
 =======
 
 
-1.2.3 (unreleased)
+1.2.4 (unreleased)
+------------------
+
+- Show a link to creating a new project when no projects are available (#3398)
+
+
+1.2.3 (2026-01-23)
 ------------------
 
 - Show warning when M&S plugin is enabled when Rana plugin is started (#3320)
+- Add numerical diffusion limiter option to substance (#241)
 - Confirm downloading of already downloaded results
 - Reorganize FileView widget with collapsible groups
 - Add option to filter by contributor and show contributors in project view
