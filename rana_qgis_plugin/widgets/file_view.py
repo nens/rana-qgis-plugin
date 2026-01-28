@@ -26,11 +26,13 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils import (
     NumericItem,
     convert_to_local_time,
     display_bytes,
     get_file_icon_name,
+    get_threedi_api,
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
@@ -385,6 +387,20 @@ class FileView(QWidget):
             ]
         if data_type == "threedi_schematisation" and revision:
             schematisation = schematisation_base["schematisation"]
+            valid_revision = revision.get("has_threedimodel")
+            if valid_revision:
+                tc = ThreediCalls(get_threedi_api())
+                threedi_models = tc.fetch_schematisation_revision_3di_models(
+                    schematisation["id"], revision["id"]
+                )
+                valid_model = next(
+                    (
+                        model
+                        for model in threedi_models
+                        if model.is_valid and not model.disabled
+                    ),
+                    None,
+                )
             details += [
                 ("Schematisation name", schematisation["name"]),
                 ("Schematisation ID", schematisation["id"]),
@@ -411,14 +427,24 @@ class FileView(QWidget):
                     "Latest revision number",
                     revision["number"] if revision else None,
                 ),
+                ("Latest revision valid", "Yes" if revision.get("is_valid") else "No"),
+                ("Latest revision is simulation ready", "Yes" if valid_model else "No"),
+                ("Projection", valid_model.epsg if valid_model else ""),
+                ("Node count", valid_model.nodes_count if valid_model else ""),
+                ("Line count", valid_model.lines_count if valid_model else ""),
             ]
 
         # Refresh contents of general box
         container = QWidget(self.more_box)
         layout = QGridLayout(container)
-        for row, (label, value) in enumerate(details):
-            layout.addWidget(QLabel(label, parent=container), row, 0)
-            layout.addWidget(QLabel(str(value), parent=container), row, 1)
+        for row, (key, value) in enumerate(details):
+            key_label = QLabel(key, parent=container)
+            value_label = QLabel(str(value), parent=container)
+            # ensure correct size hints for the labels
+            key_label.setMinimumHeight(key_label.fontMetrics().height() + 4)
+            value_label.setMinimumHeight(value_label.fontMetrics().height() + 4)
+            layout.addWidget(key_label, row, 0)
+            layout.addWidget(value_label, row, 1)
         layout.setColumnStretch(1, 1)
         # assign existing layout to temporary widget
         # this will be deleted once the scope of this method is over
