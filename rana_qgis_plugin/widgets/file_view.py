@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Optional
 
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
@@ -46,6 +48,29 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
+
+
+@dataclass
+class InfoRow:
+    key: str
+    value: Any
+    key_tooltip: Optional[str] = None
+    value_tooltip: Optional[str] = None
+
+    @staticmethod
+    def get_label_widget(value: str, tooltip: Optional[str], parent) -> QLabel:
+        label = QLabel(value, parent=parent)
+        # ensure correct size hints for the labels
+        label.setMinimumHeight(label.fontMetrics().height() + 4)
+        if tooltip:
+            label.setToolTip(tooltip)
+        return label
+
+    def get_key_widget(self, parent) -> QLabel:
+        return self.get_label_widget(self.key, self.key_tooltip, parent)
+
+    def get_value_widget(self, parent) -> QLabel:
+        return self.get_label_widget(str(self.value), self.value_tooltip, parent)
 
 
 class EditLabel(QLineEdit):
@@ -356,12 +381,12 @@ class FileView(QWidget):
                 revision = schematisation_base["latest_revision"]
         crs_str = self._get_crs_str(data_type, meta, revision)
         details = [
-            # ("Area", self._get_area_str(data_type, meta, revision)),
-            ("Projection", crs_str),
-            ("Type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
+            # InfoRow("Area", self._get_area_str(data_type, meta, revision)),
+            InfoRow("Projection", crs_str),
+            InfoRow("Type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
         ]
         if data_type != "threedi_schematisation":
-            details.append(("Storage", display_bytes(selected_file["size"])))
+            details.append(InfoRow("Storage", display_bytes(selected_file["size"])))
         if data_type == "scenario" and meta:
             simulation = meta["simulation"]
             schematisation = meta["schematisation"]
@@ -373,17 +398,17 @@ class FileView(QWidget):
                 start = "N/A"
                 end = "N/A"
             details += [
-                ("Simulation name", simulation["name"]),
-                ("Simulation ID", simulation["id"]),
-                ("Schematisation name", schematisation["name"]),
-                ("Schematisation ID", schematisation["id"]),
-                ("Schematisation version", schematisation["version"]),
-                ("Revision ID", schematisation["revision_id"]),
-                ("Model ID", schematisation["model_id"]),
-                ("Model software", simulation["software"]["id"]),
-                ("Software version", simulation["software"]["version"]),
-                ("Start", start),
-                ("End", end),
+                InfoRow("Simulation name", simulation["name"]),
+                InfoRow("Simulation ID", simulation["id"]),
+                InfoRow("Schematisation name", schematisation["name"]),
+                InfoRow("Schematisation ID", schematisation["id"]),
+                InfoRow("Schematisation version", schematisation["version"]),
+                InfoRow("Revision ID", schematisation["revision_id"]),
+                InfoRow("Model ID", schematisation["model_id"]),
+                InfoRow("Model software", simulation["software"]["id"]),
+                InfoRow("Software version", simulation["software"]["version"]),
+                InfoRow("Start", start),
+                InfoRow("End", end),
             ]
         if data_type == "threedi_schematisation" and revision:
             schematisation = schematisation_base["schematisation"]
@@ -402,49 +427,48 @@ class FileView(QWidget):
                     None,
                 )
             details += [
-                ("Schematisation name", schematisation["name"]),
-                ("Schematisation ID", schematisation["id"]),
-                (
+                InfoRow("Schematisation name", schematisation["name"]),
+                InfoRow("Schematisation ID", schematisation["id"]),
+                InfoRow(
                     "Schematisation description",
                     schematisation["meta"].get("description"),
                 ),
-                (
+                InfoRow(
                     "Schematisation created by",
                     schematisation["created_by_first_name"]
                     + " "
                     + schematisation["created_by_last_name"],
                 ),
-                (
+                InfoRow(
                     "Schematisation created on",
                     convert_to_local_time(schematisation["created"]),
                 ),
-                (
+                InfoRow(
                     "Schematisation tags",
                     "; ".join(schematisation["tags"]) if schematisation["tags"] else "",
                 ),
-                ("Latest revision ID", revision["id"] if revision else ""),
-                (
-                    "Latest revision number",
-                    revision["number"] if revision else None,
+                InfoRow("Latest revision ID", revision["id"] if revision else ""),
+                InfoRow(
+                    "Latest revision number", revision["number"] if revision else None
                 ),
-                ("Latest revision valid", "Yes" if revision.get("is_valid") else "No"),
-                ("Latest revision is simulation ready", "Yes" if valid_model else "No"),
-                ("Projection", valid_model.epsg if valid_model else ""),
-                ("Node count", valid_model.nodes_count if valid_model else ""),
-                ("Line count", valid_model.lines_count if valid_model else ""),
+                InfoRow(
+                    "Latest revision valid", "Yes" if revision.get("is_valid") else "No"
+                ),
+                InfoRow(
+                    "Latest revision is simulation ready",
+                    "Yes" if valid_model else "No",
+                ),
+                InfoRow("Node count", valid_model.nodes_count if valid_model else ""),
+                InfoRow("Line count", valid_model.lines_count if valid_model else ""),
             ]
 
         # Refresh contents of general box
         container = QWidget(self.more_box)
         layout = QGridLayout(container)
-        for row, (key, value) in enumerate(details):
-            key_label = QLabel(key, parent=container)
-            value_label = QLabel(str(value), parent=container)
-            # ensure correct size hints for the labels
-            key_label.setMinimumHeight(key_label.fontMetrics().height() + 4)
-            value_label.setMinimumHeight(value_label.fontMetrics().height() + 4)
-            layout.addWidget(key_label, row, 0)
-            layout.addWidget(value_label, row, 1)
+        for row_idx, info_row in enumerate(details):
+            layout.addWidget(info_row.get_key_widget(parent=container), row_idx, 0)
+            layout.addWidget(info_row.get_value_widget(parent=container), row_idx, 1)
+
         layout.setColumnStretch(1, 1)
         # assign existing layout to temporary widget
         # this will be deleted once the scope of this method is over
@@ -479,7 +503,11 @@ class FileView(QWidget):
             raster_file = raster.get("file")
             if raster_file:
                 rows.append(
-                    [raster_file.get("filename"), raster.get("type"), raster_file.get("size")]
+                    [
+                        raster_file.get("filename"),
+                        raster.get("type"),
+                        raster_file.get("size"),
+                    ]
                 )
         self.files_model.clear()
         self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
