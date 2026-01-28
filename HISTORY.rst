@@ -5,7 +5,7 @@ History
 1.2.5 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
 
 
 1.2.4 (2026-01-28)
