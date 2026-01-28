@@ -479,7 +479,7 @@ class FileView(QWidget):
             raster_file = raster.get("file")
             if raster_file:
                 rows.append(
-                    [raster_file.get("filename"), "raster", raster_file.get("size")]
+                    [raster_file.get("filename"), raster.get("type"), raster_file.get("size")]
                 )
         self.files_model.clear()
         self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
