@@ -32,7 +32,7 @@ from rana_qgis_plugin.utils import (
 from rana_qgis_plugin.utils_api import get_tenant_projects, get_user_info
 from rana_qgis_plugin.utils_settings import base_url, get_tenant_id
 from rana_qgis_plugin.utils_time import (
-    convert_to_timestamp,
+    convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
@@ -248,8 +248,8 @@ class ProjectsBrowser(QWidget):
         key_funcs = [
             lambda project: project["name"].lower(),
             None,
-            lambda project: -convert_to_timestamp(project["last_activity"]),
-            lambda project: -convert_to_timestamp(project["created_at"]),
+            lambda project: -convert_to_numeric_timestamp(project["last_activity"]),
+            lambda project: -convert_to_numeric_timestamp(project["created_at"]),
         ]
         key_func = key_funcs[column_index]
         if key_func:

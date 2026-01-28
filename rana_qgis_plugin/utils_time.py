@@ -7,22 +7,34 @@ from qgis.PyQt.QtCore import Qt
 from rana_qgis_plugin.utils import NumericItem
 
 
-def convert_to_timestamp(timestamp: str) -> float:
+def convert_to_numeric_timestamp(timestamp: str) -> float:
     if timestamp.endswith("Z"):
         timestamp = timestamp.replace("Z", "+00:00")
     dt = datetime.fromisoformat(timestamp)
     return dt.timestamp()
 
 
-def convert_to_local_time(timestamp: str) -> str:
-    time = parser.isoparse(timestamp)
+def parse_timestamp_str(timestamp: str) -> datetime:
+    return parser.isoparse(timestamp)
+
+
+def convert_timestamp_str_to_local_time(timestamp: str) -> str:
+    time = parse_timestamp_str(timestamp)
+    return convert_timestamp_to_local_time(time)
+
+
+def convert_timestamp_to_local_time(time: datetime) -> str:
     return time.astimezone().strftime("%d-%m-%Y %H:%M")
 
 
-def convert_to_relative_time(timestamp: str) -> str:
+def convert_timestamp_str_to_relative_time(timestamp: str) -> str:
+    past = parse_timestamp_str(timestamp)
+    return convert_timestamp_to_relative_time(past)
+
+
+def convert_timestamp_to_relative_time(past: datetime) -> str:
     """Convert a timestamp into a relative time string."""
     now = datetime.now(timezone.utc)
-    past = parser.isoparse(timestamp)
     delta = relativedelta(now, past)
 
     if delta.years > 0:
@@ -39,20 +51,23 @@ def convert_to_relative_time(timestamp: str) -> str:
         return "Just now"
 
 
-def format_activity_time(timestamp: str) -> str:
+def format_activity_timestamp_str(timestamp: str) -> str:
+    past = parse_timestamp_str(timestamp)
+    return format_activity_timestamp(past)
+
+
+def format_activity_timestamp(past: datetime) -> str:
     now = datetime.now(timezone.utc)
-    past = parser.isoparse(timestamp)
-    delta = relativedelta(now, past)
-    if delta.days < 5 and delta.months == 0:
-        return convert_to_relative_time(timestamp)
+    if (now - past).days < 5:
+        return convert_timestamp_to_relative_time(past)
     else:
-        return convert_to_local_time(timestamp)
+        return convert_timestamp_to_local_time(past)
 
 
 def get_timestamp_as_numeric_item(timestamp_str: str) -> NumericItem:
-    timestamp = convert_to_timestamp(timestamp_str)
-    display_timestamp = format_activity_time(timestamp_str)
-    local_timestamp = convert_to_local_time(timestamp_str)
+    timestamp = convert_to_numeric_timestamp(timestamp_str)
+    display_timestamp = format_activity_timestamp_str(timestamp_str)
+    local_timestamp = convert_timestamp_str_to_local_time(timestamp_str)
     item = NumericItem(display_timestamp)
     item.setData(timestamp, role=Qt.ItemDataRole.UserRole)
     if display_timestamp != local_timestamp:
