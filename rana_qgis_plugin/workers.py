@@ -659,6 +659,9 @@ class ProjectJobMonitorWorker(QThread):
             if job["id"] in new_jobs:
                 # new job cannot be updated
                 continue
-            if job["state"] != self.active_jobs[job["id"]]["state"]:
+            if (
+                job["state"] != self.active_jobs[job["id"]]["state"]
+                or job["process"] != self.active_jobs[job["id"]]["process"]
+            ):
                 self.job_updated.emit(job)
                 self.active_jobs[job["id"]] = job

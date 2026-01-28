@@ -1,14 +1,13 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 
-from qgis.PyQt.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
-    QDesktopServices,
     QStandardItem,
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
     QHeaderView,
+    QLabel,
     QProgressBar,
     QSizePolicy,
     QTreeView,
@@ -117,26 +116,12 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setColumnWidth(3, 160)
         self.processes_tv.header().setStretchLastSection(False)
         self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
-        self.processes_tv.clicked.connect(self.handle_item_click)
-
-    def handle_item_click(self, index):
-        if index.column() != 0:
-            return
-        job = self.processes_model.itemFromIndex(index).data(Qt.ItemDataRole.UserRole)
-        created_dt = datetime.fromtimestamp(
-            convert_to_timestamp(job.created), tz=timezone.utc
-        )
-        # Links are only available for recent items
-        # TODO: ensure this is the correct cut off time!
-        if not job.process_id:
-            # if (datetime.now(timezone.utc) - created_dt) > timedelta(weeks=2):
-            return
-        job_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['code']}?tab=2&job={job.id}"
-        QDesktopServices.openUrl(QUrl(job_url))
 
     def add_item(self, job):
-        name_item = QStandardItem(job.name)
-        name_item.setData(job, Qt.ItemDataRole.UserRole)
+        name_item = QStandardItem()
+        # Create QLabel to display a link as a typical html link
+        name_link = QLabel("")
+        self.update_job_link(name_link, job)
         who_item = QStandardItem()
         who_item.setData(
             [
@@ -162,6 +147,7 @@ class ProcessesBrowser(QWidget):
         for id in self.row_map:
             self.row_map[id] += 1
         self.row_map[job.id] = 0
+        self.processes_tv.setIndexWidget(name_item.index(), name_link)
         self.processes_tv.resizeColumnToContents(0)
 
     @staticmethod
@@ -169,6 +155,20 @@ class ProcessesBrowser(QWidget):
         progress_bar.setValue(job.progress)
         progress_bar.setMaximum(job.max_progress)
         progress_bar.setFormat(job.progress_str())
+
+    def update_job_link(self, link_label, job):
+        if job.process_id:
+            job_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['code']}?tab=2&job={job.id}"
+            link_label.setText(f'<a href="{job_url}">{job.name}</a>')
+            link_label.setOpenExternalLinks(True)  # This makes the link clickable
+            # use default styling
+            link_label.setStyleSheet("")
+        else:
+            link_label.setText(job.name)
+            # set style of items without link to match the treeview styling
+            link_label.setStyleSheet(
+                f"color: {self.processes_tv.palette().text().color().name()}"
+            )
 
     def add_items(self, job_list: list[dict]):
         for job in job_list:
@@ -182,3 +182,5 @@ class ProcessesBrowser(QWidget):
         status_item = self.processes_model.item(row, 3)
         status_item.setData(job.status, Qt.ItemDataRole.UserRole)
         self.update_pb_progress(self.processes_tv.indexWidget(status_item.index()), job)
+        name_item = self.processes_model.item(row, 0)
+        self.update_job_link(self.processes_tv.indexWidget(name_item.index()), job)
