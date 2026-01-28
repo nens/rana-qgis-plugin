@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.4 (unreleased)
+1.2.4 (2026-01-28)
 ------------------
 
 - Show a link to creating a new project when no projects are available (#3398)
