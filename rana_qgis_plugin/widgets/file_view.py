@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -41,7 +42,11 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
-from rana_qgis_plugin.utils_time import convert_timestamp_str_to_local_time
+from rana_qgis_plugin.utils_time import (
+    format_activity_timestamp,
+    format_activity_timestamp_str,
+    parse_timestamp_str,
+)
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
@@ -70,7 +75,12 @@ class InfoRow:
         return self.get_label_widget(self.key, self.key_tooltip, parent)
 
     def get_value_widget(self, parent) -> QLabel:
-        return self.get_label_widget(str(self.value), self.value_tooltip, parent)
+        if isinstance(self.value, datetime):
+            str_value = format_activity_timestamp(self.value)
+        else:
+            str_value = str(self.value)
+
+        return self.get_label_widget(str_value, self.value_tooltip, parent)
 
 
 class EditLabel(QLineEdit):
@@ -331,13 +341,13 @@ class FileView(QWidget):
                 self.communication, selected_file["descriptor_id"]
             )
             msg = schematisation["latest_revision"]["commit_message"]
-            last_modified = convert_timestamp_str_to_local_time(
+            last_modified = format_activity_timestamp_str(
                 schematisation["latest_revision"]["commit_date"]
             )
         else:
             descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
             msg = descriptor.get("description")
-            last_modified = convert_timestamp_str_to_local_time(
+            last_modified = format_activity_timestamp_str(
                 selected_file["last_modified"]
             )
         msg_label = QLabel(msg)
@@ -394,8 +404,8 @@ class FileView(QWidget):
             schematisation = meta["schematisation"]
             interval = simulation["interval"]
             if interval:
-                start = convert_timestamp_str_to_local_time(interval[0])
-                end = convert_timestamp_str_to_local_time(interval[1])
+                start = parse_timestamp_str(interval[0])
+                end = parse_timestamp_str(interval[1])
             else:
                 start = "N/A"
                 end = "N/A"
@@ -443,7 +453,7 @@ class FileView(QWidget):
                 ),
                 InfoRow(
                     "Schematisation created on",
-                    convert_timestamp_str_to_local_time(schematisation["created"]),
+                    parse_timestamp_str(schematisation["created"]),
                 ),
                 InfoRow(
                     "Schematisation tags",
