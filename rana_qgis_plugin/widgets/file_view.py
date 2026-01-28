@@ -31,7 +31,6 @@ from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils import (
     NumericItem,
-    convert_to_local_time,
     display_bytes,
     get_file_icon_name,
     get_threedi_api,
@@ -42,6 +41,7 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
+from rana_qgis_plugin.utils_time import convert_to_local_time
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,

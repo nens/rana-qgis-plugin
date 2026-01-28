@@ -61,7 +61,6 @@ from rana_qgis_plugin.utils import (
     display_bytes,
     elide_text,
     get_threedi_api,
-    get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import (
     get_tenant_project_file,
@@ -70,6 +69,7 @@ from rana_qgis_plugin.utils_api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils_settings import base_url
+from rana_qgis_plugin.utils_time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.file_view import FileView
 from rana_qgis_plugin.widgets.projects_browser import ProjectsBrowser
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache

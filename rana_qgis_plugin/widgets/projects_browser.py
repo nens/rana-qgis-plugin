@@ -28,11 +28,13 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.utils import (
     NumericItem,
-    convert_to_timestamp,
-    get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import get_tenant_projects, get_user_info
 from rana_qgis_plugin.utils_settings import base_url, get_tenant_id
+from rana_qgis_plugin.utils_time import (
+    convert_to_timestamp,
+    get_timestamp_as_numeric_item,
+)
 from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
 
 
