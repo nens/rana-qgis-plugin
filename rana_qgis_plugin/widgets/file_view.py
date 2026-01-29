@@ -384,7 +384,7 @@ class FileView(QWidget):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
-        revision = None
+        revision = {}
         if data_type == "threedi_schematisation":
             schematisation_base = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
@@ -422,9 +422,12 @@ class FileView(QWidget):
                 InfoRow("Start", start),
                 InfoRow("End", end),
             ]
-        if data_type == "threedi_schematisation" and revision:
-            schematisation = schematisation_base["schematisation"]
-            valid_revision = revision.get("has_threedimodel")
+        if data_type == "threedi_schematisation":
+            schematisation = (
+                schematisation_base["schematisation"] if schematisation_base else {}
+            )
+            valid_revision = revision.get("has_threedimodel", {})
+            valid_model = None
             if valid_revision:
                 tc = ThreediCalls(get_threedi_api())
                 threedi_models = tc.fetch_schematisation_revision_3di_models(
@@ -439,30 +442,32 @@ class FileView(QWidget):
                     None,
                 )
             details += [
-                InfoRow("Schematisation name", schematisation["name"]),
-                InfoRow("Schematisation ID", schematisation["id"]),
+                InfoRow("Schematisation name", schematisation.get("name")),
+                InfoRow("Schematisation ID", schematisation.get("id")),
                 InfoRow(
                     "Schematisation description",
-                    schematisation["meta"].get("description"),
+                    schematisation.get("meta", {}).get("description")
+                    if schematisation.get("meta")
+                    else None,
                 ),
                 InfoRow(
                     "Schematisation created by",
-                    schematisation["created_by_first_name"]
+                    schematisation.get("created_by_first_name")
                     + " "
-                    + schematisation["created_by_last_name"],
+                    + schematisation.get("created_by_last_name"),
                 ),
                 InfoRow(
                     "Schematisation created on",
-                    parse_timestamp_str(schematisation["created"]),
+                    parse_timestamp_str(schematisation.get("created")),
                 ),
                 InfoRow(
                     "Schematisation tags",
-                    "; ".join(schematisation["tags"]) if schematisation["tags"] else "",
+                    "; ".join(schematisation.get("tags"))
+                    if schematisation.get("tags")
+                    else "",
                 ),
-                InfoRow("Latest revision ID", revision["id"] if revision else ""),
-                InfoRow(
-                    "Latest revision number", revision["number"] if revision else None
-                ),
+                InfoRow("Latest revision ID", revision.get("id")),
+                InfoRow("Latest revision number", revision.get("number")),
                 InfoRow(
                     "Latest revision valid", "Yes" if revision.get("is_valid") else "No"
                 ),
