@@ -1567,7 +1567,7 @@ class RanaBrowser(QWidget):
         self.last_refresh_time = time.time()
 
     def refresh_project_widget(self):
-        current_widget = self.project_widget.currentIndex()
+        current_widget = self.project_widget.currentWidget()
         if isinstance(current_widget, QStackedWidget):
             current_widget = current_widget.currentWidget()
         if current_widget and hasattr(current_widget, "refresh"):
@@ -1576,7 +1576,6 @@ class RanaBrowser(QWidget):
 
     @pyqtSlot()
     def refresh(self):
-        current_widget = None
         if self.rana_browser.currentIndex() == 0:
             self.refresh_projects_browser()
         elif self.rana_browser.currentIndex() == 1:
