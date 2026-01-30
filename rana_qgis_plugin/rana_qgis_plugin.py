@@ -207,6 +207,9 @@ class RanaQgisPlugin:
         if self.dock_widget:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
+        if hasattr(self, "loader"):
+            # ensure loader is deconstructed
+            del self.loader
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
@@ -245,6 +248,15 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
+            self.rana_browser.request_monitoring_project_jobs.connect(
+                self.loader.start_project_job_monitoring
+            )
+            self.loader.project_jobs_added.connect(
+                self.rana_browser.project_jobs_added.emit
+            )
+            self.loader.project_job_updated.connect(
+                self.rana_browser.project_job_updated.emit
+            )
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
@@ -332,7 +344,7 @@ class RanaQgisPlugin:
                 lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
             )
             self.loader.simulation_started.connect(
-                lambda: self.open_info_dialog(info_dialog.RunSimulationDialog)
+                self.rana_browser.show_processes_overview
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
