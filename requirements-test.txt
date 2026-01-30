@@ -19,3 +19,4 @@ pydantic_core
 typing_inspection
 annotated_types
 bridgestyle
+freezegun

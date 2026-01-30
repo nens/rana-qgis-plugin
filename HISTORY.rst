@@ -6,6 +6,7 @@ History
 ------------------
 
 - Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
+- Several improvements to information shown for a rana schematisation file (nens/rana-qgis-plugin#253)
 
 
 1.2.4 (2026-01-28)

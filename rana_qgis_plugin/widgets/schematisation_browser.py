@@ -18,10 +18,10 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
-from rana_qgis_plugin.utils import format_activity_time
 from rana_qgis_plugin.utils_api import (
     get_schematisations,
 )
+from rana_qgis_plugin.utils_time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_search import DebouncedSearchBox
 
 
@@ -97,7 +97,7 @@ class SchematisationBrowser(QDialog):
             self.table.insertRow(self.table.rowCount())
             name_item = QTableWidgetItem(schematisation["name"])
             updated_item = QTableWidgetItem(
-                format_activity_time(schematisation["last_updated"])
+                format_activity_timestamp_str(schematisation["last_updated"])
             )
             creation_by_item = QTableWidgetItem(
                 schematisation["created_by_first_name"]
