@@ -2,7 +2,13 @@ History
 =======
 
 
-1.2.4 (unreleased)
+1.2.5 (unreleased)
+------------------
+
+- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
+
+
+1.2.4 (2026-01-28)
 ------------------
 
 - Show a link to creating a new project when no projects are available (#3398)
