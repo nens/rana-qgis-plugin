@@ -6,6 +6,8 @@ History
 ------------------
 
 - Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
+- Limit list of organisations shown in simulation wizard to the threedi organisations linked to the rana organisations (nens/rana-qgis-plugin#243)
+
 
 
 1.2.4 (2026-01-28)
