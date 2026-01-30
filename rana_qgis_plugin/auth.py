@@ -72,7 +72,7 @@ def setup_oauth2(communication: UICommunication, start_tenant_id) -> bool:
     tenant_id = get_tenant_id() if not start_tenant_id else start_tenant_id
     if not tenant_id:
         tenant_id, okPressed = UICommunication.input_ask(
-            None, "Authentication", "Please provide your tenant code."
+            None, "Authentication", "Please provide your organisation code."
         )
         if not tenant_id or not okPressed:
             return False
