@@ -77,6 +77,10 @@ class InfoRow:
     def get_value_widget(self, parent) -> QLabel:
         if isinstance(self.value, datetime):
             str_value = format_activity_timestamp(self.value)
+        elif self.value is None:
+            str_value = "N/A"
+        elif isinstance(self.value, bool):
+            str_value = "Yes" if self.value else "No"
         else:
             str_value = str(self.value)
 
@@ -267,7 +271,7 @@ class FileView(QWidget):
             )
 
     @staticmethod
-    def _get_crs_str(data_type, meta, revision) -> str:
+    def _get_crs_str(data_type, meta, revision) -> Optional[str]:
         if data_type == "scenario" and meta:
             return meta.get("grid", {}).get("crs")
         elif data_type == "threedi_schematisation" and revision:
@@ -276,7 +280,7 @@ class FileView(QWidget):
                 return f"EPSG:{dem['epsg_code']}"
         elif meta.get("extent"):
             return meta["extent"].get("crs")
-        return ""
+        return None
 
     @staticmethod
     def _get_area_str(data_type, meta, revision):
@@ -407,8 +411,8 @@ class FileView(QWidget):
                 start = parse_timestamp_str(interval[0])
                 end = parse_timestamp_str(interval[1])
             else:
-                start = "N/A"
-                end = "N/A"
+                start = None
+                end = None
             details += [
                 InfoRow("Simulation name", simulation["name"]),
                 InfoRow("Simulation ID", simulation["id"]),
@@ -468,13 +472,8 @@ class FileView(QWidget):
                 ),
                 InfoRow("Latest revision ID", revision.get("id")),
                 InfoRow("Latest revision number", revision.get("number")),
-                InfoRow(
-                    "Latest revision valid", "Yes" if revision.get("is_valid") else "No"
-                ),
-                InfoRow(
-                    "Latest revision is simulation ready",
-                    "Yes" if valid_model else "No",
-                ),
+                InfoRow("Latest revision valid", revision.get("is_valid", False)),
+                InfoRow("Latest revision is simulation ready", valid_model is not None),
                 InfoRow("Node count", valid_model.nodes_count if valid_model else ""),
                 InfoRow("Line count", valid_model.lines_count if valid_model else ""),
             ]
