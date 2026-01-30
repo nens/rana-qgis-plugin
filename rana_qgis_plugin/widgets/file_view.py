@@ -127,6 +127,42 @@ class FileView(QWidget):
         self.file_signals = file_signals
         self.setup_ui()
         self.no_refresh = False
+        self.threedi_objects = {}
+
+    @property
+    def schematisation(self) -> dict:
+        if self.selected_file["data_type"] == "threedi_schematisation":
+            if not "schematisation" in self.threedi_objects:
+                self.threedi_objects["schematisation"] = get_threedi_schematisation(
+                    self.communication, self.selected_file["descriptor_id"]
+                )
+            return self.threedi_objects["schematisation"]
+        return {}
+
+    @property
+    def latest_revision_model(self) -> Optional[Any]:
+        if self.selected_file["data_type"] != "threedi_schematisation":
+            return None
+        if "model" not in self.threedi_objects:
+            revision = self.schematisation.get("latest_revision")
+            if not revision:
+                return None
+            valid_revision = revision.get("has_threedimodel")
+            if not valid_revision:
+                return None
+            tc = ThreediCalls(get_threedi_api())
+            threedi_models = tc.fetch_schematisation_revision_3di_models(
+                self.schematisation["schematisation"]["id"], revision["id"]
+            )
+            self.threedi_objects["model"] = next(
+                (
+                    model
+                    for model in threedi_models
+                    if model.is_valid and not model.disabled
+                ),
+                None,
+            )
+        return self.threedi_objects["model"]
 
     def update_project(self, project: dict):
         self.project = project
@@ -256,7 +292,9 @@ class FileView(QWidget):
                 btn.hide()
 
     def update_selected_file(self, selected_file: dict):
-        self.selected_file = selected_file
+        if self.selected_file != selected_file:
+            self.selected_file = selected_file
+            self.threedi_objects = {}
 
     @staticmethod
     def _get_dem_raster_file(revision):
@@ -341,9 +379,7 @@ class FileView(QWidget):
             + selected_file["user"]["family_name"]
         )
         if selected_file["data_type"] == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
+            schematisation = self.schematisation
             msg = schematisation["latest_revision"]["commit_message"]
             last_modified = format_activity_timestamp_str(
                 schematisation["latest_revision"]["commit_date"]
@@ -388,13 +424,7 @@ class FileView(QWidget):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
-        revision = {}
-        if data_type == "threedi_schematisation":
-            schematisation_base = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
-            if schematisation_base:
-                revision = schematisation_base["latest_revision"]
+        revision = self.schematisation.get("latest_revision", {})
         crs_str = self._get_crs_str(data_type, meta, revision)
         details = [
             # InfoRow("Area", self._get_area_str(data_type, meta, revision)),
@@ -427,24 +457,7 @@ class FileView(QWidget):
                 InfoRow("End", end),
             ]
         if data_type == "threedi_schematisation":
-            schematisation = (
-                schematisation_base["schematisation"] if schematisation_base else {}
-            )
-            valid_revision = revision.get("has_threedimodel", {})
-            valid_model = None
-            if valid_revision:
-                tc = ThreediCalls(get_threedi_api())
-                threedi_models = tc.fetch_schematisation_revision_3di_models(
-                    schematisation["id"], revision["id"]
-                )
-                valid_model = next(
-                    (
-                        model
-                        for model in threedi_models
-                        if model.is_valid and not model.disabled
-                    ),
-                    None,
-                )
+            schematisation = self.schematisation.get("schematisation", {})
             details += [
                 InfoRow("Schematisation name", schematisation.get("name")),
                 InfoRow("Schematisation ID", schematisation.get("id")),
@@ -473,9 +486,22 @@ class FileView(QWidget):
                 InfoRow("Latest revision ID", revision.get("id")),
                 InfoRow("Latest revision number", revision.get("number")),
                 InfoRow("Latest revision valid", revision.get("is_valid", False)),
-                InfoRow("Latest revision is simulation ready", valid_model is not None),
-                InfoRow("Node count", valid_model.nodes_count if valid_model else ""),
-                InfoRow("Line count", valid_model.lines_count if valid_model else ""),
+                InfoRow(
+                    "Latest revision is simulation ready",
+                    self.latest_revision_model is not None,
+                ),
+                InfoRow(
+                    "Node count",
+                    self.latest_revision_model.nodes_count
+                    if self.latest_revision_model
+                    else "",
+                ),
+                InfoRow(
+                    "Line count",
+                    self.latest_revision_model.lines_count
+                    if self.latest_revision_model
+                    else "",
+                ),
             ]
 
         # Refresh contents of general box
@@ -497,14 +523,11 @@ class FileView(QWidget):
         if selected_file["data_type"] != "threedi_schematisation":
             self.files_box.hide()
             return
-        schematisation = get_threedi_schematisation(
-            self.communication, selected_file["descriptor_id"]
-        )
-        if not schematisation:
+        if not self.schematisation:
             self.files_box.hide()
             return
         rows = []
-        revision = schematisation["latest_revision"]
+        revision = self.schematisation["latest_revision"]
         sqlite_file = revision.get("sqlite", {}).get("file")
         if sqlite_file:
             rows.append(
@@ -540,7 +563,7 @@ class FileView(QWidget):
         self.files_box.show()
 
     def show_selected_file_details(self, selected_file):
-        self.selected_file = selected_file
+        self.update_selected_file(selected_file)
         self.update_general_box(selected_file)
         self.update_more_box(selected_file)
         self.update_files_box(selected_file)
@@ -571,7 +594,7 @@ class FileView(QWidget):
         )
         # Only update if new file is still there
         if updated_file:
-            self.selected_file = updated_file
+            self.update_selected_file(updated_file)
             last_modified_key = (
                 f"{self.project['name']}/{self.selected_file['id']}/last_modified"
             )
