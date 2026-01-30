@@ -1540,10 +1540,12 @@ class RanaBrowser(QWidget):
     @pyqtSlot()
     def enable(self):
         self.rana_browser.setEnabled(True)
+        self.breadcrumbs_stack.currentWidget().setEnabled(False)
 
     @pyqtSlot()
     def disable(self):
         self.rana_browser.setEnabled(False)
+        self.breadcrumbs_stack.currentWidget().setEnabled(False)
 
     def on_project_tab_changed(self, index):
         self.breadcrumbs_stack.setCurrentIndex(index)
@@ -1573,6 +1575,14 @@ class RanaBrowser(QWidget):
         if current_widget and hasattr(current_widget, "refresh"):
             current_widget.refresh()
             self.last_refresh_time = time.time()
+
+    def reset(self):
+        self.disable()
+        self.rana_browser.setCurrentIndex(0)
+        for widget_idx in range(self.breadcrumbs_stack.count()):
+            self.breadcrumbs_stack.widget(widget_idx).back_to_root()
+        self.projects_browser.refresh()
+        self.enable()
 
     @pyqtSlot()
     def refresh(self):
