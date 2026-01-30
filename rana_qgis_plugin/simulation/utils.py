@@ -676,14 +676,21 @@ def load_remote_schematisation(
     )
 
     if required_files is not None:
-        downloaded_local_schematisation, custom_geopackage_filepath = required_files
+        (
+            downloaded_local_schematisation,
+            custom_geopackage_filepath,
+            wip_replace_requested,
+        ) = required_files
         if not downloaded_local_schematisation:
             communications.log_warn("Unable to load local schematisation")
             return
 
+        assert revision.number in downloaded_local_schematisation.revisions
         load_local_schematisation(
             communications,
-            local_schematisation=downloaded_local_schematisation,
+            local_schematisation=downloaded_local_schematisation.wip_revision
+            if wip_replace_requested
+            else downloaded_local_schematisation.revisions[revision.number],
             action=BuildOptionActions.DOWNLOADED,
             custom_geopackage_filepath=custom_geopackage_filepath,
         )
@@ -718,6 +725,7 @@ def download_required_files(
         )
         downloaded_geopackage_filepath = None
         downloaded_local_schematisation = None
+        wip_replace_requested = False
 
         revision_pk = revision.id
         revision_number = revision.number
@@ -741,6 +749,7 @@ def download_required_files(
             replace, store, cancel = "Replace", "Store", "Cancel"
             title = "Pick action"
             question = f"Replace local WIP or store as a revision {revision_number}?"
+            wip_replace_requested = False
             picked_action_name = communications.custom_ask(
                 None, title, question, replace, store, cancel
             )
@@ -748,6 +757,7 @@ def download_required_files(
                 # Replace
                 local_schematisation.set_wip_revision(revision_number)
                 schema_db_dir = local_schematisation.wip_revision.schematisation_dir
+                wip_replace_requested = True
             elif picked_action_name == store:
                 # Store as a separate revision
                 if revision_number in local_schematisation.revisions:
@@ -767,7 +777,7 @@ def download_required_files(
                     schema_db_dir = local_revision.schematisation_dir
             else:
                 schema_db_dir = None
-            return schema_db_dir
+            return schema_db_dir, wip_replace_requested
 
         if local_schematisation_present:
             if is_latest_revision:
@@ -779,12 +789,13 @@ def download_required_files(
                     )
                 else:
                     # WIP exist
-                    schematisation_db_dir = decision_tree()
+                    schematisation_db_dir, wip_replace_requested = decision_tree()
             else:
-                schematisation_db_dir = decision_tree()
+                schematisation_db_dir, wip_replace_requested = decision_tree()
         else:
             local_schematisation.set_wip_revision(revision_number)
             schematisation_db_dir = local_schematisation.wip_revision.schematisation_dir
+            wip_replace_requested = True
 
         if not schematisation_db_dir:
             return
@@ -882,7 +893,11 @@ def download_required_files(
         msg = f"Schematisation '{schematisation_name} (revision {revision_number})' downloaded!"
         communications.bar_info(msg)
 
-        return downloaded_local_schematisation, downloaded_geopackage_filepath
+        return (
+            downloaded_local_schematisation,
+            downloaded_geopackage_filepath,
+            wip_replace_requested,
+        )
     except ApiException as e:
         error_msg = extract_error_message(e)
         communications.show_error(error_msg)
@@ -890,7 +905,7 @@ def download_required_files(
         error_msg = f"Error: {e}"
         communications.show_error(error_msg)
 
-    return None, None
+    return None, None, None
 
 
 def get_plugin_instance(plugin_name):
@@ -917,10 +932,11 @@ def load_local_schematisation(
                 if not custom_geopackage_filepath
                 else custom_geopackage_filepath
             )
-            msg = f"Schematisation '{local_schematisation.name}' {action.value}!\n"
+            msg = f"Schematisation '{local_schematisation.local_schematisation.name} ({local_schematisation.number})' {action.value}!\n"
             communication.bar_info(msg)
             # Load new schematisation
             schematisation_editor = get_plugin_instance("threedi_schematisation_editor")
+            communication.log_info(f"Loading {geopackage_filepath}")
             if schematisation_editor:
                 schematisation_editor.load_schematisation(geopackage_filepath)
             else:

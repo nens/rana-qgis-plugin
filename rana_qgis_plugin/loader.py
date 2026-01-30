@@ -968,7 +968,7 @@ class Loader(QObject):
         self.schematisation_upload_finished.emit()
         load_local_schematisation(
             communication=self.communication,
-            local_schematisation=local_schematisation,
+            local_schematisation=local_schematisation.wip_revision,
             action=BuildOptionActions.CREATED,
         )
 
