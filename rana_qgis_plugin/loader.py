@@ -42,12 +42,12 @@ from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_local_file_path,
     get_threedi_api,
+    get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
     add_threedi_schematisation,
     create_folder,
-    create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
     get_tenant_details,
@@ -469,7 +469,10 @@ class Loader(QObject):
 
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
-        organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        allowed_org_ids = get_threedi_organisations(self.communication)
+        organisations = {
+            org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
+        }
 
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
@@ -926,14 +929,10 @@ class Loader(QObject):
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
             return
-        available_organisations = [
-            org.replace("-", "") for org in tenant_details["threedi_organisations"]
-        ]
         tc = ThreediCalls(threedi_api)
+        allowed_org_ids = get_threedi_organisations(self.communication)
         organisations = {
-            org.unique_id: org
-            for org in tc.fetch_organisations()
-            if org is not None and org.unique_id in available_organisations
+            org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
         }
 
         if len(organisations) == 0:

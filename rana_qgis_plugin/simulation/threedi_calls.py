@@ -3,7 +3,7 @@
 import logging
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from threedi_api_client import ThreediApi
 from threedi_api_client.openapi import (
@@ -460,9 +460,16 @@ class ThreediCalls:
         revision_models_list = self.threedi_api.revisions_threedimodels(rev_id)
         return revision_models_list
 
-    def fetch_organisations(self) -> List[Organisation]:
+    def fetch_organisations(
+        self, id_list: Optional[List[str]] = None
+    ) -> List[Organisation]:
         """Fetch all Organisations available for current user."""
-        organisations = self.paginated_fetch(self.threedi_api.organisations_list)
+        params = {}
+        if id_list is not None:
+            params["unique_id__in"] = ",".join(id_list)
+        organisations = self.paginated_fetch(
+            self.threedi_api.organisations_list, **params
+        )
         return organisations
 
     def fetch_lateral_files(self, simulation_pk: int) -> List[FileLateral]:

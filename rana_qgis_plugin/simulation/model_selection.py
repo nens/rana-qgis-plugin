@@ -98,11 +98,17 @@ class ModelSelectionDialog(uicls, basecls):
 
     def populate_organisations(self):
         """Populating organisations list inside combo box."""
-        for org in self.organisations.values():
-            self.organisations_box.addItem(org.name, org)
-        last_organisation = read_3di_settings("threedi/last_used_organisation")
-        if last_organisation:
-            self.organisations_box.setCurrentText(last_organisation)
+        if len(self.organisations) == 1:
+            self.label_6.hide()
+            self.organisations_box.hide()
+        else:
+            self.label_6.show()
+            self.organisations_box.show()
+            for org in self.organisations.values():
+                self.organisations_box.addItem(org.name, org)
+            last_organisation = read_3di_settings("threedi/last_used_organisation")
+            if last_organisation:
+                self.organisations_box.setCurrentText(last_organisation)
 
     def switch_to_model_organisation(self):
         """Switch to model organisation."""
