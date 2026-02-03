@@ -12,6 +12,7 @@ class FileAction(Enum):
     OPEN_WMS = "Open WMS in QGIS"
     SAVE_REVISION = "Save revision to Rana"
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
+    SAVE_RASTER_STYLING = "Save raster style to Rana"
     UPLOAD_FILE = "Save data to Rana"
     VIEW_REVISIONS = "View all revisions"
     DOWNLOAD_RESULTS = "Download results"
@@ -37,6 +38,9 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     # Add save only for vector and raster files
     if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
+    # Add save raster style only for raster files
+    if data_type == "raster":
+        actions.append(FileAction.SAVE_RASTER_STYLING)
     # Add save vector style only for vector files
     if data_type == "vector":
         actions.append(FileAction.SAVE_VECTOR_STYLING)
@@ -64,6 +68,7 @@ class FileActionSignals(QObject):
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
     save_vector_styling_requested = pyqtSignal(dict)
+    save_raster_styling_requested = pyqtSignal(dict)
     save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
@@ -78,6 +83,7 @@ class FileActionSignals(QObject):
             FileAction.OPEN_IN_QGIS: self.open_in_qgis_requested,
             FileAction.UPLOAD_FILE: self.upload_file_requested,
             FileAction.SAVE_VECTOR_STYLING: self.save_vector_styling_requested,
+            FileAction.SAVE_RASTER_STYLING: self.save_raster_styling_requested,
             FileAction.SAVE_REVISION: self.save_revision_requested,
             FileAction.OPEN_WMS: self.open_wms_requested,
             FileAction.DOWNLOAD_RESULTS: self.download_results_requested,

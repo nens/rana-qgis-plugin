@@ -79,6 +79,7 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
+    RasterStyleWorker,
     VectorStyleWorker,
 )
 
@@ -94,6 +95,8 @@ class Loader(QObject):
     new_file_upload_finished = pyqtSignal(str)
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
+    raster_style_finished = pyqtSignal()
+    raster_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
     download_results_cancelled = pyqtSignal()
     schematisation_upload_cancelled = pyqtSignal()
@@ -118,6 +121,7 @@ class Loader(QObject):
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
+        self.raster_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.communication = communication
 
@@ -894,6 +898,21 @@ class Loader(QObject):
         self.vector_style_worker.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
 
+    @pyqtSlot(dict, dict)
+    def save_raster_style(self, project, file):
+        """Start the worker for saving raster styling files"""
+        self.communication.progress_bar(
+            "Generating and saving raster styling files...", clear_msg_bar=True
+        )
+        self.raster_style_worker = RasterStyleWorker(
+            project,
+            file,
+        )
+        self.raster_style_worker.finished.connect(self.on_raster_style_finished)
+        self.raster_style_worker.failed.connect(self.on_raster_style_failed)
+        self.raster_style_worker.warning.connect(self.communication.show_warn)
+        self.raster_style_worker.start()
+
     def on_vector_style_finished(self, msg: str):
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
@@ -903,6 +922,16 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
+
+    def on_raster_style_finished(self, msg: str):
+        self.communication.clear_message_bar()
+        self.communication.show_info(msg)
+        self.raster_style_finished.emit()
+
+    def on_raster_style_failed(self, msg: str):
+        self.communication.clear_message_bar()
+        self.communication.show_error(msg)
+        self.raster_style_failed.emit(msg)
 
     @pyqtSlot(dict, dict)
     def import_schematisation_to_rana(self, project, selected_file):
