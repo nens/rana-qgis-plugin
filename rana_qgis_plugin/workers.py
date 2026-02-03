@@ -8,14 +8,18 @@ from typing import List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
+from bridgestyle.qgis import togeostyler
 from qgis.core import Qgis, QgsMessageLog, QgsProject
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
+
+from rana_qgis_plugin.utils_lizard import import_from_geostyler
 
 from .utils import build_vrt, get_local_file_path, image_to_bytes, split_scenario_extent
 from .utils_api import (
     finish_file_upload,
     get_raster_file_link,
+    get_raster_style_upload_urls,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
@@ -323,6 +327,118 @@ class VectorStyleWorker(QThread):
             os.remove(zip_path)
 
             # Finish
+            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+        except Exception as e:
+            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+
+
+class RasterStyleWorker(QThread):
+    """Worker thread for generating and uploading raster styling files"""
+
+    finished = pyqtSignal(str)
+    failed = pyqtSignal(str)
+    warning = pyqtSignal(str)
+
+    def __init__(
+        self,
+        project: dict,
+        file: dict,
+    ):
+        super().__init__()
+        self.project = project
+        self.file = file
+
+    def upload_to_s3(self, url: str, data: dict, content_type: str):
+        """Method to upload to S3"""
+        try:
+            headers = {"Content-Type": content_type}
+            response = requests.put(url, data=data, headers=headers)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
+
+    def create_qml_zip(self, local_dir: str, zip_path: str):
+        """Craete a QML zip file for all the qml files in the local directory"""
+        try:
+            with zipfile.ZipFile(zip_path, "w") as zip_file:
+                for root, _, files in os.walk(local_dir):
+                    for file in files:
+                        if file.endswith(".qml"):
+                            file_path = os.path.join(root, file)
+                            zip_file.write(
+                                file_path, os.path.relpath(file_path, local_dir)
+                            )
+        except Exception as e:
+            self.failed.emit(f"Failed to create QML zip: {str(e)}")
+
+    @pyqtSlot()
+    def run(self):
+        if not self.file:
+            self.failed.emit("File not found.")
+            return
+        path = self.file["id"]
+        file_name = os.path.basename(path.rstrip("/"))
+        descriptor_id = self.file["descriptor_id"]
+        all_layers = QgsProject.instance().mapLayers().values()
+        layers = [layer for layer in all_layers if file_name in layer.source()]
+
+        if not layers:
+            self.failed.emit(
+                f"No layers found for {file_name}. Open the file in QGIS and try again."
+            )
+            return
+
+        if not len(layers) == 1:
+            self.failed.emit(
+                f"Multiple layers found for {file_name}. Open the file in QGIS and try again."
+            )
+            return
+
+        layer = layers[0]
+
+        # Save QML style files for each layer to local directory
+        local_dir, _ = get_local_file_path(self.project["slug"], path)
+        os.makedirs(local_dir, exist_ok=True)
+
+        qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
+        layer.saveNamedStyle(str(qml_path))
+
+        # Raster styling to geostyler, and then to lizard styling
+        try:
+            geostyler, _, _, warnings = togeostyler.convert(layer)
+            if len(geostyler["rules"]) != 1:
+                self.failed.emit(f"Multiple rules found for {file_name}.")
+                return
+            if len(geostyler["rules"][0]["symbolizers"]) != 1:
+                self.failed.emit(f"Multiple symbolizers found for {file_name}.")
+                return
+
+            if warnings:
+                self.warning.emit(", ".join(set(warnings)))
+
+            lizard_styling = import_from_geostyler(
+                geostyler["rules"][0]["symbolizers"][0]
+            )
+
+            upload_urls = get_raster_style_upload_urls(descriptor_id)
+
+            if not upload_urls:
+                self.failed.emit("Failed to get raster style upload URLs from the API.")
+                return
+
+            self.upload_to_s3(
+                upload_urls["style.lizard"],
+                lizard_styling,
+                "application/json",
+            )
+
+            # Zip and upload QML zip as well
+            zip_path = os.path.join(local_dir, "qml.zip")
+            self.create_qml_zip(local_dir, zip_path)
+            with open(zip_path, "rb") as file:
+                self.upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
+            os.remove(zip_path)
+
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")

@@ -1196,6 +1196,7 @@ class RanaBrowser(QWidget):
     open_in_qgis_selected = pyqtSignal(dict, dict)
     upload_file_selected = pyqtSignal(dict, dict)
     save_vector_styling_selected = pyqtSignal(dict, dict)
+    save_raster_styling_selected = pyqtSignal(dict, dict)
     upload_new_file_selected = pyqtSignal(dict, dict)
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
@@ -1355,6 +1356,10 @@ class RanaBrowser(QWidget):
             (
                 file_signals.save_vector_styling_requested,
                 self.save_vector_styling_selected,
+            ),
+            (
+                file_signals.save_raster_styling_requested,
+                self.save_raster_styling_selected,
             ),
             (file_signals.open_wms_requested, self.open_wms_selected),
             (file_signals.download_file_requested, self.download_file_selected),
