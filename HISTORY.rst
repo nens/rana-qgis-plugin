@@ -5,7 +5,8 @@ History
 1.2.5 (unreleased)
 ------------------
 
-- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
+- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125)
+- Add option to convert shapefile to geopackage when uploading (nens/rana#3445)
 
 
 1.2.4 (2026-01-28)
