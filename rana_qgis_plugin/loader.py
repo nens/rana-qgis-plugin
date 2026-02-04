@@ -853,7 +853,6 @@ class Loader(QObject):
         self.new_file_upload_worker.finished.connect(
             partial(self.on_new_file_upload_finished, online_path)
         )
-        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
         if len(local_paths) == 1:
             self.new_file_upload_worker.failed.connect(
@@ -911,7 +910,6 @@ class Loader(QObject):
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
             self.initialize_file_download_worker(project, file)
-            self.file_download_worker.finished.connect(self.on_file_download_finished)
             self.file_download_worker.start()
         self.new_file_upload_finished.emit(online_path)
 
