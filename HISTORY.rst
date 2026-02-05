@@ -5,7 +5,11 @@ History
 1.2.5 (unreleased)
 ------------------
 
-- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
+- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125)
+- Add option to convert shapefile to geopackage when uploading (nens/rana#3445)
+- Fixed that uploaded vector or raster file is loaded twice into QGIS (#267)
+- Disable moving of columns in projects and files browsers (nens/rana3444)
+- Limit list of organisations shown in simulation wizard to the threedi organisations linked to the rana organisations (nens/rana-qgis-plugin#243)
 - Several improvements to information shown for a rana schematisation file (nens/rana-qgis-plugin#253)
 
 

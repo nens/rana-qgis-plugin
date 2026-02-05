@@ -97,6 +97,7 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
+        self.projects_tv.header().setSectionsMovable(False)
         self.projects_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.projects_tv.customContextMenuRequested.connect(self.show_context_menu)
         self.projects_tv.header().sortIndicatorChanged.connect(self.sort_projects)

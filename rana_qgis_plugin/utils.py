@@ -19,7 +19,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
-from rana_qgis_plugin.utils_api import get_frontend_settings
+from rana_qgis_plugin.utils_api import get_frontend_settings, get_tenant_details
 from rana_qgis_plugin.utils_settings import hcc_working_dir, rana_cache_dir
 
 from .communication import UICommunication
@@ -59,6 +59,14 @@ def get_threedi_api():
     api_url = frontend_settings["hcc_url"].rstrip("/")
     threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
     return threedi_api
+
+
+def get_threedi_organisations(communication) -> list[str]:
+    """Retrieve threedi organisations linked to rana tenant and fromat the uuids to match threedi-api"""
+    return [
+        org_id.replace("-", "")
+        for org_id in get_tenant_details(communication).get("threedi_organisations", [])
+    ]
 
 
 def add_layer_to_qgis(

@@ -83,7 +83,7 @@
          <widget class="QLabel" name="label_6">
           <property name="maximumSize">
            <size>
-            <width>120</width>
+            <width>150</width>
             <height>16777215</height>
            </size>
           </property>
@@ -94,7 +94,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Billing goes to:</string>
+           <string>Select organisation:</string>
           </property>
          </widget>
         </item>
