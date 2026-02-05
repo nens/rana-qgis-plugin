@@ -523,6 +523,17 @@ def map_result_to_file_name(result: dict) -> str:
             return result["code"]
 
 
+def get_threedi_organisations() -> list[str]:
+    url = f"{api_url()}/tenants/{get_tenant_id()}/"
+    network_manager = NetworkManager(url, get_authcfg_id())
+    status, error = network_manager.fetch()
+    if status:
+        return [
+            uuid.replace("-", "")
+            for uuid in network_manager.content["threedi_organisations"]
+        ]
+
+
 def get_user_image(communication: UICommunication, user_id):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -535,4 +546,17 @@ def get_user_image(communication: UICommunication, user_id):
         return response
     else:
         communication.show_error(f"Failed to retrieve user image: {error}")
+        return None
+
+
+def get_project_jobs(project_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    params = {"project_id": project_id, "limit": 100}
+    url = f"{api_url()}/tenants/{tenant}/jobs"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+    if status:
+        return network_manager.content
+    else:
         return None
