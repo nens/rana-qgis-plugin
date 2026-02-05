@@ -153,7 +153,7 @@ class RanaQgisPlugin:
                     f"Organisation set to: {selected_tenant_id}"
                 )
                 if self.rana_browser:
-                    self.rana_browser.refresh()
+                    self.rana_browser.reset()
 
     def add_rana_menu(self, show_authentication: bool):
         """Add Rana menu to the main menu bar."""

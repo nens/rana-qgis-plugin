@@ -6,6 +6,8 @@ History
 ------------------
 
 - Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125))
+- Reset RanaBrowser on switching organisation (nens/rana#3438)
+- Disable breadcrumbs when RanaBrowser is disabled
 
 
 1.2.4 (2026-01-28)
