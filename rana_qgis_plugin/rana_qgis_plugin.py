@@ -40,6 +40,7 @@ class RanaQgisPlugin:
         self.tenants = []
         self.dock_widget = None
         self.rana_browser = None
+        self.loader = None
         self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
         self.toolbar.setObjectName(PLUGIN_NAME)
         self.action = QAction(rana_icon, "Open Rana Panel", iface.mainWindow())
@@ -207,7 +208,7 @@ class RanaQgisPlugin:
         if self.dock_widget:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
-        if hasattr(self, "loader"):
+        if self.loader:
             # ensure loader is deconstructed
             del self.loader
 
