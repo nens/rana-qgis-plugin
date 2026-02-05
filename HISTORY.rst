@@ -10,6 +10,7 @@ History
 - Fixed that uploaded vector or raster file is loaded twice into QGIS (#267)
 - Disable moving of columns in projects and files browsers (nens/rana3444)
 - Limit list of organisations shown in simulation wizard to the threedi organisations linked to the rana organisations (nens/rana-qgis-plugin#243)
+- Several improvements to information shown for a rana schematisation file (nens/rana-qgis-plugin#253)
 
 
 1.2.4 (2026-01-28)
