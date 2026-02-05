@@ -857,6 +857,7 @@ class FilesBrowser(QWidget):
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
+        self.files_tv.header().setSectionsMovable(False)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
