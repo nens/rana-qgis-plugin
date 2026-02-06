@@ -11,6 +11,7 @@ History
 - Disable moving of columns in projects and files browsers (nens/rana3444)
 - Limit list of organisations shown in simulation wizard to the threedi organisations linked to the rana organisations (nens/rana-qgis-plugin#243)
 - Several improvements to information shown for a rana schematisation file (nens/rana-qgis-plugin#253)
+- Added status to file detail view (red for failed processing) and added additional checks (nens/rana-qgis-plugin#3496)
 
 
 1.2.4 (2026-01-28)

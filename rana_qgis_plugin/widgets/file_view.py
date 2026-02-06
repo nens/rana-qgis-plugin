@@ -9,11 +9,7 @@ from qgis.PyQt.QtCore import (
     Qt,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import (
-    QIcon,
-    QStandardItem,
-    QStandardItemModel,
-)
+from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -61,18 +57,26 @@ class InfoRow:
     value: Any
     key_tooltip: Optional[str] = None
     value_tooltip: Optional[str] = None
+    color: Optional[QColor] = None
 
     @staticmethod
-    def get_label_widget(value: str, tooltip: Optional[str], parent) -> QLabel:
+    def get_label_widget(
+        value: str, tooltip: Optional[str], color: Optional[QColor], parent
+    ) -> QLabel:
         label = QLabel(value, parent=parent)
         # ensure correct size hints for the labels
         label.setMinimumHeight(label.fontMetrics().height() + 4)
         if tooltip:
             label.setToolTip(tooltip)
+        if color:
+            label.setStyleSheet(
+                f"color: rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()});"
+            )
+
         return label
 
     def get_key_widget(self, parent) -> QLabel:
-        return self.get_label_widget(self.key, self.key_tooltip, parent)
+        return self.get_label_widget(self.key, self.key_tooltip, self.color, parent)
 
     def get_value_widget(self, parent) -> QLabel:
         if isinstance(self.value, datetime):
@@ -84,7 +88,7 @@ class InfoRow:
         else:
             str_value = str(self.value)
 
-        return self.get_label_widget(str_value, self.value_tooltip, parent)
+        return self.get_label_widget(str_value, self.value_tooltip, self.color, parent)
 
 
 class EditLabel(QLineEdit):
@@ -316,7 +320,7 @@ class FileView(QWidget):
             dem = FileView._get_dem_raster_file(revision)
             if dem:
                 return f"EPSG:{dem['epsg_code']}"
-        elif meta.get("extent"):
+        elif meta and meta.get("extent"):
             return meta["extent"].get("crs")
         return None
 
@@ -425,12 +429,21 @@ class FileView(QWidget):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
+
+        status = descriptor.get("status", {})
+        message_i18n = status.get("message_i18n", {})
+        status_msg = message_i18n.get("msg") if message_i18n else None
         revision = self.schematisation.get("latest_revision", {})
         crs_str = self._get_crs_str(data_type, meta, revision)
         details = [
             # InfoRow("Area", self._get_area_str(data_type, meta, revision)),
             InfoRow("Projection", crs_str),
             InfoRow("Type", SUPPORTED_DATA_TYPES.get(data_type, data_type)),
+            InfoRow(
+                "Status",
+                status.get("id", "") + ("" if not status_msg else f": {status_msg}"),
+                color=QColor(255, 0, 0) if status.get("id") == "failed" else None,
+            ),
         ]
         if data_type != "threedi_schematisation":
             details.append(InfoRow("Storage", display_bytes(selected_file["size"])))
