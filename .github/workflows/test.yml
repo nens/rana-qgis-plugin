@@ -23,4 +23,8 @@ jobs:
 
       - name: test
         run: |
-          docker compose run qgis pytest
+          docker compose run qgis pytest tests
+
+      - name: e2e
+        run: |
+          docker compose run qgis pytest e2e

@@ -1,4 +1,4 @@
-version: "1.0"
+version: "3.8"
 
 services:
   qgis:
@@ -7,12 +7,22 @@ services:
       - "7070:7070"
     environment:
       - DISPLAY=unix${DISPLAY}
-      # Note: run 'xhost +localhost' beforehand.
+      # Note: run 'xhost +local:docker' beforehand.
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
       - .:/tests_directory/
       - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
     command: qgis
+
+  test:
+    build: .
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
+      - .:/tests_directory/
+      - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
+    environment:
+      - DISPLAY=${DISPLAY}
+    command: pytest e2e/ -v -s
 
 volumes:
   profile-dir:
