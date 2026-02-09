@@ -15,9 +15,12 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.utils import convert_to_timestamp, get_timestamp_as_numeric_item
 from rana_qgis_plugin.utils_api import get_tenant_id
 from rana_qgis_plugin.utils_settings import base_url
+from rana_qgis_plugin.utils_time import (
+    convert_to_numeric_timestamp,
+    get_timestamp_as_numeric_item,
+)
 from rana_qgis_plugin.widgets.utils_delegates import (
     ContributorAvatarsDelegate,
     WordWrapDelegate,
@@ -40,7 +43,7 @@ class JobData:
 
     @property
     def created_timestamp(self):
-        return convert_to_timestamp(self.created)
+        return convert_to_numeric_timestamp(self.created)
 
     @property
     def user_name(self):

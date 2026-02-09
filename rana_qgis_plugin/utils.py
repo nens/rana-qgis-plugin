@@ -1,12 +1,9 @@
 import math
 import os
-from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
-from dateutil import parser
-from dateutil.relativedelta import relativedelta
 from osgeo import gdal
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
@@ -22,7 +19,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
-from rana_qgis_plugin.utils_api import get_frontend_settings
+from rana_qgis_plugin.utils_api import get_frontend_settings, get_tenant_details
 from rana_qgis_plugin.utils_settings import hcc_working_dir, rana_cache_dir
 
 from .communication import UICommunication
@@ -62,6 +59,14 @@ def get_threedi_api():
     api_url = frontend_settings["hcc_url"].rstrip("/")
     threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
     return threedi_api
+
+
+def get_threedi_organisations(communication) -> list[str]:
+    """Retrieve threedi organisations linked to rana tenant and fromat the uuids to match threedi-api"""
+    return [
+        org_id.replace("-", "")
+        for org_id in get_tenant_details(communication).get("threedi_organisations", [])
+    ]
 
 
 def add_layer_to_qgis(
@@ -168,48 +173,6 @@ def elide_text(font: QFont, text: str, max_width: int) -> str:
     # Calculate elided text based on font and max width
     font_metrics = QFontMetrics(font)
     return font_metrics.elidedText(text, Qt.TextElideMode.ElideRight, max_width)
-
-
-def convert_to_timestamp(timestamp: str) -> float:
-    if timestamp.endswith("Z"):
-        timestamp = timestamp.replace("Z", "+00:00")
-    dt = datetime.fromisoformat(timestamp)
-    return dt.timestamp()
-
-
-def convert_to_local_time(timestamp: str) -> str:
-    time = parser.isoparse(timestamp)
-    return time.astimezone().strftime("%d-%m-%Y %H:%M")
-
-
-def convert_to_relative_time(timestamp: str) -> str:
-    """Convert a timestamp into a relative time string."""
-    now = datetime.now(timezone.utc)
-    past = parser.isoparse(timestamp)
-    delta = relativedelta(now, past)
-
-    if delta.years > 0:
-        return f"{delta.years} year{'s' if delta.years > 1 else ''} ago"
-    elif delta.months > 0:
-        return f"{delta.months} month{'s' if delta.months > 1 else ''} ago"
-    elif delta.days > 0:
-        return f"{delta.days} day{'s' if delta.days > 1 else ''} ago"
-    elif delta.hours > 0:
-        return f"{delta.hours} hour{'s' if delta.hours > 1 else ''} ago"
-    elif delta.minutes > 0:
-        return f"{delta.minutes} minute{'s' if delta.minutes > 1 else ''} ago"
-    else:
-        return "Just now"
-
-
-def format_activity_time(timestamp: str) -> str:
-    now = datetime.now(timezone.utc)
-    past = parser.isoparse(timestamp)
-    delta = relativedelta(now, past)
-    if delta.days <= 6 and delta.months == 0:
-        return convert_to_relative_time(timestamp)
-    else:
-        return convert_to_local_time(timestamp)
 
 
 def image_to_bytes(image: QImage) -> bytes:
@@ -332,14 +295,3 @@ def get_file_icon_name(data_type: str) -> str:
         "sqlite": "mIconDbSchema.svg",
     }
     return icon_map.get(data_type, "mIconFile.svg")
-
-
-def get_timestamp_as_numeric_item(timestamp_str: str) -> NumericItem:
-    timestamp = convert_to_timestamp(timestamp_str)
-    display_timestamp = format_activity_time(timestamp_str)
-    local_timestamp = convert_to_local_time(timestamp_str)
-    item = NumericItem(display_timestamp)
-    item.setData(timestamp, role=Qt.ItemDataRole.UserRole)
-    if display_timestamp != local_timestamp:
-        item.setToolTip(local_timestamp)
-    return item

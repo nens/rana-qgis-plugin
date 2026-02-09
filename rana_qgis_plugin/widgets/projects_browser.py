@@ -30,11 +30,13 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.icons import refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
-    convert_to_timestamp,
-    get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.utils_api import get_tenant_projects, get_user_info
 from rana_qgis_plugin.utils_settings import base_url, get_tenant_id
+from rana_qgis_plugin.utils_time import (
+    convert_to_numeric_timestamp,
+    get_timestamp_as_numeric_item,
+)
 from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
 
@@ -97,6 +99,7 @@ class ProjectsBrowser(QWidget):
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)
+        self.projects_tv.header().setSectionsMovable(False)
         self.projects_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.projects_tv.customContextMenuRequested.connect(self.show_context_menu)
         self.projects_tv.header().sortIndicatorChanged.connect(self.sort_projects)
@@ -252,8 +255,8 @@ class ProjectsBrowser(QWidget):
         key_funcs = [
             lambda project: project["name"].lower(),
             None,
-            lambda project: -convert_to_timestamp(project["last_activity"]),
-            lambda project: -convert_to_timestamp(project["created_at"]),
+            lambda project: -convert_to_numeric_timestamp(project["last_activity"]),
+            lambda project: -convert_to_numeric_timestamp(project["created_at"]),
         ]
         key_func = key_funcs[column_index]
         if key_func:
