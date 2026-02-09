@@ -18,6 +18,7 @@ from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.auth import get_authcfg_id
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local import (
     SchematisationLoad,
@@ -42,12 +43,12 @@ from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_local_file_path,
     get_threedi_api,
+    get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
     add_threedi_schematisation,
     create_folder,
-    create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
     get_tenant_details,
@@ -66,6 +67,7 @@ from rana_qgis_plugin.utils_qgis import (
     COLOR_RAMP_OCEAN_HALINE,
     apply_gradient_ramp,
     color_ramp_from_data,
+    convert_vectorfile_to_geopackage,
     get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
     multiband_raster_min_max,
@@ -473,7 +475,10 @@ class Loader(QObject):
 
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
-        organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        allowed_org_ids = get_threedi_organisations(self.communication)
+        organisations = {
+            org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
+        }
 
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
@@ -782,9 +787,9 @@ class Loader(QObject):
             None,
             "Open file(s)",
             last_saved_dir,
-            "All supported files (*.tif *.tiff *.gpkg *.sqlite);;"
+            "All supported files (*.tif *.tiff *.gpkg *.sqlite *.geojson *.shp);;"
             "Rasters (*.tif *.tiff);;"
-            "Vector files (*.gpkg *.sqlite)",
+            "Vector files (*.gpkg *.sqlite *.geojson *.shp)",
         )
         if not local_paths:
             self.loading_cancelled.emit()
@@ -794,6 +799,50 @@ class Loader(QObject):
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder",
             str(Path(local_paths[0]).parent),
         )
+
+        # Check whether something needs to be converted
+        try:
+            converted_paths = []
+            convert_all_files = False
+            for local_path in local_paths:
+                _, ext = os.path.splitext(local_path)
+                if ext == ".shp":
+                    if convert_all_files:
+                        converted_paths.append(
+                            convert_vectorfile_to_geopackage(local_path)
+                        )
+                    else:
+                        file_convert = UICommunication.custom_ask(
+                            self.parent(),
+                            "Shapefile not supported",
+                            f"Rana does not natively support shapefiles, would you like to convert it before uploading or cancel?",
+                            "Cancel",
+                            "Convert this file only",
+                            "Convert all shapefiles",
+                        )
+                        if file_convert == "Cancel":
+                            self.loading_cancelled.emit()
+                            return
+                        elif file_convert == "Convert all shapefiles":
+                            convert_all_files = True
+                            converted_paths.append(
+                                convert_vectorfile_to_geopackage(local_path)
+                            )
+                        else:
+                            converted_paths.append(
+                                convert_vectorfile_to_geopackage(local_path)
+                            )
+                else:
+                    # no conversion necessary
+                    converted_paths.append(local_path)
+
+        except Exception as e:
+            self.communication.bar_error(f"Error converting shapefiles: {str(e)}")
+            self.file_upload_failed.emit(str(e))
+            return
+
+        local_paths = converted_paths.copy()
+
         self.communication.bar_info("Start uploading file(s) to Rana...")
         online_dir = ""
         if file:
@@ -811,7 +860,6 @@ class Loader(QObject):
         self.new_file_upload_worker.finished.connect(
             partial(self.on_new_file_upload_finished, online_path)
         )
-        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
         if len(local_paths) == 1:
             self.new_file_upload_worker.failed.connect(
@@ -869,7 +917,6 @@ class Loader(QObject):
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
             self.initialize_file_download_worker(project, file)
-            self.file_download_worker.finished.connect(self.on_file_download_finished)
             self.file_download_worker.start()
         self.new_file_upload_finished.emit(online_path)
 
@@ -955,14 +1002,10 @@ class Loader(QObject):
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
             return
-        available_organisations = [
-            org.replace("-", "") for org in tenant_details["threedi_organisations"]
-        ]
         tc = ThreediCalls(threedi_api)
+        allowed_org_ids = get_threedi_organisations(self.communication)
         organisations = {
-            org.unique_id: org
-            for org in tc.fetch_organisations()
-            if org is not None and org.unique_id in available_organisations
+            org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
         }
 
         if len(organisations) == 0:
