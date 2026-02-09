@@ -79,6 +79,8 @@ from rana_qgis_plugin.workers import (
     VectorStyleWorker,
 )
 
+STYLE_DIR = Path(__file__).parent / "styles"
+
 
 class Loader(QObject):
     file_download_finished = pyqtSignal(str)
@@ -220,6 +222,7 @@ class Loader(QObject):
                 # Check whether result and gridadmin exist in the target folder
                 result_path = os.path.join(local_file_path, "results_3di.nc")
                 admin_path = os.path.join(local_file_path, "gridadmin.h5")
+                waterdepth_path = os.path.join(local_file_path, "max_waterdepth.tif")
                 if os.path.exists(result_path) and os.path.exists(admin_path):
                     if hasattr(ra_tool, "load_result"):
                         if self.communication.ask(
@@ -230,6 +233,18 @@ class Loader(QObject):
                             ra_tool.load_result(result_path, admin_path)
                             if not ra_tool.dockwidget.isVisible():
                                 ra_tool.toggle_results_manager.run()  # also does some initialisation
+                            if os.path.exists(waterdepth_path):
+                                # we only download non-temporal rasters, so always pick the first band
+                                waterdepth_layer = QgsRasterLayer(
+                                    waterdepth_path, "max_waterdepth.tif", "gdal"
+                                )
+                                waterdepth_layer.loadNamedStyle(
+                                    str(STYLE_DIR / "water_depth.qml")
+                                )
+                                if hasattr(waterdepth_layer.renderer(), "setBand"):
+                                    waterdepth_layer.renderer().setBand(1)
+                                waterdepth_layer.setName("max_waterdepth.tif")
+                                QgsProject.instance().addMapLayer(waterdepth_layer)
 
         else:
             schematisation = None
