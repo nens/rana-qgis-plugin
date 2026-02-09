@@ -572,7 +572,13 @@ class Loader(QObject):
             if tag in process["tags"]:
                 return process["id"]
 
-    def start_model_tracker_process(self, project, schematisation, revision_id: int):
+    def start_model_tracker_process(
+        self,
+        project,
+        schematisation,
+        revision_id: int,
+        inherit_from_previous_revision: bool = False,
+    ):
         track_process = self.get_process_id_for_tag("model_tracker")
         if track_process is None:
             self.communication.log_err("No model tracker available")
@@ -583,7 +589,7 @@ class Loader(QObject):
                 "schematisation_id": schematisation["id"],
                 "revision_id": revision_id,
                 "inherit_from_previous_model": True,
-                "inherit_from_previous_revision": False,
+                "inherit_from_previous_revision": inherit_from_previous_revision,
             },
             "name": f"model_tracker_{schematisation['name']}_rev{revision_id}",
         }
@@ -1152,7 +1158,15 @@ class Loader(QObject):
                 local_schematisation,
                 new_upload,
             )
-
+            upload_worker.signals.create_model_requested.connect(
+                lambda revision_id,
+                inherit_from_previous_revision: self.start_model_tracker_process(
+                    project,
+                    schematisation.to_dict(),
+                    revision_id,
+                    inherit_from_previous_revision,
+                )
+            )
             upload_worker.signals.thread_finished.connect(
                 self.on_schematisation_upload_finished
             )
