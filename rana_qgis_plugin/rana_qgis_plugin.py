@@ -221,7 +221,6 @@ class RanaQgisPlugin:
                 "M&S plugin detected",
                 "The Models & simulation plugin is still active, but it's replaced by the Rana plugin. Please disable the Models & Simulation plugin.",
             )
-
         if start_url:
             path_params, query_params = parse_url(start_url)
             if not self.login(path_params["tenant_id"]):
