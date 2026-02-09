@@ -1,6 +1,5 @@
 import os
 from copy import deepcopy
-from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -64,13 +63,9 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import (
-    COLOR_RAMP_OCEAN_HALINE,
-    apply_gradient_ramp,
-    color_ramp_from_data,
     convert_vectorfile_to_geopackage,
     get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
-    multiband_raster_min_max,
 )
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
@@ -204,18 +199,6 @@ class Loader(QObject):
         )
         self.file_download_finished.emit(None)
 
-    def apply_style(self, layer):
-        # Water level styling
-        min_value, max_value = multiband_raster_min_max(layer)
-        color_ramp = color_ramp_from_data(COLOR_RAMP_OCEAN_HALINE)
-        apply_gradient_ramp(
-            layer=layer,
-            color_ramp=color_ramp,
-            min_value=min_value,
-            max_value=max_value,
-            band=1,
-        )
-
     def on_file_download_finished(
         self, project, file, local_file_path: str, from_thread=True
     ):
@@ -237,7 +220,6 @@ class Loader(QObject):
                 # Check whether result and gridadmin exist in the target folder
                 result_path = os.path.join(local_file_path, "results_3di.nc")
                 admin_path = os.path.join(local_file_path, "gridadmin.h5")
-                waterdepth_path = os.path.join(local_file_path, "max_waterdepth.tif")
                 if os.path.exists(result_path) and os.path.exists(admin_path):
                     if hasattr(ra_tool, "load_result"):
                         if self.communication.ask(
@@ -248,16 +230,6 @@ class Loader(QObject):
                             ra_tool.load_result(result_path, admin_path)
                             if not ra_tool.dockwidget.isVisible():
                                 ra_tool.toggle_results_manager.run()  # also does some initialisation
-                            if os.path.exists(waterdepth_path):
-                                # we only download non-temporal rasters, so always pick the first band
-                                waterdepth_layer = QgsRasterLayer(
-                                    waterdepth_path, "max_waterdepth.tif", "gdal"
-                                )
-                                self.apply_style(waterdepth_layer)
-                                if hasattr(waterdepth_layer.renderer(), "setBand"):
-                                    waterdepth_layer.renderer().setBand(1)
-                                waterdepth_layer.setName("max_waterdepth.tif")
-                                QgsProject.instance().addMapLayer(waterdepth_layer)
 
         else:
             schematisation = None
