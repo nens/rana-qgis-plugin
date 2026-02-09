@@ -723,8 +723,8 @@ class RanaBrowser(QWidget):
     start_simulation_selected = pyqtSignal(dict, dict)
     start_simulation_selected_with_revision = pyqtSignal(dict, dict, int)
     save_revision_selected = pyqtSignal(dict, dict)
-    create_model_selected = pyqtSignal(dict)
-    create_model_selected_with_revision = pyqtSignal(dict, int)
+    create_model_selected = pyqtSignal(dict, dict)
+    create_model_selected_with_revision = pyqtSignal(dict, dict, int)
     delete_model_selected = pyqtSignal(dict, int)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
@@ -924,11 +924,11 @@ class RanaBrowser(QWidget):
             )
         )
         self.file_view.btn_create_model.clicked.connect(
-            lambda _: self.create_model_selected.emit(self.selected_item)
+            lambda _: self.create_model_selected.emit(self.project, self.selected_item)
         )
         self.revisions_view.create_3di_model_clicked.connect(
             lambda revision_id: self.create_model_selected_with_revision.emit(
-                self.selected_item, revision_id
+                self.project, self.selected_item, revision_id
             )
         )
         self.revisions_view.delete_3di_model_clicked.connect(
