@@ -348,29 +348,6 @@ class RasterStyleWorker(QThread):
         self.project = project
         self.file = file
 
-    def upload_to_s3(self, url: str, data: dict, content_type: str):
-        """Method to upload to S3"""
-        try:
-            headers = {"Content-Type": content_type}
-            response = requests.put(url, data=data, headers=headers)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
-
-    def create_qml_zip(self, local_dir: str, zip_path: str):
-        """Craete a QML zip file for all the qml files in the local directory"""
-        try:
-            with zipfile.ZipFile(zip_path, "w") as zip_file:
-                for root, _, files in os.walk(local_dir):
-                    for file in files:
-                        if file.endswith(".qml"):
-                            file_path = os.path.join(root, file)
-                            zip_file.write(
-                                file_path, os.path.relpath(file_path, local_dir)
-                            )
-        except Exception as e:
-            self.failed.emit(f"Failed to create QML zip: {str(e)}")
-
     @pyqtSlot()
     def run(self):
         if not self.file:
@@ -402,6 +379,9 @@ class RasterStyleWorker(QThread):
 
         qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
         layer.saveNamedStyle(str(qml_path))
+        zip_path = os.path.join(local_dir, "qml.zip")
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            zipf.write(qml_path, f"{layer.name()}.qml")
 
         # Raster styling to geostyler, and then to lizard styling
         try:
@@ -419,25 +399,18 @@ class RasterStyleWorker(QThread):
             lizard_styling = import_from_geostyler(
                 geostyler["rules"][0]["symbolizers"][0]
             )
+            lizard_styling_path = os.path.join(local_dir, "colormap.json")
+            with open(lizard_styling_path, "w") as f:
+                json.dump(lizard_styling, f)
 
-            upload_urls = get_raster_style_upload_urls(descriptor_id)
+            files = [
+                ("files", "colormap.json", lizard_styling_path, "application/json"),
+                ("files", "qml.zip", zip_path, "application/zip"),
+            ]
+            get_raster_style_upload_urls(descriptor_id, files)
 
-            if not upload_urls:
-                self.failed.emit("Failed to get raster style upload URLs from the API.")
-                return
-
-            self.upload_to_s3(
-                upload_urls["style.lizard"],
-                lizard_styling,
-                "application/json",
-            )
-
-            # Zip and upload QML zip as well
-            zip_path = os.path.join(local_dir, "qml.zip")
-            self.create_qml_zip(local_dir, zip_path)
-            with open(zip_path, "rb") as file:
-                self.upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
             os.remove(zip_path)
+            os.remove(lizard_styling_path)
 
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
