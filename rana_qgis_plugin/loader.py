@@ -463,6 +463,13 @@ class Loader(QObject):
             org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
         }
 
+        if len(organisations) == 0:
+            self.communication.show_warn(
+                "No organisation available for this simulation"
+            )
+            self.simulation_started_failed.emit()
+            return
+
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
