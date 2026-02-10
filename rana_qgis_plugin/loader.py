@@ -1,6 +1,5 @@
 import os
 from copy import deepcopy
-from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -64,13 +63,9 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import (
-    COLOR_RAMP_OCEAN_HALINE,
-    apply_gradient_ramp,
-    color_ramp_from_data,
     convert_vectorfile_to_geopackage,
     get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
-    multiband_raster_min_max,
 )
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
@@ -84,6 +79,8 @@ from rana_qgis_plugin.workers import (
     ProjectJobMonitorWorker,
     VectorStyleWorker,
 )
+
+STYLE_DIR = Path(__file__).parent / "styles"
 
 
 class Loader(QObject):
@@ -211,18 +208,6 @@ class Loader(QObject):
         )
         self.file_download_finished.emit(None)
 
-    def apply_style(self, layer):
-        # Water level styling
-        min_value, max_value = multiband_raster_min_max(layer)
-        color_ramp = color_ramp_from_data(COLOR_RAMP_OCEAN_HALINE)
-        apply_gradient_ramp(
-            layer=layer,
-            color_ramp=color_ramp,
-            min_value=min_value,
-            max_value=max_value,
-            band=1,
-        )
-
     def on_file_download_finished(
         self, project, file, local_file_path: str, from_thread=True
     ):
@@ -260,7 +245,9 @@ class Loader(QObject):
                                 waterdepth_layer = QgsRasterLayer(
                                     waterdepth_path, "max_waterdepth.tif", "gdal"
                                 )
-                                self.apply_style(waterdepth_layer)
+                                waterdepth_layer.loadNamedStyle(
+                                    str(STYLE_DIR / "water_depth.qml")
+                                )
                                 if hasattr(waterdepth_layer.renderer(), "setBand"):
                                     waterdepth_layer.renderer().setBand(1)
                                 waterdepth_layer.setName("max_waterdepth.tif")
@@ -482,6 +469,13 @@ class Loader(QObject):
         organisations = {
             org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
         }
+
+        if len(organisations) == 0:
+            self.communication.show_warn(
+                "No organisation available for this simulation"
+            )
+            self.simulation_started_failed.emit()
+            return
 
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
