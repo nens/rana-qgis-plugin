@@ -77,6 +77,8 @@ class NetworkManager(object):
             for field_name, file_name, file_path, content_type in files:
                 file = QFile(file_path)
                 if file.open(QIODevice.OpenModeFlag.ReadOnly):
+                    file_data = file.readAll()  # Read data into memory
+                    file.close()  # Close immediately
                     QgsMessageLog.logMessage(
                         f"{field_name}, {file_path}, {file_name}, {content_type}"
                     )
@@ -89,8 +91,7 @@ class NetworkManager(object):
                     part.setHeader(
                         QNetworkRequest.KnownHeaders.ContentTypeHeader, content_type
                     )
-                    part.setBodyDevice(file)
-                    file.setParent(multipart)  # Keep file alive with multipart
+                    part.setBody(file_data)
                     multipart.append(part)
 
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
