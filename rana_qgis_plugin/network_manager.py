@@ -79,9 +79,6 @@ class NetworkManager(object):
                 if file.open(QIODevice.OpenModeFlag.ReadOnly):
                     file_data = file.readAll()  # Read data into memory
                     file.close()  # Close immediately
-                    QgsMessageLog.logMessage(
-                        f"{field_name}, {file_path}, {file_name}, {content_type}"
-                    )
                     part = QHttpPart()
                     part.setHeader(
                         QNetworkRequest.KnownHeaders.ContentDispositionHeader,
