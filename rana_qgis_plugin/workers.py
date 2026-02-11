@@ -1,5 +1,7 @@
+import copy
 import io
 import json
+import math
 import os
 import zipfile
 from pathlib import Path
@@ -393,12 +395,35 @@ class RasterStyleWorker(QThread):
                 self.failed.emit(f"Multiple symbolizers found for {file_name}.")
                 return
 
-            if warnings:
-                self.warning.emit(", ".join(set(warnings)))
-
             lizard_styling = import_from_geostyler(
                 geostyler["rules"][0]["symbolizers"][0]
             )
+
+            # Do some corrections and checks
+            labels = copy.deepcopy(lizard_styling.get("labels", {}))
+            for language, ranges in labels.items():
+                new_labels = []
+                for quantity, label in ranges:
+                    if math.isinf(quantity):
+                        warnings.append(
+                            f"Label '{label}' with infinite quantity cannot be used and will be ignored."
+                        )
+                    else:
+                        new_labels.append([quantity, label])
+
+                lizard_styling["labels"][language] = new_labels
+
+            if lizard_styling["type"] == "DiscreteColormap":
+                for entry, _ in lizard_styling["data"]:
+                    if isinstance(entry, float):
+                        self.failed.emit(
+                            f"Failed to generate and upload styling files: DiscreteColormap cannot contain float quantities."
+                        )
+                        return
+
+            if warnings:
+                self.warning.emit(", ".join(set(warnings)))
+
             lizard_styling_path = os.path.join(local_dir, "colormap.json")
             with open(lizard_styling_path, "w") as f:
                 json.dump(lizard_styling, f)
