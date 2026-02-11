@@ -71,6 +71,7 @@ from rana_qgis_plugin.utils_api import (
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.file_view import FileView
+from rana_qgis_plugin.widgets.processes_browser import ProcessesBrowser
 from rana_qgis_plugin.widgets.projects_browser import ProjectsBrowser
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -550,12 +551,13 @@ class BreadcrumbType(Enum):
     FOLDER = "folder"
     FILE = "file"
     REVISIONS = "revisions"
+    PROJECT = "project"
 
 
 BreadcrumbItem = namedtuple("BreadcrumbItem", ["type", "name"])
 
 
-class BreadCrumbsWidget(QWidget):
+class BreadcrumbsWidget(QWidget):
     projects_selected = pyqtSignal()
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal()
@@ -569,48 +571,16 @@ class BreadCrumbsWidget(QWidget):
         self.setup_ui()
         self.update()
 
-    def remove_file(self):
-        # remove last item from the path
-        if self._items[-1].type == BreadcrumbType.FILE:
-            self._items.pop()
-        self.update()
-
-    def rename_file(self, new_name):
-        if self._items[-1].type == BreadcrumbType.FILE:
-            self._items[-1] = BreadcrumbItem(BreadcrumbType.FILE, new_name)
-        self.update()
-
-    def add_file(self, file_path):
-        # files can only be added after a folder
-        if self._items[-1].type == BreadcrumbType.FOLDER:
-            self._items.append(BreadcrumbItem(BreadcrumbType.FILE, file_path))
-        self.update()
-
-    def add_folder(self, folder_name):
-        # folders can only be added after projects or a folder
-        if self._items[-1].type in [BreadcrumbType.PROJECTS, BreadcrumbType.FOLDER]:
-            self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, folder_name))
-        self.update()
-
-    def add_revisions(self, selected_file):
-        # revisions can only be added after a file
-        if self._items[-1].type == BreadcrumbType.FOLDER:
-            self.add_file(selected_file["id"])
-        if self._items[-1].type == BreadcrumbType.FILE:
-            self._items.append(BreadcrumbItem(BreadcrumbType.REVISIONS, "Revisions"))
-        self.update()
-
-    def set_folders(self, paths):
-        for item in paths:
-            self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, item))
-        self.update()
-
     def setup_ui(self):
         self.layout = QHBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.create_ellipsis()
         self.setLayout(self.layout)
+
+    def back_to_root(self):
+        self._items = self._items[:1]
+        self.update()
 
     def create_ellipsis(self):
         # when deleting and creating this widget on-the-fly qgis crashes with a segfault
@@ -712,6 +682,54 @@ class BreadCrumbsWidget(QWidget):
         self.update()
 
 
+class FilesBreadcrumbsWidget(BreadcrumbsWidget):
+    """Breadcrumbs widget specialized for file tab"""
+
+    def remove_file(self):
+        # remove last item from the path
+        if self._items[-1].type == BreadcrumbType.FILE:
+            self._items.pop()
+        self.update()
+
+    def rename_file(self, new_name):
+        if self._items[-1].type == BreadcrumbType.FILE:
+            self._items[-1] = BreadcrumbItem(BreadcrumbType.FILE, new_name)
+        self.update()
+
+    def add_file(self, file_path):
+        # files can only be added after a folder
+        if self._items[-1].type == BreadcrumbType.FOLDER:
+            self._items.append(BreadcrumbItem(BreadcrumbType.FILE, file_path))
+        self.update()
+
+    def add_folder(self, folder_name):
+        # folders can only be added after projects or a folder
+        if self._items[-1].type in [BreadcrumbType.PROJECTS, BreadcrumbType.FOLDER]:
+            self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, folder_name))
+        self.update()
+
+    def add_revisions(self, selected_file):
+        # revisions can only be added after a file
+        if self._items[-1].type == BreadcrumbType.FOLDER:
+            self.add_file(selected_file["id"])
+        if self._items[-1].type == BreadcrumbType.FILE:
+            self._items.append(BreadcrumbItem(BreadcrumbType.REVISIONS, "Revisions"))
+        self.update()
+
+    def set_folders(self, paths):
+        for item in paths:
+            self._items.append(BreadcrumbItem(BreadcrumbType.FOLDER, item))
+        self.update()
+
+
+class ProcessBreadcrumbsWidget(BreadcrumbsWidget):
+    def add_project(self, project_name):
+        # folders can only be added after projects or a folder
+        if self._items[-1].type in [BreadcrumbType.PROJECTS]:
+            self._items.append(BreadcrumbItem(BreadcrumbType.PROJECT, project_name))
+        self.update()
+
+
 class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
@@ -732,6 +750,9 @@ class RanaBrowser(QWidget):
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
+    request_monitoring_project_jobs = pyqtSignal(str)
+    project_jobs_added = pyqtSignal(list)
+    project_job_updated = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -741,7 +762,7 @@ class RanaBrowser(QWidget):
         self.setup_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.auto_refresh)
-        self.refresh_timer.start(60000)
+        self.refresh_timer.start(10000)
 
     @property
     def project(self):
@@ -756,57 +777,14 @@ class RanaBrowser(QWidget):
         return self.files_browser.selected_item
 
     def setup_ui(self):
-        self.rana_browser = QTabWidget()
-        self.rana_processes = QWidget()
-        self.rana_files = QStackedWidget()
-        self.rana_browser.addTab(self.rana_files, "Files")
-        self.rana_browser.setCurrentIndex(0)
-        self.rana_browser.tabBar().setTabVisible(0, False)
-        # Set up breadcrumbs, browser and file view widgets
-        self.breadcrumbs = BreadCrumbsWidget(
-            communication=self.communication, parent=self
-        )
-        refresh_btn = QToolButton()
-        refresh_btn.setToolTip("Refresh")
-        refresh_btn.setIcon(refresh_icon)
-        refresh_btn.clicked.connect(self.refresh)
-
-        # Setup top layout with logo and breadcrumbs
-        top_layout = QGridLayout()
-
-        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
-        renderer = banner.renderer()
-        original_size = renderer.defaultSize()  # QSize
-        width = 150
-        height = int(original_size.height() / original_size.width() * width)
-        banner.setFixedWidth(width)
-        banner.setFixedHeight(height)
-        self.logo_label = banner
-        self.logo_label.installEventFilter(self)
-        self.window().installEventFilter(self)
-        top_layout.addWidget(self.breadcrumbs, 0, 0, 1, 3)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        top_layout.addItem(spacer, 0, 3, 1, 1)
-        top_layout.addWidget(self.logo_label, 0, 4)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        top_layout.addItem(spacer, 1, 0, 1, 1)
-        top_layout.addWidget(refresh_btn, 1, 4, Qt.AlignRight)
-
-        # Add components to the layout
-        layout = QVBoxLayout(self)
-        layout.addLayout(top_layout)
-        layout.addWidget(self.rana_browser)
-        self.setLayout(layout)
-        self.resize(800, self.height())
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-        # Setup widgets that populate the rana widget
-        file_signals = FileActionSignals()
+        # Setup widgets
         self.projects_browser = ProjectsBrowser(
             communication=self.communication,
             avatar_cache=self.avatar_cache,
             parent=self,
         )
+        self.avatar_cache.update_users_in_thread(self.projects_browser.users)
+        file_signals = FileActionSignals()
         self.files_browser = FilesBrowser(
             communication=self.communication, file_signals=file_signals, parent=self
         )
@@ -819,10 +797,71 @@ class RanaBrowser(QWidget):
         self.revisions_view = RevisionsView(
             communication=self.communication, parent=self
         )
+        self.processes_browser = ProcessesBrowser(
+            communication=self.communication,
+            avatar_cache=self.avatar_cache,
+            parent=self,
+        )
+        self.files_breadcrumbs = FilesBreadcrumbsWidget(
+            communication=self.communication, parent=self
+        )
+        self.processes_breadcrumbs = ProcessBreadcrumbsWidget(
+            communication=self.communication, parent=self
+        )
+        self.breadcrumbs_stack = QStackedWidget(self)
+        self.breadcrumbs_stack.addWidget(self.files_breadcrumbs)
+        self.breadcrumbs_stack.addWidget(self.processes_breadcrumbs)
+        self.breadcrumbs_stack.setCurrentIndex(0)
+        # set fixed height because the size hint of the stacked widget is not correct
+        self.breadcrumbs_stack.setFixedHeight(25)
 
-        # Start getting avatars from loaded users
-        # Consider better solution at some moment
-        self.avatar_cache.update_users_in_thread(self.projects_browser.users)
+        # Organize widgets in stacks and tabs
+        self.rana_browser = QStackedWidget()
+        self.rana_browser.addWidget(self.projects_browser)
+        # Create tab widget for project related actions
+        self.project_widget = QTabWidget()
+        self.rana_browser.addWidget(self.project_widget)
+        self.rana_browser.setCurrentIndex(0)
+        refresh_btn = QToolButton()
+        refresh_btn.setToolTip("Refresh")
+        refresh_btn.setIcon(refresh_icon)
+        self.project_widget.setCornerWidget(refresh_btn)
+        self.project_widget.currentChanged.connect(self.on_project_tab_changed)
+        # Create stacked widget for file browsing
+        self.rana_files = QStackedWidget()
+        self.rana_files.addWidget(self.files_browser)
+        self.rana_files.addWidget(self.file_view)
+        self.rana_files.addWidget(self.revisions_view)
+        self.project_widget.addTab(self.rana_files, "Files")
+        self.project_widget.setCurrentIndex(0)
+        # Create stacked widget for processes
+        self.rana_processes = QStackedWidget()
+        self.rana_processes.addWidget(self.processes_browser)
+        self.project_widget.addTab(self.rana_processes, "Processes")
+        self.project_widget.currentChanged.connect(self.on_project_tab_changed)
+        # Setup top layout with logo and breadcrumbs
+        top_layout = QHBoxLayout()
+        banner = QSvgWidget(os.path.join(ICONS_DIR, "banner.svg"))
+        renderer = banner.renderer()
+        original_size = renderer.defaultSize()  # QSize
+        width = 150
+        height = int(original_size.height() / original_size.width() * width)
+        banner.setFixedWidth(width)
+        banner.setFixedHeight(height)
+        self.logo_label = banner
+        self.logo_label.installEventFilter(self)
+        self.window().installEventFilter(self)
+        top_layout.addWidget(self.breadcrumbs_stack)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        top_layout.addItem(spacer)
+        top_layout.addWidget(self.logo_label)
+        # Add components to the layout
+        layout = QVBoxLayout(self)
+        layout.addLayout(top_layout)
+        layout.addWidget(self.rana_browser)
+        self.setLayout(layout)
+        self.resize(800, self.height())
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         # Connect avatar_cache
         # Note that avatar_cache is only linked to the projects_browser because for now
@@ -832,7 +871,6 @@ class RanaBrowser(QWidget):
         )
         self.avatar_cache.avatar_changed.connect(self.projects_browser.update_avatar)
 
-        # self.avatar_cache.avatar_updated.connect(self.file_view.update_avatar)
         # Disable/enable widgets
         self.projects_browser.busy.connect(lambda: self.disable)
         self.projects_browser.ready.connect(lambda: self.enable)
@@ -840,16 +878,23 @@ class RanaBrowser(QWidget):
         self.revisions_view.ready.connect(lambda: self.enable)
         self.files_browser.busy.connect(lambda: self.disable)
         self.files_browser.ready.connect(lambda: self.enable)
-        # Add browsers and file view to rana widget
-        self.rana_files.addWidget(self.projects_browser)
-        self.rana_files.addWidget(self.files_browser)
-        self.rana_files.addWidget(self.file_view)
-        self.rana_files.addWidget(self.revisions_view)
+
+        self.processes_browser.start_monitoring_project_jobs.connect(
+            self.request_monitoring_project_jobs.emit
+        )
+        self.project_jobs_added.connect(self.processes_browser.add_items)
+        self.project_job_updated.connect(self.processes_browser.update_job_state)
+        # Connect refresh buttons
+        self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
+        refresh_btn.clicked.connect(self.refresh_project_widget)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
         self.projects_browser.project_selected.connect(
             self.files_browser.update_project
+        )
+        self.projects_browser.project_selected.connect(
+            self.processes_browser.update_project
         )
         self.projects_browser.project_selected.connect(self.file_view.update_project)
         # Show file details on selecting file
@@ -907,10 +952,10 @@ class RanaBrowser(QWidget):
             )
         )
         # Connect updating folder from breadcrumb
-        self.breadcrumbs.folder_selected.connect(
+        self.files_breadcrumbs.folder_selected.connect(
             lambda path: self.files_browser.select_path(path)
         )
-        self.breadcrumbs.file_selected.connect(self.file_view.refresh)
+        self.files_breadcrumbs.file_selected.connect(self.file_view.refresh)
         # File view buttons
         file_signals.view_all_revisions_requested.connect(
             self.revisions_view.show_revisions_for_file
@@ -948,43 +993,72 @@ class RanaBrowser(QWidget):
         )
         # Update breadcrumbs when file browser path changes
         self.projects_browser.project_selected.connect(
-            lambda selected_item: self.breadcrumbs.add_folder(selected_item["name"])
+            lambda selected_item: self.files_breadcrumbs.add_folder(
+                selected_item["name"]
+            )
         )
-        self.files_browser.folder_selected.connect(self.breadcrumbs.add_folder)
+        self.projects_browser.project_selected.connect(
+            lambda selected_item: self.processes_breadcrumbs.add_project(
+                selected_item["name"]
+            )
+        )
+        self.files_browser.folder_selected.connect(self.files_breadcrumbs.add_folder)
         self.files_browser.file_selected.connect(
-            lambda selected_item: self.breadcrumbs.add_file(
+            lambda selected_item: self.files_breadcrumbs.add_file(
                 selected_item["id"].split("/")[-1]
             )
         )
         file_signals.view_all_revisions_requested.connect(
-            lambda _, selected_file: self.breadcrumbs.add_revisions(selected_file)
+            lambda _, selected_file: self.files_breadcrumbs.add_revisions(selected_file)
         )
-        # Ensure correct page is shown - do this last zo all updates are done
-        self.projects_browser.projects_refreshed.connect(
-            lambda: self.rana_files.setCurrentIndex(0)
-        )
+        # Ensure correct page is shown - do this last so all updates are done
+        self.projects_browser.projects_refreshed.connect(self.show_projects_browser)
         self.projects_browser.project_selected.connect(
-            lambda _: self.rana_files.setCurrentIndex(1)
-        )
-        self.files_browser.folder_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(1)
+            lambda _: self.show_project_data(self.project_widget.currentWidget(), 0)
         )
         self.files_browser.file_selected.connect(
-            lambda _: self.rana_files.setCurrentIndex(2)
+            lambda _: self.show_project_data(self.rana_files, 1)
         )
-        self.file_view.file_showed.connect(lambda: self.rana_files.setCurrentIndex(2))
+        self.files_browser.folder_selected.connect(
+            lambda: self.show_project_data(self.rana_files, 0)
+        )
+        self.file_view.file_showed.connect(
+            lambda: self.show_project_data(self.rana_files, 1)
+        )
         file_signals.view_all_revisions_requested.connect(
-            lambda _: self.rana_files.setCurrentIndex(3)
+            lambda _: self.show_project_data(self.rana_files, 2)
         )
-        self.breadcrumbs.projects_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(0)
+        self.files_breadcrumbs.projects_selected.connect(self.show_projects_browser)
+        self.files_breadcrumbs.projects_selected.connect(
+            self.processes_breadcrumbs.back_to_root
         )
-        self.breadcrumbs.folder_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(1)
+        self.processes_breadcrumbs.projects_selected.connect(self.show_projects_browser)
+        self.processes_breadcrumbs.projects_selected.connect(
+            self.files_breadcrumbs.back_to_root
         )
-        self.breadcrumbs.file_selected.connect(
-            lambda: self.rana_files.setCurrentIndex(2)
+
+        self.files_breadcrumbs.folder_selected.connect(
+            lambda: self.show_project_data(self.rana_files, 0)
         )
+        self.files_breadcrumbs.file_selected.connect(
+            lambda: self.show_project_data(self.rana_files, 1)
+        )
+
+    def show_projects_browser(self):
+        self.rana_browser.setCurrentIndex(0)
+        self.rana_files.setCurrentIndex(0)
+        self.rana_processes.setCurrentIndex(0)
+
+    def show_project_data(self, parent, index):
+        self.rana_browser.setCurrentIndex(1)
+        parent.setCurrentIndex(index)
+
+    def show_processes_overview(self):
+        if self.rana_browser.currentIndex() != 1:
+            # going to the processes view can only happen when the project widget is shown
+            return
+        self.project_widget.setCurrentIndex(1)
+        self.rana_processes.setCurrentIndex(0)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.MouseButtonPress and obj == self.logo_label:
@@ -1004,21 +1078,41 @@ class RanaBrowser(QWidget):
     def disable(self):
         self.rana_browser.setEnabled(False)
 
+    def on_project_tab_changed(self, index):
+        self.breadcrumbs_stack.setCurrentIndex(index)
+        if index == 0:
+            self.project_widget.cornerWidget().show()
+        else:
+            self.project_widget.cornerWidget().hide()
+
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
+        if not self.rana_browser.isEnabled():
+            return
         if (
-            self.rana_files.currentIndex() in [1, 2, 3]
-            and self.rana_browser.isEnabled()
-        ):
+            self.rana_browser.currentIndex() == 0
+            and self.rana_files.currentIndex() in [1, 2, 3]
+        ) or self.rana_browser.currentIndex() == 1:
             self.refresh()
+
+    def refresh_projects_browser(self):
+        self.projects_browser.refresh()
+        self.last_refresh_time = time.time()
+
+    def refresh_project_widget(self):
+        current_widget = self.project_widget.currentWidget()
+        if isinstance(current_widget, QStackedWidget):
+            current_widget = current_widget.currentWidget()
+        if current_widget and hasattr(current_widget, "refresh"):
+            current_widget.refresh()
+            self.last_refresh_time = time.time()
 
     @pyqtSlot()
     def refresh(self):
-        if hasattr(self.rana_files.currentWidget(), "refresh"):
-            self.rana_files.currentWidget().refresh()
-            self.last_refresh_time = time.time()
-        else:
-            raise Exception("Attempted refresh on widget without refresh support")
+        if self.rana_browser.currentIndex() == 0:
+            self.refresh_projects_browser()
+        elif self.rana_browser.currentIndex() == 1:
+            self.refresh_project_widget()
 
     def refresh_after_file_delete(self):
         if self.rana_files.currentIndex() == 2:
@@ -1026,7 +1120,7 @@ class RanaBrowser(QWidget):
                 str(Path(self.file_view.selected_file["id"]).parent) + "/"
             )
             self.file_view.selected_file = None
-            self.breadcrumbs.remove_file()
+            self.files_breadcrumbs.remove_file()
             self.rana_files.setCurrentIndex(1)
         self.refresh()
 
@@ -1035,7 +1129,7 @@ class RanaBrowser(QWidget):
             self.file_view.selected_file["id"] = str(
                 Path(self.file_view.selected_file["id"]).with_name(new_name)
             )
-            self.breadcrumbs.rename_file(new_name)
+            self.files_breadcrumbs.rename_file(new_name)
         self.refresh()
 
     def start_file_in_qgis(self, project_id: str, online_path: str):
@@ -1051,7 +1145,7 @@ class RanaBrowser(QWidget):
             paths = [self.projects_browser.project["name"]] + online_path.split("/")[
                 :-1
             ]
-            self.breadcrumbs.set_folders(paths)
+            self.files_breadcrumbs.set_folders(paths)
             # handle item as it was selected in the UI
             self.files_browser.update()
             # open in qgis; note that selected_item is either None or a file

@@ -76,6 +76,7 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
+    ProjectJobMonitorWorker,
     VectorStyleWorker,
 )
 
@@ -111,6 +112,8 @@ class Loader(QObject):
     model_created = pyqtSignal()
     revision_saved = pyqtSignal()
     model_deleted = pyqtSignal()
+    project_jobs_added = pyqtSignal(list)
+    project_job_updated = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -118,6 +121,7 @@ class Loader(QObject):
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
+        self.project_job_monitor: QThread = None
         self.communication = communication
 
         # For simulations
@@ -127,6 +131,9 @@ class Loader(QObject):
         # For upload of schematisations
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
+
+    def __del__(self):
+        self.stop_project_job_monitoring()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -1233,3 +1240,17 @@ class Loader(QObject):
 
         self.upload_thread_pool.start(upload_worker)
         self.revision_saved.emit()
+
+    def stop_project_job_monitoring(self):
+        if self.project_job_monitor:
+            self.project_job_monitor.stop()
+
+    def start_project_job_monitoring(self, project_id):
+        self.stop_project_job_monitoring()
+        self.project_job_monitor = ProjectJobMonitorWorker(
+            project_id=project_id, parent=self
+        )
+        self.project_job_monitor.jobs_added.connect(self.project_jobs_added)
+        self.project_job_monitor.job_updated.connect(self.project_job_updated)
+        self.project_job_monitor.failed.connect(self.communication.show_warn)
+        self.project_job_monitor.start()

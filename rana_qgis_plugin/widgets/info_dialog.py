@@ -1,6 +1,15 @@
+from typing import Optional
+
 from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
-rana_hcc_url = "<a href='https://ranawaterintelligence.com/hcc-management'>ranawaterintelligence.com/hcc-management</a>"
+from rana_qgis_plugin.utils_settings import base_url
+
+
+def get_hcc_url(path: Optional[str] = None) -> str:
+    hcc_path = f"{base_url()}/hcc-management"
+    if path:
+        hcc_path += "/" + path
+    return f"<a href='{hcc_path}'>{hcc_path}</a>"
 
 
 class InfoDialog(QDialog):
@@ -21,7 +30,7 @@ class InfoDialog(QDialog):
 class CreateModelDialog(InfoDialog):
     def __init__(self, parent=None):
         super().__init__(
-            info_msg=f"Rana model creation started. Follow progress here: {rana_hcc_url}",
+            info_msg=f"Rana model creation started. Follow progress here: {get_hcc_url()}",
             window_title="Rana model creation started",
             parent=parent,
         )
@@ -30,16 +39,7 @@ class CreateModelDialog(InfoDialog):
 class SaveRevisionDialog(InfoDialog):
     def __init__(self, parent=None):
         super().__init__(
-            info_msg=f"Rana revision being saved. Follow progress here: {rana_hcc_url}",
+            info_msg=f"Rana revision being saved. Follow progress here: {get_hcc_url()}",
             window_title="Revision being saved",
-            parent=parent,
-        )
-
-
-class RunSimulationDialog(InfoDialog):
-    def __init__(self, parent=None):
-        super().__init__(
-            info_msg=f"Rana revision simulation started. Follow progress here: {rana_hcc_url}",
-            window_title="Revision simulation started",
             parent=parent,
         )
