@@ -22,6 +22,7 @@ from .utils_api import (
     finish_file_upload,
     get_project_jobs,
     get_raster_file_link,
+    get_raster_style_file,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
@@ -75,8 +76,11 @@ class FileDownloadWorker(QThread):
                             self.progress.emit(progress, "")
                             previous_progress = progress
             # Fetch and extract the QML zip for vector files
-            if self.file["data_type"] == "vector":
-                qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+            if self.file["data_type"] in ["vector", "raster"]:
+                if self.file["data_type"] == "raster":
+                    qml_zip_content = get_raster_style_file(descriptor_id, "qml.zip")
+                else:
+                    qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
                 if qml_zip_content:
                     stream = io.BytesIO(qml_zip_content)
                     if zipfile.is_zipfile(stream):
