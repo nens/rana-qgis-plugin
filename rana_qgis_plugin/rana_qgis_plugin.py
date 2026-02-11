@@ -340,9 +340,7 @@ class RanaQgisPlugin:
             self.loader.revision_saved.connect(
                 lambda: self.open_info_dialog(info_dialog.SaveRevisionDialog)
             )
-            self.loader.model_created.connect(
-                lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
-            )
+            self.loader.model_created.connect(self.rana_browser.show_processes_overview)
             self.loader.simulation_started.connect(
                 self.rana_browser.show_processes_overview
             )
