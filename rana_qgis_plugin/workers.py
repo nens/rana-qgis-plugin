@@ -379,11 +379,12 @@ class RasterStyleWorker(QThread):
         local_dir, _ = get_local_file_path(self.project["slug"], path)
         os.makedirs(local_dir, exist_ok=True)
 
-        qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
+        qml_file_name = os.path.splitext(layer.name())[0] + ".qml"
+        qml_path = os.path.join(local_dir, qml_file_name)
         layer.saveNamedStyle(str(qml_path))
         zip_path = os.path.join(local_dir, "qml.zip")
         with zipfile.ZipFile(zip_path, "w") as zipf:
-            zipf.write(qml_path, f"{layer.name()}.qml")
+            zipf.write(qml_path, qml_file_name)
 
         # Raster styling to geostyler, and then to lizard styling
         try:
