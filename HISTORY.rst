@@ -14,6 +14,7 @@ History
 - Added status to file detail view (red for failed processing) and added additional checks (nens/rana-qgis-plugin#3496)
 - Reset RanaBrowser on switching organisation (nens/rana#3438)
 - Disable breadcrumbs when RanaBrowser is disabled
+- Create threedi models via rana process (nens/rana-qgis-plugin#258)
 
 
 1.2.4 (2026-01-28)

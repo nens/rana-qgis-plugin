@@ -2,6 +2,7 @@ import os
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
+from typing import Optional
 
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt.QtCore import (
@@ -405,27 +406,18 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unable to create folder {folder_name}")
 
-    @pyqtSlot(dict)
-    @pyqtSlot(dict, int)
-    def create_schematisation_revision_3di_model(self, file, revision_id=None):
-        tc = ThreediCalls(get_threedi_api())
+    @pyqtSlot(dict, dict)
+    @pyqtSlot(dict, dict, int)
+    def create_schematisation_revision_3di_model(self, project, file, revision_id=None):
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
         )
         if not revision_id:
             revision_id = schematisation["latest_revision"]["id"]
-        schematisation_id = schematisation["schematisation"]["id"]
-        try:
-            tc.create_schematisation_revision_3di_model(schematisation_id, revision_id)
-            self.model_created.emit()
-        except ApiException as e:
-            if e.status == 400:
-                QMessageBox.warning(
-                    QApplication.activeWindow(), "Warning", eval(e.body)[0]
-                )
-            else:
-                raise
+        self.start_model_tracker_process(
+            project, schematisation["schematisation"], revision_id
+        )
 
     @pyqtSlot(dict, int)
     def delete_schematisation_revision_3di_model(self, file, revision_id):
@@ -565,7 +557,7 @@ class Loader(QObject):
                     lizard_post_processing_overview,
                 )
             simulation_wizard.simulation_created.connect(
-                partial(self.start_process, project, file)
+                partial(self.start_simulation_tracker_process, project, file)
             )
             simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
@@ -574,14 +566,39 @@ class Loader(QObject):
             if simulation_wizard.exec() == QDialog.Rejected:
                 self.simulation_cancelled.emit()
 
-    def start_process(self, project, file, simulations):
-        # Find the simulation tracker processes
+    def get_process_id_for_tag(self, tag: str) -> Optional[str]:
         processes = get_tenant_processes(self.communication)
-        track_process = None
         for process in processes:
-            if "simulation_tracker" in process["tags"]:
-                track_process = process["id"]
-                break
+            if tag in process["tags"]:
+                return process["id"]
+
+    def start_model_tracker_process(
+        self,
+        project,
+        schematisation,
+        revision_id: int,
+        inherit_from_previous_revision: bool = False,
+    ):
+        track_process = self.get_process_id_for_tag("model_tracker")
+        if track_process is None:
+            self.communication.log_err("No model tracker available")
+            return
+        params = {
+            "project_id": project["id"],
+            "inputs": {
+                "schematisation_id": schematisation["id"],
+                "revision_id": revision_id,
+                "inherit_from_previous_model": True,
+                "inherit_from_previous_revision": inherit_from_previous_revision,
+            },
+            "name": f"model_tracker_{schematisation['name']}_rev{revision_id}",
+        }
+        _ = start_tenant_process(self.communication, track_process, params)
+        self.model_created.emit()
+
+    def start_simulation_tracker_process(self, project, file, simulations):
+        # Find the simulation tracker processes
+        track_process = self.get_process_id_for_tag("simulation_tracker")
 
         if track_process is None:
             self.communication.log_err("No simulation tracker available")
@@ -1141,7 +1158,15 @@ class Loader(QObject):
                 local_schematisation,
                 new_upload,
             )
-
+            upload_worker.signals.create_model_requested.connect(
+                lambda revision_id,
+                inherit_from_previous_revision: self.start_model_tracker_process(
+                    project,
+                    schematisation.to_dict(),
+                    revision_id,
+                    inherit_from_previous_revision,
+                )
+            )
             upload_worker.signals.thread_finished.connect(
                 self.on_schematisation_upload_finished
             )

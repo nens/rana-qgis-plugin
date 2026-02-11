@@ -221,7 +221,6 @@ class RanaQgisPlugin:
                 "M&S plugin detected",
                 "The Models & simulation plugin is still active, but it's replaced by the Rana plugin. Please disable the Models & Simulation plugin.",
             )
-
         if start_url:
             path_params, query_params = parse_url(start_url)
             if not self.login(path_params["tenant_id"]):
@@ -341,9 +340,7 @@ class RanaQgisPlugin:
             self.loader.revision_saved.connect(
                 lambda: self.open_info_dialog(info_dialog.SaveRevisionDialog)
             )
-            self.loader.model_created.connect(
-                lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
-            )
+            self.loader.model_created.connect(self.rana_browser.show_processes_overview)
             self.loader.simulation_started.connect(
                 self.rana_browser.show_processes_overview
             )
