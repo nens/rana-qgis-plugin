@@ -161,7 +161,7 @@ class ProcessesBrowser(QWidget):
 
     def update_job_link(self, link_label, job):
         if job.process_id:
-            job_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['code']}?tab=2&job={job.id}"
+            job_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=2&job={job.id}"
             link_label.setText(f'<a href="{job_url}">{job.name}</a>')
             link_label.setOpenExternalLinks(True)  # This makes the link clickable
             # use default styling
