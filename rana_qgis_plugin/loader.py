@@ -580,6 +580,11 @@ class Loader(QObject):
         inherit_from_previous_revision: bool = True,
     ):
         track_process = self.get_process_id_for_tag("model_tracker")
+        from qgis.core import Qgis, QgsMessageLog
+
+        QgsMessageLog.logMessage(
+            f"start model tracker {track_process=}", "DEBUG", Qgis.Info
+        )
         if track_process is None:
             self.communication.log_err("No model tracker available")
             return

@@ -12,7 +12,6 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
 )
 
-import rana_qgis_plugin.widgets.info_dialog as info_dialog
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.auth_3di import setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
@@ -124,10 +123,6 @@ class RanaQgisPlugin:
                 self.login()
                 if self.rana_browser:
                     self.rana_browser.refresh()
-
-    def open_info_dialog(self, dialog_class):
-        dialog = dialog_class(self.iface.mainWindow())
-        dialog.exec()
 
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
@@ -337,9 +332,6 @@ class RanaQgisPlugin:
             )
             self.rana_browser.save_revision_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
-            self.loader.revision_saved.connect(
-                lambda: self.open_info_dialog(info_dialog.SaveRevisionDialog)
-            )
             self.loader.model_created.connect(self.rana_browser.show_processes_overview)
             self.loader.simulation_started.connect(
                 self.rana_browser.show_processes_overview
