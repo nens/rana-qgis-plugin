@@ -577,7 +577,7 @@ class Loader(QObject):
         project,
         schematisation,
         revision_id: int,
-        inherit_from_previous_revision: bool = False,
+        inherit_from_previous_revision: bool = True,
     ):
         track_process = self.get_process_id_for_tag("model_tracker")
         if track_process is None:
