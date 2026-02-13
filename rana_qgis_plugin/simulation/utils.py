@@ -752,7 +752,7 @@ def download_required_files(
         def decision_tree():
             replace, store, cancel = "Replace", "Store", "Cancel"
             title = "Pick action"
-            question = f"Replace local WIP or store as a revision {revision_number}?"
+            question = f"Store as a revision {revision_number} or replace local WIP?"
             wip_replace_requested = False
             picked_action_name = communications.custom_ask(
                 None, title, question, replace, store, cancel
