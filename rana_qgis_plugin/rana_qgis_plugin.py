@@ -337,6 +337,8 @@ class RanaQgisPlugin:
                 self.rana_browser.show_processes_overview
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
+            self.loader.file_opened.connect(self.rana_browser.view_file_after_open)
+            self.loader.file_download_finished.connect(self.rana_browser.refresh)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.refresh)

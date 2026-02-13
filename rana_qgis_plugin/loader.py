@@ -115,6 +115,7 @@ class Loader(QObject):
     model_deleted = pyqtSignal()
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    file_opened = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -156,6 +157,7 @@ class Loader(QObject):
                         "wms",
                     )
                     QgsProject.instance().addMapLayer(rlayer)
+                self.file_opened.emit(file)
                 return True
 
         return False
@@ -207,6 +209,7 @@ class Loader(QObject):
             hcc_working_dir(),
             get_threedi_api(),
         )
+        self.file_opened.emit(file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -268,6 +271,7 @@ class Loader(QObject):
                 get_tenant_file_descriptor(file["descriptor_id"]),
                 schematisation,
             )
+        self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
