@@ -16,6 +16,7 @@ History
 - Disable breadcrumbs when RanaBrowser is disabled
 - Create threedi models via rana process (nens/rana-qgis-plugin#258)
 - Download styling for raster and vector files (nens/rana-qgis-plugin#274)
+- Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
 
 
 1.2.4 (2026-01-28)

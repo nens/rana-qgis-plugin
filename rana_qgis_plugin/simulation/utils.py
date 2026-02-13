@@ -23,7 +23,11 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.utils import plugins
 from threedi_api_client.openapi import ApiException
-from threedi_mi_utils import LocalSchematisation, list_local_schematisations
+from threedi_mi_utils import (
+    LocalSchematisation,
+    RevisionSubPathType,
+    list_local_schematisations,
+)
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
@@ -767,7 +771,7 @@ def download_required_files(
                     )
                     if picked_action_name == "Replace":
                         local_revision = local_schematisation.add_revision(
-                            revision_number
+                            revision_number, keep_subpaths=[RevisionSubPathType.RESULTS]
                         )
                         schema_db_dir = local_revision.schematisation_dir
                     else:
