@@ -1274,3 +1274,20 @@ class Loader(QObject):
         self.project_job_monitor.job_updated.connect(self.project_job_updated)
         self.project_job_monitor.failed.connect(self.communication.show_warn)
         self.project_job_monitor.start()
+
+    @pyqtSlot(int)
+    def cancel_simulation(self, simulation_pk):
+        confirm_cancel = QMessageBox.warning(
+            None,
+            "Cancel Simulation",
+            "Are you sure you want to cancel the simulation?",
+            QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm_cancel == QMessageBox.StandardButton.Yes:
+            tc = ThreediCalls(get_threedi_api())
+            tc.fetch_simulation_status(simulation_pk)
+            try:
+                tc.create_simulation_action(simulation_pk, name="shutdown")
+            except ApiException as e:
+                self.communication.show_error(f"Could not cancel simulation")
