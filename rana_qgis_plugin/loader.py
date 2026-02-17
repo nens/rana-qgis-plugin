@@ -77,8 +77,8 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    RasterStyleWorker,
     ProjectJobMonitorWorker,
+    RasterStyleWorker,
     VectorStyleWorker,
 )
 

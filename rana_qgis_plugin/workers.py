@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.utils_lizard import import_from_geostyler
+
 from .utils import (
     build_vrt,
     get_local_file_path,
@@ -26,8 +27,8 @@ from .utils_api import (
     finish_file_upload,
     get_project_jobs,
     get_raster_file_link,
-    get_raster_style_upload_urls,
     get_raster_style_file,
+    get_raster_style_upload_urls,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
