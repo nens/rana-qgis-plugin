@@ -134,15 +134,14 @@ class FileUploadWorker(QThread):
     def upload_single_file(
         self, local_path: Path, progress_start, progress_step
     ) -> bool:
-        online_path = self.online_dir + local_path.name
-
+        online_path = f"{self.online_dir}/{local_path.name}"
         # Check if file exists locally before uploading
         if not local_path.exists():
             self.failed.emit(f"File not found: {local_path}")
             return False
 
         # Handle file conflict
-        continue_upload = self.handle_file_conflict(local_path)
+        continue_upload = self.handle_file_conflict(online_path)
         if not continue_upload:
             return False
 
@@ -182,20 +181,18 @@ class ExistingFileUploadWorker(FileUploadWorker):
     """Worker thread for uploading files."""
 
     def __init__(self, project: dict, file: dict):
-        super().__init__(
-            project, get_local_file_path(project["slug"], file["id"])[1], file["id"]
-        )
+        local_file = Path(get_local_file_path(project["slug"], file["id"])[1])
+        online_dir = str(Path(file["id"]).parent)
+        super().__init__(project, [local_file], online_dir)
 
         self.file_overwrite = False
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
         self.finished.connect(self._finish)
 
-    def handle_file_conflict(self):
+    def handle_file_conflict(self, online_path):
         local_last_modified = QSettings().value(self.last_modified_key)
-        server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.online_dir}
-        )
+        server_file = get_tenant_project_file(self.project["id"], {"path": online_path})
         if not server_file:
             self.failed.emit(
                 "Failed to get file from server. Check if file has been moved or deleted."
