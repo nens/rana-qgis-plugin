@@ -21,11 +21,13 @@ from qgis.PyQt.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
 
+from rana_qgis_plugin.icons import refresh_icon
 from rana_qgis_plugin.utils import (
     NumericItem,
 )
@@ -35,7 +37,7 @@ from rana_qgis_plugin.utils_time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
-from rana_qgis_plugin.widgets.utils_avatars import ContributorAvatarsDelegate
+from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
 
 class ProjectsBrowser(QWidget):
@@ -118,10 +120,14 @@ class ProjectsBrowser(QWidget):
         self.btn_next = QPushButton(">")
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
+        self.refresh_btn = QToolButton()
+        self.refresh_btn.setToolTip("Refresh")
+        self.refresh_btn.setIcon(refresh_icon)
         # Organize widgets in layouts
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.projects_search)
         top_layout.addWidget(self.contributor_filter)
+        top_layout.addWidget(self.refresh_btn)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
         pagination_layout.addWidget(

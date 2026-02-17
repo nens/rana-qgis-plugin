@@ -12,6 +12,11 @@ History
 - Limit list of organisations shown in simulation wizard to the threedi organisations linked to the rana organisations (nens/rana-qgis-plugin#243)
 - Several improvements to information shown for a rana schematisation file (nens/rana-qgis-plugin#253)
 - Added status to file detail view (red for failed processing) and added additional checks (nens/rana-qgis-plugin#3496)
+- Reset RanaBrowser on switching organisation (nens/rana#3438)
+- Disable breadcrumbs when RanaBrowser is disabled
+- Create threedi models via rana process (nens/rana-qgis-plugin#258)
+- Download styling for raster and vector files (nens/rana-qgis-plugin#274)
+- Fix broken file upload for existing files (nens/rana#3592)
 
 
 1.2.4 (2026-01-28)

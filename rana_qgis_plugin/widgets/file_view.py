@@ -17,6 +17,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTableView,
@@ -227,12 +228,21 @@ class FileView(QWidget):
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
 
-        # Put everything in the widget layout
+        # Collect widgets and place in scroll area
+        scroll_content = QWidget()
+        scroll_content_layout = QVBoxLayout(scroll_content)
+        scroll_content_layout.addWidget(collapsible_container)
+        scroll_content_layout.addLayout(file_action_btn_layout)
+        scroll_content_layout.addLayout(button_layout)
+        scroll_content_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(scroll_content)
+
+        # Put scroll area in layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(collapsible_container)
-        layout.addLayout(file_action_btn_layout)
-        layout.addLayout(button_layout)
+        layout.addWidget(scroll_area)
         self.setLayout(layout)
 
     def toggle_interactions(self, enabled: bool):

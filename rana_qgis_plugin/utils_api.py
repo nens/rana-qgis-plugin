@@ -430,10 +430,10 @@ def get_raster_style_upload_urls(descriptor_id: str, files):
         return None
 
 
-def get_vector_style_file(descriptor_id: str, file_name: str):
+def get_style_file(source_type: str, descriptor_id: str, file_name: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style/{file_name}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{source_type}-style/{file_name}"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch()
@@ -447,6 +447,14 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
             return None
     else:
         return None
+
+
+def get_raster_style_file(descriptor_id: str, file_name: str):
+    return get_style_file("raster", descriptor_id, file_name)
+
+
+def get_vector_style_file(descriptor_id: str, file_name: str):
+    return get_style_file("vector", descriptor_id, file_name)
 
 
 def get_schematisations(communication, icontains=""):
@@ -538,6 +546,17 @@ def map_result_to_file_name(result: dict) -> str:
             return result["code"]
 
 
+def get_threedi_organisations() -> list[str]:
+    url = f"{api_url()}/tenants/{get_tenant_id()}/"
+    network_manager = NetworkManager(url, get_authcfg_id())
+    status, error = network_manager.fetch()
+    if status:
+        return [
+            uuid.replace("-", "")
+            for uuid in network_manager.content["threedi_organisations"]
+        ]
+
+
 def get_user_image(communication: UICommunication, user_id):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -550,4 +569,17 @@ def get_user_image(communication: UICommunication, user_id):
         return response
     else:
         communication.show_error(f"Failed to retrieve user image: {error}")
+        return None
+
+
+def get_project_jobs(project_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    params = {"project_id": project_id, "limit": 100}
+    url = f"{api_url()}/tenants/{tenant}/jobs"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+    if status:
+        return network_manager.content
+    else:
         return None

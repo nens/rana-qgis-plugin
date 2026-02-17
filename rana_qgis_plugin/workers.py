@@ -16,12 +16,18 @@ from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.utils_lizard import import_from_geostyler
-
-from .utils import build_vrt, get_local_file_path, image_to_bytes, split_scenario_extent
+from .utils import (
+    build_vrt,
+    get_local_file_path,
+    image_to_bytes,
+    split_scenario_extent,
+)
 from .utils_api import (
     finish_file_upload,
+    get_project_jobs,
     get_raster_file_link,
     get_raster_style_upload_urls,
+    get_raster_style_file,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
@@ -75,8 +81,11 @@ class FileDownloadWorker(QThread):
                             self.progress.emit(progress, "")
                             previous_progress = progress
             # Fetch and extract the QML zip for vector files
-            if self.file["data_type"] == "vector":
-                qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+            if self.file["data_type"] in ["vector", "raster"]:
+                if self.file["data_type"] == "raster":
+                    qml_zip_content = get_raster_style_file(descriptor_id, "qml.zip")
+                else:
+                    qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
                 if qml_zip_content:
                     stream = io.BytesIO(qml_zip_content)
                     if zipfile.is_zipfile(stream):
@@ -130,15 +139,14 @@ class FileUploadWorker(QThread):
     def upload_single_file(
         self, local_path: Path, progress_start, progress_step
     ) -> bool:
-        online_path = self.online_dir + local_path.name
-
+        online_path = f"{self.online_dir}/{local_path.name}"
         # Check if file exists locally before uploading
         if not local_path.exists():
             self.failed.emit(f"File not found: {local_path}")
             return False
 
         # Handle file conflict
-        continue_upload = self.handle_file_conflict(local_path)
+        continue_upload = self.handle_file_conflict(online_path)
         if not continue_upload:
             return False
 
@@ -178,20 +186,18 @@ class ExistingFileUploadWorker(FileUploadWorker):
     """Worker thread for uploading files."""
 
     def __init__(self, project: dict, file: dict):
-        super().__init__(
-            project, get_local_file_path(project["slug"], file["id"])[1], file["id"]
-        )
+        local_file = Path(get_local_file_path(project["slug"], file["id"])[1])
+        online_dir = str(Path(file["id"]).parent)
+        super().__init__(project, [local_file], online_dir)
 
         self.file_overwrite = False
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
         self.finished.connect(self._finish)
 
-    def handle_file_conflict(self):
+    def handle_file_conflict(self, online_path):
         local_last_modified = QSettings().value(self.last_modified_key)
-        server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.online_dir}
-        )
+        server_file = get_tenant_project_file(self.project["id"], {"path": online_path})
         if not server_file:
             self.failed.emit(
                 "Failed to get file from server. Check if file has been moved or deleted."
@@ -728,3 +734,49 @@ class LizardResultDownloadWorker(QThread):
 
         if not task_failed:
             self.finished.emit(self.project, self.file, self.target_folder)
+
+
+class ProjectJobMonitorWorker(QThread):
+    failed = pyqtSignal(str)
+    jobs_added = pyqtSignal(list)
+    job_updated = pyqtSignal(dict)
+
+    def __init__(self, project_id, parent=None):
+        super().__init__(parent)
+        self.active_jobs = {}
+        self.project_id = project_id
+        self._stop_flag = False
+
+    def run(self):
+        # initialize active jobs
+        self.update_jobs()
+        while not self._stop_flag:
+            self.update_jobs()
+            # Process contains a single api call, so every second should be fine
+            QThread.sleep(1)
+
+    def stop(self):
+        """Gracefully stop the worker"""
+        self._stop_flag = True
+        self.wait()
+
+    def update_jobs(self):
+        response = get_project_jobs(self.project_id)
+        if not response:
+            return
+        current_jobs = response["items"]
+        new_jobs = {
+            job["id"]: job for job in current_jobs if job["id"] not in self.active_jobs
+        }
+        self.jobs_added.emit(list(new_jobs.values()))
+        self.active_jobs.update(new_jobs)
+        for job in current_jobs:
+            if job["id"] in new_jobs:
+                # new job cannot be updated
+                continue
+            if (
+                job["state"] != self.active_jobs[job["id"]]["state"]
+                or job["process"] != self.active_jobs[job["id"]]["process"]
+            ):
+                self.job_updated.emit(job)
+                self.active_jobs[job["id"]] = job

@@ -23,6 +23,10 @@ class NetworkManager(object):
 
     def __init__(self, url: str, auth_cfg: str = None):
         self._network_manager = QgsNetworkAccessManager.instance()
+        # Don't follow redirects automatically
+        self._network_manager.setRedirectPolicy(
+            QNetworkRequest.RedirectPolicy.ManualRedirectPolicy
+        )
         self._auth_manager = QgsApplication.authManager()
         self._network_finished = False
         self._network_timeout = False
@@ -131,20 +135,29 @@ class NetworkManager(object):
             QCoreApplication.processEvents()
 
         description = None
+
+        # Check for redirect status codes FIRST (before checking for errors)
+        if self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) in (
+            301,
+            302,
+            303,
+            307,
+            308,
+        ):
+            location = self._reply.rawHeader(b"Location")
+            if location:
+                redirect_url = str(location, "utf-8")
+                self._reply.deleteLater()
+                return True, redirect_url
+            else:
+                self._reply.deleteLater()
+                return False, "Redirect response missing Location header"
+
         if self._reply.error() != QNetworkReply.NetworkError.NoError:
             status = False
             description = self._reply.errorString()
         else:
             status = True
-            if (
-                self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
-                == 307
-            ):
-                # For HTTP status code 307 (Temporary Redirect),
-                # look for the 'Location' header to get the new redirect URL
-                location = self._reply.rawHeader(b"Location")
-                if location:
-                    return status, str(location, "utf-8")
 
             if (
                 self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
