@@ -1,5 +1,7 @@
+import copy
 import io
 import json
+import math
 import os
 import zipfile
 from pathlib import Path
@@ -8,9 +10,12 @@ from typing import List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
+from bridgestyle.qgis import togeostyler
 from qgis.core import Qgis, QgsMessageLog, QgsProject
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
+
+from rana_qgis_plugin.utils_lizard import import_from_geostyler
 
 from .utils import (
     build_vrt,
@@ -23,6 +28,7 @@ from .utils_api import (
     get_project_jobs,
     get_raster_file_link,
     get_raster_style_file,
+    get_raster_style_upload_urls,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
@@ -330,6 +336,115 @@ class VectorStyleWorker(QThread):
             os.remove(zip_path)
 
             # Finish
+            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+        except Exception as e:
+            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+
+
+class RasterStyleWorker(QThread):
+    """Worker thread for generating and uploading raster styling files"""
+
+    finished = pyqtSignal(str)
+    failed = pyqtSignal(str)
+    warning = pyqtSignal(str)
+
+    def __init__(
+        self,
+        project: dict,
+        file: dict,
+    ):
+        super().__init__()
+        self.project = project
+        self.file = file
+
+    @pyqtSlot()
+    def run(self):
+        if not self.file:
+            self.failed.emit("File not found.")
+            return
+        path = self.file["id"]
+        file_name = os.path.basename(path.rstrip("/"))
+        descriptor_id = self.file["descriptor_id"]
+        all_layers = QgsProject.instance().mapLayers().values()
+        layers = [layer for layer in all_layers if file_name in layer.source()]
+
+        if not layers:
+            self.failed.emit(
+                f"No layers found for {file_name}. Open the file in QGIS and try again."
+            )
+            return
+
+        if not len(layers) == 1:
+            self.failed.emit(
+                f"Multiple layers found for {file_name}. Open the file in QGIS and try again."
+            )
+            return
+
+        layer = layers[0]
+
+        # Save QML style files for each layer to local directory
+        local_dir, _ = get_local_file_path(self.project["slug"], path)
+        os.makedirs(local_dir, exist_ok=True)
+
+        qml_file_name = os.path.splitext(layer.name())[0] + ".qml"
+        qml_path = os.path.join(local_dir, qml_file_name)
+        layer.saveNamedStyle(str(qml_path))
+        zip_path = os.path.join(local_dir, "qml.zip")
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            zipf.write(qml_path, qml_file_name)
+
+        # Raster styling to geostyler, and then to lizard styling
+        try:
+            geostyler, _, _, warnings = togeostyler.convert(layer)
+            if len(geostyler["rules"]) != 1:
+                self.failed.emit(f"Multiple rules found for {file_name}.")
+                return
+            if len(geostyler["rules"][0]["symbolizers"]) != 1:
+                self.failed.emit(f"Multiple symbolizers found for {file_name}.")
+                return
+
+            lizard_styling = import_from_geostyler(
+                geostyler["rules"][0]["symbolizers"][0]
+            )
+
+            # Do some corrections and checks
+            labels = copy.deepcopy(lizard_styling.get("labels", {}))
+            for language, ranges in labels.items():
+                new_labels = []
+                for quantity, label in ranges:
+                    if math.isinf(quantity):
+                        warnings.append(
+                            f"Label '{label}' with infinite quantity cannot be used and will be ignored."
+                        )
+                    else:
+                        new_labels.append([quantity, label])
+
+                lizard_styling["labels"][language] = new_labels
+
+            if lizard_styling["type"] == "DiscreteColormap":
+                for entry, _ in lizard_styling["data"]:
+                    if isinstance(entry, float):
+                        self.failed.emit(
+                            f"Failed to generate and upload styling files: DiscreteColormap cannot contain float quantities."
+                        )
+                        return
+
+            if warnings:
+                self.warning.emit(", ".join(set(warnings)))
+
+            lizard_styling_path = os.path.join(local_dir, "colormap.json")
+            with open(lizard_styling_path, "w") as f:
+                json.dump(lizard_styling, f)
+
+            files = [
+                ("files", "colormap.json", lizard_styling_path, "application/json"),
+                ("files", "qml.zip", zip_path, "application/zip"),
+            ]
+            get_raster_style_upload_urls(descriptor_id, files)
+
+            os.remove(zip_path)
+            os.remove(lizard_styling_path)
+
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
