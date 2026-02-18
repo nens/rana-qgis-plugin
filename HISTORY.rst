@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.5 (unreleased)
+1.2.5 (2026-02-18)
 ------------------
 
 - Added raster styling (nens/rana#2524)
