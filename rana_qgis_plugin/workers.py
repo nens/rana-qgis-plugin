@@ -188,7 +188,10 @@ class ExistingFileUploadWorker(FileUploadWorker):
 
     def __init__(self, project: dict, file: dict):
         local_file = Path(get_local_file_path(project["slug"], file["id"])[1])
-        online_dir = str(Path(file["id"]).parent)
+        if Path(file["id"]).parent == Path("."):
+            online_dir = ""
+        else:
+            online_dir = str(Path(file["id"]).parent) + "/"
         super().__init__(project, [local_file], online_dir)
 
         self.file_overwrite = False
