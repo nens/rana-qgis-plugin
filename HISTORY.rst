@@ -5,6 +5,7 @@ History
 1.2.5 (unreleased)
 ------------------
 
+- Added raster styling (nens/rana#2524)
 - Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125)
 - Add option to convert shapefile to geopackage when uploading (nens/rana#3445)
 - Fixed that uploaded vector or raster file is loaded twice into QGIS (#267)
