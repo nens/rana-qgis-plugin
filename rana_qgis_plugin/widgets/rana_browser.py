@@ -754,6 +754,7 @@ class RanaBrowser(QWidget):
     request_monitoring_project_jobs = pyqtSignal(str)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    update_avatar_cache = pyqtSignal(list)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -784,7 +785,6 @@ class RanaBrowser(QWidget):
             avatar_cache=self.avatar_cache,
             parent=self,
         )
-        self.avatar_cache.update_users_in_thread(self.projects_browser.users)
         file_signals = FileActionSignals()
         self.files_browser = FilesBrowser(
             communication=self.communication, file_signals=file_signals, parent=self
@@ -867,9 +867,7 @@ class RanaBrowser(QWidget):
         # Connect avatar_cache
         # Note that avatar_cache is only linked to the projects_browser because for now
         # all widgets that use avatars are loaded after the projects browser is initialized
-        self.projects_browser.users_refreshed.connect(
-            self.avatar_cache.update_users_in_thread
-        )
+        self.projects_browser.users_refreshed.connect(self.update_avatar_cache.emit)
         self.avatar_cache.avatar_changed.connect(self.projects_browser.update_avatar)
 
         # Disable/enable widgets
