@@ -925,7 +925,7 @@ class Loader(QObject):
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
-
+        sender.deleteLater()
         self.file_upload_finished.emit()
 
     def on_new_file_upload_finished(self, online_path: str, project):
