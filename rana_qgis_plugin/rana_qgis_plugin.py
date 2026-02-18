@@ -246,6 +246,11 @@ class RanaQgisPlugin:
             self.rana_browser.request_monitoring_project_jobs.connect(
                 self.loader.start_project_job_monitoring
             )
+            self.rana_browser.update_avatar_cache.connect(self.loader.update_avatars)
+            self.loader.avatar_updated.connect(
+                self.rana_browser.avatar_cache.update_avatar
+            )
+
             self.loader.project_jobs_added.connect(
                 self.rana_browser.project_jobs_added.emit
             )
