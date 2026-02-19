@@ -1,21 +1,24 @@
 from dataclasses import dataclass
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.core import QgsApplication
+from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
     QStandardItem,
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QProgressBar,
     QSizePolicy,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
 
-from rana_qgis_plugin.utils_api import get_tenant_id
+from rana_qgis_plugin.utils_api import get_process_id_for_tag, get_tenant_id
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import (
     convert_to_numeric_timestamp,
@@ -37,6 +40,7 @@ class JobData:
     progress: int
     max_progress: int
     process_id: int | None
+    inputs: dict
 
     def progress_str(self):
         return f"{self.status} ({self.progress}%)"
@@ -63,6 +67,7 @@ class JobData:
                 progress=int(100 * job["state"]["progress"]),
                 max_progress=100,
                 process_id=job["process"].get("id") if job["process"] else None,
+                inputs=job["inputs"],
             )
         except Exception as e:
             QgsMessageLog.logMessage(f"create job {job=}", "DEBUG", Qgis.Info)
@@ -70,15 +75,18 @@ class JobData:
 
 
 class ProcessesBrowser(QWidget):
-    start_monitoring_simulations = pyqtSignal()
-    start_monitoring_model_generation = pyqtSignal()
     start_monitoring_project_jobs = pyqtSignal(str)
+    cancel_simulation = pyqtSignal(int)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
         self.communication = communication
         self.avatar_cache = avatar_cache
         self.setup_ui()
+        self.proces_map = {
+            process_tag: get_process_id_for_tag(self.communication, process_tag)
+            for process_tag in ["model_tracker", "simulation_tracker"]
+        }
         self.row_map = {}
         self.project = {}
 
@@ -116,7 +124,7 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.header().setSectionResizeMode(3, QHeaderView.Fixed)
         self.processes_tv.setColumnWidth(1, 50)
         self.processes_tv.setColumnWidth(2, 150)
-        self.processes_tv.setColumnWidth(3, 160)
+        self.processes_tv.setColumnWidth(3, 190)
         self.processes_tv.header().setStretchLastSection(False)
         self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
 
@@ -139,14 +147,38 @@ class ProcessesBrowser(QWidget):
         date_item = get_timestamp_as_numeric_item(job.created)
         status_item = QStandardItem()
         status_item.setData(job.status, Qt.ItemDataRole.UserRole)
-        # Create the progress bar
+        # Create the progress bar and cancel button
         progress_bar = QProgressBar()
         progress_bar.setFixedWidth(160)
         self.update_pb_progress(progress_bar, job)
         progress_bar.setTextVisible(True)
+        status_layout = QHBoxLayout()
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(4)
+        status_layout.addWidget(progress_bar)
+        # Add hidden cancel button
+        cancel_button = QToolButton()
+        cancel_button.setToolTip("cancel simulation")
+        cancel_button.setIcon(QgsApplication.getThemeIcon("mTaskCancel.svg"))
+        cancel_button.setIconSize(QSize(16, 16))
+        cancel_button.setAutoRaise(True)
+        cancel_button.setAttribute(Qt.WA_TranslucentBackground)
+        cancel_button.hide()
+        # connect cancel button to canceling a simulation
+        if job.process_id == self.proces_map["simulation_tracker"]:
+            cancel_button.clicked.connect(
+                lambda: self.cancel_simulation.emit(job.inputs["simulation_id"])
+            )
+            if job.status == "running":
+                cancel_button.show()
+        status_layout.addWidget(cancel_button)
+        status_layout.addStretch(1)
+        status_container = QWidget()
+        status_container.setLayout(status_layout)
+        status_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         row = [name_item, who_item, date_item, status_item]
         self.processes_model.insertRow(0, row)
-        self.processes_tv.setIndexWidget(status_item.index(), progress_bar)
+        self.processes_tv.setIndexWidget(status_item.index(), status_container)
         for id in self.row_map:
             self.row_map[id] += 1
         self.row_map[job.id] = 0
@@ -184,6 +216,20 @@ class ProcessesBrowser(QWidget):
             return
         status_item = self.processes_model.item(row, 3)
         status_item.setData(job.status, Qt.ItemDataRole.UserRole)
-        self.update_pb_progress(self.processes_tv.indexWidget(status_item.index()), job)
+        # retrieve progress bar and cancel button, and update their status
+        status_layout = self.processes_tv.indexWidget(status_item.index()).layout()
+        progress_bar = status_layout.itemAt(0).widget()
+        cancel_button = status_layout.itemAt(1).widget()
+        self.update_pb_progress(progress_bar, job)
+        if (
+            job.process_id == self.proces_map["simulation_tracker"]
+            and job.status == "running"
+        ):
+            cancel_button.show()
+        else:
+            cancel_button.hide()
+        if status_layout.count() == 2 and job.status != "running":
+            status_layout.itemAt(1).widget().deleteLater()
+            status_layout.removeItem(status_layout.itemAt(1))
         name_item = self.processes_model.item(row, 0)
         self.update_job_link(self.processes_tv.indexWidget(name_item.index()), job)
