@@ -1,7 +1,12 @@
+from __future__ import annotations
+
+import sys
+import traceback
 from functools import partial
+from typing import Any, Callable, Optional
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtCore import QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAction,
     QButtonGroup,
@@ -35,6 +40,46 @@ from rana_qgis_plugin.widgets.utils_dialog import (
     show_error_dialog_with_helpdesk_message,
 )
 
+_original_excepthook: Optional[
+    Callable[[type[BaseException], BaseException, Any], None]
+] = None
+
+
+class ErrorSignals(QObject):
+    error_occurred = pyqtSignal(str)  # Signal with error message
+
+
+error_signals = ErrorSignals()
+
+
+def _plugin_excepthook(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_traceback: Any,
+) -> None:
+    """Handle uncaught exceptions from the plugin."""
+    # Check if this exception is from our plugin
+    if any(
+        "rana_qgis_plugin" in frame.filename
+        for frame in traceback.extract_tb(exc_traceback)
+    ):
+        message: str = "".join(
+            traceback.format_exception(exc_type, exc_value, exc_traceback)
+        )
+        error_signals.error_occurred.emit(message)
+        # Don't call the original exception hook for our plugin errors
+        return
+
+    # For other exceptions, use the original handler
+    if _original_excepthook is not None:
+        _original_excepthook(exc_type, exc_value, exc_traceback)
+
+
+def install_exception_hook() -> None:
+    global _original_excepthook
+    _original_excepthook = sys.excepthook
+    sys.excepthook = _plugin_excepthook
+
 
 class RanaQgisPlugin:
     def __init__(self, iface):
@@ -62,6 +107,7 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
+        install_exception_hook()
         self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
@@ -384,9 +430,10 @@ class RanaQgisPlugin:
             self.loader.schematisation_upload_finished.connect(
                 self.rana_browser.refresh
             )
-            self.loader.unknown_error_raised.connect(
+            error_signals.error_occurred.connect(
                 show_error_dialog_with_helpdesk_message
             )
+            error_signals.error_occurred.connect(self.rana_browser.enable)
             self.loader.unknown_error_raised.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(

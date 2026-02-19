@@ -1,7 +1,6 @@
 import os
-import traceback
 from copy import deepcopy
-from functools import partial, wraps
+from functools import partial
 from pathlib import Path
 from typing import Optional
 
@@ -86,55 +85,8 @@ from rana_qgis_plugin.workers import (
 
 STYLE_DIR = Path(__file__).parent / "styles"
 
-QObjectMeta = type(QObject)
 
-
-class PyQtSlotExceptionHandlingMeta(QObjectMeta):
-    """Metaclass that adds exception handling only to pyqtSlot methods"""
-
-    def __new__(mcs, name, bases, attrs):
-        # Add the process_failed signal if it doesn't exist
-        if "process_failed" not in attrs:
-            attrs["process_failed"] = pyqtSignal(str, str)
-
-        # Process all methods in the class that are decorated with aa pyqtSlot
-        for attr_name, attr_value in list(attrs.items()):
-            if callable(
-                attr_value
-            ) and PyQtSlotExceptionHandlingMeta.is_pyqtslot_method(attr_value):
-                attrs[attr_name] = PyQtSlotExceptionHandlingMeta.add_exception_handling(
-                    attr_value
-                )
-
-        # Create the class
-        return super().__new__(mcs, name, bases, attrs)
-
-    @staticmethod
-    def is_pyqtslot_method(method):
-        """Check if a method is decorated with pyqtSlot"""
-        return hasattr(method, "__pyqtSignature__")
-
-    @staticmethod
-    def add_exception_handling(method):
-        """Add exception handling to a method while preserving pyqtSlot functionality"""
-
-        @wraps(method)
-        def wrapper(self, *args, **kwargs):
-            try:
-                return method(self, *args, **kwargs)
-            except Exception as e:
-                # Get the full traceback as a separate string
-                tb = traceback.format_exc()
-
-                # Emit the signal with separate error message and traceback
-                self.unknown_error_raised.emit(tb)
-
-        wrapper.__pyqtSignature__ = getattr(method, "__pyqtSignature__", None)
-        return wrapper
-
-
-class Loader(QObject, metaclass=PyQtSlotExceptionHandlingMeta):
-    unknown_error_raised = pyqtSignal(str)
+class Loader(QObject):
     file_download_finished = pyqtSignal(str)
     file_download_failed = pyqtSignal(str)
     file_download_progress = pyqtSignal(int, str)
