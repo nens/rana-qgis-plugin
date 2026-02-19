@@ -1077,12 +1077,14 @@ class RanaBrowser(QWidget):
 
     @pyqtSlot()
     def enable(self):
-        self.breadcrumbs_stack.currentWidget().setEnabled(True)
+        for i in range(self.breadcrumbs_stack.count()):
+            self.breadcrumbs_stack.widget(i).setEnabled(True)
         self.rana_browser.setEnabled(True)
 
     @pyqtSlot()
     def disable(self):
-        self.breadcrumbs_stack.currentWidget().setEnabled(False)
+        for i in range(self.breadcrumbs_stack.count()):
+            self.breadcrumbs_stack.widget(i).setEnabled(False)
         self.rana_browser.setEnabled(False)
 
     def on_project_tab_changed(self, index):
