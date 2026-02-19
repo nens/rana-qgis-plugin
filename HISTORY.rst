@@ -5,7 +5,7 @@ History
 1.2.6 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Fix incorrect enabling of breadcrumbs when automatically switching tabs (nens/rana#3612)
 
 
 1.2.5 (2026-02-18)
