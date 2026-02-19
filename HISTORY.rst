@@ -5,6 +5,7 @@ History
 1.2.7 (unreleased)
 ------------------
 
+- Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
 - Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
 - Create model when creating new schematisation (nens/rana#3533)
 - Add cancel button for running simulations (nens/rana-qgis-plugin#235)

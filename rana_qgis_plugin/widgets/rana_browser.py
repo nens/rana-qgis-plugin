@@ -754,6 +754,7 @@ class RanaBrowser(QWidget):
     request_monitoring_project_jobs = pyqtSignal(str)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    view_file_after_open = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -902,6 +903,8 @@ class RanaBrowser(QWidget):
         self.files_browser.file_selected.connect(
             self.file_view.show_selected_file_details
         )
+        # Show file details after opening a file
+        self.view_file_after_open.connect(self.files_browser.file_selected.emit)
         # Connect upload button
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
