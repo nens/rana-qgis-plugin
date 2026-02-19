@@ -1053,7 +1053,9 @@ class Loader(QObject):
             # Search GeoPackage database tables for attributes with file paths.
             paths = new_schematisation_wizard.get_paths_from_geopackage(db_path)
 
-            self.save_initial_revision(new_schematisation, local_schematisation, paths)
+            self.save_initial_revision(
+                project, new_schematisation, local_schematisation, paths
+            )
 
         if rana_path:
             file_path = rana_path + new_schematisation.name
@@ -1222,8 +1224,10 @@ class Loader(QObject):
             clear_msg_bar=True,
         )
 
-    @pyqtSlot(dict, dict, dict, dict)
-    def save_initial_revision(self, schematisation, local_schematisation, raster_paths):
+    @pyqtSlot(dict, dict, dict, dict, dict)
+    def save_initial_revision(
+        self, project, schematisation, local_schematisation, raster_paths
+    ):
         raster_dir = local_schematisation.wip_revision.raster_dir
 
         selected_files = {
@@ -1268,7 +1272,7 @@ class Loader(QObject):
             "selected_files": selected_files,
             "commit_message": "Initial commit",
             "create_revision": True,
-            "make_3di_model": False,
+            "make_3di_model": True,
             "cb_inherit_templates": False,
         }
 
@@ -1279,6 +1283,14 @@ class Loader(QObject):
             local_schematisation,
             upload_template,
         )
+        upload_worker.signals.create_model_requested.connect(
+            lambda revision_id: self.start_model_tracker_process(
+                project,
+                schematisation.to_dict(),
+                revision_id,
+            )
+        )
+
         upload_worker.signals.thread_finished.connect(
             self.schematisation_upload_finished
         )
