@@ -583,3 +583,10 @@ def get_project_jobs(project_id: str):
         return network_manager.content
     else:
         return None
+
+
+def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional[str]:
+    processes = get_tenant_processes(communication)
+    for process in processes:
+        if tag in process["tags"]:
+            return process["id"]

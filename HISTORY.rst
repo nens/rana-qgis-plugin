@@ -5,7 +5,7 @@ History
 1.2.7 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Add cancel button for running simulations (nens/rana-qgis-plugin#235)
 
 
 1.2.6 (2026-02-19)
