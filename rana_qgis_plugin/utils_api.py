@@ -415,6 +415,21 @@ def get_vector_style_upload_urls(descriptor_id: str):
         return None
 
 
+def get_raster_style_upload_urls(descriptor_id: str, files):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.put_multipart(files=files)
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
 def get_style_file(source_type: str, descriptor_id: str, file_name: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

@@ -264,6 +264,9 @@ class RanaQgisPlugin:
             self.rana_browser.save_vector_styling_selected.connect(
                 self.loader.save_vector_style
             )
+            self.rana_browser.save_raster_styling_selected.connect(
+                self.loader.save_raster_style
+            )
             self.rana_browser.upload_new_file_selected.connect(
                 self.rana_browser.disable
             )
@@ -297,6 +300,9 @@ class RanaQgisPlugin:
             )
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_vector_styling_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.save_raster_styling_selected.connect(
                 self.rana_browser.disable
             )
             self.loader.download_results_cancelled.connect(self.rana_browser.enable)
@@ -350,6 +356,9 @@ class RanaQgisPlugin:
             self.loader.vector_style_finished.connect(self.rana_browser.enable)
             self.loader.vector_style_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
+            self.loader.raster_style_finished.connect(self.rana_browser.enable)
+            self.loader.raster_style_finished.connect(self.rana_browser.refresh)
+            self.loader.raster_style_failed.connect(self.rana_browser.enable)
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
