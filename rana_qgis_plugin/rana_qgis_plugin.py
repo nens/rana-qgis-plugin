@@ -31,7 +31,9 @@ from rana_qgis_plugin.widgets.about_rana_dialog import AboutRanaDialog
 from rana_qgis_plugin.widgets.rana_browser import RanaBrowser
 from rana_qgis_plugin.widgets.settings_dialog import SettingsDialog
 from rana_qgis_plugin.widgets.tenant_selection_dialog import TenantSelectionDialog
-from rana_qgis_plugin.widgets.utils_dialog import SimpleErrorDialog
+from rana_qgis_plugin.widgets.utils_dialog import (
+    show_error_dialog_with_helpdesk_message,
+)
 
 
 class RanaQgisPlugin:
@@ -124,10 +126,6 @@ class RanaQgisPlugin:
                 self.login()
                 if self.rana_browser:
                     self.rana_browser.refresh()
-
-    def open_error_dialog(self, error_message: str, trace: str):
-        dialog = SimpleErrorDialog(error_message, trace, parent=self.iface.mainWindow())
-        dialog.exec()
 
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
@@ -372,7 +370,9 @@ class RanaQgisPlugin:
             self.loader.schematisation_upload_finished.connect(
                 self.rana_browser.refresh
             )
-            self.loader.unknown_error_raised.connect(self.open_error_dialog)
+            self.loader.unknown_error_raised.connect(
+                show_error_dialog_with_helpdesk_message
+            )
             self.loader.unknown_error_raised.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(

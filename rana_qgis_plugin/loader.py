@@ -128,14 +128,14 @@ class PyQtSlotExceptionHandlingMeta(QObjectMeta):
                 tb = traceback.format_exc()
 
                 # Emit the signal with separate error message and traceback
-                self.unknown_error_raised.emit(error_message, tb)
+                self.unknown_error_raised.emit(tb)
 
         wrapper.__pyqtSignature__ = getattr(method, "__pyqtSignature__", None)
         return wrapper
 
 
 class Loader(QObject, metaclass=PyQtSlotExceptionHandlingMeta):
-    unknown_error_raised = pyqtSignal(str, str)
+    unknown_error_raised = pyqtSignal(str)
     file_download_finished = pyqtSignal(str)
     file_download_failed = pyqtSignal(str)
     file_download_progress = pyqtSignal(int, str)

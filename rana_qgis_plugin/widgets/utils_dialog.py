@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
+from qgis.PyQt.QtCore import Qt
 
 
 class SimpleErrorDialog(QDialog):
@@ -22,6 +23,10 @@ class SimpleErrorDialog(QDialog):
         # Error message at the top
         error_label = QLabel(error_message)
         error_label.setWordWrap(True)
+        error_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        error_label.setCursor(Qt.IBeamCursor)
         main_layout.addWidget(error_label)
 
         # Traceback text box with monospace font
@@ -66,3 +71,9 @@ class SimpleErrorDialog(QDialog):
     def copy_traceback(self):
         """Copy the traceback to clipboard"""
         QApplication.clipboard().setText(self.trace)
+
+
+def show_error_dialog_with_helpdesk_message(trace):
+    msg = "An unhandled error occurred. Please contact the helpdesk via support@ranawaterintelligence.com and include a copy of this error in your message."
+    dialog = SimpleErrorDialog(msg, trace)
+    dialog.exec()
