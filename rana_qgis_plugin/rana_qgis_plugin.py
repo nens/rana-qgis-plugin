@@ -252,6 +252,9 @@ class RanaQgisPlugin:
             self.loader.project_job_updated.connect(
                 self.rana_browser.project_job_updated.emit
             )
+            self.rana_browser.processes_browser.cancel_simulation.connect(
+                self.loader.cancel_simulation
+            )
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)

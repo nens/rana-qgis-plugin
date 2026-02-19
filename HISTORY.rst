@@ -2,10 +2,19 @@ History
 =======
 
 
-1.2.6 (unreleased)
+1.2.7 (unreleased)
 ------------------
 
 - Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
+- Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
+- Create model when creating new schematisation (nens/rana#3533)
+- Add cancel button for running simulations (nens/rana-qgis-plugin#235)
+
+
+1.2.6 (2026-02-19)
+------------------
+
+- Fix incorrect enabling of breadcrumbs when automatically switching tabs (nens/rana#3612)
 
 
 1.2.5 (2026-02-18)
