@@ -31,6 +31,9 @@ from rana_qgis_plugin.widgets.about_rana_dialog import AboutRanaDialog
 from rana_qgis_plugin.widgets.rana_browser import RanaBrowser
 from rana_qgis_plugin.widgets.settings_dialog import SettingsDialog
 from rana_qgis_plugin.widgets.tenant_selection_dialog import TenantSelectionDialog
+from rana_qgis_plugin.widgets.utils_dialog import (
+    show_error_dialog_with_helpdesk_message,
+)
 
 
 class RanaQgisPlugin:
@@ -381,6 +384,10 @@ class RanaQgisPlugin:
             self.loader.schematisation_upload_finished.connect(
                 self.rana_browser.refresh
             )
+            self.loader.unknown_error_raised.connect(
+                show_error_dialog_with_helpdesk_message
+            )
+            self.loader.unknown_error_raised.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
