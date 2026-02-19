@@ -2,9 +2,26 @@ History
 =======
 
 
-1.2.5 (unreleased)
+1.2.7 (unreleased)
 ------------------
 
+- Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
+- Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
+- Create model when creating new schematisation (nens/rana#3533)
+- Add cancel button for running simulations (nens/rana-qgis-plugin#235)
+- Handle uncaught errors via pyqt signals (nens/rana-qgis-plugin#254)
+
+
+1.2.6 (2026-02-19)
+------------------
+
+- Fix incorrect enabling of breadcrumbs when automatically switching tabs (nens/rana#3612)
+
+
+1.2.5 (2026-02-18)
+------------------
+
+- Added raster styling (nens/rana#2524)
 - Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125)
 - Add option to convert shapefile to geopackage when uploading (nens/rana#3445)
 - Fixed that uploaded vector or raster file is loaded twice into QGIS (#267)
@@ -16,7 +33,7 @@ History
 - Disable breadcrumbs when RanaBrowser is disabled
 - Create threedi models via rana process (nens/rana-qgis-plugin#258)
 - Download styling for raster and vector files (nens/rana-qgis-plugin#274)
-- Handle uncaught errors via pyqt signals (nens/rana-qgis-plugin#254)
+- Fix broken file upload for existing files (nens/rana#3592)
 
 
 1.2.4 (2026-01-28)

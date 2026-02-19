@@ -735,6 +735,7 @@ class RanaBrowser(QWidget):
     open_in_qgis_selected = pyqtSignal(dict, dict)
     upload_file_selected = pyqtSignal(dict, dict)
     save_vector_styling_selected = pyqtSignal(dict, dict)
+    save_raster_styling_selected = pyqtSignal(dict, dict)
     upload_new_file_selected = pyqtSignal(dict, dict)
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
@@ -753,6 +754,7 @@ class RanaBrowser(QWidget):
     request_monitoring_project_jobs = pyqtSignal(str)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    view_file_after_open = pyqtSignal(dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -901,6 +903,8 @@ class RanaBrowser(QWidget):
         self.files_browser.file_selected.connect(
             self.file_view.show_selected_file_details
         )
+        # Show file details after opening a file
+        self.view_file_after_open.connect(self.files_browser.file_selected.emit)
         # Connect upload button
         self.files_browser.btn_upload.clicked.connect(
             lambda _,: self.upload_new_file_selected.emit(
@@ -921,6 +925,10 @@ class RanaBrowser(QWidget):
             (
                 file_signals.save_vector_styling_requested,
                 self.save_vector_styling_selected,
+            ),
+            (
+                file_signals.save_raster_styling_requested,
+                self.save_raster_styling_selected,
             ),
             (file_signals.open_wms_requested, self.open_wms_selected),
             (file_signals.download_file_requested, self.download_file_selected),
@@ -1072,12 +1080,14 @@ class RanaBrowser(QWidget):
 
     @pyqtSlot()
     def enable(self):
-        self.breadcrumbs_stack.currentWidget().setEnabled(True)
+        for i in range(self.breadcrumbs_stack.count()):
+            self.breadcrumbs_stack.widget(i).setEnabled(True)
         self.rana_browser.setEnabled(True)
 
     @pyqtSlot()
     def disable(self):
-        self.breadcrumbs_stack.currentWidget().setEnabled(False)
+        for i in range(self.breadcrumbs_stack.count()):
+            self.breadcrumbs_stack.widget(i).setEnabled(False)
         self.rana_browser.setEnabled(False)
 
     def on_project_tab_changed(self, index):
