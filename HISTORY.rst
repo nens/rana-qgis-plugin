@@ -9,6 +9,7 @@ History
 - Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
 - Create model when creating new schematisation (nens/rana#3533)
 - Add cancel button for running simulations (nens/rana-qgis-plugin#235)
+- Handle uncaught errors via pyqt signals (nens/rana-qgis-plugin#254)
 
 
 1.2.6 (2026-02-19)
