@@ -1173,6 +1173,7 @@ class UploadWorkerSignals(QObject):
     )  # task name, task progress, total progress
     upload_canceled = pyqtSignal(int)
     revision_committed = pyqtSignal()
+    create_model_requested = pyqtSignal(int, bool)
 
 
 class SchematisationUploadProgressWorker(QRunnable):
@@ -1442,37 +1443,7 @@ class SchematisationUploadProgressWorker(QRunnable):
                 err = RevisionUploadError(error_msg)
                 raise err
         # Create 3Di model
-        model = self.tc.create_schematisation_revision_3di_model(
-            self.schematisation.id, self.revision.id, inherit_templates
-        )
-        model_id = model.id
-        finished_tasks = {
-            "make_gridadmin": False,
-            "make_tables": False,
-            "make_aggregations": False,
-            "make_cog": False,
-            "make_geojson": False,
-            "make_simulation_templates": False,
-        }
-        expected_tasks_number = len(finished_tasks)
-        while not all(finished_tasks.values()):
-            model_tasks = self.tc.fetch_3di_model_tasks(model_id)
-            for task in model_tasks:
-                task_status = task.status
-                if task_status == ThreediModelTaskStatus.SUCCESS.value:
-                    finished_tasks[task.name] = True
-                elif task_status == ThreediModelTaskStatus.FAILURE.value:
-                    err = RevisionUploadError(task.detail["message"])
-                    raise err
-            model = self.tc.fetch_3di_model(model_id)
-            if getattr(model, "is_valid", False):
-                finished_tasks = {
-                    task_name: True for task_name in finished_tasks.keys()
-                }
-            finished_tasks_count = len([val for val in finished_tasks.values() if val])
-            self.monitor_upload_progress(finished_tasks_count, expected_tasks_number)
-            if finished_tasks_count != expected_tasks_number:
-                time.sleep(self.TASK_CHECK_INTERVAL)
+        self.signals.create_model_requested.emit(self.revision.id, inherit_templates)
 
     def report_upload_progress(self):
         """Report upload progress."""

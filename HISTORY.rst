@@ -2,7 +2,46 @@ History
 =======
 
 
-1.2.3 (unreleased)
+1.2.7 (unreleased)
+------------------
+
+- Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
+- Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
+- Create model when creating new schematisation (nens/rana#3533)
+- Add cancel button for running simulations (nens/rana-qgis-plugin#235)
+
+
+1.2.6 (2026-02-19)
+------------------
+
+- Fix incorrect enabling of breadcrumbs when automatically switching tabs (nens/rana#3612)
+
+
+1.2.5 (2026-02-18)
+------------------
+
+- Added raster styling (nens/rana#2524)
+- Add downloaded waterdepth map to QGIS project as maplayer (nens/rana#3125)
+- Add option to convert shapefile to geopackage when uploading (nens/rana#3445)
+- Fixed that uploaded vector or raster file is loaded twice into QGIS (#267)
+- Disable moving of columns in projects and files browsers (nens/rana3444)
+- Limit list of organisations shown in simulation wizard to the threedi organisations linked to the rana organisations (nens/rana-qgis-plugin#243)
+- Several improvements to information shown for a rana schematisation file (nens/rana-qgis-plugin#253)
+- Added status to file detail view (red for failed processing) and added additional checks (nens/rana-qgis-plugin#3496)
+- Reset RanaBrowser on switching organisation (nens/rana#3438)
+- Disable breadcrumbs when RanaBrowser is disabled
+- Create threedi models via rana process (nens/rana-qgis-plugin#258)
+- Download styling for raster and vector files (nens/rana-qgis-plugin#274)
+- Fix broken file upload for existing files (nens/rana#3592)
+
+
+1.2.4 (2026-01-28)
+------------------
+
+- Show a link to creating a new project when no projects are available (#3398)
+
+
+1.2.3 (2026-01-23)
 ------------------
 
 - Show warning when M&S plugin is enabled when Rana plugin is started (#3320)

@@ -1,5 +1,7 @@
+import copy
 import io
 import json
+import math
 import os
 import zipfile
 from pathlib import Path
@@ -8,14 +10,25 @@ from typing import List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
+from bridgestyle.qgis import togeostyler
 from qgis.core import Qgis, QgsMessageLog, QgsProject
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal, pyqtSlot
 from threedi_mi_utils import bypass_max_path_limit
 
-from .utils import build_vrt, get_local_file_path, image_to_bytes, split_scenario_extent
+from rana_qgis_plugin.utils_lizard import import_from_geostyler
+
+from .utils import (
+    build_vrt,
+    get_local_file_path,
+    image_to_bytes,
+    split_scenario_extent,
+)
 from .utils_api import (
     finish_file_upload,
+    get_project_jobs,
     get_raster_file_link,
+    get_raster_style_file,
+    get_raster_style_upload_urls,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
@@ -69,8 +82,11 @@ class FileDownloadWorker(QThread):
                             self.progress.emit(progress, "")
                             previous_progress = progress
             # Fetch and extract the QML zip for vector files
-            if self.file["data_type"] == "vector":
-                qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+            if self.file["data_type"] in ["vector", "raster"]:
+                if self.file["data_type"] == "raster":
+                    qml_zip_content = get_raster_style_file(descriptor_id, "qml.zip")
+                else:
+                    qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
                 if qml_zip_content:
                     stream = io.BytesIO(qml_zip_content)
                     if zipfile.is_zipfile(stream):
@@ -124,15 +140,14 @@ class FileUploadWorker(QThread):
     def upload_single_file(
         self, local_path: Path, progress_start, progress_step
     ) -> bool:
-        online_path = self.online_dir + local_path.name
-
+        online_path = f"{self.online_dir}{local_path.name}"
         # Check if file exists locally before uploading
         if not local_path.exists():
             self.failed.emit(f"File not found: {local_path}")
             return False
 
         # Handle file conflict
-        continue_upload = self.handle_file_conflict(local_path)
+        continue_upload = self.handle_file_conflict(online_path)
         if not continue_upload:
             return False
 
@@ -172,20 +187,21 @@ class ExistingFileUploadWorker(FileUploadWorker):
     """Worker thread for uploading files."""
 
     def __init__(self, project: dict, file: dict):
-        super().__init__(
-            project, get_local_file_path(project["slug"], file["id"])[1], file["id"]
-        )
+        local_file = Path(get_local_file_path(project["slug"], file["id"])[1])
+        if "/" not in file["id"]:
+            online_dir = ""
+        else:
+            online_dir = file["id"][: file["id"].rindex("/") + 1]
+        super().__init__(project, [local_file], online_dir)
 
         self.file_overwrite = False
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
         self.finished.connect(self._finish)
 
-    def handle_file_conflict(self):
+    def handle_file_conflict(self, online_path):
         local_last_modified = QSettings().value(self.last_modified_key)
-        server_file = get_tenant_project_file(
-            self.project["id"], {"path": self.online_dir}
-        )
+        server_file = get_tenant_project_file(self.project["id"], {"path": online_path})
         if not server_file:
             self.failed.emit(
                 "Failed to get file from server. Check if file has been moved or deleted."
@@ -323,6 +339,115 @@ class VectorStyleWorker(QThread):
             os.remove(zip_path)
 
             # Finish
+            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+        except Exception as e:
+            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+
+
+class RasterStyleWorker(QThread):
+    """Worker thread for generating and uploading raster styling files"""
+
+    finished = pyqtSignal(str)
+    failed = pyqtSignal(str)
+    warning = pyqtSignal(str)
+
+    def __init__(
+        self,
+        project: dict,
+        file: dict,
+    ):
+        super().__init__()
+        self.project = project
+        self.file = file
+
+    @pyqtSlot()
+    def run(self):
+        if not self.file:
+            self.failed.emit("File not found.")
+            return
+        path = self.file["id"]
+        file_name = os.path.basename(path.rstrip("/"))
+        descriptor_id = self.file["descriptor_id"]
+        all_layers = QgsProject.instance().mapLayers().values()
+        layers = [layer for layer in all_layers if file_name in layer.source()]
+
+        if not layers:
+            self.failed.emit(
+                f"No layers found for {file_name}. Open the file in QGIS and try again."
+            )
+            return
+
+        if not len(layers) == 1:
+            self.failed.emit(
+                f"Multiple layers found for {file_name}. Open the file in QGIS and try again."
+            )
+            return
+
+        layer = layers[0]
+
+        # Save QML style files for each layer to local directory
+        local_dir, _ = get_local_file_path(self.project["slug"], path)
+        os.makedirs(local_dir, exist_ok=True)
+
+        qml_file_name = os.path.splitext(layer.name())[0] + ".qml"
+        qml_path = os.path.join(local_dir, qml_file_name)
+        layer.saveNamedStyle(str(qml_path))
+        zip_path = os.path.join(local_dir, "qml.zip")
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            zipf.write(qml_path, qml_file_name)
+
+        # Raster styling to geostyler, and then to lizard styling
+        try:
+            geostyler, _, _, warnings = togeostyler.convert(layer)
+            if len(geostyler["rules"]) != 1:
+                self.failed.emit(f"Multiple rules found for {file_name}.")
+                return
+            if len(geostyler["rules"][0]["symbolizers"]) != 1:
+                self.failed.emit(f"Multiple symbolizers found for {file_name}.")
+                return
+
+            lizard_styling = import_from_geostyler(
+                geostyler["rules"][0]["symbolizers"][0]
+            )
+
+            # Do some corrections and checks
+            labels = copy.deepcopy(lizard_styling.get("labels", {}))
+            for language, ranges in labels.items():
+                new_labels = []
+                for quantity, label in ranges:
+                    if math.isinf(quantity):
+                        warnings.append(
+                            f"Label '{label}' with infinite quantity cannot be used and will be ignored."
+                        )
+                    else:
+                        new_labels.append([quantity, label])
+
+                lizard_styling["labels"][language] = new_labels
+
+            if lizard_styling["type"] == "DiscreteColormap":
+                for entry, _ in lizard_styling["data"]:
+                    if isinstance(entry, float):
+                        self.failed.emit(
+                            f"Failed to generate and upload styling files: DiscreteColormap cannot contain float quantities."
+                        )
+                        return
+
+            if warnings:
+                self.warning.emit(", ".join(set(warnings)))
+
+            lizard_styling_path = os.path.join(local_dir, "colormap.json")
+            with open(lizard_styling_path, "w") as f:
+                json.dump(lizard_styling, f)
+
+            files = [
+                ("files", "colormap.json", lizard_styling_path, "application/json"),
+                ("files", "qml.zip", zip_path, "application/zip"),
+            ]
+            get_raster_style_upload_urls(descriptor_id, files)
+
+            os.remove(zip_path)
+            os.remove(lizard_styling_path)
+
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
@@ -613,3 +738,49 @@ class LizardResultDownloadWorker(QThread):
 
         if not task_failed:
             self.finished.emit(self.project, self.file, self.target_folder)
+
+
+class ProjectJobMonitorWorker(QThread):
+    failed = pyqtSignal(str)
+    jobs_added = pyqtSignal(list)
+    job_updated = pyqtSignal(dict)
+
+    def __init__(self, project_id, parent=None):
+        super().__init__(parent)
+        self.active_jobs = {}
+        self.project_id = project_id
+        self._stop_flag = False
+
+    def run(self):
+        # initialize active jobs
+        self.update_jobs()
+        while not self._stop_flag:
+            self.update_jobs()
+            # Process contains a single api call, so every second should be fine
+            QThread.sleep(1)
+
+    def stop(self):
+        """Gracefully stop the worker"""
+        self._stop_flag = True
+        self.wait()
+
+    def update_jobs(self):
+        response = get_project_jobs(self.project_id)
+        if not response:
+            return
+        current_jobs = response["items"]
+        new_jobs = {
+            job["id"]: job for job in current_jobs if job["id"] not in self.active_jobs
+        }
+        self.jobs_added.emit(list(new_jobs.values()))
+        self.active_jobs.update(new_jobs)
+        for job in current_jobs:
+            if job["id"] in new_jobs:
+                # new job cannot be updated
+                continue
+            if (
+                job["state"] != self.active_jobs[job["id"]]["state"]
+                or job["process"] != self.active_jobs[job["id"]]["process"]
+            ):
+                self.job_updated.emit(job)
+                self.active_jobs[job["id"]] = job

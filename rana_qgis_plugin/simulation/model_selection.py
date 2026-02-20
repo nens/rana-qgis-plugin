@@ -103,6 +103,12 @@ class ModelSelectionDialog(uicls, basecls):
         last_organisation = read_3di_settings("threedi/last_used_organisation")
         if last_organisation:
             self.organisations_box.setCurrentText(last_organisation)
+        if len(self.organisations) == 1:
+            self.label_6.hide()
+            self.organisations_box.hide()
+        else:
+            self.label_6.show()
+            self.organisations_box.show()
 
     def switch_to_model_organisation(self):
         """Switch to model organisation."""

@@ -1,5 +1,12 @@
 import os
+from pathlib import Path
 
+from qgis.core import (
+    Qgis,
+    QgsProject,
+    QgsVectorFileWriter,
+    QgsVectorLayer,
+)
 from qgis.utils import plugins
 
 
@@ -29,3 +36,37 @@ def is_loaded_in_schematisation_editor(local_schematisation_gpkg):
         )
     except KeyError:
         return None
+
+
+def convert_vectorfile_to_geopackage(
+    vector_path: str, layer_name: str = "default"
+) -> str:
+    """Returns the path of the resulting geopackage"""
+    layer = QgsVectorLayer(vector_path, layer_name, "ogr")
+    if not layer.isValid():
+        raise Exception("Layer failed to load")
+
+    options = QgsVectorFileWriter.SaveVectorOptions()
+    options.driverName = "GPKG"
+    options.layerName = layer_name
+    options.symbologyExport = Qgis.FeatureSymbologyExport.PerFeature
+
+    gpkg_path = str(Path(vector_path).with_suffix(".gpkg"))
+
+    error = QgsVectorFileWriter.writeAsVectorFormatV3(
+        layer, gpkg_path, QgsProject.instance().transformContext(), options
+    )
+
+    if error[0] != QgsVectorFileWriter.NoError:
+        raise Exception(error)
+
+    # Explicitly embed the style in the geopackage
+    gpkg_layer = QgsVectorLayer(
+        f"{gpkg_path}|layername={layer_name}", layer_name, "ogr"
+    )
+
+    gpkg_layer.saveStyleToDatabase(
+        name="default", description="", useAsDefault=True, uiFileContent=None
+    )
+
+    return gpkg_path

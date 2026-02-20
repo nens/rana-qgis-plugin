@@ -2,6 +2,7 @@ import os
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
+from typing import Optional
 
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
 from qgis.PyQt.QtCore import (
@@ -17,6 +18,7 @@ from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.auth import get_authcfg_id
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local import (
     SchematisationLoad,
@@ -41,14 +43,15 @@ from rana_qgis_plugin.utils import (
     add_layer_to_qgis,
     get_local_file_path,
     get_threedi_api,
+    get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
     add_threedi_schematisation,
     create_folder,
-    create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
+    get_process_id_for_tag,
     get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -62,6 +65,7 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
 )
 from rana_qgis_plugin.utils_qgis import (
+    convert_vectorfile_to_geopackage,
     get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
 )
@@ -74,8 +78,12 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
+    ProjectJobMonitorWorker,
+    RasterStyleWorker,
     VectorStyleWorker,
 )
+
+STYLE_DIR = Path(__file__).parent / "styles"
 
 
 class Loader(QObject):
@@ -89,6 +97,8 @@ class Loader(QObject):
     new_file_upload_finished = pyqtSignal(str)
     vector_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
+    raster_style_finished = pyqtSignal()
+    raster_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
     download_results_cancelled = pyqtSignal()
     schematisation_upload_cancelled = pyqtSignal()
@@ -107,13 +117,18 @@ class Loader(QObject):
     model_created = pyqtSignal()
     revision_saved = pyqtSignal()
     model_deleted = pyqtSignal()
+    project_jobs_added = pyqtSignal(list)
+    project_job_updated = pyqtSignal(dict)
+    file_opened = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
+        self.raster_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
+        self.project_job_monitor: QThread = None
         self.communication = communication
 
         # For simulations
@@ -123,6 +138,9 @@ class Loader(QObject):
         # For upload of schematisations
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
+
+    def __del__(self):
+        self.stop_project_job_monitoring()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -144,6 +162,7 @@ class Loader(QObject):
                         "wms",
                     )
                     QgsProject.instance().addMapLayer(rlayer)
+                self.file_opened.emit(file)
                 return True
 
         return False
@@ -195,6 +214,7 @@ class Loader(QObject):
             hcc_working_dir(),
             get_threedi_api(),
         )
+        self.file_opened.emit(file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -218,6 +238,7 @@ class Loader(QObject):
                 # Check whether result and gridadmin exist in the target folder
                 result_path = os.path.join(local_file_path, "results_3di.nc")
                 admin_path = os.path.join(local_file_path, "gridadmin.h5")
+                waterdepth_path = os.path.join(local_file_path, "max_waterdepth.tif")
                 if os.path.exists(result_path) and os.path.exists(admin_path):
                     if hasattr(ra_tool, "load_result"):
                         if self.communication.ask(
@@ -228,6 +249,18 @@ class Loader(QObject):
                             ra_tool.load_result(result_path, admin_path)
                             if not ra_tool.dockwidget.isVisible():
                                 ra_tool.toggle_results_manager.run()  # also does some initialisation
+                            if os.path.exists(waterdepth_path):
+                                # we only download non-temporal rasters, so always pick the first band
+                                waterdepth_layer = QgsRasterLayer(
+                                    waterdepth_path, "max_waterdepth.tif", "gdal"
+                                )
+                                waterdepth_layer.loadNamedStyle(
+                                    str(STYLE_DIR / "water_depth.qml")
+                                )
+                                if hasattr(waterdepth_layer.renderer(), "setBand"):
+                                    waterdepth_layer.renderer().setBand(1)
+                                waterdepth_layer.setName("max_waterdepth.tif")
+                                QgsProject.instance().addMapLayer(waterdepth_layer)
 
         else:
             schematisation = None
@@ -243,6 +276,7 @@ class Loader(QObject):
                 get_tenant_file_descriptor(file["descriptor_id"]),
                 schematisation,
             )
+        self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
@@ -381,27 +415,18 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unable to create folder {folder_name}")
 
-    @pyqtSlot(dict)
-    @pyqtSlot(dict, int)
-    def create_schematisation_revision_3di_model(self, file, revision_id=None):
-        tc = ThreediCalls(get_threedi_api())
+    @pyqtSlot(dict, dict)
+    @pyqtSlot(dict, dict, int)
+    def create_schematisation_revision_3di_model(self, project, file, revision_id=None):
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
         )
         if not revision_id:
             revision_id = schematisation["latest_revision"]["id"]
-        schematisation_id = schematisation["schematisation"]["id"]
-        try:
-            tc.create_schematisation_revision_3di_model(schematisation_id, revision_id)
-            self.model_created.emit()
-        except ApiException as e:
-            if e.status == 400:
-                QMessageBox.warning(
-                    QApplication.activeWindow(), "Warning", eval(e.body)[0]
-                )
-            else:
-                raise
+        self.start_model_tracker_process(
+            project, schematisation["schematisation"], revision_id
+        )
 
     @pyqtSlot(dict, int)
     def delete_schematisation_revision_3di_model(self, file, revision_id):
@@ -441,7 +466,17 @@ class Loader(QObject):
 
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
-        organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+        allowed_org_ids = get_threedi_organisations(self.communication)
+        organisations = {
+            org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
+        }
+
+        if len(organisations) == 0:
+            self.communication.show_warn(
+                "No organisation available for this simulation"
+            )
+            self.simulation_started_failed.emit()
+            return
 
         # Retrieve schematisation info
         schematisation = get_threedi_schematisation(
@@ -531,7 +566,7 @@ class Loader(QObject):
                     lizard_post_processing_overview,
                 )
             simulation_wizard.simulation_created.connect(
-                partial(self.start_process, project, file)
+                partial(self.start_simulation_tracker_process, project, file)
             )
             simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
@@ -540,14 +575,33 @@ class Loader(QObject):
             if simulation_wizard.exec() == QDialog.Rejected:
                 self.simulation_cancelled.emit()
 
-    def start_process(self, project, file, simulations):
+    def start_model_tracker_process(
+        self,
+        project,
+        schematisation,
+        revision_id: int,
+        inherit_from_previous_revision: bool = True,
+    ):
+        track_process = get_process_id_for_tag(self.communication, "model_tracker")
+        if track_process is None:
+            self.communication.log_err("No model tracker available")
+            return
+        params = {
+            "project_id": project["id"],
+            "inputs": {
+                "schematisation_id": schematisation["id"],
+                "revision_id": revision_id,
+                "inherit_from_previous_model": True,
+                "inherit_from_previous_revision": inherit_from_previous_revision,
+            },
+            "name": f"model_tracker_{schematisation['name']}_rev{revision_id}",
+        }
+        _ = start_tenant_process(self.communication, track_process, params)
+        self.model_created.emit()
+
+    def start_simulation_tracker_process(self, project, file, simulations):
         # Find the simulation tracker processes
-        processes = get_tenant_processes(self.communication)
-        track_process = None
-        for process in processes:
-            if "simulation_tracker" in process["tags"]:
-                track_process = process["id"]
-                break
+        track_process = get_process_id_for_tag(self.communication, "simulation_tracker")
 
         if track_process is None:
             self.communication.log_err("No simulation tracker available")
@@ -750,9 +804,9 @@ class Loader(QObject):
             None,
             "Open file(s)",
             last_saved_dir,
-            "All supported files (*.tif *.tiff *.gpkg *.sqlite);;"
+            "All supported files (*.tif *.tiff *.gpkg *.sqlite *.geojson *.shp);;"
             "Rasters (*.tif *.tiff);;"
-            "Vector files (*.gpkg *.sqlite)",
+            "Vector files (*.gpkg *.sqlite *.geojson *.shp)",
         )
         if not local_paths:
             self.loading_cancelled.emit()
@@ -762,6 +816,50 @@ class Loader(QObject):
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder",
             str(Path(local_paths[0]).parent),
         )
+
+        # Check whether something needs to be converted
+        try:
+            converted_paths = []
+            convert_all_files = False
+            for local_path in local_paths:
+                _, ext = os.path.splitext(local_path)
+                if ext == ".shp":
+                    if convert_all_files:
+                        converted_paths.append(
+                            convert_vectorfile_to_geopackage(local_path)
+                        )
+                    else:
+                        file_convert = UICommunication.custom_ask(
+                            self.parent(),
+                            "Shapefile not supported",
+                            f"Rana does not natively support shapefiles, would you like to convert it before uploading or cancel?",
+                            "Cancel",
+                            "Convert this file only",
+                            "Convert all shapefiles",
+                        )
+                        if file_convert == "Cancel":
+                            self.loading_cancelled.emit()
+                            return
+                        elif file_convert == "Convert all shapefiles":
+                            convert_all_files = True
+                            converted_paths.append(
+                                convert_vectorfile_to_geopackage(local_path)
+                            )
+                        else:
+                            converted_paths.append(
+                                convert_vectorfile_to_geopackage(local_path)
+                            )
+                else:
+                    # no conversion necessary
+                    converted_paths.append(local_path)
+
+        except Exception as e:
+            self.communication.bar_error(f"Error converting shapefiles: {str(e)}")
+            self.file_upload_failed.emit(str(e))
+            return
+
+        local_paths = converted_paths.copy()
+
         self.communication.bar_info("Start uploading file(s) to Rana...")
         online_dir = ""
         if file:
@@ -779,7 +877,6 @@ class Loader(QObject):
         self.new_file_upload_worker.finished.connect(
             partial(self.on_new_file_upload_finished, online_path)
         )
-        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
         self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
         if len(local_paths) == 1:
             self.new_file_upload_worker.failed.connect(
@@ -827,7 +924,7 @@ class Loader(QObject):
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
-
+        sender.deleteLater()
         self.file_upload_finished.emit()
 
     def on_new_file_upload_finished(self, online_path: str, project):
@@ -837,7 +934,6 @@ class Loader(QObject):
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
             self.initialize_file_download_worker(project, file)
-            self.file_download_worker.finished.connect(self.on_file_download_finished)
             self.file_download_worker.start()
         self.new_file_upload_finished.emit(online_path)
 
@@ -866,6 +962,21 @@ class Loader(QObject):
         self.vector_style_worker.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
 
+    @pyqtSlot(dict, dict)
+    def save_raster_style(self, project, file):
+        """Start the worker for saving raster styling files"""
+        self.communication.progress_bar(
+            "Generating and saving raster styling files...", clear_msg_bar=True
+        )
+        self.raster_style_worker = RasterStyleWorker(
+            project,
+            file,
+        )
+        self.raster_style_worker.finished.connect(self.on_raster_style_finished)
+        self.raster_style_worker.failed.connect(self.on_raster_style_failed)
+        self.raster_style_worker.warning.connect(self.communication.show_warn)
+        self.raster_style_worker.start()
+
     def on_vector_style_finished(self, msg: str):
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
@@ -875,6 +986,16 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
         self.vector_style_failed.emit(msg)
+
+    def on_raster_style_finished(self, msg: str):
+        self.communication.clear_message_bar()
+        self.communication.show_info(msg)
+        self.raster_style_finished.emit()
+
+    def on_raster_style_failed(self, msg: str):
+        self.communication.clear_message_bar()
+        self.communication.show_error(msg)
+        self.raster_style_failed.emit(msg)
 
     @pyqtSlot(dict, dict)
     def import_schematisation_to_rana(self, project, selected_file):
@@ -898,14 +1019,10 @@ class Loader(QObject):
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
             return
-        available_organisations = [
-            org.replace("-", "") for org in tenant_details["threedi_organisations"]
-        ]
         tc = ThreediCalls(threedi_api)
+        allowed_org_ids = get_threedi_organisations(self.communication)
         organisations = {
-            org.unique_id: org
-            for org in tc.fetch_organisations()
-            if org is not None and org.unique_id in available_organisations
+            org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
         }
 
         if len(organisations) == 0:
@@ -940,7 +1057,9 @@ class Loader(QObject):
             # Search GeoPackage database tables for attributes with file paths.
             paths = new_schematisation_wizard.get_paths_from_geopackage(db_path)
 
-            self.save_initial_revision(new_schematisation, local_schematisation, paths)
+            self.save_initial_revision(
+                project, new_schematisation, local_schematisation, paths
+            )
 
         if rana_path:
             file_path = rana_path + new_schematisation.name
@@ -1069,7 +1188,15 @@ class Loader(QObject):
                 local_schematisation,
                 new_upload,
             )
-
+            upload_worker.signals.create_model_requested.connect(
+                lambda revision_id,
+                inherit_from_previous_revision: self.start_model_tracker_process(
+                    project,
+                    schematisation.to_dict(),
+                    revision_id,
+                    inherit_from_previous_revision,
+                )
+            )
             upload_worker.signals.thread_finished.connect(
                 self.on_schematisation_upload_finished
             )
@@ -1101,8 +1228,10 @@ class Loader(QObject):
             clear_msg_bar=True,
         )
 
-    @pyqtSlot(dict, dict, dict, dict)
-    def save_initial_revision(self, schematisation, local_schematisation, raster_paths):
+    @pyqtSlot(dict, dict, dict, dict, dict)
+    def save_initial_revision(
+        self, project, schematisation, local_schematisation, raster_paths
+    ):
         raster_dir = local_schematisation.wip_revision.raster_dir
 
         selected_files = {
@@ -1147,7 +1276,7 @@ class Loader(QObject):
             "selected_files": selected_files,
             "commit_message": "Initial commit",
             "create_revision": True,
-            "make_3di_model": False,
+            "make_3di_model": True,
             "cb_inherit_templates": False,
         }
 
@@ -1158,6 +1287,14 @@ class Loader(QObject):
             local_schematisation,
             upload_template,
         )
+        upload_worker.signals.create_model_requested.connect(
+            lambda revision_id: self.start_model_tracker_process(
+                project,
+                schematisation.to_dict(),
+                revision_id,
+            )
+        )
+
         upload_worker.signals.thread_finished.connect(
             self.schematisation_upload_finished
         )
@@ -1168,3 +1305,34 @@ class Loader(QObject):
 
         self.upload_thread_pool.start(upload_worker)
         self.revision_saved.emit()
+
+    def stop_project_job_monitoring(self):
+        if self.project_job_monitor:
+            self.project_job_monitor.stop()
+
+    def start_project_job_monitoring(self, project_id):
+        self.stop_project_job_monitoring()
+        self.project_job_monitor = ProjectJobMonitorWorker(
+            project_id=project_id, parent=self
+        )
+        self.project_job_monitor.jobs_added.connect(self.project_jobs_added)
+        self.project_job_monitor.job_updated.connect(self.project_job_updated)
+        self.project_job_monitor.failed.connect(self.communication.show_warn)
+        self.project_job_monitor.start()
+
+    @pyqtSlot(int)
+    def cancel_simulation(self, simulation_pk):
+        confirm_cancel = QMessageBox.warning(
+            None,
+            "Cancel Simulation",
+            "Are you sure you want to cancel the simulation?",
+            QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm_cancel == QMessageBox.StandardButton.Yes:
+            tc = ThreediCalls(get_threedi_api())
+            tc.fetch_simulation_status(simulation_pk)
+            try:
+                tc.create_simulation_action(simulation_pk, name="shutdown")
+            except ApiException as e:
+                self.communication.show_error(f"Could not cancel simulation")

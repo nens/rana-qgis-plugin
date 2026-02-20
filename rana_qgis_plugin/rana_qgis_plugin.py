@@ -12,7 +12,6 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
 )
 
-import rana_qgis_plugin.widgets.info_dialog as info_dialog
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.auth_3di import setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
@@ -40,6 +39,7 @@ class RanaQgisPlugin:
         self.tenants = []
         self.dock_widget = None
         self.rana_browser = None
+        self.loader = None
         self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
         self.toolbar.setObjectName(PLUGIN_NAME)
         self.action = QAction(rana_icon, "Open Rana Panel", iface.mainWindow())
@@ -124,10 +124,6 @@ class RanaQgisPlugin:
                 if self.rana_browser:
                     self.rana_browser.refresh()
 
-    def open_info_dialog(self, dialog_class):
-        dialog = dialog_class(self.iface.mainWindow())
-        dialog.exec()
-
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
         dialog = TenantSelectionDialog(self.iface.mainWindow())
@@ -152,7 +148,7 @@ class RanaQgisPlugin:
                     f"Organisation set to: {selected_tenant_id}"
                 )
                 if self.rana_browser:
-                    self.rana_browser.refresh()
+                    self.rana_browser.reset()
 
     def add_rana_menu(self, show_authentication: bool):
         """Add Rana menu to the main menu bar."""
@@ -207,6 +203,9 @@ class RanaQgisPlugin:
         if self.dock_widget:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
+        if self.loader:
+            # ensure loader is deconstructed
+            del self.loader
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
@@ -217,7 +216,6 @@ class RanaQgisPlugin:
                 "M&S plugin detected",
                 "The Models & simulation plugin is still active, but it's replaced by the Rana plugin. Please disable the Models & Simulation plugin.",
             )
-
         if start_url:
             path_params, query_params = parse_url(start_url)
             if not self.login(path_params["tenant_id"]):
@@ -245,6 +243,18 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
+            self.rana_browser.request_monitoring_project_jobs.connect(
+                self.loader.start_project_job_monitoring
+            )
+            self.loader.project_jobs_added.connect(
+                self.rana_browser.project_jobs_added.emit
+            )
+            self.loader.project_job_updated.connect(
+                self.rana_browser.project_job_updated.emit
+            )
+            self.rana_browser.processes_browser.cancel_simulation.connect(
+                self.loader.cancel_simulation
+            )
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
@@ -253,6 +263,9 @@ class RanaQgisPlugin:
             )
             self.rana_browser.save_vector_styling_selected.connect(
                 self.loader.save_vector_style
+            )
+            self.rana_browser.save_raster_styling_selected.connect(
+                self.loader.save_raster_style
             )
             self.rana_browser.upload_new_file_selected.connect(
                 self.rana_browser.disable
@@ -287,6 +300,9 @@ class RanaQgisPlugin:
             )
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_vector_styling_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.save_raster_styling_selected.connect(
                 self.rana_browser.disable
             )
             self.loader.download_results_cancelled.connect(self.rana_browser.enable)
@@ -325,16 +341,13 @@ class RanaQgisPlugin:
             )
             self.rana_browser.save_revision_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
-            self.loader.revision_saved.connect(
-                lambda: self.open_info_dialog(info_dialog.SaveRevisionDialog)
-            )
-            self.loader.model_created.connect(
-                lambda: self.open_info_dialog(info_dialog.CreateModelDialog)
-            )
+            self.loader.model_created.connect(self.rana_browser.show_processes_overview)
             self.loader.simulation_started.connect(
-                lambda: self.open_info_dialog(info_dialog.RunSimulationDialog)
+                self.rana_browser.show_processes_overview
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
+            self.loader.file_opened.connect(self.rana_browser.view_file_after_open)
+            self.loader.file_download_finished.connect(self.rana_browser.refresh)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.refresh)
@@ -345,6 +358,9 @@ class RanaQgisPlugin:
             self.loader.vector_style_finished.connect(self.rana_browser.enable)
             self.loader.vector_style_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_failed.connect(self.rana_browser.enable)
+            self.loader.raster_style_finished.connect(self.rana_browser.enable)
+            self.loader.raster_style_finished.connect(self.rana_browser.refresh)
+            self.loader.raster_style_failed.connect(self.rana_browser.enable)
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
