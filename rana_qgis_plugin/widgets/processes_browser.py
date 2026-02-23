@@ -117,7 +117,6 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setWordWrap(True)
         self.processes_tv.setUniformRowHeights(False)
         self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.setContentsMargins(0, 0, 0, 0)
         self.processes_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.processes_tv.header().setSectionResizeMode(1, QHeaderView.Fixed)
         self.processes_tv.header().setSectionResizeMode(2, QHeaderView.Fixed)

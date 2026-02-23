@@ -73,6 +73,7 @@ from rana_qgis_plugin.utils_time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.file_view import FileView
 from rana_qgis_plugin.widgets.processes_browser import ProcessesBrowser
 from rana_qgis_plugin.widgets.projects_browser import ProjectsBrowser
+from rana_qgis_plugin.widgets.publications_browser import PublicationsBrowser
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
@@ -722,7 +723,7 @@ class FilesBreadcrumbsWidget(BreadcrumbsWidget):
         self.update()
 
 
-class ProcessBreadcrumbsWidget(BreadcrumbsWidget):
+class GenericBreadCrumbsWidget(BreadcrumbsWidget):
     def add_project(self, project_name):
         # folders can only be added after projects or a folder
         if self._items[-1].type in [BreadcrumbType.PROJECTS]:
@@ -752,8 +753,11 @@ class RanaBrowser(QWidget):
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
     request_monitoring_project_jobs = pyqtSignal(str)
+    request_monitoring_project_publications = pyqtSignal(str)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    project_publication_added = pyqtSignal(list)
+    project_publication_updated = pyqtSignal(dict)
     update_avatar_cache = pyqtSignal(list)
     view_file_after_open = pyqtSignal(dict)
 
@@ -804,15 +808,24 @@ class RanaBrowser(QWidget):
             avatar_cache=self.avatar_cache,
             parent=self,
         )
+        self.publications_browser = PublicationsBrowser(
+            communication=self.communication,
+            avatar_cache=self.avatar_cache,
+            parent=self,
+        )
         self.files_breadcrumbs = FilesBreadcrumbsWidget(
             communication=self.communication, parent=self
         )
-        self.processes_breadcrumbs = ProcessBreadcrumbsWidget(
+        self.processes_breadcrumbs = GenericBreadCrumbsWidget(
+            communication=self.communication, parent=self
+        )
+        self.publications_breadcrumbs = GenericBreadCrumbsWidget(
             communication=self.communication, parent=self
         )
         self.breadcrumbs_stack = QStackedWidget(self)
         self.breadcrumbs_stack.addWidget(self.files_breadcrumbs)
         self.breadcrumbs_stack.addWidget(self.processes_breadcrumbs)
+        self.breadcrumbs_stack.addWidget(self.publications_breadcrumbs)
         self.breadcrumbs_stack.setCurrentIndex(0)
         # set fixed height because the size hint of the stacked widget is not correct
         self.breadcrumbs_stack.setFixedHeight(25)
@@ -840,6 +853,11 @@ class RanaBrowser(QWidget):
         self.rana_processes = QStackedWidget()
         self.rana_processes.addWidget(self.processes_browser)
         self.project_widget.addTab(self.rana_processes, "Processes")
+        self.project_widget.currentChanged.connect(self.on_project_tab_changed)
+        # Create stacked widget for publications
+        self.rana_publications = QStackedWidget()
+        self.rana_publications.addWidget(self.publications_browser)
+        self.project_widget.addTab(self.rana_publications, "Publications")
         self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Setup top layout with logo and breadcrumbs
         top_layout = QHBoxLayout()
@@ -879,11 +897,19 @@ class RanaBrowser(QWidget):
         self.files_browser.busy.connect(lambda: self.disable)
         self.files_browser.ready.connect(lambda: self.enable)
 
+        # Connect widgets that use monitoring
         self.processes_browser.start_monitoring_project_jobs.connect(
             self.request_monitoring_project_jobs.emit
         )
         self.project_jobs_added.connect(self.processes_browser.add_items)
         self.project_job_updated.connect(self.processes_browser.update_job_state)
+        self.publications_browser.start_monitoring_project_publications.connect(
+            self.request_monitoring_project_publications.emit
+        )
+        self.project_publication_added.connect(self.publications_browser.add_items)
+        self.project_publication_updated.connect(self.publications_browser.update_item)
+        # TODO add publicaitons widget
+
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
@@ -895,6 +921,9 @@ class RanaBrowser(QWidget):
         )
         self.projects_browser.project_selected.connect(
             self.processes_browser.update_project
+        )
+        self.projects_browser.project_selected.connect(
+            self.publications_browser.update_project
         )
         self.projects_browser.project_selected.connect(self.file_view.update_project)
         # Show file details on selecting file
@@ -1008,6 +1037,11 @@ class RanaBrowser(QWidget):
                 selected_item["name"]
             )
         )
+        self.projects_browser.project_selected.connect(
+            lambda selected_item: self.publications_breadcrumbs.add_project(
+                selected_item["name"]
+            )
+        )
         self.files_browser.folder_selected.connect(self.files_breadcrumbs.add_folder)
         self.files_browser.file_selected.connect(
             lambda selected_item: self.files_breadcrumbs.add_file(
@@ -1034,15 +1068,20 @@ class RanaBrowser(QWidget):
         file_signals.view_all_revisions_requested.connect(
             lambda _: self.show_project_data(self.rana_files, 2)
         )
-        self.files_breadcrumbs.projects_selected.connect(self.show_projects_browser)
-        self.files_breadcrumbs.projects_selected.connect(
-            self.processes_breadcrumbs.back_to_root
-        )
-        self.processes_breadcrumbs.projects_selected.connect(self.show_projects_browser)
-        self.processes_breadcrumbs.projects_selected.connect(
-            self.files_breadcrumbs.back_to_root
-        )
-
+        # Ensure all breadcrumbs are reset on selecting project
+        for breadcrumb in [
+            self.files_breadcrumbs,
+            self.processes_breadcrumbs,
+            self.publications_breadcrumbs,
+        ]:
+            breadcrumb.projects_selected.connect(self.show_projects_browser)
+            for other_breadcrumb in [
+                self.files_breadcrumbs,
+                self.processes_breadcrumbs,
+                self.publications_breadcrumbs,
+            ]:
+                if other_breadcrumb != breadcrumb:
+                    breadcrumb.projects_selected.connect(other_breadcrumb.back_to_root)
         self.files_breadcrumbs.folder_selected.connect(
             lambda: self.show_project_data(self.rana_files, 0)
         )

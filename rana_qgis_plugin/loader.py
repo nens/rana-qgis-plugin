@@ -80,6 +80,7 @@ from rana_qgis_plugin.workers import (
     FileUploadWorker,
     LizardResultDownloadWorker,
     ProjectJobMonitorWorker,
+    PublicationMonitorWorker,
     RasterStyleWorker,
     VectorStyleWorker,
 )
@@ -120,6 +121,8 @@ class Loader(QObject):
     model_deleted = pyqtSignal()
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    project_publications_added = pyqtSignal(list)
+    project_publication_updated = pyqtSignal(dict)
     avatar_updated = pyqtSignal(str, "QPixmap")
     file_opened = pyqtSignal(dict)
 
@@ -131,6 +134,7 @@ class Loader(QObject):
         self.raster_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.project_job_monitor: QThread = None
+        self.project_publication_monitor: QThread = None
         self.communication = communication
 
         # For simulations
@@ -146,6 +150,7 @@ class Loader(QObject):
 
     def __del__(self):
         self.stop_project_job_monitoring()
+        self.stop_publication_monitoring()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -1324,6 +1329,24 @@ class Loader(QObject):
         self.project_job_monitor.job_updated.connect(self.project_job_updated)
         self.project_job_monitor.failed.connect(self.communication.show_warn)
         self.project_job_monitor.start()
+
+    def stop_publication_monitoring(self):
+        if self.project_publication_monitor:
+            self.project_publication_monitor.stop()
+
+    def start_publication_monitoring(self, project_id):
+        self.stop_publication_monitoring()
+        self.project_publication_monitor = PublicationMonitorWorker(
+            project_id=project_id, parent=self
+        )
+        self.project_publication_monitor.publications_added.connect(
+            self.project_publications_added
+        )
+        self.project_publication_monitor.publication_updated.connect(
+            self.project_publication_updated
+        )
+        self.project_publication_monitor.failed.connect(self.communication.show_warn)
+        self.project_publication_monitor.start()
 
     def initialize_avatar_worker(self, users):
         self.avatar_worker = AvatarWorker(self.communication, users)

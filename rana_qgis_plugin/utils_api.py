@@ -585,6 +585,20 @@ def get_project_jobs(project_id: str):
         return None
 
 
+def get_project_publications(project_id: str):
+    # TODO: add pagination
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    params = {"project_id": project_id, "limit": 100, "offset": 0}
+    url = f"{api_url()}/tenants/{tenant}/publications"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+    if status:
+        return network_manager.content
+    else:
+        return None
+
+
 def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional[str]:
     processes = get_tenant_processes(communication)
     for process in processes:

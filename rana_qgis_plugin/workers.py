@@ -36,6 +36,7 @@ from .utils import (
 from .utils_api import (
     finish_file_upload,
     get_project_jobs,
+    get_project_publications,
     get_raster_file_link,
     get_raster_style_file,
     get_raster_style_upload_urls,
@@ -794,6 +795,55 @@ class ProjectJobMonitorWorker(QThread):
             ):
                 self.job_updated.emit(job)
                 self.active_jobs[job["id"]] = job
+
+
+class PublicationMonitorWorker(QThread):
+    failed = pyqtSignal(str)
+    publications_added = pyqtSignal(list)
+    publication_updated = pyqtSignal(dict)
+
+    def __init__(self, project_id, parent=None):
+        super().__init__(parent)
+        self.monitored_publications = {}
+        self.project_id = project_id
+        self._stop_flag = False
+
+    def run(self):
+        # initialize active jobs
+        self.update_publications()
+        # TODO: find a way to handle stopping nicely with long sleep
+        while not self._stop_flag:
+            self.update_publications()
+            break
+            # QThread.sleep(2)
+
+    def stop(self):
+        """Gracefully stop the worker"""
+        self._stop_flag = True
+        self.wait()
+
+    def update_publications(self):
+        response = get_project_publications(self.project_id)
+        if not response:
+            return
+        current_publications = response["items"]
+        new_publications = {
+            publication["id"]: publication
+            for publication in current_publications
+            if publication["id"] not in self.monitored_publications
+        }
+        if new_publications:
+            self.publications_added.emit(list(new_publications.values()))
+        self.monitored_publications.update(new_publications)
+        for publication in current_publications:
+            if publication["id"] in new_publications:
+                continue
+            if (
+                publication["updated_at"]
+                != self.monitored_publications[publication["id"]]["updated_at"]
+            ):
+                self.publication_updated.emit(publication)
+                self.monitored_publications[publication["id"]] = publication
 
 
 # We need a separate signals class since QRunnable cannot have signals

@@ -250,12 +250,20 @@ class RanaQgisPlugin:
             self.loader.avatar_updated.connect(
                 self.rana_browser.avatar_cache.update_avatar
             )
-
             self.loader.project_jobs_added.connect(
                 self.rana_browser.project_jobs_added.emit
             )
             self.loader.project_job_updated.connect(
                 self.rana_browser.project_job_updated.emit
+            )
+            self.rana_browser.request_monitoring_project_publications.connect(
+                self.loader.start_publication_monitoring
+            )
+            self.loader.project_publications_added.connect(
+                self.rana_browser.project_publication_added.emit
+            )
+            self.loader.project_publication_updated.connect(
+                self.rana_browser.project_publication_updated.emit
             )
             self.rana_browser.processes_browser.cancel_simulation.connect(
                 self.loader.cancel_simulation
