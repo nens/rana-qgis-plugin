@@ -75,7 +75,6 @@ class JobData:
 
 
 class ProcessesBrowser(QWidget):
-    start_monitoring_project_jobs = pyqtSignal(str)
     cancel_simulation = pyqtSignal(int)
 
     def __init__(self, communication, avatar_cache, parent=None):
@@ -91,12 +90,9 @@ class ProcessesBrowser(QWidget):
         self.project = {}
 
     def update_project(self, project: dict):
-        # Remove cached data
         self.processes_model.removeRows(0, self.processes_model.rowCount())
         self.row_map.clear()
         self.project = project
-        # Start monitor jobs for the selected project
-        self.start_monitoring_project_jobs.emit(project["id"])
 
     def setup_ui(self):
         self.processes_model = QStandardItemModel()

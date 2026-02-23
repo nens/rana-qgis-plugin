@@ -30,8 +30,6 @@ from rana_qgis_plugin.widgets.utils_delegates import (
 
 
 class PublicationsBrowser(QWidget):
-    start_monitoring_project_publications = pyqtSignal(str)
-
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
         self.communication = communication
@@ -44,7 +42,6 @@ class PublicationsBrowser(QWidget):
         self.publications_model.removeRows(0, self.publications_model.rowCount())
         self.project = project
         self.row_map.clear()
-        self.start_monitoring_project_publications.emit(project["id"])
 
     def setup_ui(self):
         self.publications_model = QStandardItemModel()

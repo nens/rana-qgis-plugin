@@ -752,14 +752,13 @@ class RanaBrowser(QWidget):
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
-    request_monitoring_project_jobs = pyqtSignal(str)
-    request_monitoring_project_publications = pyqtSignal(str)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
     project_publication_added = pyqtSignal(list)
     project_publication_updated = pyqtSignal(dict)
     update_avatar_cache = pyqtSignal(list)
     view_file_after_open = pyqtSignal(dict)
+    project_changed = pyqtSignal(str)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -898,14 +897,8 @@ class RanaBrowser(QWidget):
         self.files_browser.ready.connect(lambda: self.enable)
 
         # Connect widgets that use monitoring
-        self.processes_browser.start_monitoring_project_jobs.connect(
-            self.request_monitoring_project_jobs.emit
-        )
         self.project_jobs_added.connect(self.processes_browser.add_items)
         self.project_job_updated.connect(self.processes_browser.update_job_state)
-        self.publications_browser.start_monitoring_project_publications.connect(
-            self.request_monitoring_project_publications.emit
-        )
         self.project_publication_added.connect(self.publications_browser.add_items)
         self.project_publication_updated.connect(self.publications_browser.update_item)
         # TODO add publicaitons widget
@@ -926,6 +919,9 @@ class RanaBrowser(QWidget):
             self.publications_browser.update_project
         )
         self.projects_browser.project_selected.connect(self.file_view.update_project)
+        self.projects_browser.project_selected.connect(
+            lambda project: self.project_changed.emit(project["id"])
+        )
         # Show file details on selecting file
         self.files_browser.file_selected.connect(
             self.file_view.show_selected_file_details

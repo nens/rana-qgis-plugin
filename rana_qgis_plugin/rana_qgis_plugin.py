@@ -243,9 +243,7 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
-            self.rana_browser.request_monitoring_project_jobs.connect(
-                self.loader.start_project_job_monitoring
-            )
+            self.rana_browser.project_changed.connect(self.loader.update_project)
             self.rana_browser.update_avatar_cache.connect(self.loader.update_avatars)
             self.loader.avatar_updated.connect(
                 self.rana_browser.avatar_cache.update_avatar
@@ -255,9 +253,6 @@ class RanaQgisPlugin:
             )
             self.loader.project_job_updated.connect(
                 self.rana_browser.project_job_updated.emit
-            )
-            self.rana_browser.request_monitoring_project_publications.connect(
-                self.loader.start_publication_monitoring
             )
             self.loader.project_publications_added.connect(
                 self.rana_browser.project_publication_added.emit

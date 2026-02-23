@@ -23,7 +23,6 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QPixmap
 from threedi_mi_utils import bypass_max_path_limit
 
-from rana_qgis_plugin.utils_api import get_user_image
 from rana_qgis_plugin.utils_lizard import import_from_geostyler
 from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 
@@ -35,8 +34,6 @@ from .utils import (
 )
 from .utils_api import (
     finish_file_upload,
-    get_project_jobs,
-    get_project_publications,
     get_raster_file_link,
     get_raster_style_file,
     get_raster_style_upload_urls,
@@ -749,101 +746,6 @@ class LizardResultDownloadWorker(QThread):
 
         if not task_failed:
             self.finished.emit(self.project, self.file, self.target_folder)
-
-
-class ProjectJobMonitorWorker(QThread):
-    failed = pyqtSignal(str)
-    jobs_added = pyqtSignal(list)
-    job_updated = pyqtSignal(dict)
-
-    def __init__(self, project_id, parent=None):
-        super().__init__(parent)
-        self.active_jobs = {}
-        self.project_id = project_id
-        self._stop_flag = False
-
-    def run(self):
-        # initialize active jobs
-        self.update_jobs()
-        while not self._stop_flag:
-            self.update_jobs()
-            # Process contains a single api call, so every second should be fine
-            QThread.sleep(1)
-
-    def stop(self):
-        """Gracefully stop the worker"""
-        self._stop_flag = True
-        self.wait()
-
-    def update_jobs(self):
-        response = get_project_jobs(self.project_id)
-        if not response:
-            return
-        current_jobs = response["items"]
-        new_jobs = {
-            job["id"]: job for job in current_jobs if job["id"] not in self.active_jobs
-        }
-        self.jobs_added.emit(list(new_jobs.values()))
-        self.active_jobs.update(new_jobs)
-        for job in current_jobs:
-            if job["id"] in new_jobs:
-                # new job cannot be updated
-                continue
-            if (
-                job["state"] != self.active_jobs[job["id"]]["state"]
-                or job["process"] != self.active_jobs[job["id"]]["process"]
-            ):
-                self.job_updated.emit(job)
-                self.active_jobs[job["id"]] = job
-
-
-class PublicationMonitorWorker(QThread):
-    failed = pyqtSignal(str)
-    publications_added = pyqtSignal(list)
-    publication_updated = pyqtSignal(dict)
-
-    def __init__(self, project_id, parent=None):
-        super().__init__(parent)
-        self.monitored_publications = {}
-        self.project_id = project_id
-        self._stop_flag = False
-
-    def run(self):
-        # initialize active jobs
-        self.update_publications()
-        # TODO: find a way to handle stopping nicely with long sleep
-        while not self._stop_flag:
-            self.update_publications()
-            break
-            # QThread.sleep(2)
-
-    def stop(self):
-        """Gracefully stop the worker"""
-        self._stop_flag = True
-        self.wait()
-
-    def update_publications(self):
-        response = get_project_publications(self.project_id)
-        if not response:
-            return
-        current_publications = response["items"]
-        new_publications = {
-            publication["id"]: publication
-            for publication in current_publications
-            if publication["id"] not in self.monitored_publications
-        }
-        if new_publications:
-            self.publications_added.emit(list(new_publications.values()))
-        self.monitored_publications.update(new_publications)
-        for publication in current_publications:
-            if publication["id"] in new_publications:
-                continue
-            if (
-                publication["updated_at"]
-                != self.monitored_publications[publication["id"]]["updated_at"]
-            ):
-                self.publication_updated.emit(publication)
-                self.monitored_publications[publication["id"]] = publication
 
 
 # We need a separate signals class since QRunnable cannot have signals
