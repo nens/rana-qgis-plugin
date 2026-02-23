@@ -759,6 +759,7 @@ class RanaBrowser(QWidget):
     update_avatar_cache = pyqtSignal(list)
     view_file_after_open = pyqtSignal(dict)
     project_changed = pyqtSignal(str)
+    force_persistent_tasks = pyqtSignal()
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -1109,6 +1110,7 @@ class RanaBrowser(QWidget):
             # prevent multiple events on window activation to cause multiple refresh actions
             if time.time() - self.last_refresh_time > 0.1:
                 self.auto_refresh()
+                self.force_persistent_tasks.emit()
         return False
 
     @pyqtSlot()

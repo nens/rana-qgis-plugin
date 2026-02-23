@@ -68,10 +68,13 @@ class PersistentTaskScheduler:
             if task.worker == worker:
                 self.tasks.remove(task)
 
-    def _check_and_execute_tasks(self):
+    def run_all_tasks(self):
+        self._check_and_execute_tasks(force=True)
+
+    def _check_and_execute_tasks(self, force=False):
         current_time = time.time()
         for task in self.tasks:
-            if task.should_run(current_time):
+            if force or task.should_run(current_time):
                 runnable_task = SingleTask(task.worker)
                 self.thread_pool.start(runnable_task)
                 task.update_last_run(current_time)

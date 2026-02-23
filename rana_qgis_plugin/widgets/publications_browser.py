@@ -96,4 +96,4 @@ class PublicationsBrowser(QWidget):
         if row < 0:
             return
         updated_item = get_timestamp_as_numeric_item(publication["updated_at"])
-        self.publications_model.setItem(row, 2, updated_item)
+        self.publications_model.setItem(row, 3, updated_item)
