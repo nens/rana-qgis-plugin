@@ -23,7 +23,11 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.utils import plugins
 from threedi_api_client.openapi import ApiException
-from threedi_mi_utils import LocalSchematisation, list_local_schematisations
+from threedi_mi_utils import (
+    LocalSchematisation,
+    RevisionSubPathType,
+    list_local_schematisations,
+)
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
@@ -748,7 +752,7 @@ def download_required_files(
         def decision_tree():
             replace, store, cancel = "Replace", "Store", "Cancel"
             title = "Pick action"
-            question = f"Replace local WIP or store as a revision {revision_number}?"
+            question = f"Store as a revision {revision_number} or replace local WIP?"
             wip_replace_requested = False
             picked_action_name = communications.custom_ask(
                 None, title, question, replace, store, cancel
@@ -767,7 +771,7 @@ def download_required_files(
                     )
                     if picked_action_name == "Replace":
                         local_revision = local_schematisation.add_revision(
-                            revision_number
+                            revision_number, keep_subpaths=[RevisionSubPathType.RESULTS]
                         )
                         schema_db_dir = local_revision.schematisation_dir
                     else:

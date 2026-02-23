@@ -51,6 +51,7 @@ from rana_qgis_plugin.utils_api import (
     create_folder,
     delete_tenant_project_directory,
     delete_tenant_project_file,
+    get_process_id_for_tag,
     get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -120,6 +121,7 @@ class Loader(QObject):
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
     avatar_updated = pyqtSignal(str, "QPixmap")
+    file_opened = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -165,6 +167,7 @@ class Loader(QObject):
                         "wms",
                     )
                     QgsProject.instance().addMapLayer(rlayer)
+                self.file_opened.emit(file)
                 return True
 
         return False
@@ -216,6 +219,7 @@ class Loader(QObject):
             hcc_working_dir(),
             get_threedi_api(),
         )
+        self.file_opened.emit(file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -277,6 +281,7 @@ class Loader(QObject):
                 get_tenant_file_descriptor(file["descriptor_id"]),
                 schematisation,
             )
+        self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
@@ -575,12 +580,6 @@ class Loader(QObject):
             if simulation_wizard.exec() == QDialog.Rejected:
                 self.simulation_cancelled.emit()
 
-    def get_process_id_for_tag(self, tag: str) -> Optional[str]:
-        processes = get_tenant_processes(self.communication)
-        for process in processes:
-            if tag in process["tags"]:
-                return process["id"]
-
     def start_model_tracker_process(
         self,
         project,
@@ -588,7 +587,7 @@ class Loader(QObject):
         revision_id: int,
         inherit_from_previous_revision: bool = True,
     ):
-        track_process = self.get_process_id_for_tag("model_tracker")
+        track_process = get_process_id_for_tag(self.communication, "model_tracker")
         if track_process is None:
             self.communication.log_err("No model tracker available")
             return
@@ -607,7 +606,7 @@ class Loader(QObject):
 
     def start_simulation_tracker_process(self, project, file, simulations):
         # Find the simulation tracker processes
-        track_process = self.get_process_id_for_tag("simulation_tracker")
+        track_process = get_process_id_for_tag(self.communication, "simulation_tracker")
 
         if track_process is None:
             self.communication.log_err("No simulation tracker available")
@@ -930,7 +929,7 @@ class Loader(QObject):
         sender = self.sender()
         assert isinstance(sender, QThread)
         sender.wait()
-
+        sender.deleteLater()
         self.file_upload_finished.emit()
 
     def on_new_file_upload_finished(self, online_path: str, project):
@@ -1063,7 +1062,9 @@ class Loader(QObject):
             # Search GeoPackage database tables for attributes with file paths.
             paths = new_schematisation_wizard.get_paths_from_geopackage(db_path)
 
-            self.save_initial_revision(new_schematisation, local_schematisation, paths)
+            self.save_initial_revision(
+                project, new_schematisation, local_schematisation, paths
+            )
 
         if rana_path:
             file_path = rana_path + new_schematisation.name
@@ -1232,8 +1233,10 @@ class Loader(QObject):
             clear_msg_bar=True,
         )
 
-    @pyqtSlot(dict, dict, dict, dict)
-    def save_initial_revision(self, schematisation, local_schematisation, raster_paths):
+    @pyqtSlot(dict, dict, dict, dict, dict)
+    def save_initial_revision(
+        self, project, schematisation, local_schematisation, raster_paths
+    ):
         raster_dir = local_schematisation.wip_revision.raster_dir
 
         selected_files = {
@@ -1278,7 +1281,7 @@ class Loader(QObject):
             "selected_files": selected_files,
             "commit_message": "Initial commit",
             "create_revision": True,
-            "make_3di_model": False,
+            "make_3di_model": True,
             "cb_inherit_templates": False,
         }
 
@@ -1289,6 +1292,14 @@ class Loader(QObject):
             local_schematisation,
             upload_template,
         )
+        upload_worker.signals.create_model_requested.connect(
+            lambda revision_id: self.start_model_tracker_process(
+                project,
+                schematisation.to_dict(),
+                revision_id,
+            )
+        )
+
         upload_worker.signals.thread_finished.connect(
             self.schematisation_upload_finished
         )
@@ -1321,3 +1332,20 @@ class Loader(QObject):
     def update_avatars(self, users):
         self.initialize_avatar_worker(users)
         self.avatar_runner_pool.start(self.avatar_worker)
+
+    @pyqtSlot(int)
+    def cancel_simulation(self, simulation_pk):
+        confirm_cancel = QMessageBox.warning(
+            None,
+            "Cancel Simulation",
+            "Are you sure you want to cancel the simulation?",
+            QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm_cancel == QMessageBox.StandardButton.Yes:
+            tc = ThreediCalls(get_threedi_api())
+            tc.fetch_simulation_status(simulation_pk)
+            try:
+                tc.create_simulation_action(simulation_pk, name="shutdown")
+            except ApiException as e:
+                self.communication.show_error(f"Could not cancel simulation")

@@ -150,7 +150,7 @@ class FileUploadWorker(QThread):
     def upload_single_file(
         self, local_path: Path, progress_start, progress_step
     ) -> bool:
-        online_path = str(Path(self.online_dir).joinpath(local_path.name))
+        online_path = f"{self.online_dir}{local_path.name}"
         # Check if file exists locally before uploading
         if not local_path.exists():
             self.failed.emit(f"File not found: {local_path}")
@@ -198,7 +198,10 @@ class ExistingFileUploadWorker(FileUploadWorker):
 
     def __init__(self, project: dict, file: dict):
         local_file = Path(get_local_file_path(project["slug"], file["id"])[1])
-        online_dir = str(Path(file["id"]).parent)
+        if "/" not in file["id"]:
+            online_dir = ""
+        else:
+            online_dir = file["id"][: file["id"].rindex("/") + 1]
         super().__init__(project, [local_file], online_dir)
 
         self.file_overwrite = False
