@@ -74,6 +74,7 @@ from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
+    AvatarWorker,
     ExistingFileUploadWorker,
     FileDownloadWorker,
     FileUploadWorker,
@@ -119,6 +120,7 @@ class Loader(QObject):
     model_deleted = pyqtSignal()
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    avatar_updated = pyqtSignal(str, "QPixmap")
     file_opened = pyqtSignal(dict)
 
     def __init__(self, communication, parent):
@@ -134,6 +136,9 @@ class Loader(QObject):
         # For simulations
         self.simulation_runner_pool = QThreadPool()
         self.simulation_runner_pool.setMaxThreadCount(1)
+
+        # For collecting avatars
+        self.avatar_runner_pool = QThreadPool()
 
         # For upload of schematisations
         self.upload_thread_pool = QThreadPool()
@@ -1319,6 +1324,14 @@ class Loader(QObject):
         self.project_job_monitor.job_updated.connect(self.project_job_updated)
         self.project_job_monitor.failed.connect(self.communication.show_warn)
         self.project_job_monitor.start()
+
+    def initialize_avatar_worker(self, users):
+        self.avatar_worker = AvatarWorker(self.communication, users)
+        self.avatar_worker.signals.avatar_ready.connect(self.avatar_updated)
+
+    def update_avatars(self, users):
+        self.initialize_avatar_worker(users)
+        self.avatar_runner_pool.start(self.avatar_worker)
 
     @pyqtSlot(int)
     def cancel_simulation(self, simulation_pk):
