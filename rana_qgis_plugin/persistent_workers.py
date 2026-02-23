@@ -125,8 +125,10 @@ class PublicationMonitorWorker(QObject):
         self._stop_flag = False
 
     def run(self):
-        response = get_project_publications(self.project_id)
-        if not response:
+        try:
+            response = get_project_publications(self.project_id)
+        except Exception as e:
+            self.failed.emit(str(e))
             return
         current_publications = response["items"]
         new_publications = {

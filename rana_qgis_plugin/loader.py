@@ -1338,7 +1338,8 @@ class Loader(QObject):
         worker = PublicationMonitorWorker(project_id=project_id, parent=self)
         worker.publications_added.connect(self.project_publications_added)
         worker.publication_updated.connect(self.project_publication_updated)
-        worker.failed.connect(self.communication.show_warn)
+        # TODO: consider if this should be a warning
+        worker.failed.connect(self.communication.log_warn)
         self.persistent_scheduler.add_task(worker, 60)
 
     def initialize_avatar_worker(self, users):
