@@ -32,6 +32,7 @@ class PublicationsBrowser(QWidget):
         self.setup_ui()
         self.row_map = {}
         self.project = {}
+        # TODO: pagination
 
     def update_project(self, project: dict):
         self.publications_model.removeRows(0, self.publications_model.rowCount())
@@ -53,6 +54,12 @@ class PublicationsBrowser(QWidget):
         self.publications_tv.setWordWrap(True)
         self.publications_tv.setUniformRowHeights(False)
         self.publications_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.publications_tv.setSortingEnabled(True)
+        header = self.publications_tv.header()
+        header.setSectionsMovable(False)
+        header.setSectionsClickable(True)
+        header.setSortIndicatorShown(True)
+        header.setStretchLastSection(False)
         create_publication_btn = QPushButton(
             "Create publication (opens Rana in web browser)"
         )
@@ -94,6 +101,12 @@ class PublicationsBrowser(QWidget):
     def add_items(self, publication_list: list[dict]):
         for publication in publication_list:
             self.add_item(publication)
+        # Let first column stretch and resize the others to contents
+        self.publications_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, self.publications_model.columnCount()):
+            self.publications_tv.header().setSectionResizeMode(
+                col, QHeaderView.ResizeToContents
+            )
 
     def update_item(self, publication: dict):
         row = self.row_map.get(publication["id"], -1)
