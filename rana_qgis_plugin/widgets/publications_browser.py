@@ -1,14 +1,11 @@
-from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
-from qgis.PyQt.QtGui import (
-    QStandardItem,
-    QStandardItemModel,
-)
+from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QProgressBar,
+    QPushButton,
     QSizePolicy,
     QToolButton,
     QTreeView,
@@ -19,10 +16,8 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.utils_api import get_tenant_id
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import (
-    convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
-from rana_qgis_plugin.widgets.processes_browser import JobData
 from rana_qgis_plugin.widgets.utils_delegates import (
     ContributorAvatarsDelegate,
     WordWrapDelegate,
@@ -48,12 +43,8 @@ class PublicationsBrowser(QWidget):
         self.publications_tv = QTreeView()
         self.publications_tv.setModel(self.publications_model)
         self.publications_tv.setEditTriggers(QTreeView.NoEditTriggers)
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.publications_tv)
-        self.setLayout(layout)
-        # TODO: make naming consistent
         self.publications_model.setHorizontalHeaderLabels(
-            ["Name", "Created by", "Created at", "Last modified"]
+            ["Name", "Who", "Created at", "Last modified"]
         )
         avatar_delegate = ContributorAvatarsDelegate(self.publications_tv)
         self.publications_tv.setItemDelegateForColumn(1, avatar_delegate)
@@ -62,6 +53,19 @@ class PublicationsBrowser(QWidget):
         self.publications_tv.setWordWrap(True)
         self.publications_tv.setUniformRowHeights(False)
         self.publications_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        create_publication_btn = QPushButton(
+            "Create publication (opens Rana in web browser)"
+        )
+        create_publication_btn.clicked.connect(self.create_publication_online)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.publications_tv)
+        layout.addWidget(create_publication_btn)
+        self.setLayout(layout)
+
+    def create_publication_online(self):
+        link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&creating=true"
+        if link:
+            QDesktopServices.openUrl(QUrl(link))
 
     def add_item(self, publication):
         name_item = QStandardItem(publication["name"])

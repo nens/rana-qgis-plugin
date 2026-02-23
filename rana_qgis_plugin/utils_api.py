@@ -586,7 +586,6 @@ def get_project_jobs(project_id: str):
 
 
 def get_project_publications(project_id: str):
-    # TODO: add pagination
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     params = {"project_id": project_id, "limit": 100, "offset": 0}
