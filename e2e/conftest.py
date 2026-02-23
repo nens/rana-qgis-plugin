@@ -5,7 +5,8 @@ from unittest.mock import Mock
 import pytest
 from qgis.core import QgsApplication, QgsProject
 from qgis.gui import QgsMapCanvas
-from qgis.PyQt.QtCore import QObject, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QObject, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
     QAction,
     QMainWindow,
@@ -25,6 +26,7 @@ def qgis_application() -> QgsApplication:
     qgs = QgsApplication([], True)
     qgs.initQgis()
     yield qgs
+
     qgs.processEvents()
     gc.collect()
     qgs.exitQgis()
@@ -65,6 +67,9 @@ def qgis_iface(qgis_application):
     # Create real message bar
     message_bar = QMessageBox(main_window)
     iface.messageBar.return_value = message_bar
+    # Add clearWidgets method to message bar mock
+    message_bar.clearWidgets = Mock()
+    message_bar.pushMessage = Mock()
 
     # Mock toolbar - returns real toolbar
     def add_toolbar(name):
@@ -105,9 +110,19 @@ def qgis_iface(qgis_application):
 
 @pytest.fixture(scope="function")
 def plugin(qgis_iface, qgis_application):
+    auth_manager = QgsApplication.authManager()
+    if not auth_manager.authenticationDatabasePath():
+        auth_manager.setup()
+
+    if not auth_manager.masterPasswordIsSet():
+        auth_manager.setMasterPassword("test", True)
+
+    # if not QDesktopServices.openUrl(QUrl("https://demo.lizard.net")):
+    #     QMessageBox.critical(None, "Test", "Unable to open")
+
     plugin = RanaQgisPlugin(qgis_iface)
     plugin.initGui()
-    qgis_application.processEvents()
     yield plugin
+
     plugin.unload()
     qgis_application.processEvents()

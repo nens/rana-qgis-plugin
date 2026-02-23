@@ -1,7 +1,9 @@
 import unittest
 
+from qgis.PyQt.QtCore import QTimer
 
-def test_download_project(plugin):
+
+def test_download_project(plugin, qgis_application):
     """Test failing request"""
-    plugin.initGui()
-    assert True
+    QTimer.singleShot(0, plugin.run)
+    assert False

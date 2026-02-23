@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - "7070:7070"
+      - "80:80"
     environment:
       - DISPLAY=unix${DISPLAY}
       # Note: run 'xhost +local:docker' beforehand.
