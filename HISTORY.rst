@@ -9,6 +9,7 @@ History
 - Prevent deleting results replacing an existing revision (nens/rana-qgis-plugin#259)
 - Create model when creating new schematisation (nens/rana#3533)
 - Add cancel button for running simulations (nens/rana-qgis-plugin#235)
+- Add publications browser (nens/rana#302)
 
 
 1.2.6 (2026-02-19)
