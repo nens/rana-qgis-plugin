@@ -1,5 +1,6 @@
 import time
 from dataclasses import dataclass, field
+from typing import Optional
 
 from qgis.PyQt.QtCore import (
     QObject,
@@ -68,16 +69,26 @@ class PersistentTaskScheduler:
             if task.worker == worker:
                 self.tasks.remove(task)
 
+    def run_task_by_type(self, worker_type: type):
+        for task in self.tasks:
+            if isinstance(task.worker, worker_type):
+                self.run_task(task)
+
     def run_all_tasks(self):
         self._check_and_execute_tasks(force=True)
+
+    def run_task(self, task, current_time: Optional[float] = None):
+        if not current_time:
+            current_time = time.time()
+        runnable_task = SingleTask(task.worker)
+        self.thread_pool.start(runnable_task)
+        task.update_last_run(current_time)
 
     def _check_and_execute_tasks(self, force=False):
         current_time = time.time()
         for task in self.tasks:
             if force or task.should_run(current_time):
-                runnable_task = SingleTask(task.worker)
-                self.thread_pool.start(runnable_task)
-                task.update_last_run(current_time)
+                self.run_task(task, current_time)
 
 
 class ProjectJobMonitorWorker(QObject):

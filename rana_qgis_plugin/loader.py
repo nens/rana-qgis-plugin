@@ -1345,6 +1345,14 @@ class Loader(QObject):
         worker.failed.connect(self.communication.log_warn)
         self.persistent_scheduler.add_task(worker, 60)
 
+    @pyqtSlot()
+    def update_project_publications(self):
+        self.persistent_scheduler.run_task_by_type(PublicationMonitorWorker)
+
+    @pyqtSlot()
+    def run_all_persistent_tasks(self):
+        self.persistent_scheduler.run_all_tasks()
+
     def initialize_avatar_worker(self, users):
         self.avatar_worker = AvatarWorker(self.communication, users)
         self.avatar_worker.signals.avatar_ready.connect(self.avatar_updated)

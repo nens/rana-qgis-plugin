@@ -243,7 +243,7 @@ class RanaQgisPlugin:
 
             # Connect signals
             self.rana_browser.force_persistent_tasks.connect(
-                self.loader.persistent_scheduler.run_all_tasks
+                self.loader.run_all_persistent_tasks
             )
             self.rana_browser.project_changed.connect(self.loader.update_project)
             self.rana_browser.update_avatar_cache.connect(self.loader.update_avatars)
@@ -261,6 +261,9 @@ class RanaQgisPlugin:
             )
             self.loader.project_publication_updated.connect(
                 self.rana_browser.project_publication_updated.emit
+            )
+            self.rana_browser.update_project_publications.connect(
+                self.loader.update_project_publications
             )
             self.rana_browser.processes_browser.cancel_simulation.connect(
                 self.loader.cancel_simulation

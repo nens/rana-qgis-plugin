@@ -576,6 +576,7 @@ class RanaBrowser(QWidget):
     view_file_after_open = pyqtSignal(dict)
     project_changed = pyqtSignal(str)
     force_persistent_tasks = pyqtSignal()
+    update_project_publications = pyqtSignal()
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -930,10 +931,10 @@ class RanaBrowser(QWidget):
 
     def on_project_tab_changed(self, index):
         self.breadcrumbs_manager.set_index(index)
-        if index == 0:
-            self.project_widget.cornerWidget().show()
-        else:
+        if index == 1:
             self.project_widget.cornerWidget().hide()
+        else:
+            self.project_widget.cornerWidget().show()
 
     def auto_refresh(self):
         # skip auto refresh for projects view to not mess up pagination
@@ -956,6 +957,8 @@ class RanaBrowser(QWidget):
         if current_widget and hasattr(current_widget, "refresh"):
             current_widget.refresh()
             self.last_refresh_time = time.time()
+        elif isinstance(current_widget, PublicationsBrowser):
+            self.update_project_publications.emit()
 
     def reset(self):
         self.disable()
