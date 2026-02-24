@@ -25,7 +25,7 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
-def simple_fetch(
+def single_fetch(
     url: str, limit: int, offset: int, params: Optional[dict] = None
 ) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
@@ -42,11 +42,11 @@ def simple_fetch(
 def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict:
     offset = 0
     full_response = {"total": 0, "items": []}
-    response = simple_fetch(url, limit, offset, params)
+    response = single_fetch(url, limit, offset, params)
     full_response["total"] = response["total"]
     full_response["items"] += response["items"]
     for offset in range(limit, response["total"], limit):
-        response = simple_fetch(url, limit, offset, params)
+        response = single_fetch(url, limit, offset, params)
         full_response["items"] += response.get("items")
     return full_response
 
