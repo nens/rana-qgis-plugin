@@ -204,8 +204,7 @@ class RanaQgisPlugin:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
         if self.loader:
-            # ensure loader is deconstructed
-            del self.loader
+            self.loader.cleanup()
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""

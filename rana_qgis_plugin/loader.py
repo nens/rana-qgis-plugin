@@ -154,8 +154,11 @@ class Loader(QObject):
         self.persistent_scheduler = PersistentTaskScheduler()
         self.persistent_scheduler.start()
 
-    def __del__(self):
+    def cleanup(self):
         self.persistent_scheduler.stop()
+
+    def __del__(self):
+        self.cleanup()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
