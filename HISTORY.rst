@@ -5,7 +5,7 @@ History
 1.2.9 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Add publications browser (nens/rana#302)
 
 
 1.2.8 (2026-03-13)
