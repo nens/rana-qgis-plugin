@@ -197,6 +197,22 @@ class FilesBreadcrumbsWidget(BreadcrumbsWidget):
         self.update()
 
 
+# class PublicationBreadCrumbsWidget(BreadcrumbsWidget):
+#     def add_project(self, project_name):
+#         # folders can only be added after projects or a folder
+#         if self._items[-1].type in [BreadcrumbType.PROJECTS]:
+#             self._items.append(BreadcrumbItem(BreadcrumbType.PROJECT, project_name))
+#         self.update()
+#
+#     def add_detail_view(self, publication_name: str):
+#         # files can only be added after a folder
+#         if self._items[-1].type == BreadcrumbType.:
+#             self._items.append(BreadcrumbItem(BreadcrumbType.FILE, file_path))
+#         self.update()
+
+## TODO: gerelaize add_projct also for BreadcrumbsWidget?
+
+
 class GenericBreadcrumbsWidget(BreadcrumbsWidget):
     def add_project(self, project_name):
         # folders can only be added after projects or a folder
