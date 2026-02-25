@@ -5,7 +5,9 @@ History
 1.2.9 (unreleased)
 ------------------
 
-- Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
+- Add publications browser (nens/rana#302)
+- Add publication view (nens/rana#303)
+- Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#2>
 
 
 1.2.8 (2026-03-13)
