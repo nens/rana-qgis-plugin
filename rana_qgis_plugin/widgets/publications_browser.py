@@ -25,6 +25,8 @@ from rana_qgis_plugin.widgets.utils_delegates import (
 
 
 class PublicationsBrowser(QWidget):
+    publication_selected = pyqtSignal(dict)
+    
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
         self.communication = communication
@@ -69,6 +71,18 @@ class PublicationsBrowser(QWidget):
         layout.addWidget(create_publication_btn)
         self.setLayout(layout)
 
+        self.publications_tv.doubleClicked.connect(self.on_publication_clicked)
+
+    def on_publication_clicked(self, index):
+        # publication data is stored in the first column
+        # TODO: maybe this is a bit dirty, reconsider
+        name_index = index.sibling(index.row(), 0)
+        item = self.publications_model.itemFromIndex(name_index)
+        if item:
+            publication_data = item.data(Qt.ItemDataRole.UserRole)
+            if publication_data:
+                self.publication_selected.emit(publication_data)
+
     def create_publication_online(self):
         link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&creating=true"
         if link:
@@ -76,6 +90,7 @@ class PublicationsBrowser(QWidget):
 
     def add_item(self, publication):
         name_item = QStandardItem(publication["name"])
+        name_item.setData(publication, Qt.ItemDataRole.UserRole)
         who_item = QStandardItem()
         who_item.setData(
             [
