@@ -23,7 +23,6 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QPixmap
 from threedi_mi_utils import bypass_max_path_limit
 
-from rana_qgis_plugin.utils_api import get_user_image
 from rana_qgis_plugin.utils_lizard import import_from_geostyler
 from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 
@@ -35,7 +34,6 @@ from .utils import (
 )
 from .utils_api import (
     finish_file_upload,
-    get_project_jobs,
     get_raster_file_link,
     get_raster_style_file,
     get_raster_style_upload_urls,
