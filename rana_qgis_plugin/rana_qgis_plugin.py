@@ -204,8 +204,7 @@ class RanaQgisPlugin:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
         if self.loader:
-            # ensure loader is deconstructed
-            del self.loader
+            self.loader.cleanup()
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
@@ -243,19 +242,28 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
-            self.rana_browser.request_monitoring_project_jobs.connect(
-                self.loader.start_project_job_monitoring
+            self.rana_browser.run_persistent_tasks.connect(
+                self.loader.run_all_persistent_tasks
             )
+            self.rana_browser.project_changed.connect(self.loader.update_project)
             self.rana_browser.update_avatar_cache.connect(self.loader.update_avatars)
             self.loader.avatar_updated.connect(
                 self.rana_browser.avatar_cache.update_avatar
             )
-
             self.loader.project_jobs_added.connect(
                 self.rana_browser.project_jobs_added.emit
             )
             self.loader.project_job_updated.connect(
                 self.rana_browser.project_job_updated.emit
+            )
+            self.loader.project_publications_added.connect(
+                self.rana_browser.project_publication_added.emit
+            )
+            self.loader.project_publication_updated.connect(
+                self.rana_browser.project_publication_updated.emit
+            )
+            self.rana_browser.update_project_publications.connect(
+                self.loader.update_project_publications
             )
             self.rana_browser.processes_browser.cancel_simulation.connect(
                 self.loader.cancel_simulation

@@ -17,6 +17,40 @@ class UserInfo(TypedDict):
     email: str
 
 
+class FetchError(Exception):
+    def __init__(self, msg: str, url: str, params: dict):
+        self.msg = msg
+        self.url = url
+        self.params = params
+        super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
+
+
+def single_fetch(
+    url: str, limit: int, offset: int, params: Optional[dict] = None
+) -> Optional[dict]:
+    authcfg_id = get_authcfg_id()
+    params.update({"limit": limit, "offset": offset})
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+    if status:
+        return network_manager.content
+    else:
+        # Raise when fetch failed, error should be handled downstream
+        raise FetchError(error, url, params)
+
+
+def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict:
+    offset = 0
+    full_response = {"total": 0, "items": []}
+    response = single_fetch(url, limit, offset, params)
+    full_response["total"] = response["total"]
+    full_response["items"] += response["items"]
+    for offset in range(limit, response["total"], limit):
+        response = single_fetch(url, limit, offset, params)
+        full_response["items"] += response.get("items")
+    return full_response
+
+
 def get_frontend_settings():
     url = f"{api_url()}/frontend-settings"
     network_manager = NetworkManager(url, get_authcfg_id())
@@ -583,6 +617,13 @@ def get_project_jobs(project_id: str):
         return network_manager.content
     else:
         return None
+
+
+def get_project_publications(project_id: str):
+    tenant = get_tenant_id()
+    params = {"project_id": project_id}
+    url = f"{api_url()}/tenants/{tenant}/publications"
+    return paginated_fetch(url, 100, params)
 
 
 def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional[str]:
