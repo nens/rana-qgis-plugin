@@ -10,6 +10,7 @@ History
 - Create model when creating new schematisation (nens/rana#3533)
 - Add cancel button for running simulations (nens/rana-qgis-plugin#235)
 - Add publications browser (nens/rana#302)
+- Remove confirmation dialog on opening downloaded schematisations (nens/rana#289)
 
 
 1.2.6 (2026-02-19)
