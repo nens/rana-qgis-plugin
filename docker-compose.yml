@@ -6,6 +6,7 @@ services:
       - "80:80"
     environment:
       - DISPLAY=unix${DISPLAY}
+      - QT_QPA_PLATFORM=offscreen
       # Note: run 'xhost +local:docker' beforehand.
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
