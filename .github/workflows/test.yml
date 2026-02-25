@@ -26,5 +26,8 @@ jobs:
           docker compose run qgis pytest tests
 
       - name: e2e
+        env:
+          RANA_PAK: ${{ secrets.RANA_PAK }}
+          ORG_3DI: ${{ secrets.ORG_3DI }}
         run: |
           docker compose run qgis pytest e2e

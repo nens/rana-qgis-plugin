@@ -1,9 +1,8 @@
-import unittest
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtTest import QTest
 
-from qgis.PyQt.QtCore import QTimer
 
-
-def test_download_project(plugin, qgis_application):
-    """Test failing request"""
-    QTimer.singleShot(0, plugin.run)
-    assert False
+def test_smoke(plugin, qgis_application):
+    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
+    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    assert True

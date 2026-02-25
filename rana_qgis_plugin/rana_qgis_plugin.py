@@ -1,4 +1,3 @@
-import pdb
 from functools import partial
 
 from qgis.core import QgsApplication
@@ -66,7 +65,6 @@ class RanaQgisPlugin:
         QgsApplication.processingRegistry().addProvider(self.provider)
 
     def login(self, start_tenant_id: str = None) -> bool:
-        pdb.set_trace()
         self.logout()
         if not setup_oauth2(self.communication, start_tenant_id):
             return False
@@ -394,5 +392,4 @@ class RanaQgisPlugin:
                 project_id=path_params["project_id"],
                 online_path=query_params["path"][0],
             )
-
         self.rana_browser.refresh()

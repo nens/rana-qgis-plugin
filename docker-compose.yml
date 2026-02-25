@@ -15,15 +15,5 @@ services:
       - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
     command: qgis
 
-  test:
-    build: .
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
-      - .:/tests_directory/
-      - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
-    environment:
-      - DISPLAY=${DISPLAY}
-    command: pytest e2e/ -v -s
-
 volumes:
   profile-dir:
