@@ -1,8 +1,9 @@
 FROM qgis/qgis:3.40
-RUN apt-get update && apt-get install -y python3-pyqt5.qtwebsockets xvfb && apt-get clean
+RUN apt-get update && apt-get install -y python3-pyqt5.qtwebsockets && apt-get clean
 COPY requirements-dev.txt /root
 COPY requirements-test.txt /root
 RUN pip3 install -r /root/requirements-dev.txt --break-system-packages
+
 
 ENV PYTHONPATH=/usr/share/qgis/python/:/usr/share/qgis/python/plugins:/usr/lib/python3/dist-packages/qgis:/usr/share/qgis/python/qgis:/root/.local/share/QGIS/QGIS3/profiles/default/python
 ADD https://raw.githubusercontent.com/nens/nens-dependency-loader/refs/heads/main/dependencies.py /root/dependencies.py
