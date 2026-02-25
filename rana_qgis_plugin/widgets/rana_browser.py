@@ -62,6 +62,7 @@ from rana_qgis_plugin.widgets.file_view import FileView
 from rana_qgis_plugin.widgets.files_browser import FilesBrowser
 from rana_qgis_plugin.widgets.processes_browser import ProcessesBrowser
 from rana_qgis_plugin.widgets.projects_browser import ProjectsBrowser
+from rana_qgis_plugin.widgets.publication_view import PublicationView
 from rana_qgis_plugin.widgets.publications_browser import PublicationsBrowser
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -355,6 +356,11 @@ class RanaBrowser(QWidget):
             avatar_cache=self.avatar_cache,
             parent=self,
         )
+        self.publications_view = PublicationView(
+            communication=self.communication,
+            avatar_cache=self.avatar_cache,
+            parent=self,
+        )
         self.files_breadcrumbs = FilesBreadcrumbsWidget(
             communication=self.communication, parent=self
         )
@@ -399,6 +405,7 @@ class RanaBrowser(QWidget):
         # Create stacked widget for publications
         self.rana_publications = QStackedWidget()
         self.rana_publications.addWidget(self.publications_browser)
+        self.rana_publications.addWidget(self.publications_view)
         self.project_widget.addTab(self.rana_publications, "Publications")
         self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Setup top layout with logo and breadcrumbs
@@ -565,6 +572,14 @@ class RanaBrowser(QWidget):
         self.revisions_view.open_schematisation_revision_in_qgis_requested.connect(
             self.open_schematisation_selected_with_revision
         )
+        # Open publication view
+        self.publications_browser.publication_selected.connect(
+            lambda _: self.show_project_data(self.rana_publications, 1)
+        )
+        self.publications_browser.publication_selected.connect(
+            self.publications_view.show_details
+        )
+
         # Update breadcrumbs when file browser path changes
         self.projects_browser.project_selected.connect(
             lambda selected_item: self.files_breadcrumbs.add_folder(

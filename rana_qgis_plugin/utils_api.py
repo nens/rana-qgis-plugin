@@ -28,6 +28,8 @@ class FetchError(Exception):
 def single_fetch(
     url: str, limit: int, offset: int, params: Optional[dict] = None
 ) -> Optional[dict]:
+    if params is None:
+        params = {}
     authcfg_id = get_authcfg_id()
     params.update({"limit": limit, "offset": offset})
     network_manager = NetworkManager(url, authcfg_id)
@@ -631,3 +633,9 @@ def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional
     for process in processes:
         if tag in process["tags"]:
             return process["id"]
+
+
+def get_publication_files(communication: UICommunication, publication_id: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/files"
+    return paginated_fetch(url, 100)
