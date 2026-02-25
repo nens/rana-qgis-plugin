@@ -75,7 +75,6 @@ class JobData:
 
 
 class ProcessesBrowser(QWidget):
-    start_monitoring_project_jobs = pyqtSignal(str)
     cancel_simulation = pyqtSignal(int)
 
     def __init__(self, communication, avatar_cache, parent=None):
@@ -91,12 +90,9 @@ class ProcessesBrowser(QWidget):
         self.project = {}
 
     def update_project(self, project: dict):
-        # Remove cached data
         self.processes_model.removeRows(0, self.processes_model.rowCount())
         self.row_map.clear()
         self.project = project
-        # Start monitor jobs for the selected project
-        self.start_monitoring_project_jobs.emit(project["id"])
 
     def setup_ui(self):
         self.processes_model = QStandardItemModel()
@@ -117,7 +113,6 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setWordWrap(True)
         self.processes_tv.setUniformRowHeights(False)
         self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.setContentsMargins(0, 0, 0, 0)
         self.processes_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.processes_tv.header().setSectionResizeMode(1, QHeaderView.Fixed)
         self.processes_tv.header().setSectionResizeMode(2, QHeaderView.Fixed)

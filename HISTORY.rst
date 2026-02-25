@@ -11,6 +11,7 @@ History
 - Add cancel button for running simulations (nens/rana-qgis-plugin#235)
 - Remove confirmation dialog on opening downloaded schematisations (nens/rana-qgis-plugin#289)
 - Take buttons in the file view out of the scroll area (nens/rana#3630)
+- Add publications browser (nens/rana#302)
 
 
 1.2.6 (2026-02-19)

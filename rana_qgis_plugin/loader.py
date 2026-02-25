@@ -20,6 +20,11 @@ from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.persistent_workers import (
+    PersistentTaskScheduler,
+    ProjectJobMonitorWorker,
+    PublicationMonitorWorker,
+)
 from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local import (
     SchematisationLoad,
 )
@@ -79,7 +84,6 @@ from rana_qgis_plugin.workers import (
     FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    ProjectJobMonitorWorker,
     RasterStyleWorker,
     VectorStyleWorker,
 )
@@ -120,6 +124,8 @@ class Loader(QObject):
     model_deleted = pyqtSignal()
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
+    project_publications_added = pyqtSignal(list)
+    project_publication_updated = pyqtSignal(dict)
     avatar_updated = pyqtSignal(str, "QPixmap")
     file_opened = pyqtSignal(dict)
 
@@ -130,7 +136,6 @@ class Loader(QObject):
         self.vector_style_worker: QThread = None
         self.raster_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
-        self.project_job_monitor: QThread = None
         self.communication = communication
 
         # For simulations
@@ -139,13 +144,21 @@ class Loader(QObject):
 
         # For collecting avatars
         self.avatar_runner_pool = QThreadPool()
+        self.avatar_runner_pool.setMaxThreadCount(1)
 
         # For upload of schematisations
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
 
+        # Create persistent scheduler that handles background monitoring
+        self.persistent_scheduler = PersistentTaskScheduler()
+        self.persistent_scheduler.start()
+
+    def cleanup(self):
+        self.persistent_scheduler.stop()
+
     def __del__(self):
-        self.stop_project_job_monitoring()
+        self.cleanup()
 
     @pyqtSlot(dict, dict)
     def open_wms(self, _: dict, file: dict) -> bool:
@@ -1295,19 +1308,34 @@ class Loader(QObject):
         self.upload_thread_pool.start(upload_worker)
         self.revision_saved.emit()
 
-    def stop_project_job_monitoring(self):
-        if self.project_job_monitor:
-            self.project_job_monitor.stop()
+    @pyqtSlot(str)
+    def update_project(self, project_id: str):
+        self.persistent_scheduler.clear()
+        self.start_project_job_monitoring(project_id)
+        self.start_publication_monitoring(project_id)
 
     def start_project_job_monitoring(self, project_id):
-        self.stop_project_job_monitoring()
-        self.project_job_monitor = ProjectJobMonitorWorker(
-            project_id=project_id, parent=self
-        )
-        self.project_job_monitor.jobs_added.connect(self.project_jobs_added)
-        self.project_job_monitor.job_updated.connect(self.project_job_updated)
-        self.project_job_monitor.failed.connect(self.communication.show_warn)
-        self.project_job_monitor.start()
+        worker = ProjectJobMonitorWorker(project_id=project_id, parent=self)
+        worker.jobs_added.connect(self.project_jobs_added)
+        worker.job_updated.connect(self.project_job_updated)
+        worker.failed.connect(self.communication.show_warn)
+        self.persistent_scheduler.add_task(worker, 1)
+
+    def start_publication_monitoring(self, project_id):
+        worker = PublicationMonitorWorker(project_id=project_id, parent=self)
+        worker.publications_added.connect(self.project_publications_added)
+        worker.publication_updated.connect(self.project_publication_updated)
+        # TODO: consider if this should be a warning
+        worker.failed.connect(self.communication.log_warn)
+        self.persistent_scheduler.add_task(worker, 60)
+
+    @pyqtSlot()
+    def update_project_publications(self):
+        self.persistent_scheduler.run_task_by_type(PublicationMonitorWorker)
+
+    @pyqtSlot()
+    def run_all_persistent_tasks(self):
+        self.persistent_scheduler.run_all_tasks()
 
     def initialize_avatar_worker(self, users):
         self.avatar_worker = AvatarWorker(self.communication, users)
