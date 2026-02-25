@@ -242,7 +242,7 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
-            self.rana_browser.force_persistent_tasks.connect(
+            self.rana_browser.run_persistent_tasks.connect(
                 self.loader.run_all_persistent_tasks
             )
             self.rana_browser.project_changed.connect(self.loader.update_project)
