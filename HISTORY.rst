@@ -12,6 +12,7 @@ History
 - Remove confirmation dialog on opening downloaded schematisations (nens/rana-qgis-plugin#289)
 - Take buttons in the file view out of the scroll area (nens/rana#3630)
 - Make creating avatars safe for users without given and/or family name
+- Add publications browser (nens/rana#302)
 
 
 1.2.6 (2026-02-19)
