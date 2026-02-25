@@ -8,10 +8,10 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QTimer
 
 
-class SimpleErrorDialog(QDialog):
+class ErrorDialog(QDialog):
     def __init__(self, error_message, trace, parent=None):
         super().__init__(parent)
         self.setWindowTitle("An error occurred")
@@ -30,8 +30,8 @@ class SimpleErrorDialog(QDialog):
         main_layout.addWidget(error_label)
 
         # Traceback text box with monospace font
-        self.trace_text = QTextEdit()
-        self.trace_text.setReadOnly(True)
+        trace_text = QTextEdit()
+        trace_text.setReadOnly(True)
 
         # Set monospace font
         font = QFont("Monospace")  # Use system monospace font
@@ -39,41 +39,53 @@ class SimpleErrorDialog(QDialog):
             QFont.Monospace
         )  # Fallback to any monospace if specific one not available
         font.setFixedPitch(True)
-        self.trace_text.setFont(font)
+        trace_text.setFont(font)
 
         # Preserve formatting
-        self.trace_text.setLineWrapMode(QTextEdit.NoWrap)
-        self.trace_text.setText(trace)
+        trace_text.setLineWrapMode(QTextEdit.NoWrap)
+        trace_text.setText(trace)
 
-        main_layout.addWidget(self.trace_text)
+        main_layout.addWidget(trace_text)
 
         # Button layout
-        button_layout = QHBoxLayout()
+        bottom_layout = QHBoxLayout()
 
         # Copy button
         copy_button = QPushButton("Copy error")
-        copy_button.clicked.connect(self.copy_traceback)
-        button_layout.addWidget(copy_button)
+        bottom_layout.addWidget(copy_button)
+
+        confirm_label = QLabel("error copied to clipboard")
+        confirm_label.hide()
+        bottom_layout.addWidget(confirm_label)
+        copy_button.clicked.connect(
+            lambda: self.copy_with_confirmation(trace, confirm_label)
+        )
 
         # Spacer to push close button to the right
-        button_layout.addStretch()
+        bottom_layout.addStretch()
 
         # Close button
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.accept)
-        button_layout.addWidget(close_button)
+        bottom_layout.addWidget(close_button)
 
-        main_layout.addLayout(button_layout)
+        main_layout.addLayout(bottom_layout)
 
         # Store trace for copy operation
         self.trace = trace
 
-    def copy_traceback(self):
-        """Copy the traceback to clipboard"""
-        QApplication.clipboard().setText(self.trace)
+    @staticmethod
+    def copy_with_confirmation(trace, label):
+        # Copy to clipboard
+        QApplication.clipboard().setText(trace)
+
+        label.show()
+
+        # Hide the label after 2 seconds using QTimer
+        QTimer.singleShot(2000, label.hide)
 
 
 def show_error_dialog_with_helpdesk_message(trace):
     msg = "An unhandled error occurred. Please contact the helpdesk via support@ranawaterintelligence.com and include a copy of this error in your message."
-    dialog = SimpleErrorDialog(msg, trace)
+    dialog = ErrorDialog(msg, trace)
     dialog.exec()

@@ -170,6 +170,7 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     def open_in_qgis(self, project: dict, file: dict):
         """Start the worker to download and open files in QGIS"""
+        raise Exception("oops")
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
             _, local_file_path = get_local_file_path(project["slug"], file["id"])

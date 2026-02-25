@@ -434,7 +434,6 @@ class RanaQgisPlugin:
                 show_error_dialog_with_helpdesk_message
             )
             error_signals.error_occurred.connect(self.rana_browser.enable)
-            self.loader.unknown_error_raised.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True
