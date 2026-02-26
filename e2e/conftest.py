@@ -76,7 +76,7 @@ def mock_get_user_tenants():
 def qgis_application() -> QgsApplication:
     """QGIS app for testing with GUI"""
     QgsApplication.setPrefixPath("/usr", True)
-    qgs = QgsApplication([], False)
+    qgs = QgsApplication([], True)
     qgs.initQgis()
     yield qgs
 
