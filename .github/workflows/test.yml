@@ -21,6 +21,9 @@ jobs:
         run: |
           docker compose build qgis
 
+      - name: setup-xvfb
+        uses: coactions/setup-xvfb@v1.0.1
+
       - name: test
         run: |
           docker compose run --rm qgis pytest tests
