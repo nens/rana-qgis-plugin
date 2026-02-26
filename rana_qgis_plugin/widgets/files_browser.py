@@ -25,8 +25,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import dir_icon, file_icon
-from rana_qgis_plugin.utils import NumericItem, display_bytes
+from rana_qgis_plugin.icons import dir_icon
+from rana_qgis_plugin.utils import NumericItem, display_bytes, get_file_icon_name
 from rana_qgis_plugin.utils_api import get_tenant_project_files
 from rana_qgis_plugin.utils_time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -34,6 +34,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
+from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
 # allow for using specific data just for sorting
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -245,6 +246,7 @@ class FilesBrowser(QWidget):
         # Add files second
         for file in files:
             file_name = os.path.basename(file["id"].rstrip("/"))
+            file_icon = get_icon_from_theme(get_file_icon_name(file["data_type"]))
             name_item = QStandardItem(file_icon, file_name)
             name_item.setToolTip(file_name)
             name_item.setData(file, role=Qt.ItemDataRole.UserRole)

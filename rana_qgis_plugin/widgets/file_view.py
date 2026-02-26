@@ -49,7 +49,10 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
-from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
+from rana_qgis_plugin.widgets.utils_icons import (
+    get_icon_from_theme_as_pixmap,
+    get_icon_label,
+)
 
 
 @dataclass
@@ -364,7 +367,9 @@ class FileView(QWidget):
     def update_general_box(self, selected_file: dict):
         rows = []
         # line 1: icon - filename - size
-        file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
+        file_icon = get_icon_from_theme_as_pixmap(
+            get_file_icon_name(selected_file["data_type"])
+        )
         file_icon_label = get_icon_label(file_icon)
         filename = Path(selected_file["id"]).name
         size_str = (
@@ -576,7 +581,9 @@ class FileView(QWidget):
         self.files_model.clear()
         self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
         for file_name, data_type, file_size in rows:
-            file_type_icon = get_icon_from_theme(get_file_icon_name(data_type))
+            file_type_icon = get_icon_from_theme_as_pixmap(
+                get_file_icon_name(data_type)
+            )
             name_item = QStandardItem(file_name)
             name_item.setIcon(QIcon(file_type_icon))
             data_type_item = QStandardItem(
