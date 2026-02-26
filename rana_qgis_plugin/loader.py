@@ -122,6 +122,7 @@ class Loader(QObject):
     project_job_updated = pyqtSignal(dict)
     avatar_updated = pyqtSignal(str, "QPixmap")
     file_opened = pyqtSignal(dict)
+    simulation_cancelled = pyqtSignal(int)
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -1331,5 +1332,6 @@ class Loader(QObject):
             tc.fetch_simulation_status(simulation_pk)
             try:
                 tc.create_simulation_action(simulation_pk, name="shutdown")
+                self.simulation_cancelled.emit(simulation_pk)
             except ApiException as e:
                 self.communication.show_error(f"Could not cancel simulation")
