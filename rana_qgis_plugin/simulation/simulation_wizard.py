@@ -3931,6 +3931,7 @@ class SimulationWizard(QWizard):
         current_model,
         threedi_api,
         communication,
+        layer_manager,
         init_conditions_dlg,
         parent,
     ):
@@ -5036,6 +5037,7 @@ class SimulationWizard(QWizard):
 
     def load_breach_layers(self):
         """Loading breach layers into the map canvas."""
+        # TODO: use layer manager
         if self.current_model_geojson_breaches is not None:
             potential_breaches_layer = QgsVectorLayer(
                 self.current_model_geojson_breaches, "Potential breaches", "ogr"
