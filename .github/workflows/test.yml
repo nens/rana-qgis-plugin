@@ -21,16 +21,16 @@ jobs:
         run: |
           docker compose build qgis
 
-      - name: setup-xvfb
-        uses: coactions/setup-xvfb@v1.0.1
-
       - name: test
         run: |
           docker compose run --rm qgis pytest tests
 
-      - name: e2e
+      - name: setup-xvfb
+        uses: coactions/setup-xvfb@v1.0.1
+        with:
+          run: |
+            docker compose run --rm qgis pytest e2e
         env:
           RANA_PAK: ${{ secrets.RANA_PAK }}
           ORG_3DI: ${{ secrets.ORG_3DI }}
-        run: |
-          docker compose run --rm qgis pytest e2e
+
