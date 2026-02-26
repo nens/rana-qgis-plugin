@@ -24,7 +24,7 @@ jobs:
       # 3️⃣ Run tests headless inside container
       - name: Run Pytest with Xvfb
         run: |
-          docker compose run --rm -T qgis bash -c "
+          docker compose run --rm qgis bash -c "
             # Enable software rendering for OpenGL
             export LIBGL_ALWAYS_SOFTWARE=1
 
