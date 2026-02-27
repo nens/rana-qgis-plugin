@@ -1,6 +1,5 @@
 name: pytest
 
-# Run on pull requests and on the master branch itself.
 on:
   push:
     branches:
@@ -9,18 +8,40 @@ on:
       - "*"
   pull_request:
 
-
 jobs:
   test:
     runs-on: ubuntu-24.04
+
     steps:
-      # Checkout the code.
-      - uses: actions/checkout@v2
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - uses: pyvista/setup-headless-display-action@v3
+        with:
+          qt: true
+      # 2️⃣ Build Docker image
+      - name: Build QGIS Docker image
+        run: docker compose build qgis
 
-      - name: build
+      # 3️⃣ Run tests headless inside container
+      - name: Run Pytest with Xvfb
         run: |
-          docker compose build qgis
+          docker compose run --rm qgis bash -c "
+            # Enable software rendering for OpenGL
+            export LIBGL_ALWAYS_SOFTWARE=1
 
-      - name: test
-        run: |
-          docker compose run qgis pytest
+            # Start virtual X server in background
+            Xvfb :99 -screen 0 1920x1080x24 &
+
+            # Set DISPLAY to point to the virtual X server
+            export DISPLAY=:99
+
+            # Give Xvfb time to start
+            sleep 4
+
+            # Run your tests
+            pytest -v e2e
+          "
+        env:
+          RANA_PAK: ${{ secrets.RANA_PAK }}
+          ORG_3DI: ${{ secrets.ORG_3DI }}
