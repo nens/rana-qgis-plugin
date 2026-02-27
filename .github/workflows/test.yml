@@ -16,7 +16,9 @@ jobs:
       # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
-
+      - uses: pyvista/setup-headless-display-action@v3
+        with:
+          qt: true
       # 2️⃣ Build Docker image
       - name: Build QGIS Docker image
         run: docker compose build qgis

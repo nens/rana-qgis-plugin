@@ -8,14 +8,14 @@ services:
       # DISPLAY=unix${DISPLAY}
       # QT_QPA_PLATFORM=offscreen
       # Note: run 'xhost +local:docker' beforehand.
-      
+
       # Force software OpenGL rendering (headless mode)
       LIBGL_ALWAYS_SOFTWARE: "1"
-
+      # QT_QPA_PLATFORM: "xvfb"
       # Optional: keep DISPLAY consistent with GitHub Actions
       DISPLAY: ":99"
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # Allow GUI application to run in docker
       - .:/tests_directory/
       - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
     command: qgis
