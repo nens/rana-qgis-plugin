@@ -106,7 +106,7 @@ class Loader(QObject):
     schematisation_upload_finished = pyqtSignal()
     schematisation_import_finished = pyqtSignal()
     schematisation_upload_failed = pyqtSignal()
-    simulation_cancelled = pyqtSignal()
+    simulation_wizard_cancelled = pyqtSignal()
     simulation_started = pyqtSignal()
     simulation_started_failed = pyqtSignal()
     file_deleted = pyqtSignal()
@@ -509,7 +509,7 @@ class Loader(QObject):
             self.parent(),
         )
         if template_dialog.exec() == QDialog.Rejected:
-            self.simulation_cancelled.emit()
+            self.simulation_wizard_cancelled.emit()
             return
 
         simulation_template = template_dialog.get_selected_template()
@@ -533,7 +533,7 @@ class Loader(QObject):
             parent=self.parent(),
         )
         if simulation_init_wizard.exec() == QDialog.Rejected:
-            self.simulation_cancelled.emit()
+            self.simulation_wizard_cancelled.emit()
             return
 
         if simulation_init_wizard.open_wizard:
@@ -563,7 +563,7 @@ class Loader(QObject):
             )
 
             if simulation_wizard.exec() == QDialog.Rejected:
-                self.simulation_cancelled.emit()
+                self.simulation_wizard_cancelled.emit()
 
     def start_model_tracker_process(
         self,

@@ -3953,6 +3953,7 @@ class SimulationWizard(QWizard):
             current_model.schematisation_name,
             current_model.revision_number,
         )
+
         self.current_model_geojson_breaches = self.get_breach_geojson_path("breaches")
         self.current_simulation_template = simulation_template
 

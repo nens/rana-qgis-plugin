@@ -370,7 +370,7 @@ class RanaQgisPlugin:
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
             self.loader.simulation_started.connect(self.rana_browser.enable)
-            self.loader.simulation_cancelled.connect(self.rana_browser.enable)
+            self.loader.simulation_wizard_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
             self.loader.schematisation_upload_cancelled.connect(
                 self.rana_browser.enable
