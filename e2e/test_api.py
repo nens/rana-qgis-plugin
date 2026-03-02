@@ -12,16 +12,16 @@ def test_smoke(plugin):
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     # QTest.mouseClick(rana_tool_button, Qt.LeftButton)
     # sleep(2)
-    # # rana_tool_button.click()
+    rana_tool_button.click()
     # plugin.run()
 
     # print("*******")
-    # assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
+    assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
     # sleep(10)
     # # import pdb
     # # pdb.set_trace()
     # # plugin.run()
-    
+
     # # print(dir(plugin))
     # sleep(10)
-    assert False
+    assert True
