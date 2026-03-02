@@ -158,14 +158,13 @@ def qgis_iface(qgis_application):
     yield iface
 
     # Cleanup
-    # del iface
-    # main_window.close()
-    # main_window.deleteLater()
-    # qgis_application.processEvents()
+    main_window.close()
+    main_window.deleteLater()
+    qgis_application.processEvents()
 
 
 @pytest.fixture(scope="function")
-def plugin(qgis_iface):
+def plugin(qgis_iface, qgis_application):
     auth_manager = QgsApplication.authManager()
     if not auth_manager.authenticationDatabasePath():
         auth_manager.setup()
@@ -193,5 +192,5 @@ def plugin(qgis_iface):
     plugin.initGui()
     yield plugin
 
-    # plugin.unload()
-    # qgis_application.processEvents()
+    plugin.unload()
+    qgis_application.processEvents()
