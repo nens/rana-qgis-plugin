@@ -6,9 +6,6 @@ from qgis.PyQt.QtTest import QTest
 
 
 def test_smoke(plugin):
-    secret = os.getenv("RANA_PAK")
-    print(secret)
-    print(type(secret))
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
     sleep(10)
