@@ -951,8 +951,10 @@ def load_local_schematisation(
                     )
                 except TypeError as e:
                     if "parents" in str(e):
-                        # Fall back on old syntax
-                        # TODO: warn somewhere about outdated schematisation editor
+                        # Warn and all back on old syntax and behavior
+                        communication.show_warn(
+                            "Rana schematisation editor is not up to date and therefore the schematisation layers will not be properly organized. Please update the plugin."
+                        )
                         schematisation_editor.load_schematisation(geopackage_filepath)
                     else:
                         raise
