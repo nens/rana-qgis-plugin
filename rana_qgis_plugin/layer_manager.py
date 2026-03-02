@@ -44,7 +44,7 @@ class LayerManager(QObject):
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
         if file.get("data_type") == "scenario":
-            self._add_layer_from_scenario(local_file_path, file, parents=parents)
+            self._add_layer_from_scenario(local_file_path, file, project=project_name)
         elif file.get("data_type") == "raster":
             self._add_layer_from_raster_file(local_file_path, file, parents=parents)
         elif file.get("data_type") == "vector":
@@ -68,7 +68,7 @@ class LayerManager(QObject):
             self.communication.show_warn(f"Failed to add layer {file_name}.")
 
     def _add_layers_from_vector_file(
-        self, local_file_path: str, file: dict, parents: Optional[list] = None
+        self, local_file_path: str, file: dict, parents: Optional[list[str]] = None
     ):
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         file_name = Path(file["id"]).name
@@ -103,16 +103,10 @@ class LayerManager(QObject):
             + (f" to group {'/'.join(parents)}." if parents else ".")
         )
 
-    def _add_layer_from_scenario(
-        self, local_file_path: str, file: dict, parents: Optional[list]
-    ):
+    def _add_layer_from_scenario(self, local_file_path: str, file: dict, project: str):
         # if zip file, do nothing, else try to load in results analysis
         if local_file_path.endswith(".zip"):
             return
-        # NOTE: this seems to fully depend on proper loading in the results analysis tool
-        # TODO: add to same group as results analysis
-        # TODO: create group in results analysis at correct level
-        # NOTE: load_result goes deep into the results manager; consider moving layer instead (consult cookbook)
         ra_tool = get_threedi_results_analysis_tool_instance()
         # Check whether result and gridadmin exist in the target folder
         result_path = Path(local_file_path).joinpath("results_3di.nc")
@@ -126,11 +120,34 @@ class LayerManager(QObject):
                     "Rana",
                     "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
                 ):
-                    ra_tool.load_result(result_path, admin_path)
-                    # TODO: move outside layer manager??
+                    try:
+                        ra_tool.load_result(result_path, admin_path, project=project)
+                    except TypeError as e:
+                        if "project" in str(e):
+                            # Warn and fall back on old syntax and behavior
+                            self.communication.show_warn(
+                                "Rana results analysis is not up to date and therefore the results layers will not be organized by project. Please update the plugin."
+                            )
+                            ra_tool.load_result(result_path, admin_path)
+                        else:
+                            raise
                     if not ra_tool.dockwidget.isVisible():
                         ra_tool.toggle_results_manager.run()  # also does some initialisation
                     if waterdepth_path.exists():
+                        # construct waterdepth parents based on metadata
+                        waterdepth_parents = [project]
+                        file_descriptor = get_tenant_file_descriptor(
+                            file["descriptor_id"]
+                        )
+                        if file_descriptor and file_descriptor.get("meta"):
+                            meta = file_descriptor["meta"]
+                            rev_name = meta.get("schematisation", {}).get("name")
+                            if rev_name:
+                                waterdepth_parents.append(rev_name)
+                            waterdepth_parents.append("Waterdepth")
+                            sim_name = meta.get("simulation", {}).get("name")
+                            if sim_name:
+                                waterdepth_parents.append(sim_name)
                         layer = self._create_and_add_layer(
                             QgsRasterLayer,
                             layer_args=[
@@ -138,7 +155,7 @@ class LayerManager(QObject):
                                 "max_waterdepth.tif",
                                 "gdal",
                             ],
-                            parents=parents,
+                            parents=waterdepth_parents,
                         )
                         if layer:
                             # we only download non-temporal rasters, so always pick the first band
@@ -148,8 +165,8 @@ class LayerManager(QObject):
                             self.communication.bar_info(
                                 f"Added water depth layer for {file_name}"
                                 + (
-                                    f" to group {'/'.join(parents)}."
-                                    if parents
+                                    f" to group {'/'.join(waterdepth_parents)}."
+                                    if waterdepth_parents
                                     else "."
                                 )
                             )
@@ -158,7 +175,7 @@ class LayerManager(QObject):
                     "Cannot add results as layer without Rana Results Analysis plugin"
                 )
 
-    def add_layer(self, layer, parents: Optional[list] = None):
+    def add_layer(self, layer, parents: Optional[list[str]] = None):
         self.project_inst.addMapLayer(layer, False)
         root = self.root
         if parents:
@@ -170,7 +187,7 @@ class LayerManager(QObject):
         root.addLayer(layer)
 
     def _create_and_add_layer(
-        self, layer_class, parents: Optional[list], layer_args: list
+        self, layer_class, parents: Optional[list[str]], layer_args: list
     ) -> Optional[QgsMapLayer]:
         layer = layer_class(*layer_args)
         if layer.isValid():
@@ -178,7 +195,6 @@ class LayerManager(QObject):
             return layer
 
     def add_from_wms(self, project_name, file: dict):
-        # TODO: add to same group as results analysis
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         parents = [project_name] + file["id"].split("/")
         file_name = Path(file["id"]).name
