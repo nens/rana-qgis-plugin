@@ -162,27 +162,11 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
-    @pyqtSlot(dict, dict)
-    def open_schematisation_with_revision(self, revision, schematisation):
-        if not hcc_working_dir():
-            self.communication.show_warn(
-                "Working directory not yet set, please configure this in the plugin settings."
-            )
-            return
-
-        pb = self.communication.progress_bar(
-            msg="Downloading remote schematisation...", clear_msg_bar=True
+    @pyqtSlot(dict, dict, dict)
+    def open_schematisation_with_revision(self, project, revision, schematisation):
+        self.layer_manager.add_from_schematisation(
+            project["name"], schematisation, revision
         )
-        # TODO: use layer maanger and set parents - note that does not know about project atm
-        load_remote_schematisation(
-            self.communication,
-            schematisation,
-            revision,
-            pb,
-            hcc_working_dir(),
-            get_threedi_api(),
-        )
-        self.file_opened.emit(file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -202,15 +186,17 @@ class Loader(QObject):
                 self.communication, file["descriptor_id"]
             )
             if schematisation:
+                revision = schematisation["latest_revision"]
+                if not revision:
+                    self.communication.show_warn(
+                        "Cannot open a schematisation without a revision."
+                    )
+                    return
                 self.layer_manager.add_from_schematisation(
-                    project["name"], schematisation
+                    project["name"], schematisation["schematisation"], revision
                 )
         elif file["data_type"] in ["scenario", "vector", "raster"]:
-            self.layer_manager.add_from_file(
-                local_file_path,
-                project["name"],
-                file,
-            )
+            self.layer_manager.add_from_file(project["name"], local_file_path, file)
         self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 

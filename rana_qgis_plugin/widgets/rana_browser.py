@@ -745,7 +745,7 @@ class RanaBrowser(QWidget):
     create_model_selected = pyqtSignal(dict, dict)
     create_model_selected_with_revision = pyqtSignal(dict, dict, int)
     delete_model_selected = pyqtSignal(dict, int)
-    open_schematisation_selected_with_revision = pyqtSignal(dict, dict)
+    open_schematisation_selected_with_revision = pyqtSignal(dict, dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
@@ -884,6 +884,7 @@ class RanaBrowser(QWidget):
         )
         self.project_jobs_added.connect(self.processes_browser.add_items)
         self.project_job_updated.connect(self.processes_browser.update_job_state)
+
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
@@ -995,7 +996,10 @@ class RanaBrowser(QWidget):
         )
         # Load specific revision of schematisation
         self.revisions_view.open_schematisation_revision_in_qgis_requested.connect(
-            self.open_schematisation_selected_with_revision
+            lambda schematisation,
+            revision: self.open_schematisation_selected_with_revision.emit(
+                self.project, schematisation, revision
+            )
         )
         # Update breadcrumbs when file browser path changes
         self.projects_browser.project_selected.connect(

@@ -37,11 +37,11 @@ class LayerManager(QObject):
         self.project_inst = QgsProject.instance()
         self.root = self.project_inst.layerTreeRoot()
 
-    def add_from_file(self, local_file_path: str, project_name: str, file: dict):
+    def add_from_file(self, project_name, local_file_path: str, file: dict):
         self.communication.clear_message_bar()
-        parents = [project_name] + path.split("/")[:-1]
+        parents = [project_name] + file["id"].split("/")[:-1]
         # Save the last modified date of the downloaded file in QSettings
-        last_modified_key = f"{project_name}/{path}/last_modified"
+        last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
         if file.get("data_type") == "scenario":
             self._add_layer_from_scenario(local_file_path, file, parents=parents)
@@ -174,7 +174,7 @@ class LayerManager(QObject):
             root.addLayer(layer)
             return layer
 
-    def add_from_wms(self, project_name: str, file: dict):
+    def add_from_wms(self, project_name, file: dict):
         # TODO: add to same group as results analysis
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         parents = [project_name] + file["id"].split("/")
@@ -205,17 +205,8 @@ class LayerManager(QObject):
                 return
         self.communication.show_error(f"Cannot add wms layer(s) from {file_name}")
 
-    def add_from_schematisation(self, project_name: str, schematisation_instance):
-        parents = [project_name]
+    def add_from_schematisation(self, project_name, schematisation, revision):
         self.communication.clear_message_bar()
-        # TODO: handle other revisions
-        schematisation = schematisation_instance["schematisation"]
-        revision = schematisation_instance["latest_revision"]
-        if not revision:
-            self.communication.show_warn(
-                "Cannot open a schematisation without a revision."
-            )
-            return
         pb = self.communication.progress_bar(
             msg="Downloading remote schematisation...", clear_msg_bar=True
         )
@@ -224,7 +215,6 @@ class LayerManager(QObject):
                 "Working directory not yet set, please configure this in the plugin settings."
             )
             return
-        # TODO: check other/downstream usage
         load_remote_schematisation(
             self.communication,
             schematisation,
@@ -232,6 +222,6 @@ class LayerManager(QObject):
             pb,
             hcc_working_dir(),
             get_threedi_api(),
-            parents=parents,
+            parents=[project_name],
         )
         self.communication.clear_message_bar()
