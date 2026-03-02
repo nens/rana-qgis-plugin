@@ -39,7 +39,6 @@ class LayerManager(QObject):
 
     def add_from_file(self, local_file_path: str, project_name: str, file: dict):
         self.communication.clear_message_bar()
-        path = file["id"]
         parents = [project_name] + path.split("/")[:-1]
         # Save the last modified date of the downloaded file in QSettings
         last_modified_key = f"{project_name}/{path}/last_modified"
@@ -113,6 +112,7 @@ class LayerManager(QObject):
         # NOTE: this seems to fully depend on proper loading in the results analysis tool
         # TODO: add to same group as results analysis
         # TODO: create group in results analysis at correct level
+        # NOTE: load_result goes deep into the results manager; consider moving layer instead (consult cookbook)
         ra_tool = get_threedi_results_analysis_tool_instance()
         # Check whether result and gridadmin exist in the target folder
         result_path = Path(local_file_path).joinpath("results_3di.nc")
@@ -205,7 +205,8 @@ class LayerManager(QObject):
                 return
         self.communication.show_error(f"Cannot add wms layer(s) from {file_name}")
 
-    def add_from_schematisation(self, schematisation_instance):
+    def add_from_schematisation(self, project_name: str, schematisation_instance):
+        parents = [project_name]
         self.communication.clear_message_bar()
         # TODO: handle other revisions
         schematisation = schematisation_instance["schematisation"]
@@ -223,6 +224,7 @@ class LayerManager(QObject):
                 "Working directory not yet set, please configure this in the plugin settings."
             )
             return
+        # TODO: check other/downstream usage
         load_remote_schematisation(
             self.communication,
             schematisation,
@@ -230,5 +232,6 @@ class LayerManager(QObject):
             pb,
             hcc_working_dir(),
             get_threedi_api(),
+            parents=parents,
         )
         self.communication.clear_message_bar()

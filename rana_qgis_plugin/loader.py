@@ -173,7 +173,7 @@ class Loader(QObject):
         pb = self.communication.progress_bar(
             msg="Downloading remote schematisation...", clear_msg_bar=True
         )
-
+        # TODO: use layer maanger and set parents - note that does not know about project atm
         load_remote_schematisation(
             self.communication,
             schematisation,
@@ -202,7 +202,9 @@ class Loader(QObject):
                 self.communication, file["descriptor_id"]
             )
             if schematisation:
-                self.layer_manager.add_from_schematisation(schematisation)
+                self.layer_manager.add_from_schematisation(
+                    project["name"], schematisation
+                )
         elif file["data_type"] in ["scenario", "vector", "raster"]:
             self.layer_manager.add_from_file(
                 local_file_path,
