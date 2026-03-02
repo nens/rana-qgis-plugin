@@ -466,7 +466,11 @@ class Loader(QObject):
         if simulation_init_wizard.exec() == QDialog.Rejected:
             self.simulation_wizard_cancelled.emit()
             return
-
+        layer_parents = (
+            [project["name"]]
+            + file["id"].split("/")[:-1]
+            + [f"Rana schematisation: {Path(file['id']).stem} {revision['number']}"]
+        )
         if simulation_init_wizard.open_wizard:
             simulation_wizard = SimulationWizard(
                 self.simulation_runner_pool,
@@ -477,6 +481,7 @@ class Loader(QObject):
                 threedi_api,
                 self.communication,
                 self.layer_manager,
+                layer_parents,
                 simulation_init_wizard,
                 self.parent(),
             )

@@ -53,7 +53,7 @@ class LayerManager(QObject):
     def _add_layer_from_raster_file(
         self, local_file_path: str, file: dict, parents: list
     ):
-        layer = self._add_layer(
+        layer = self._create_and_add_layer(
             QgsRasterLayer,
             parents=parents,
             layer_args=[local_file_path, Path(file["id"]).name],
@@ -82,7 +82,7 @@ class LayerManager(QObject):
             self.communication.show_warn(f"No layers found in {file_name}.")
             return
         for file_layer in layers:
-            layer = self._add_layer(
+            layer = self._create_and_add_layer(
                 QgsVectorLayer,
                 layer_args=[local_file_path, file_layer["name"], "ogr"],
                 parents=parents,
@@ -131,7 +131,7 @@ class LayerManager(QObject):
                     if not ra_tool.dockwidget.isVisible():
                         ra_tool.toggle_results_manager.run()  # also does some initialisation
                     if waterdepth_path.exists():
-                        layer = self._add_layer(
+                        layer = self._create_and_add_layer(
                             QgsRasterLayer,
                             layer_args=[
                                 str(waterdepth_path),
@@ -158,20 +158,23 @@ class LayerManager(QObject):
                     "Cannot add results as layer without Rana Results Analysis plugin"
                 )
 
-    def _add_layer(
+    def add_layer(self, layer, parents: Optional[list] = None):
+        self.project_inst.addMapLayer(layer, False)
+        root = self.root
+        if parents:
+            for parent in parents:
+                if not root.findGroup(parent):
+                    root = root.addGroup(parent)
+                else:
+                    root = root.findGroup(parent)
+        root.addLayer(layer)
+
+    def _create_and_add_layer(
         self, layer_class, parents: Optional[list], layer_args: list
     ) -> Optional[QgsMapLayer]:
         layer = layer_class(*layer_args)
         if layer.isValid():
-            self.project_inst.addMapLayer(layer, False)
-            root = self.root
-            if parents:
-                for parent in parents:
-                    if not root.findGroup(parent):
-                        root = root.addGroup(parent)
-                    else:
-                        root = root.findGroup(parent)
-            root.addLayer(layer)
+            self.add_layer(layer, parents)
             return layer
 
     def add_from_wms(self, project_name, file: dict):
@@ -190,7 +193,7 @@ class LayerManager(QObject):
                     # the wms provider will take care to expand authcfg URI parameter with credential
                     # just before setting the HTTP connection.
                     quri.setAuthConfigId(get_authcfg_id())
-                    self._add_layer(
+                    self._create_and_add_layer(
                         QgsRasterLayer,
                         parents=parents,
                         layer_args=[
