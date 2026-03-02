@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     fontconfig \
     dbus \
-    mesa-utils
+    mesa-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 
 COPY requirements-dev.txt /root
 COPY requirements-test.txt /root
@@ -26,3 +28,12 @@ RUN python3 /root/dependencies.py
 RUN pip3 install -r /root/requirements-test.txt -c /root/constraints.txt --no-deps --upgrade --target /usr/share/qgis/python/plugins
 
 WORKDIR /tests_directory
+
+COPY xvfb-startup.sh .
+RUN sed -i 's/\r$//' xvfb-startup.sh
+ARG RESOLUTION="1920x1080x24"
+ENV XVFB_RES="${RESOLUTION}"
+ARG XARGS=""
+ENV XVFB_ARGS="${XARGS}"
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+ENTRYPOINT ["/bin/bash", "xvfb-startup.sh"]

@@ -24,24 +24,9 @@ jobs:
         run: docker compose build qgis
 
       # 3️⃣ Run tests headless inside container
-      - name: Run Pytest with Xvfb
-        run: |
-          docker compose run --rm qgis bash -c "
-            # Enable software rendering for OpenGL
-            export LIBGL_ALWAYS_SOFTWARE=1
-
-            # Start virtual X server in background
-            Xvfb :99 -screen 0 1920x1080x24 &
-
-            # Set DISPLAY to point to the virtual X server
-            export DISPLAY=:99
-
-            # Give Xvfb time to start
-            sleep 4
-
-            # Run your tests
-            pytest -v e2e
-          "
+      - name: Run e2e
+        run: 
+          docker compose run --rm qgis pytest -v e2e
         env:
           RANA_PAK: ${{ secrets.RANA_PAK }}
           ORG_3DI: ${{ secrets.ORG_3DI }}

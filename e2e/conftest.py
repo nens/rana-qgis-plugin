@@ -78,11 +78,13 @@ def qgis_application() -> QgsApplication:
     QgsApplication.setPrefixPath("/usr", True)
     qgs = QgsApplication([], True)
     qgs.initQgis()
+    print("QGIS application initialized for testing")
     yield qgs
 
     qgs.processEvents()
     gc.collect()
     qgs.exitQgis()
+    print("QGIS application exited after testing")
     gc.collect()
 
 
@@ -156,13 +158,14 @@ def qgis_iface(qgis_application):
     yield iface
 
     # Cleanup
-    main_window.close()
-    main_window.deleteLater()
-    qgis_application.processEvents()
+    # del iface
+    # main_window.close()
+    # main_window.deleteLater()
+    # qgis_application.processEvents()
 
 
 @pytest.fixture(scope="function")
-def plugin(qgis_iface, qgis_application):
+def plugin(qgis_iface):
     auth_manager = QgsApplication.authManager()
     if not auth_manager.authenticationDatabasePath():
         auth_manager.setup()
@@ -190,5 +193,5 @@ def plugin(qgis_iface, qgis_application):
     plugin.initGui()
     yield plugin
 
-    plugin.unload()
-    qgis_application.processEvents()
+    # plugin.unload()
+    # qgis_application.processEvents()
