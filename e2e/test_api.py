@@ -14,7 +14,7 @@ def test_smoke(plugin):
 
     # print("*******")
     assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
-    sleep(20)
+    sleep(10)
     # # import pdb
     # # pdb.set_trace()
     # # plugin.run()
