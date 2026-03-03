@@ -7,14 +7,15 @@ from qgis.PyQt.QtTest import QTest
 
 def test_smoke(plugin):
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
+    # sleep(10)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-    sleep(10)
+    
     # rana_tool_button.click()
     # plugin.run()
 
     # print("*******")
     assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
-    sleep(20)
+    # sleep(20)
     # # import pdb
     # # pdb.set_trace()
     # # plugin.run()

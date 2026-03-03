@@ -5,13 +5,14 @@ services:
       - "7070:7070"
       - "80:80"
       - "5900:5900" # x11vnc
-    tmpfs:
-      - /tmp
-      - /tmp/.X11-unix
+    # tmpfs:
+    #   - /tmp
+    #   - /tmp/.X11-unix
     environment:
+      DISPLAY: "unix${DISPLAY}"
       RANA_PAK: ${RANA_PAK}
     volumes:
-      # - /tmp/.X11-unix:/tmp/.X11-unix:rw  # Allow GUI application to run in docker
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # Allow GUI application to run in docker
       - .:/tests_directory/
       - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
 
