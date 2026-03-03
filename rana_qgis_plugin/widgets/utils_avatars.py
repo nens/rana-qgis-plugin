@@ -97,6 +97,7 @@ def get_avatar(
     elif create_from_initials:
         initials = (user["given_name"][0] if user["given_name"] else "?") + (
             user["family_name"][0] if user["family_name"] else "?"
+        )
         final_pixmap = get_user_image_from_initials(initials)
     return final_pixmap
 
