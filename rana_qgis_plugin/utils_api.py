@@ -563,12 +563,10 @@ def get_user_image(communication: UICommunication, user_id):
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
-
     if status:
         response = network_manager.content
         return response
     else:
-        communication.show_error(f"Failed to retrieve user image: {error}")
         return None
 
 
