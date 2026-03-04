@@ -2,19 +2,16 @@ import gc
 import os
 from unittest.mock import Mock, patch
 
-# Patch get_user_info to always return a test user using unittest.mock.patch
 import pytest
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
-from qgis.gui import QgsMapCanvas
-from qgis.PyQt.QtCore import QObject, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QDesktopServices
+from qgis.core import QgsApplication, QgsAuthMethodConfig
+from qgis.gui import QgsMapCanvas, QgsMessageBar
+from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import (
-    QAction,
     QMainWindow,
     QMenu,
-    QMenuBar,
-    QMessageBox,
     QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 import rana_qgis_plugin.utils_api as utils_api
@@ -77,7 +74,7 @@ def qgis_application() -> QgsApplication:
     """QGIS app for testing with GUI"""
     QgsApplication.setPrefixPath("/usr", True)
     qgs = QgsApplication([], True)
-    qgs.initQgis()
+    qgs.initQgis()  # TODO: QtWarningMsg: Logged warning: Duplicate provider rana_desktop_client registered
     print("QGIS application initialized for testing")
     yield qgs
 
@@ -114,19 +111,23 @@ def qgis_iface(qgis_application):
     iface = Mock()
     iface.mainWindow.return_value = main_window
 
+    centerWidget = QWidget(main_window)
+    center_layout = QVBoxLayout(centerWidget)
+    centerWidget.setLayout(center_layout)
+
+    main_window.setCentralWidget(centerWidget)
+
     # Create real map canvas
     canvas = QgsMapCanvas(main_window)
-    main_window.setCentralWidget(canvas)
     iface.mapCanvas.return_value = canvas
 
     # Create real message bar
-    message_bar = QMessageBox(main_window)
+    message_bar = QgsMessageBar(main_window)
     iface.messageBar.return_value = message_bar
-    # Add clearWidgets method to message bar mock
-    message_bar.clearWidgets = Mock()
-    message_bar.pushMessage = Mock()
+    center_layout.addWidget(message_bar)
+    center_layout.addWidget(canvas)
 
-    # Mock toolbar - returns real toolbar
+    # Mock QGIS toolbar - returns real toolbar
     def add_toolbar(name):
         toolbar = QToolBar(name, main_window)
         main_window.addToolBar(toolbar)
@@ -165,6 +166,11 @@ def qgis_iface(qgis_application):
 
 @pytest.fixture(scope="function")
 def plugin(qgis_iface, qgis_application):
+    QSettings().setValue(
+        f"{RANA_SETTINGS_ENTRY}/last_upload_folder",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"),
+    )
+
     auth_manager = QgsApplication.authManager()
     if not auth_manager.authenticationDatabasePath():
         auth_manager.setup()
