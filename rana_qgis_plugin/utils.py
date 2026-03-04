@@ -78,6 +78,7 @@ def add_layer_to_qgis(
     schematisation_instance: dict,
     revision_instance: dict = None,
 ):
+    # TODO: remove this
     path = file["id"]
     file_name = os.path.basename(path.rstrip("/"))
     data_type = descriptor["data_type"]
