@@ -41,6 +41,9 @@ def test_upload(plugin, qtbot, request):
     )
     QTest.qWait(2000)
 
+    # TODO
+    # assert not plugin.rana_browser.files_browser.isVisible()
+
     def handle_dialog2():
         modal = QApplication.activeModalWidget()
         assert isinstance(modal, QMessageBox)
@@ -54,7 +57,7 @@ def test_upload(plugin, qtbot, request):
         QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-    QTimer.singleShot(5000, handle_dialog2)
+    QTimer.singleShot(8000, handle_dialog2)
 
     with qtbot.waitSignal(plugin.loader.file_upload_finished):
 
@@ -70,8 +73,13 @@ def test_upload(plugin, qtbot, request):
         QTimer.singleShot(1000, handle_dialog)
         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    # print("Upload finished signal emitted")
+    QTest.qWait(10000)
 
-    # QTest.qWait(20000)
+    # Check whether File view is visible and contains the uploaded file
+    # TODO
+    # assert plugin.rana_browser.files_browser.isVisible()
 
-    assert False
+    # Check whether the map layer was added to the canvas
+    assert any(
+        "upload.gpkg" in layer.name() for layer in plugin.iface.mapCanvas().layers()
+    )

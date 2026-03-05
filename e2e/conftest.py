@@ -3,8 +3,8 @@ import os
 from unittest.mock import Mock, patch
 
 import pytest
-from qgis.core import QgsApplication, QgsAuthMethodConfig
-from qgis.gui import QgsMapCanvas, QgsMessageBar
+from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
+from qgis.gui import QgsLayerTreeMapCanvasBridge, QgsMapCanvas, QgsMessageBar
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import (
     QMainWindow,
@@ -120,6 +120,8 @@ def qgis_iface(qgis_application):
     # Create real map canvas
     canvas = QgsMapCanvas(main_window)
     iface.mapCanvas.return_value = canvas
+
+    bridge = QgsLayerTreeMapCanvasBridge(QgsProject.instance().layerTreeRoot(), canvas)
 
     # Create real message bar
     message_bar = QgsMessageBar(main_window)
