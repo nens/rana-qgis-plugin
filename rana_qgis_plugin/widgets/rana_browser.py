@@ -451,7 +451,6 @@ class RanaBrowser(QWidget):
         self.project_job_updated.connect(self.processes_browser.update_job_state)
         self.project_publication_added.connect(self.publications_browser.add_items)
         self.project_publication_updated.connect(self.publications_browser.update_item)
-        # TODO add publicaitons widget
 
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
@@ -581,23 +580,18 @@ class RanaBrowser(QWidget):
                 self.project, publication
             )
         )
-
+        self.publications_browser.publication_selected.connect(
+            lambda publication: self.publications_breadcrumbs.add_detail_view(
+                publication["name"]
+            )
+        )
         # Update breadcrumbs when file browser path changes
-        self.projects_browser.project_selected.connect(
-            lambda selected_item: self.files_breadcrumbs.add_folder(
-                selected_item["name"]
+        for breadcrumb_widget in self.breadcrumbs_manager.widgets:
+            self.projects_browser.project_selected.connect(
+                lambda selected_item, widget=breadcrumb_widget: widget.add_project(
+                    selected_item["name"]
+                )
             )
-        )
-        self.projects_browser.project_selected.connect(
-            lambda selected_item: self.processes_breadcrumbs.add_project(
-                selected_item["name"]
-            )
-        )
-        self.projects_browser.project_selected.connect(
-            lambda selected_item: self.publications_breadcrumbs.add_project(
-                selected_item["name"]
-            )
-        )
         self.files_browser.folder_selected.connect(self.files_breadcrumbs.add_folder)
         self.files_browser.file_selected.connect(
             lambda selected_item: self.files_breadcrumbs.add_file(
@@ -632,6 +626,9 @@ class RanaBrowser(QWidget):
         )
         self.files_breadcrumbs.file_selected.connect(
             lambda: self.show_project_data(self.rana_files, 1)
+        )
+        self.publications_breadcrumbs.project_selected.connect(
+            lambda: self.show_project_data(self.rana_publications, 0)
         )
 
     def show_projects_browser(self):
