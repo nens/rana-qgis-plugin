@@ -290,7 +290,7 @@ def get_file_icon_name(data_type: str) -> str:
     # TODO: extend with more types
     # Ensure that data_type is a string so we can safely use string operations
     if not data_type:
-        date_type = ''
+        date_type = ""
     icon_map = {
         "scenario": "mIconTemporalRaster.svg",
         "threedi_schematisation": "mIconDbSchema.svg",
@@ -298,5 +298,11 @@ def get_file_icon_name(data_type: str) -> str:
         "vector": "mIconVector.svg",
         "sqlite": "mIconDbSchema.svg",
         "polygon": "mIconPolygonLayer.svg",
+        "point": "mIconPointLayer.svg",
+        "linestring": "mIconLineLayer.svg",
+        "multipoint": "mIconPointLayer.svg",
+        "multilinestring": "mIconLineLayer.svg",
+        "multipolygon": "mIconPolygonLayer.svg",
+        "geometrycollection": "mIconGeometryCollection.svg",
     }
     return icon_map.get(data_type.lower(), "mIconFile.svg")

@@ -257,8 +257,6 @@ class PublicationView(QWidget):
                 for file_layer in (
                     entry["file_descriptor"].get("meta", {}).get("layers", [])
                 ):
-                    # TODO: support more types
-                    # Geometry types: "Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection".
                     layer_icon = get_icon_from_theme(
                         get_file_icon_name(file_layer.get("type", ""))
                     )
