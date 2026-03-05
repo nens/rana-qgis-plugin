@@ -188,8 +188,8 @@ class PublicationView(QWidget):
         self.general_box.setCollapsed(False)
 
     def add_buttons_to_row(self, parent_item):
-        open_btn = self.get_buttom_item("Open in QGIS")
-        save_btn = self.get_buttom_item("Save style to Rana")
+        open_btn = self.get_button_item("Open in QGIS")
+        save_btn = self.get_button_item("Save style to Rana")
         child_row_index = parent_item.index().child(
             parent_item.rowCount() - 1,  # Child row is the last added
             0,  # Always reference the first column
@@ -202,21 +202,47 @@ class PublicationView(QWidget):
             child_row_index.sibling(child_row_index.row(), 3), save_btn
         )
 
-    def add_map_layers(self, parent_item, layers):
+    def collect_map_data(self, layers):
         """
-        Recursive function to process layers and groups,
-        and add them to the parent item.
+        Recursively collect data from API needed to populate the maps table
         """
-        # TODO: seperate collecting data and populating model
+        map_data = []
         for layer in layers:
             if layer.get("type") == "layer":
                 file = self.file_map.get(layer["layer_in_file"])
                 if not file:
                     continue
-                data_type = file.get("data_type", "")
+                file_descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                map_data.append(
+                    {
+                        "type": "layer",
+                        "layer": layer,
+                        "file": file,
+                        "file_descriptor": file_descriptor,
+                    }
+                )
+            elif layer.get("type") == "group":
+                map_data.append(
+                    {
+                        "type": "group",
+                        "layer": layer,
+                        "sub_layers": self.collect_map_data(layer.get("layers", [])),
+                    }
+                )
+        return map_data
+
+    def add_map_layers(self, parent_item, map_data: list):
+        """
+        Recursively add map layers to the maps table
+        """
+        for entry in map_data:
+            if entry["type"] == "layer":
+                if not entry.get("file"):
+                    continue
+                data_type = entry["file"].get("data_type", "")
                 file_icon = get_icon_from_theme(get_file_icon_name(data_type))
-                file_item = QStandardItem(file_icon, layer["name"])
-                file_item.setToolTip(file["id"])
+                file_item = QStandardItem(file_icon, entry["layer"]["name"])
+                file_item.setToolTip(entry["file"]["id"])
                 parent_item.appendRow(
                     [
                         file_item,
@@ -226,10 +252,11 @@ class PublicationView(QWidget):
                     ]
                 )
                 self.add_buttons_to_row(parent_item)
-                file_descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-                if not file_descriptor:
+                if not entry.get("file_descriptor"):
                     continue
-                for file_layer in file_descriptor.get("meta", {}).get("layers", []):
+                for file_layer in (
+                    entry["file_descriptor"].get("meta", {}).get("layers", [])
+                ):
                     # TODO: support more types
                     # Geometry types: "Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection".
                     layer_icon = get_icon_from_theme(
@@ -245,8 +272,8 @@ class PublicationView(QWidget):
                         ]
                     )
                     self.add_buttons_to_row(file_item)
-            elif layer.get("type") == "group":
-                group_item = QStandardItem(layer["name"])
+            elif entry["type"] == "group":
+                group_item = QStandardItem(entry["layer"]["name"])
                 parent_item.appendRow(
                     [
                         group_item,
@@ -259,21 +286,23 @@ class PublicationView(QWidget):
                 group_index = parent_index.child(parent_item.rowCount() - 1, 0)
                 self.maps_tv.expand(group_index)
                 # Recurse for nested layers in the group
-                self.add_map_layers(group_item, layer.get("layers", []))
+                self.add_map_layers(group_item, entry["sub_layers"])
 
     def update_maps_box(self):
-        maps = self.current_version.get("maps", [])
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", "", ""])
-        for map in maps:
-            # TODO: make bold
-            name_item = QStandardItem(map["name"])
+        data = {
+            map["name"]: self.collect_map_data(map.get("layers", []))
+            for map in self.current_version.get("maps", [])
+        }
+        for name, map_data in data.items():
+            name_item = QStandardItem(name)
             self.maps_model.appendRow(
                 [name_item, QStandardItem(), QStandardItem(), QStandardItem()]
             )
+            self.add_map_layers(name_item, map_data)
             map_index = self.maps_model.indexFromItem(name_item)
             self.maps_tv.expand(map_index)
-            self.add_map_layers(name_item, map.get("layers", []))
         self.maps_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, self.maps_model.columnCount()):
             self.maps_tv.header().setSectionResizeMode(
@@ -281,7 +310,7 @@ class PublicationView(QWidget):
             )
 
     @staticmethod
-    def get_buttom_item(label: str, func=None, tooltip: str = None) -> QWidget:
+    def get_button_item(label: str, func=None, tooltip: str = None) -> QWidget:
         btn = QPushButton(label)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         if func:
