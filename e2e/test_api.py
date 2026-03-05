@@ -1,6 +1,6 @@
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QTreeView
+from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox, QTreeView
 
 
 def click_tree_item(tree: QTreeView, index, qtbot):
@@ -19,7 +19,8 @@ def click_tree_item(tree: QTreeView, index, qtbot):
         qtbot.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
 
 
-def test_smoke(plugin):
+def test_smoke(plugin, request):
+    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     QTest.qWait(1000)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
@@ -27,10 +28,11 @@ def test_smoke(plugin):
     assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
 
 
-def test_upload(plugin, qtbot):
+def test_upload(plugin, qtbot, request):
+    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-
+    QTest.qWait(2000)
     # Select the one and only project
     click_tree_item(
         plugin.rana_browser.projects_browser.projects_tv,
@@ -39,20 +41,37 @@ def test_upload(plugin, qtbot):
     )
     QTest.qWait(2000)
 
-    def handle_dialog():
-        # Get the active modal widget
+    def handle_dialog2():
         modal = QApplication.activeModalWidget()
-        assert isinstance(modal, QFileDialog)
-        print("Dialog opened successfully")
+        assert isinstance(modal, QMessageBox)
+        modal.setFocus()
         QTest.qWait(1000)
-        # Close the dialog
-        modal.setFocus()  # Ensure the file dialog has focus
-        modal.selectFile("upload.gpkg")  # Clear any selected file
-        QTest.qWait(2000)
+        qtbot.keyPress(modal, Qt.Key_Shift)
+        qtbot.keyPress(modal, Qt.Key_Tab)
+        QTest.qWait(100)
+        qtbot.keyRelease(modal, Qt.Key_Tab)
+        qtbot.keyRelease(modal, Qt.Key_Shift)
+        QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-    QTimer.singleShot(1000, handle_dialog)
-    QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
-    QTest.qWait(2000)
+    QTimer.singleShot(5000, handle_dialog2)
+
+    with qtbot.waitSignal(plugin.loader.file_upload_finished):
+
+        def handle_dialog():
+            modal = QApplication.activeModalWidget()
+            assert isinstance(modal, QFileDialog)
+            QTest.qWait(1000)
+            modal.setFocus()
+            modal.selectFile("upload.gpkg")  # Clear any selected file
+            QTest.qWait(1000)
+            qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+        QTimer.singleShot(1000, handle_dialog)
+        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+
+    # print("Upload finished signal emitted")
+
+    # QTest.qWait(20000)
 
     assert False
