@@ -27,6 +27,7 @@ class BreadcrumbType(Enum):
     FILE = "file"
     REVISIONS = "revisions"
     PROJECT = "project"
+    VIEW = "view"
 
 
 BreadcrumbItem = namedtuple("BreadcrumbItem", ["type", "name"])
@@ -34,6 +35,7 @@ BreadcrumbItem = namedtuple("BreadcrumbItem", ["type", "name"])
 
 class BreadcrumbsWidget(QWidget):
     projects_selected = pyqtSignal()
+    project_selected = pyqtSignal()
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal()
 
@@ -139,21 +141,34 @@ class BreadcrumbsWidget(QWidget):
     def on_click(self, index: int):
         # Truncate items to clicked position
         self._items = self._items[: index + 1]
-        if index == 0:  # Projects
+        clicked_item = self._items[index]
+        if clicked_item.type == BreadcrumbType.PROJECTS:
             self.projects_selected.emit()
         else:
             self.communication.progress_bar("Loading files...", clear_msg_bar=True)
-            clicked_item = self._items[index]
+            if clicked_item.type == BreadcrumbType.PROJECT:
+                self.project_selected.emit()
+            elif clicked_item.type == BreadcrumbType.FOLDER:
+                self.folder_selected.emit(
+                    "/".join(item.name for item in self._items[2:]) + "/"
+                )
             if clicked_item.type == BreadcrumbType.FILE:
                 self.file_selected.emit()
-            else:
-                # path should be None for project root
-                if len(self._items) == 2:
-                    path = None
-                else:
-                    path = "/".join(item.name for item in self._items[2:]) + "/"
-                self.folder_selected.emit(path)
             self.communication.clear_message_bar()
+        self.update()
+
+    def add_project(self, project_name):
+        if self._items[-1].type in [BreadcrumbType.PROJECTS]:
+            self._items.append(BreadcrumbItem(BreadcrumbType.PROJECT, project_name))
+        self.update()
+
+
+class GenericBreadcrumbsWidget(BreadcrumbsWidget):
+    """Breadcrumbs widgets for generic views with two levels: project overview and detail view"""
+
+    def add_detail_view(self, name: str):
+        if self._items[-1].type == BreadcrumbType.PROJECT:
+            self._items.append(BreadcrumbItem(BreadcrumbType.VIEW, name))
         self.update()
 
 
@@ -170,6 +185,10 @@ class FilesBreadcrumbsWidget(BreadcrumbsWidget):
         if self._items[-1].type == BreadcrumbType.FILE:
             self._items[-1] = BreadcrumbItem(BreadcrumbType.FILE, new_name)
         self.update()
+
+    def add_project(self, project_name):
+        # Project overview is just a folder so this is added as a folder
+        self.add_folder(project_name)
 
     def add_file(self, file_path):
         # files can only be added after a folder
@@ -197,35 +216,12 @@ class FilesBreadcrumbsWidget(BreadcrumbsWidget):
         self.update()
 
 
-# class PublicationBreadCrumbsWidget(BreadcrumbsWidget):
-#     def add_project(self, project_name):
-#         # folders can only be added after projects or a folder
-#         if self._items[-1].type in [BreadcrumbType.PROJECTS]:
-#             self._items.append(BreadcrumbItem(BreadcrumbType.PROJECT, project_name))
-#         self.update()
-#
-#     def add_detail_view(self, publication_name: str):
-#         # files can only be added after a folder
-#         if self._items[-1].type == BreadcrumbType.:
-#             self._items.append(BreadcrumbItem(BreadcrumbType.FILE, file_path))
-#         self.update()
-
-## TODO: gerelaize add_projct also for BreadcrumbsWidget?
-
-
-class GenericBreadcrumbsWidget(BreadcrumbsWidget):
-    def add_project(self, project_name):
-        # folders can only be added after projects or a folder
-        if self._items[-1].type in [BreadcrumbType.PROJECTS]:
-            self._items.append(BreadcrumbItem(BreadcrumbType.PROJECT, project_name))
-        self.update()
-
-
 class BreadcrumbsManager(QWidget):
     def __init__(self, breadcrumb_widgets: List[BreadcrumbsWidget], parent=None):
         super().__init__(parent)
         # Add all breadcrumbs widget to a stack
         self.stack = QStackedWidget()
+        self.widgets = breadcrumb_widgets
         for widget in breadcrumb_widgets:
             self.stack.addWidget(widget)
         self.link_breadcrumbs()
