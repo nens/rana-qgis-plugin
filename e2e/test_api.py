@@ -81,3 +81,5 @@ def test_upload(plugin, qtbot, request):
         plugin.iface.mapCanvas().layers()[0].dataProvider().dataSourceUri()
         == "/root/Rana/plugin-test/upload/upload.gpkg|layername=test"
     )
+
+    # Delete the file
