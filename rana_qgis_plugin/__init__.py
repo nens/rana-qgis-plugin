@@ -43,7 +43,7 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :param iface: A QGIS interface instance.
     :type iface: QgsInterface
     """
-    # check_dependency_loader()
+    check_dependency_loader()
 
     from .rana_qgis_plugin import RanaQgisPlugin
 
