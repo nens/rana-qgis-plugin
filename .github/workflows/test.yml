@@ -1,6 +1,5 @@
 name: pytest
 
-# Run on pull requests and on the master branch itself.
 on:
   push:
     branches:
@@ -9,18 +8,29 @@ on:
       - "*"
   pull_request:
 
-
 jobs:
   test:
     runs-on: ubuntu-24.04
+
     steps:
-      # Checkout the code.
-      - uses: actions/checkout@v2
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      # 2️⃣ Build Docker image
+      - name: Build QGIS Docker image
+        run: docker compose build qgis
 
-      - name: build
-        run: |
-          docker compose build qgis
+      # 3️⃣ Run tests headless inside container
+      - name: Run e2e
+        run: 
+          docker compose run --service-ports --rm qgis pytest -v e2e
+        env:
+          RANA_PAK: ${{ secrets.RANA_PAK }}
+          ORG_3DI: ${{ secrets.ORG_3DI }}
 
-      - name: test
-        run: |
-          docker compose run qgis pytest
+      - name: Upload recording if tests fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-recording
+          path: output.mp4

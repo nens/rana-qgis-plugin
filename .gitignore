@@ -14,3 +14,5 @@ crayfish
 lizard_qgis_plugin
 plugin_reloader
 rana_qgis_customisations
+docker-compose.override.yml
+output.mp4

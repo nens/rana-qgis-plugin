@@ -790,14 +790,22 @@ class Loader(QObject):
         last_saved_dir = QSettings().value(
             f"{RANA_SETTINGS_ENTRY}/last_upload_folder", ""
         )
-        local_paths, _ = QFileDialog.getOpenFileNames(
-            None,
-            "Open file(s)",
-            last_saved_dir,
-            "All supported files (*.tif *.tiff *.gpkg *.sqlite *.geojson *.shp);;"
-            "Rasters (*.tif *.tiff);;"
-            "Vector files (*.gpkg *.sqlite *.geojson *.shp)",
+        dialog = QFileDialog(None, "Open file(s)", last_saved_dir)
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+        dialog.setNameFilters(
+            [
+                "All supported files (*.tif *.tiff *.gpkg *.sqlite *.geojson *.shp)",
+                "Rasters (*.tif *.tiff)",
+                "Vector files (*.gpkg *.sqlite *.geojson *.shp)",
+            ]
         )
+        # Optional but recommended for testing (allows qtbot interaction)
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        if dialog.exec():
+            local_paths = dialog.selectedFiles()
+        else:
+            local_paths = []
+
         if not local_paths:
             self.loading_cancelled.emit()
             return
