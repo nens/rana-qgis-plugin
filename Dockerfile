@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dri \
     libxrender1 \
     libxext6 \
+    ffmpeg \
     fontconfig \
     dbus \
     mesa-utils \
