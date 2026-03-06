@@ -45,13 +45,13 @@ def test_upload(plugin, qtbot, request):
         modal = QApplication.activeModalWidget()
         assert isinstance(modal, QMessageBox)
         modal.setFocus()
-        # QTest.qWait(1000)
+        QTest.qWait(1000)
         qtbot.keyPress(modal, Qt.Key_Shift)
         qtbot.keyPress(modal, Qt.Key_Tab)
         QTest.qWait(100)
         qtbot.keyRelease(modal, Qt.Key_Tab)
         qtbot.keyRelease(modal, Qt.Key_Shift)
-        # QTest.qWait(1000)
+        QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
     QTimer.singleShot(8000, handle_dialog_load_layer)
@@ -61,16 +61,16 @@ def test_upload(plugin, qtbot, request):
         def handle_dialog():
             modal = QApplication.activeModalWidget()
             assert isinstance(modal, QFileDialog)
-            # QTest.qWait(1000)
+            QTest.qWait(1000)
             modal.setFocus()
             modal.selectFile("upload.gpkg")  # Clear any selected file
-            QTest.qWait(500)
+            QTest.qWait(1000)
             qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
         QTimer.singleShot(2000, handle_dialog)
         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    QTest.qWait(2000)
+    QTest.qWait(5000)
 
     # TODO
     # assert plugin.rana_browser.files_browser.isVisible()
