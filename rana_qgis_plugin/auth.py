@@ -1,6 +1,5 @@
 import json
 import re
-import unittest
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
@@ -54,11 +53,7 @@ def remove_authcfg():
 def setup_oauth2(communication: UICommunication, start_tenant_id) -> bool:
     settings = QSettings()
     auth_manager = QgsApplication.authManager()
-    if not auth_manager.setMasterPassword():
-        communication.show_error(
-            "Failed to set master password for authentication manager"
-        )
-        return False
+    auth_manager.setMasterPassword()
 
     # Check if the OAuth2 configuration is already stored
     auth_configs = auth_manager.availableAuthMethodConfigs()
@@ -151,16 +146,12 @@ def setup_oauth2(communication: UICommunication, start_tenant_id) -> bool:
     authcfg.setConfigMap({"oauth2config": config_map_json})
 
     # Store the OAuth2 configuration
-    res, auth_reult = auth_manager.storeAuthenticationConfig(authcfg)
-    if not res:
-        communication.show_error("Failed to create OAuth2 configuration")
-        return False
-
+    auth_manager.storeAuthenticationConfig(authcfg)
     new_authcfg_id = authcfg.id()
     if new_authcfg_id:
         settings.setValue(RANA_AUTHCFG_ENTRY, new_authcfg_id)
     else:
-        communication.show_error("Failed to create OAuth2 configuration")
+        communication.log_warn("Failed to create OAuth2 configuration")
         return False
 
     set_tenant_id(tenant_id)

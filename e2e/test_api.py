@@ -2,6 +2,8 @@ from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox, QTreeView
 
+from rana_qgis_plugin.utils_api import delete_tenant_project_file
+
 
 def click_tree_item(tree: QTreeView, index, qtbot):
     # Ensure item is visible
@@ -83,3 +85,4 @@ def test_upload(plugin, qtbot, request):
     )
 
     # Delete the file
+    delete_tenant_project_file("NEEjN2HZ", {"path": "upload.gpkg"})

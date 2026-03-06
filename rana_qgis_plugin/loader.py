@@ -2,7 +2,6 @@ import os
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from tkinter import dialog
 from typing import Optional
 
 from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
