@@ -132,8 +132,8 @@ class PublicationView(QWidget):
         self.maps_tv.header().setSectionResizeMode(QHeaderView.Interactive)
         self.maps_tv.header().setSectionsMovable(False)
         self.maps_tv.header().setStretchLastSection(False)
-        self.maps_model.setColumnCount(4)
-        self.maps_model.setHorizontalHeaderLabels(["Name", "Type", "", ""])
+        self.maps_model.setColumnCount(3)
+        self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
         maps_layout = QVBoxLayout()
         maps_layout.addWidget(self.maps_tv)
         self.maps_box.setLayout(maps_layout)
@@ -262,20 +262,44 @@ class PublicationView(QWidget):
         self.general_box.setLayout(layout)
         self.general_box.setCollapsed(False)
 
-    def add_buttons_to_row(self, parent_item):
-        open_btn = self.get_button_item("Open in QGIS")
-        save_btn = self.get_button_item("Save style to Rana")
-        child_row_index = parent_item.index().child(
-            parent_item.rowCount() - 1,  # Child row is the last added
-            0,  # Always reference the first column
-        )
-        # TODO: connect!!
-        self.maps_tv.setIndexWidget(
-            child_row_index.sibling(child_row_index.row(), 2), open_btn
-        )
-        self.maps_tv.setIndexWidget(
-            child_row_index.sibling(child_row_index.row(), 3), save_btn
-        )
+    @staticmethod
+    def get_button_item(label: str, func=None, tooltip: str = None) -> QPushButton:
+        btn = QPushButton(label)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        if func:
+            btn.clicked.connect(func)
+        if tooltip:
+            btn.setToolTip(tooltip)
+        return btn
+
+    @staticmethod
+    def get_button_container() -> QWidget:
+        # TODO: extend with data about object for which buttons are creted
+        # build functions for connecting and pass to get_button_item
+        open_btn = PublicationView.get_button_item("Open in QGIS")
+        save_btn = PublicationView.get_button_item("Save style to Rana")
+        btn_container = QWidget()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(open_btn)
+        layout.addWidget(save_btn)
+        btn_container.setLayout(layout)
+        return btn_container
+
+    def add_buttons_to_row(
+        self, btn_container: QWidget, parent_item: Optional[QStandardItem] = None
+    ):
+        if parent_item:
+            # find last row in parent object
+            child_row_index = parent_item.index().child(
+                parent_item.rowCount() - 1,  # Child row is the last added
+                0,  # Always reference the first column
+            )
+            child_model_index = child_row_index.sibling(child_row_index.row(), 2)
+        else:
+            # assume parent is root object and just add to last row
+            child_model_index = self.maps_model.index(self.maps_model.rowCount() - 1, 2)
+        self.maps_tv.setIndexWidget(child_model_index, btn_container)
 
     def collect_map_data(self, layers):
         """
@@ -323,10 +347,11 @@ class PublicationView(QWidget):
                         file_item,
                         QStandardItem(SUPPORTED_DATA_TYPES.get(data_type, data_type)),
                         QStandardItem(),
-                        QStandardItem(),
                     ]
                 )
-                self.add_buttons_to_row(parent_item)
+                # TODO: pass data to get_button_container
+                btn_container = self.get_button_container()
+                self.add_buttons_to_row(btn_container, parent_item)
                 if not entry.get("file_descriptor"):
                     continue
                 for file_layer in (
@@ -341,20 +366,17 @@ class PublicationView(QWidget):
                             layer_item,
                             QStandardItem(file_layer.get("type", "")),
                             QStandardItem(),
-                            QStandardItem(),
                         ]
                     )
-                    self.add_buttons_to_row(file_item)
+                    # TODO: pass data to get_button_container
+                    btn_container = self.get_button_container()
+                    self.add_buttons_to_row(btn_container, file_item)
             elif entry["type"] == "group":
                 group_item = QStandardItem(entry["layer"]["name"])
-                parent_item.appendRow(
-                    [
-                        group_item,
-                        QStandardItem(),
-                        QStandardItem(),
-                        QStandardItem(),
-                    ]
-                )
+                parent_item.appendRow([group_item, QStandardItem(), QStandardItem()])
+                # TODO: pass data to get_button_container
+                btn_container = self.get_button_container()
+                self.add_buttons_to_row(btn_container, parent_item)
                 parent_index = self.maps_model.indexFromItem(parent_item)
                 group_index = parent_index.child(parent_item.rowCount() - 1, 0)
                 self.maps_tv.expand(group_index)
@@ -363,7 +385,7 @@ class PublicationView(QWidget):
 
     def update_maps_box(self):
         self.maps_model.clear()
-        self.maps_model.setHorizontalHeaderLabels(["Name", "Type", "", ""])
+        self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
         data = {
             map["name"]: self.collect_map_data(map.get("layers", []))
             for map in self.current_version.get("maps", [])
@@ -373,27 +395,11 @@ class PublicationView(QWidget):
             bold_font = QFont()
             bold_font.setBold(True)
             name_item.setFont(bold_font)
-            self.maps_model.appendRow(
-                [name_item, QStandardItem(), QStandardItem(), QStandardItem()]
-            )
+            self.maps_model.appendRow([name_item, QStandardItem(), QStandardItem()])
+            # TODO: extend to connect buttons to actions
+            btn_container = self.get_button_container()
+            self.add_buttons_to_row(btn_container)
             self.add_map_layers(name_item, map_data)
             map_index = self.maps_model.indexFromItem(name_item)
             self.maps_tv.expand(map_index)
         self.maps_tv.resize_columns_aware_of_collapsed_items()
-
-    @staticmethod
-    def get_button_item(label: str, func=None, tooltip: str = None) -> QWidget:
-        btn = QPushButton(label)
-        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        if func:
-            btn.clicked.connect(func)
-        if tooltip:
-            btn.setToolTip(tooltip)
-        container = QWidget()
-        container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(btn)
-        container.adjustSize()
-        return container
