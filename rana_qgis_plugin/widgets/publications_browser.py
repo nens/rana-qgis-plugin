@@ -1,4 +1,4 @@
-from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
@@ -147,6 +147,17 @@ class PublicationsBrowser(QWidget):
         sorted_column = header.sortIndicatorSection()
         sort_order = header.sortIndicatorOrder()
         self.publications_tv.sortByColumn(sorted_column, sort_order)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_width()
+
+    def resizeEvent(self, event):
+        """
+        Dynamically adjusts the first column's width when the widget is resized.
+        """
+        super().resizeEvent(event)
+        self.update_width()  # Recalculate the widths for dynamic resizing
 
     def update_width(self):
         # The custom WordWrapDelegate sets a very small size hint and then uses that for wrapping
