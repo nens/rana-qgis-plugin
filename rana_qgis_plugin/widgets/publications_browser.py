@@ -41,6 +41,7 @@ class PublicationsBrowser(QWidget):
 
     def setup_ui(self):
         self.publications_model = QStandardItemModel()
+        self.publications_model.setSortRole(Qt.ItemDataRole.UserRole)
         self.publications_tv = QTreeView()
         self.publications_tv.setModel(self.publications_model)
         self.publications_tv.setEditTriggers(QTreeView.NoEditTriggers)
@@ -60,6 +61,9 @@ class PublicationsBrowser(QWidget):
         header.setSectionsClickable(True)
         header.setSortIndicatorShown(True)
         header.setStretchLastSection(False)
+        header.setSortIndicator(3, Qt.SortOrder.DescendingOrder)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        self.publications_tv.sortByColumn(3, Qt.SortOrder.DescendingOrder)
         create_publication_btn = QPushButton(
             "Create publication (opens Rana in web browser)"
         )
@@ -74,8 +78,10 @@ class PublicationsBrowser(QWidget):
         if link:
             QDesktopServices.openUrl(QUrl(link))
 
-    def add_item(self, publication):
+    def make_items(self, publication) -> list[QStandardItem]:
         name_item = QStandardItem(publication["name"])
+        name_item.setData(publication["name"].lower(), role=Qt.ItemDataRole.UserRole)
+        name_item.setData(publication["id"], role=Qt.ItemDataRole.UserRole + 1)
         who_item = QStandardItem()
         who_item.setData(
             [
@@ -93,24 +99,48 @@ class PublicationsBrowser(QWidget):
         )
         created_at_item = get_timestamp_as_numeric_item(publication["created_at"])
         last_modified_item = get_timestamp_as_numeric_item(publication["updated_at"])
-        self.publications_model.appendRow(
-            [name_item, who_item, created_at_item, last_modified_item]
-        )
-        self.row_map[publication["id"]] = self.publications_model.rowCount() - 1
+        return [name_item, who_item, created_at_item, last_modified_item]
 
     def add_items(self, publication_list: list[dict]):
         for publication in publication_list:
-            self.add_item(publication)
+            self.publications_model.appendRow(self.make_items(publication))
+            self.row_map[publication["id"]] = self.publications_model.rowCount() - 1
         # Let first column stretch and resize the others to contents
-        self.publications_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col in range(1, self.publications_model.columnCount()):
-            self.publications_tv.header().setSectionResizeMode(
-                col, QHeaderView.ResizeToContents
+        self.apply_current_sort()
+        self.update_width()
+
+    def find_row_by_publication_id(self, publication_id: str):
+        for row in range(self.publications_model.rowCount()):
+            publication_id_item = self.publications_model.item(row, 0).data(
+                Qt.ItemDataRole.UserRole + 1
             )
+            if publication_id_item == publication_id:
+                return row
 
     def update_item(self, publication: dict):
-        row = self.row_map.get(publication["id"], -1)
-        if row < 0:
+        row = self.find_row_by_publication_id(publication["id"])
+        if not row:
             return
-        updated_item = get_timestamp_as_numeric_item(publication["updated_at"])
-        self.publications_model.setItem(row, 3, updated_item)
+        # Just update all items
+        new_items = self.make_items(publication)
+        for i, updated_item in enumerate(new_items):
+            self.publications_model.setItem(row, i, updated_item)
+        self.apply_current_sort()
+        self.update_width()
+
+    def apply_current_sort(self):
+        header = self.publications_tv.header()
+        sorted_column = header.sortIndicatorSection()
+        sort_order = header.sortIndicatorOrder()
+        self.publications_tv.sortByColumn(sorted_column, sort_order)
+
+    def update_width(self):
+        # The custom WordWrapDelegate sets a very small size hint and then uses that for wrapping
+        # to the contents of the first column cannot be used for resizing
+        # Instead we have to calculate and set the space manually
+        used_width = 0
+        for col in range(1, self.publications_model.columnCount()):
+            self.publications_tv.resizeColumnToContents(col)
+            used_width += self.publications_tv.columnWidth(col)
+        remaining_width = max(self.publications_tv.viewport().width() - used_width, 100)
+        self.publications_tv.setColumnWidth(0, remaining_width)
