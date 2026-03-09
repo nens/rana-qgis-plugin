@@ -35,6 +35,60 @@ from rana_qgis_plugin.utils_time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
 
 
+class PublicationMapsTreeView(QTreeView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def resize_columns_aware_of_collapsed_items(self):
+        """
+        Resize columns to fit their contents, including collapsed items.
+        """
+        # Save current collapsed status
+        expanded_states = {}
+        for row in range(self.model().rowCount()):
+            self._save_expanded_states(self.model().index(row, 0), expanded_states)
+        # Temporarily expand all items
+        for row in range(self.model().rowCount()):
+            self._expand_all_items(self.model().index(row, 0))
+        # Resize columns to fit *all items*, including collapsed ones
+        for col in range(self.model().columnCount()):
+            self.resizeColumnToContents(col)
+        # Restore the original collapsed state
+        for row in range(self.model().rowCount()):
+            self._restore_expanded_states(self.model().index(row, 0), expanded_states)
+
+    def _save_expanded_states(self, index, expanded_states):
+        """
+        Recursively save the expanded/collapsed state of all items.
+        """
+        if not index.isValid():
+            return
+        expanded_states[index] = self.isExpanded(index)
+        for row in range(index.model().rowCount(index)):
+            self._save_expanded_states(index.child(row, 0), expanded_states)
+
+    def _expand_all_items(self, index):
+        """
+        Recursively expand all items in the tree view.
+        """
+        if not index.isValid():
+            return
+        self.setExpanded(index, True)
+        for row in range(index.model().rowCount(index)):
+            self._expand_all_items(index.child(row, 0))
+
+    def _restore_expanded_states(self, index, expanded_states):
+        """
+        Recursively restore the expanded/collapsed state of items.
+        """
+        if not index.isValid():
+            return
+        if index in expanded_states:
+            self.setExpanded(index, expanded_states[index])
+        for row in range(index.model().rowCount(index)):
+            self._restore_expanded_states(index.child(row, 0), expanded_states)
+
+
 class PublicationView(QWidget):
     refresh_failed = pyqtSignal()
 
@@ -57,13 +111,17 @@ class PublicationView(QWidget):
         self.general_box.setAlignment(Qt.AlignTop)
         self.general_box.setContentsMargins(0, 0, 0, 0)
         self.maps_box = QgsCollapsibleGroupBox("Maps")
+        self.maps_box.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding
+        )
         self.maps_model = QStandardItemModel()
-        self.maps_tv = QTreeView()
+        self.maps_tv = PublicationMapsTreeView()
         self.maps_tv.setEditTriggers(QTreeView.NoEditTriggers)
         self.maps_tv.setModel(self.maps_model)
-        self.maps_tv.setUniformRowHeights(False)
+        self.maps_tv.setUniformRowHeights(True)
         self.maps_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.maps_tv.setSortingEnabled(False)
+        self.maps_tv.header().setSectionResizeMode(QHeaderView.Interactive)
         self.maps_tv.header().setSectionsMovable(False)
         self.maps_tv.header().setStretchLastSection(False)
         self.maps_model.setColumnCount(4)
@@ -71,7 +129,6 @@ class PublicationView(QWidget):
         maps_layout = QVBoxLayout()
         maps_layout.addWidget(self.maps_tv)
         self.maps_box.setLayout(maps_layout)
-
         # put all collabpsibles in a container, this seems to help with correct spacing
         collapsible_container = QWidget()
         collapsible_layout = QVBoxLayout(collapsible_container)
@@ -79,7 +136,6 @@ class PublicationView(QWidget):
         collapsible_layout.setSpacing(0)
         collapsible_layout.addWidget(self.general_box)
         collapsible_layout.addWidget(self.maps_box)
-        collapsible_layout.addStretch()
         # make container scrollable
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -164,7 +220,6 @@ class PublicationView(QWidget):
         )
         layout.addWidget(user_icon_label)
         layout.addWidget(user_name_label)
-        layout.addStretch()
         layout.addWidget(
             QLabel(format_activity_timestamp_str(self.publication["updated_at"]))
         )
@@ -313,11 +368,7 @@ class PublicationView(QWidget):
             self.add_map_layers(name_item, map_data)
             map_index = self.maps_model.indexFromItem(name_item)
             self.maps_tv.expand(map_index)
-        self.maps_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col in range(1, self.maps_model.columnCount()):
-            self.maps_tv.header().setSectionResizeMode(
-                col, QHeaderView.ResizeToContents
-            )
+        self.maps_tv.resize_columns_aware_of_collapsed_items()
 
     @staticmethod
     def get_button_item(label: str, func=None, tooltip: str = None) -> QWidget:
