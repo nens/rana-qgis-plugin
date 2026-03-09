@@ -62,6 +62,7 @@ def result_folder_info():
         "schematisation_name": "foo",
         "revision_number": 1,
         "simulation_name": "bar",
+        "simulation_id": 1337,
     }
 
 
@@ -70,7 +71,7 @@ def results_folder_subpath(result_folder_info):
     return [
         f"revision {result_folder_info['revision_number']}",
         "results",
-        result_folder_info["simulation_name"],
+        f"{result_folder_info['simulation_name']} ({result_folder_info['simulation_id']})",
     ]
 
 
