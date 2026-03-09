@@ -700,9 +700,6 @@ class Loader(QObject):
             simulation_name.replace("/", "-").replace("\\", "-"),
             simulation_id,
         )
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage(f"{target_folder=}", "DEBUG", Qgis.Info)
         os.makedirs(target_folder, exist_ok=True)
         link = next(
             (
