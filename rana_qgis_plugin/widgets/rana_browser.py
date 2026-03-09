@@ -356,7 +356,7 @@ class RanaBrowser(QWidget):
             avatar_cache=self.avatar_cache,
             parent=self,
         )
-        self.publications_view = PublicationView(
+        self.publication_view = PublicationView(
             communication=self.communication,
             avatar_cache=self.avatar_cache,
             parent=self,
@@ -405,7 +405,7 @@ class RanaBrowser(QWidget):
         # Create stacked widget for publications
         self.rana_publications = QStackedWidget()
         self.rana_publications.addWidget(self.publications_browser)
-        self.rana_publications.addWidget(self.publications_view)
+        self.rana_publications.addWidget(self.publication_view)
         self.project_widget.addTab(self.rana_publications, "Publications")
         self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Setup top layout with logo and breadcrumbs
@@ -573,14 +573,14 @@ class RanaBrowser(QWidget):
         )
         # Open publication view
         self.publications_browser.publication_selected.connect(
-            lambda publication_id: self.publications_view.show_details(
+            lambda publication_id: self.publication_view.show_details(
                 self.project, publication_id
             )
         )
-        self.publications_view.show_success.connect(
+        self.publication_view.show_success.connect(
             lambda _: self.show_project_data(self.rana_publications, 1)
         )
-        self.publications_view.show_success.connect(
+        self.publication_view.show_success.connect(
             lambda publication_name: self.publications_breadcrumbs.add_detail_view(
                 publication_name
             )
