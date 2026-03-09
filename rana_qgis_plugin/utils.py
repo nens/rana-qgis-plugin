@@ -213,15 +213,13 @@ def get_threedi_schematisation_simulation_results_folder(
 ) -> str:
     local_schematisations = list_local_schematisations(working_dir)
     if schematisation_id:
-        try:
-            local_schematisation = local_schematisations[schematisation_id]
-        except KeyError:
+        local_schematisation = local_schematisations.get(schematisation_id)
+        if not local_schematisation:
             local_schematisation = LocalSchematisation(
                 working_dir, schematisation_id, schematisation_name, create=True
             )
-        try:
-            local_revision = local_schematisation.revisions[revision_number]
-        except KeyError:
+        local_revision = local_schematisation.revisions.get(revision_number)
+        if not local_revision:
             local_revision = LocalRevision(local_schematisation, revision_number)
             local_revision.make_revision_structure()
         result = os.path.join(local_revision.results_dir, simulation_name)
