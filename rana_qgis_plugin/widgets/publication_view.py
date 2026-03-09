@@ -6,7 +6,14 @@ from qgis.PyQt.QtCore import (
     Qt,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QColor, QIcon, QPalette, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import (
+    QColor,
+    QFont,
+    QIcon,
+    QPalette,
+    QStandardItem,
+    QStandardItemModel,
+)
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -363,6 +370,9 @@ class PublicationView(QWidget):
         }
         for name, map_data in data.items():
             name_item = QStandardItem(name)
+            bold_font = QFont()
+            bold_font.setBold(True)
+            name_item.setFont(bold_font)
             self.maps_model.appendRow(
                 [name_item, QStandardItem(), QStandardItem(), QStandardItem()]
             )
