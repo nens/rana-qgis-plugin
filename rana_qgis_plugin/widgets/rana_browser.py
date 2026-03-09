@@ -573,24 +573,17 @@ class RanaBrowser(QWidget):
         )
         # Open publication view
         self.publications_browser.publication_selected.connect(
+            lambda publication_id: self.publications_view.show_details(
+                self.project, publication_id
+            )
+        )
+        self.publications_view.show_success.connect(
             lambda _: self.show_project_data(self.rana_publications, 1)
         )
-        self.publications_browser.publication_selected.connect(
-            lambda publication: self.publications_view.show_details(
-                self.project, publication
+        self.publications_view.show_success.connect(
+            lambda publication_name: self.publications_breadcrumbs.add_detail_view(
+                publication_name
             )
-        )
-        self.publications_browser.publication_selected.connect(
-            lambda publication: self.publications_breadcrumbs.add_detail_view(
-                publication["name"]
-            )
-        )
-        # Handle failed refresh
-        self.publications_view.refresh_failed.connect(
-            lambda: self.show_project_data(self.rana_publications, 0)
-        )
-        self.publications_view.refresh_failed.connect(
-            self.publications_breadcrumbs.back_to_project
         )
         # Update breadcrumbs when file browser path changes
         for breadcrumb_widget in self.breadcrumbs_manager.widgets:
@@ -683,6 +676,7 @@ class RanaBrowser(QWidget):
             self.project_widget.cornerWidget().show()
 
     def auto_refresh(self):
+        return
         # skip auto refresh for projects view to not mess up pagination
         if not self.rana_browser.isEnabled():
             return

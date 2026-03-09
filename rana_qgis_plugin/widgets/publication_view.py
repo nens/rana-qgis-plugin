@@ -90,7 +90,8 @@ class PublicationMapsTreeView(QTreeView):
 
 
 class PublicationView(QWidget):
-    refresh_failed = pyqtSignal()
+    show_failed = pyqtSignal()
+    show_success = pyqtSignal(str)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -155,16 +156,14 @@ class PublicationView(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
-        # refetch publication to catch remote delete
-        publication = get_publication_details(self.publication["id"])
-        if not publication:
-            self.communication.show_warn("Cannot find loaded publication")
-            self.refresh_failed.emit()
-            return
-        self.update_publication(publication)
+        self.update_publication(self.publication["id"])
 
-    def update_publication(self, publication: dict):
-        self.publication = publication
+    def update_publication(self, publication_id: str):
+        self.publication = get_publication_details(publication_id)
+        if not self.publication:
+            self.communication.show_warn("Cannot find loaded publication")
+            self.show_failed.emit()
+            return
         self.current_version = get_publication_version_latest(self.publication["id"])
         if self.current_version:
             self.file_map = {
@@ -177,11 +176,13 @@ class PublicationView(QWidget):
             self.current_version = {}
             self.file_map = {}
 
-    def show_details(self, project: dict, publication: dict):
+    def show_details(self, project: dict, publication_id: str):
         self.project = project
-        self.update_publication(publication)
-        self.update_general_box()
-        self.update_maps_box()
+        self.update_publication(publication_id)
+        if self.publication:
+            self.update_general_box()
+            self.update_maps_box()
+            self.show_success.emit(self.publication["name"])
 
     def update_general_box(self):
         # collect all contents as a list of layouts
