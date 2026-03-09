@@ -667,10 +667,11 @@ class Loader(QObject):
         schematisation_id = meta["schematisation"]["id"]
         revision_number = meta["schematisation"]["version"]
         simulation_name = meta["simulation"]["name"]
+        simulation_id = meta["simulation"].get("id")
         # Simulation name is only set after post-processing is fully finished
         if not simulation_name:
-            if meta["simulation"].get("id"):
-                simulation_name = tc.fetch_simulation(meta["simulation"].get("id")).name
+            if simulation_id:
+                simulation_name = tc.fetch_simulation(simulation_id).name
             else:
                 self.communication.show_warn(
                     "Post-processing results not yet available"
@@ -697,6 +698,7 @@ class Loader(QObject):
             schematisation_name.replace("/", "-").replace("\\", "-"),
             revision_number,
             simulation_name.replace("/", "-").replace("\\", "-"),
+            simulation_id,
         )
         os.makedirs(target_folder, exist_ok=True)
         link = next(
