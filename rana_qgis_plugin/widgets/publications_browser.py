@@ -41,6 +41,7 @@ class PublicationsBrowser(QWidget):
 
     def setup_ui(self):
         self.publications_model = QStandardItemModel()
+        self.publications_model.setSortRole(Qt.ItemDataRole.UserRole)
         self.publications_tv = QTreeView()
         self.publications_tv.setModel(self.publications_model)
         self.publications_tv.setEditTriggers(QTreeView.NoEditTriggers)
@@ -76,6 +77,7 @@ class PublicationsBrowser(QWidget):
 
     def add_item(self, publication):
         name_item = QStandardItem(publication["name"])
+        name_item.setData(publication["name"].lower(), role=Qt.ItemDataRole.UserRole)
         who_item = QStandardItem()
         who_item.setData(
             [
@@ -99,8 +101,10 @@ class PublicationsBrowser(QWidget):
         self.row_map[publication["id"]] = self.publications_model.rowCount() - 1
 
     def add_items(self, publication_list: list[dict]):
+        # TODO: items are reverse sorted!
         for publication in publication_list:
             self.add_item(publication)
+        # TODO fix resize
         # Let first column stretch and resize the others to contents
         self.publications_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, self.publications_model.columnCount()):
