@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import rana_qgis_plugin.utils as utils
-
+import json
 
 def test_get_local_file_path():
     rana_root = "/root/Rana/"
@@ -61,6 +61,8 @@ def test_get_threedi_schematisation_simulation_results_folder_no_local_data():
     assert results_folder == "foo/revision 1/results/bar"
 
 
+
+# TODO: ensure cases are covered
 def test_get_threedi_schematisation_simulation_results_folder_with_local_schema(
     tmp_path,
 ):
@@ -79,6 +81,12 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(tmp
     schemadir = workdir.joinpath("foo")
     revdir = schemadir.joinpath("revision 1")
     revdir.mkdir(parents=True, exist_ok=True)
+    # create schematisation config
+    config_path = Path(schemadir) / "admin" / "schematisation.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config = {"id": 1, "name": "foo", "revisions": [1], "wip_parent_revision": 1}
+    with open(config_path, "w") as f:
+        json.dump(config, f)
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
         str(workdir), 1, "foo", 1, "bar"
     )
@@ -86,7 +94,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(tmp
     assert results_folder == expected_folder
 
 
-def test_get_threedi_schematisation_simulation_results_folder_with_color(tmp_path):
+def test_get_threedi_schematisation_simulation_results_folder_with_colon(tmp_path):
     workdir = Path(tmp_path)
     schemadir = workdir.joinpath("foo:bar")
     schemadir.mkdir(parents=True, exist_ok=True)
@@ -97,3 +105,5 @@ def test_get_threedi_schematisation_simulation_results_folder_with_color(tmp_pat
         ":", "_"
     )
     assert results_folder == expected_folder
+
+

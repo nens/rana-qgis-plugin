@@ -212,7 +212,6 @@ def get_threedi_schematisation_simulation_results_folder(
     simulation_name: str,
 ) -> str:
     local_schematisations = list_local_schematisations(working_dir)
-
     if schematisation_id:
         try:
             local_schematisation = local_schematisations[schematisation_id]
