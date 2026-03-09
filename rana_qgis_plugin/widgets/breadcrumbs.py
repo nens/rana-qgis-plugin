@@ -59,6 +59,10 @@ class BreadcrumbsWidget(QWidget):
         self._items = self._items[:1]
         self.update()
 
+    def back_to_project(self):
+        self._items = self._items[:2]
+        self.update()
+
     def create_ellipsis(self):
         # when deleting and creating this widget on-the-fly qgis crashes with a segfault
         # to avoid this, it is created on ui setup, and just shown and hidden instead

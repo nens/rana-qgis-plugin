@@ -649,6 +649,12 @@ def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional
             return process["id"]
 
 
+def get_publication_details(publication_id: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}"
+    return simple_fetch(url)
+
+
 def get_publication_version_latest(publication_id: str):
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"

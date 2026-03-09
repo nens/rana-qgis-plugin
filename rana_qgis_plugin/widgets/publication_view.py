@@ -26,7 +26,7 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils import get_file_icon_name
 from rana_qgis_plugin.utils_api import (
-    get_project_file_details,
+    get_publication_details,
     get_publication_version_files,
     get_publication_version_latest,
     get_tenant_file_descriptor,
@@ -36,8 +36,7 @@ from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_l
 
 
 class PublicationView(QWidget):
-    # TODO: monitor / update
-    # TODO: breadcurmbs
+    refresh_failed = pyqtSignal()
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -99,15 +98,28 @@ class PublicationView(QWidget):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
+    def refresh(self):
+        # refetch publication to catch remote delete
+        publication = get_publication_details(self.publication["id"])
+        if not publication:
+            self.communication.show_warn("Cannot find loaded publication")
+            self.refresh_failed.emit()
+            return
+        self.update_publication(publication)
+
     def update_publication(self, publication: dict):
         self.publication = publication
         self.current_version = get_publication_version_latest(self.publication["id"])
-        self.file_map = {
-            item["file"]["id"]: item["file"]
-            for item in get_publication_version_files(
-                self.publication["id"], self.current_version["version"]
-            )["items"]
-        }
+        if self.current_version:
+            self.file_map = {
+                item["file"]["id"]: item["file"]
+                for item in get_publication_version_files(
+                    self.publication["id"], self.current_version["version"]
+                )["items"]
+            }
+        else:
+            self.current_version = {}
+            self.file_map = {}
 
     def show_details(self, project: dict, publication: dict):
         self.project = project
