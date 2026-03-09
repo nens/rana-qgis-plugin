@@ -61,6 +61,8 @@ class PublicationsBrowser(QWidget):
         header.setSectionsClickable(True)
         header.setSortIndicatorShown(True)
         header.setStretchLastSection(False)
+        header.setSortIndicator(3, Qt.SortOrder.DescendingOrder)
+        self.publications_tv.sortByColumn(3, Qt.SortOrder.DescendingOrder)
         create_publication_btn = QPushButton(
             "Create publication (opens Rana in web browser)"
         )
@@ -75,9 +77,10 @@ class PublicationsBrowser(QWidget):
         if link:
             QDesktopServices.openUrl(QUrl(link))
 
-    def add_item(self, publication):
+    def make_items(self, publication) -> list[QStandardItem]:
         name_item = QStandardItem(publication["name"])
         name_item.setData(publication["name"].lower(), role=Qt.ItemDataRole.UserRole)
+        name_item.setData(publication["id"], role=Qt.ItemDataRole.UserRole + 1)
         who_item = QStandardItem()
         who_item.setData(
             [
@@ -95,15 +98,12 @@ class PublicationsBrowser(QWidget):
         )
         created_at_item = get_timestamp_as_numeric_item(publication["created_at"])
         last_modified_item = get_timestamp_as_numeric_item(publication["updated_at"])
-        self.publications_model.appendRow(
-            [name_item, who_item, created_at_item, last_modified_item]
-        )
-        self.row_map[publication["id"]] = self.publications_model.rowCount() - 1
+        return [name_item, who_item, created_at_item, last_modified_item]
 
     def add_items(self, publication_list: list[dict]):
-        # TODO: items are reverse sorted!
         for publication in publication_list:
-            self.add_item(publication)
+            self.publications_model.appendRow(self.make_items(publication))
+            self.row_map[publication["id"]] = self.publications_model.rowCount() - 1
         # TODO fix resize
         # Let first column stretch and resize the others to contents
         self.publications_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -111,10 +111,28 @@ class PublicationsBrowser(QWidget):
             self.publications_tv.header().setSectionResizeMode(
                 col, QHeaderView.ResizeToContents
             )
+        self.apply_current_sort()
+
+    def find_row_by_publication_id(self, publication_id: str):
+        for row in range(self.publications_model.rowCount()):
+            publication_id_item = self.publications_model.item(row, 0).data(
+                Qt.ItemDataRole.UserRole + 1
+            )
+            if publication_id_item == publication_id:
+                return row
 
     def update_item(self, publication: dict):
-        row = self.row_map.get(publication["id"], -1)
-        if row < 0:
+        row = self.find_row_by_publication_id(publication["id"])
+        if not row:
             return
-        updated_item = get_timestamp_as_numeric_item(publication["updated_at"])
-        self.publications_model.setItem(row, 3, updated_item)
+        # Just update all items
+        new_items = self.make_items(publication)
+        for i, updated_item in enumerate(new_items):
+            self.publications_model.setItem(row, i, updated_item)
+        self.apply_current_sort()
+
+    def apply_current_sort(self):
+        header = self.publications_tv.header()
+        sorted_column = header.sortIndicatorSection()
+        sort_order = header.sortIndicatorOrder()
+        self.publications_tv.sortByColumn(sorted_column, sort_order)
