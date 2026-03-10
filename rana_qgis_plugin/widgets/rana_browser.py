@@ -676,7 +676,6 @@ class RanaBrowser(QWidget):
             self.project_widget.cornerWidget().show()
 
     def auto_refresh(self):
-        return
         # skip auto refresh for projects view to not mess up pagination
         if not self.rana_browser.isEnabled():
             return
