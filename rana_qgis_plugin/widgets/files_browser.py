@@ -40,9 +40,6 @@ from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
-# TODO: crashes on uploading when there are folders
-
-
 class FileBrowserModel(QStandardItemModel):
     def sort(self, column, order=Qt.SortOrder.AscendingOrder):
         self.layoutAboutToBeChanged.emit()
@@ -225,15 +222,13 @@ class FilesBrowser(QWidget):
         self.ready.emit()
 
     def fetch_and_populate(self, project: dict, path: str = None):
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage(f"fetch and populate", "DEBUG", Qgis.Info)
         params = {"limit": 1000}
         if path:
             params["path"] = path
         self.files = get_tenant_project_files(self.communication, project["id"], params)
         sort_column = self.files_tv.header().sortIndicatorSection()
         sort_order = self.files_tv.header().sortIndicatorOrder()
+
         self.files_model.clear()
         header = ["Filename", "Data type", "Size", "Last modified"]
         self.files_model.setHorizontalHeaderLabels(header)
@@ -279,7 +274,6 @@ class FilesBrowser(QWidget):
 
         self.files_tv.sortByColumn(sort_column, sort_order)
         self.files_tv.setSortingEnabled(True)
-        QgsMessageLog.logMessage(f"{sort_column=}; {sort_order=}", "DEBUG", Qgis.Info)
 
         for i in range(len(header)):
             self.files_tv.resizeColumnToContents(i)
