@@ -74,15 +74,11 @@ def qgis_application() -> QgsApplication:
     """QGIS app for testing with GUI"""
     QgsApplication.setPrefixPath("/usr", True)
     qgs = QgsApplication([], True)
-    qgs.initQgis()  # TODO: QtWarningMsg: Logged warning: Duplicate provider rana_desktop_client registered
-    print("QGIS application initialized for testing")
+    qgs.initQgis()
     yield qgs
 
     qgs.processEvents()
-    gc.collect()
     qgs.exitQgis()
-    print("QGIS application exited after testing")
-    gc.collect()
 
 
 @pytest.fixture

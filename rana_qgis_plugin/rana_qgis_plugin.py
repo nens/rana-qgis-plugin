@@ -197,6 +197,7 @@ class RanaQgisPlugin:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        QgsApplication.processingRegistry().removeProvider(self.provider)
         menu = self.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
         menu.clear()
         self.iface.removeToolBarIcon(self.action)
