@@ -13,14 +13,16 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
-      # 2️⃣ Build Docker image
+
       - name: Build QGIS Docker image
         run: docker compose build qgis
 
-      # 3️⃣ Run tests headless inside container
+      - name: Run unit tests
+        run: 
+          docker compose run --rm qgis pytest -v tests
+
       - name: Run e2e
         run: 
           docker compose run --service-ports --rm qgis pytest -v e2e
