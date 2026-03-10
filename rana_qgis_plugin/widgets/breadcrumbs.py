@@ -33,7 +33,7 @@ class BreadcrumbType(Enum):
 BreadcrumbItem = namedtuple("BreadcrumbItem", ["type", "name"])
 
 
-class BreadcrumbsWidget(QWidget):
+class BaseBreadcrumbsWidget(QWidget):
     projects_selected = pyqtSignal()
     project_selected = pyqtSignal()
     folder_selected = pyqtSignal(str)
@@ -163,7 +163,7 @@ class BreadcrumbsWidget(QWidget):
         self.update()
 
 
-class GenericBreadcrumbsWidget(BreadcrumbsWidget):
+class GenericBreadcrumbsWidget(BaseBreadcrumbsWidget):
     """Breadcrumbs widgets for generic views with two levels: project overview and detail view"""
 
     def add_detail_view(self, name: str):
@@ -172,7 +172,7 @@ class GenericBreadcrumbsWidget(BreadcrumbsWidget):
         self.update()
 
 
-class FilesBreadcrumbsWidget(BreadcrumbsWidget):
+class FilesBreadcrumbsWidget(BaseBreadcrumbsWidget):
     """Breadcrumbs widget specialized for file tab"""
 
     def remove_file(self):
@@ -217,7 +217,7 @@ class FilesBreadcrumbsWidget(BreadcrumbsWidget):
 
 
 class BreadcrumbsManager(QWidget):
-    def __init__(self, breadcrumb_widgets: List[BreadcrumbsWidget], parent=None):
+    def __init__(self, breadcrumb_widgets: List[BaseBreadcrumbsWidget], parent=None):
         super().__init__(parent)
         # Add all breadcrumbs widget to a stack
         self.stack = QStackedWidget()
