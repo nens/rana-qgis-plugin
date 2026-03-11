@@ -1,3 +1,5 @@
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
 
 from qgis.gui import QgsCollapsibleGroupBox
@@ -40,6 +42,33 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
+
+
+class MapItemType(Enum):
+    LAYER = "layer"
+    FOLDER = "folder"
+
+
+@dataclass(frozen=True)
+class MapItemData:
+    name: str
+
+
+@dataclass(frozen=True)
+class FolderItemData(MapItemData):
+    """Data class to hold data about a folder in the map"""
+
+    sub_items: list[MapItemData]
+
+
+@dataclass(frozen=True)
+class LayerItemData(MapItemData):
+    """Data class to hold data about a layer in the map"""
+
+    data_type: str
+    file: dict
+    file_descriptor: dict
+    layer_in_file: Optional[dict] = None
 
 
 class PublicationMapsTreeView(QTreeView):
@@ -272,12 +301,21 @@ class PublicationView(QWidget):
             btn.setToolTip(tooltip)
         return btn
 
-    @staticmethod
-    def get_button_container() -> QWidget:
-        # TODO: extend with data about object for which buttons are creted
-        # build functions for connecting and pass to get_button_item
+    def open_maps(self, map_item: MapItemData):
+        # TODO: recurse through map_item and open stuff
+        self.communication.show_info("Opening maps is not yet implemented.")
+        pass
+
+    def save_styles(self, map_item: MapItemData):
+        # TODO: recurse through map_item and save styles
+        self.communication.show_info("Saving styles is not yet implemented.")
+        pass
+
+    def get_button_container(self, map_item: MapItemData) -> QWidget:
         open_btn = PublicationView.get_button_item("Open in QGIS")
+        open_btn.clicked.connect(lambda: self.open_maps(map_item))
         save_btn = PublicationView.get_button_item("Save style to Rana")
+        save_btn.clicked.connect(lambda: self.open_maps(map_item))
         btn_container = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -301,87 +339,94 @@ class PublicationView(QWidget):
             child_model_index = self.maps_model.index(self.maps_model.rowCount() - 1, 2)
         self.maps_tv.setIndexWidget(child_model_index, btn_container)
 
-    def collect_map_data(self, layers):
+    def collect_map_data(self, layers) -> list[MapItemData]:
         """
         Recursively collect data from API needed to populate the maps table
         """
         map_data = []
         for layer in layers:
             if layer.get("type") == "layer":
-                file = self.file_map.get(layer["layer_in_file"])
+                file = self.file_map.get(layer.get("file_path"))
                 if not file:
                     continue
                 file_descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                if not file_descriptor:
+                    continue
+                # For scenario and vector files the layer is extracted from the file
+                if file.get("data_type", "") in ["scenario", "vector"]:
+                    layers_in_file = (file_descriptor.get("meta") or {}).get(
+                        "layers", []
+                    )
+                    # TODO: make sure slayer_in_file refers to id!!!
+                    layer_in_file = next(
+                        (
+                            layers["id"] == layer["layer_in_file"]
+                            for layers in layers_in_file
+                        ),
+                        None,
+                    )
+                else:
+                    layer_in_file = None
+                data_type = file.get("data_type", "")
+                if data_type == "vector":
+                    data_type = (file_descriptor.get("meta") or {}).get(
+                        "type", data_type
+                    )
+                # Collect data needed for UI and to open and edit the layer
                 map_data.append(
-                    {
-                        "type": "layer",
-                        "layer": layer,
-                        "file": file,
-                        "file_descriptor": file_descriptor,
-                    }
+                    LayerItemData(
+                        name=layer["name"],
+                        data_type=data_type,
+                        layer_in_file=layer_in_file,
+                        file=file,
+                        file_descriptor=file_descriptor,
+                    )
                 )
-            elif layer.get("type") == "group":
+            elif layer.get("type") == "folder":
                 map_data.append(
-                    {
-                        "type": "group",
-                        "layer": layer,
-                        "sub_layers": self.collect_map_data(layer.get("layers", [])),
-                    }
+                    FolderItemData(
+                        name=layer["name"],
+                        sub_items=self.collect_map_data(layer.get("layers", [])),
+                    )
                 )
+
         return map_data
 
-    def add_map_layers(self, parent_item, map_data: list):
+    def add_map_layers(self, parent_item, map_data: list[MapItemData]):
         """
         Recursively add map layers to the maps table
         """
-        for entry in map_data:
-            if entry["type"] == "layer":
-                if not entry.get("file"):
-                    continue
-                data_type = entry["file"].get("data_type", "")
-                file_icon = get_icon_from_theme(get_file_icon_name(data_type))
-                file_item = QStandardItem(file_icon, entry["layer"]["name"])
-                file_item.setToolTip(entry["file"]["id"])
+        for map_item in map_data:
+            if isinstance(map_item, LayerItemData):
+                tooltip = None
+                data_type = map_item.data_type
+                data_type_str = SUPPORTED_DATA_TYPES.get(data_type, data_type)
+                # Create icon - vector layer_icon is set after retrieving layer
+                if data_type in ["raster", "scenario"]:
+                    layer_icon = get_icon_from_theme(get_file_icon_name("raster"))
+                else:
+                    layer_icon = get_icon_from_theme(get_file_icon_name(data_type))
+                # For scenario and vector files the layer is extracted from the file
+                if data_type in ["scenario", "vector"]:
+                    tooltip = map_item.file["id"]
+                layer_item = QStandardItem(layer_icon, map_item.name)
+                if tooltip:
+                    layer_item.setToolTip(tooltip)
                 parent_item.appendRow(
-                    [
-                        file_item,
-                        QStandardItem(SUPPORTED_DATA_TYPES.get(data_type, data_type)),
-                        QStandardItem(),
-                    ]
+                    [layer_item, QStandardItem(data_type_str), QStandardItem()]
                 )
-                # TODO: pass data to get_button_container
-                btn_container = self.get_button_container()
+                btn_container = self.get_button_container(map_item)
                 self.add_buttons_to_row(btn_container, parent_item)
-                if not entry.get("file_descriptor"):
-                    continue
-                for file_layer in (
-                    entry["file_descriptor"].get("meta", {}).get("layers", [])
-                ):
-                    layer_icon = get_icon_from_theme(
-                        get_file_icon_name(file_layer.get("type", ""))
-                    )
-                    layer_item = QStandardItem(layer_icon, file_layer["name"])
-                    file_item.appendRow(
-                        [
-                            layer_item,
-                            QStandardItem(file_layer.get("type", "")),
-                            QStandardItem(),
-                        ]
-                    )
-                    # TODO: pass data to get_button_container
-                    btn_container = self.get_button_container()
-                    self.add_buttons_to_row(btn_container, file_item)
-            elif entry["type"] == "group":
-                group_item = QStandardItem(entry["layer"]["name"])
-                parent_item.appendRow([group_item, QStandardItem(), QStandardItem()])
-                # TODO: pass data to get_button_container
-                btn_container = self.get_button_container()
+            elif isinstance(map_item, FolderItemData):
+                folder_item = QStandardItem(map_item.name)
+                parent_item.appendRow([folder_item, QStandardItem(), QStandardItem()])
+                btn_container = self.get_button_container(map_item)
                 self.add_buttons_to_row(btn_container, parent_item)
                 parent_index = self.maps_model.indexFromItem(parent_item)
-                group_index = parent_index.child(parent_item.rowCount() - 1, 0)
-                self.maps_tv.expand(group_index)
-                # Recurse for nested layers in the group
-                self.add_map_layers(group_item, entry["sub_layers"])
+                folder_index = parent_index.child(parent_item.rowCount() - 1, 0)
+                self.maps_tv.expand(folder_index)
+                # Recurse for nested layers in the folder
+                self.add_map_layers(folder_item, map_item.sub_items)
 
     def update_maps_box(self):
         self.maps_model.clear()
@@ -396,8 +441,9 @@ class PublicationView(QWidget):
             bold_font.setBold(True)
             name_item.setFont(bold_font)
             self.maps_model.appendRow([name_item, QStandardItem(), QStandardItem()])
-            # TODO: extend to connect buttons to actions
-            btn_container = self.get_button_container()
+            btn_container = self.get_button_container(
+                FolderItemData(name=name, sub_items=map_data)
+            )
             self.add_buttons_to_row(btn_container)
             self.add_map_layers(name_item, map_data)
             map_index = self.maps_model.indexFromItem(name_item)
