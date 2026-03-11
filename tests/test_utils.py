@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -54,46 +55,87 @@ def test_parse_url_with_query():
     assert query_params == {"param1": ["value1"]}
 
 
-def test_get_threedi_schematisation_simulation_results_folder_no_local_data():
+@pytest.fixture
+def result_folder_info():
+    return {
+        "schematisation_id": 1,
+        "schematisation_name": "foo",
+        "revision_number": 1,
+        "simulation_name": "bar",
+        "simulation_id": 1337,
+    }
+
+
+@pytest.fixture
+def results_folder_subpath(result_folder_info):
+    return [
+        f"revision {result_folder_info['revision_number']}",
+        "results",
+        f"{result_folder_info['simulation_name']} ({result_folder_info['simulation_id']})",
+    ]
+
+
+def test_get_threedi_schematisation_simulation_results_folder_no_local_data(
+    result_folder_info, results_folder_subpath
+):
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
-        "./", 1, "foo", 1, "bar"
+        "./", **result_folder_info
     )
-    assert results_folder == "foo/revision 1/results/bar"
+    expected_folder = str(
+        Path(result_folder_info["schematisation_name"]).joinpath(
+            *results_folder_subpath
+        )
+    )
+    assert results_folder == expected_folder
 
 
 def test_get_threedi_schematisation_simulation_results_folder_with_local_schema(
-    tmp_path,
+    tmp_path, result_folder_info, results_folder_subpath
 ):
     workdir = Path(tmp_path)
-    schemadir = workdir.joinpath("foo")
+    schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
     schemadir.mkdir(parents=True, exist_ok=True)
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
-        str(workdir), 1, "foo", 1, "bar"
+        str(workdir), **result_folder_info
     )
-    expected_folder = str(schemadir.joinpath("revision 1", "results", "bar"))
+    expected_folder = str(schemadir.joinpath(*results_folder_subpath))
     assert results_folder == expected_folder
 
 
-def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(tmp_path):
+def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(
+    tmp_path, result_folder_info, results_folder_subpath
+):
     workdir = Path(tmp_path)
-    schemadir = workdir.joinpath("foo")
-    revdir = schemadir.joinpath("revision 1")
+    schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
+    revdir = schemadir.joinpath(f"revision {result_folder_info['revision_number']}")
     revdir.mkdir(parents=True, exist_ok=True)
+    # create schematisation config
+    config_path = Path(schemadir) / "admin" / "schematisation.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config = {
+        "id": 1,
+        "name": result_folder_info["schematisation_name"],
+        "revisions": [result_folder_info["revision_number"]],
+        "wip_parent_revision": 1,
+    }
+    with open(config_path, "w") as f:
+        json.dump(config, f)
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
-        str(workdir), 1, "foo", 1, "bar"
+        str(workdir), **result_folder_info
     )
-    expected_folder = str(revdir.joinpath("results", "bar"))
+    expected_folder = str(schemadir.joinpath(*results_folder_subpath))
     assert results_folder == expected_folder
 
 
-def test_get_threedi_schematisation_simulation_results_folder_with_color(tmp_path):
+def test_get_threedi_schematisation_simulation_results_folder_with_colon(
+    tmp_path, result_folder_info, results_folder_subpath
+):
     workdir = Path(tmp_path)
-    schemadir = workdir.joinpath("foo:bar")
+    result_folder_info["schematisation_name"] = "foo:bar"
+    schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
     schemadir.mkdir(parents=True, exist_ok=True)
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
-        str(workdir), 1, "foo:bar", 1, "bar"
+        str(workdir), **result_folder_info
     )
-    expected_folder = str(schemadir.joinpath("revision 1", "results", "bar")).replace(
-        ":", "_"
-    )
+    expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
     assert results_folder == expected_folder

@@ -2,9 +2,8 @@ import os
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Optional
 
-from qgis.core import QgsDataSourceUri, QgsProject, QgsRasterLayer, QgsSettings
+from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import (
     QObject,
     QSettings,
@@ -17,9 +16,9 @@ from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
-from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.layer_manager import LayerManager
 from rana_qgis_plugin.persistent_workers import (
     PersistentTaskScheduler,
     ProjectJobMonitorWorker,
@@ -45,7 +44,6 @@ from rana_qgis_plugin.simulation.utils import (
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
-    add_layer_to_qgis,
     get_local_file_path,
     get_threedi_api,
     get_threedi_organisations,
@@ -60,7 +58,6 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
-    get_tenant_processes,
     get_tenant_project_file,
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -71,7 +68,6 @@ from rana_qgis_plugin.utils_api import (
 )
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
-    get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
 )
 from rana_qgis_plugin.utils_settings import hcc_working_dir
@@ -151,6 +147,7 @@ class Loader(QObject):
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
 
+        self.layer_manager = LayerManager(self.communication, parent=parent)
         # Create persistent scheduler that handles background monitoring
         self.persistent_scheduler = PersistentTaskScheduler()
         self.persistent_scheduler.start()
@@ -162,29 +159,9 @@ class Loader(QObject):
         self.cleanup()
 
     @pyqtSlot(dict, dict)
-    def open_wms(self, _: dict, file: dict) -> bool:
-        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        for link in descriptor["links"]:
-            if link["rel"] == "wms":
-                for layer in descriptor["meta"]["layers"]:
-                    quri = QgsDataSourceUri()
-                    quri.setParam("layers", layer["code"])
-                    quri.setParam("styles", "")
-                    quri.setParam("format", "image/png")
-                    quri.setParam("url", link["href"])
-                    # the wms provider will take care to expand authcfg URI parameter with credential
-                    # just before setting the HTTP connection.
-                    quri.setAuthConfigId(get_authcfg_id())
-                    rlayer = QgsRasterLayer(
-                        bytes(quri.encodedUri()).decode(),
-                        f"{layer['name']} ({layer['label']})",
-                        "wms",
-                    )
-                    QgsProject.instance().addMapLayer(rlayer)
-                self.file_opened.emit(file)
-                return True
-
-        return False
+    def open_wms(self, project: dict, file: dict) -> bool:
+        self.layer_manager.add_from_wms(project["name"], file)
+        self.file_opened.emit(file)
 
     @pyqtSlot(dict, dict)
     def open_in_qgis(self, project: dict, file: dict):
@@ -197,27 +174,11 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
-    @pyqtSlot(dict, dict)
-    def open_schematisation_with_revision(self, revision, schematisation):
-        if not hcc_working_dir():
-            self.communication.show_warn(
-                "Working directory not yet set, please configure this in the plugin settings."
-            )
-            return
-
-        pb = self.communication.progress_bar(
-            msg="Downloading remote schematisation...", clear_msg_bar=True
+    @pyqtSlot(dict, dict, dict)
+    def open_schematisation_with_revision(self, project, revision, schematisation):
+        self.layer_manager.add_from_schematisation(
+            project["name"], schematisation, revision
         )
-
-        load_remote_schematisation(
-            self.communication,
-            schematisation,
-            revision,
-            pb,
-            hcc_working_dir(),
-            get_threedi_api(),
-        )
-        self.file_opened.emit(file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -232,53 +193,22 @@ class Loader(QObject):
             assert isinstance(sender, QThread)
             sender.wait()
 
-        if file["data_type"] == "scenario":
-            # if zip file, do nothing, else try to load in results analysis
-            if local_file_path.endswith(".zip"):
-                pass
-            elif os.path.isdir(local_file_path):
-                ra_tool = get_threedi_results_analysis_tool_instance()
-                # Check whether result and gridadmin exist in the target folder
-                result_path = os.path.join(local_file_path, "results_3di.nc")
-                admin_path = os.path.join(local_file_path, "gridadmin.h5")
-                waterdepth_path = os.path.join(local_file_path, "max_waterdepth.tif")
-                if os.path.exists(result_path) and os.path.exists(admin_path):
-                    if hasattr(ra_tool, "load_result"):
-                        if self.communication.ask(
-                            self.parent(),
-                            "Rana",
-                            "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
-                        ):
-                            ra_tool.load_result(result_path, admin_path)
-                            if not ra_tool.dockwidget.isVisible():
-                                ra_tool.toggle_results_manager.run()  # also does some initialisation
-                            if os.path.exists(waterdepth_path):
-                                # we only download non-temporal rasters, so always pick the first band
-                                waterdepth_layer = QgsRasterLayer(
-                                    waterdepth_path, "max_waterdepth.tif", "gdal"
-                                )
-                                waterdepth_layer.loadNamedStyle(
-                                    str(STYLE_DIR / "water_depth.qml")
-                                )
-                                if hasattr(waterdepth_layer.renderer(), "setBand"):
-                                    waterdepth_layer.renderer().setBand(1)
-                                waterdepth_layer.setName("max_waterdepth.tif")
-                                QgsProject.instance().addMapLayer(waterdepth_layer)
-
-        else:
-            schematisation = None
-            if file["data_type"] == "threedi_schematisation":
-                schematisation = get_threedi_schematisation(
-                    self.communication, file["descriptor_id"]
-                )
-            add_layer_to_qgis(
-                self.communication,
-                local_file_path,
-                project["name"],
-                file,
-                get_tenant_file_descriptor(file["descriptor_id"]),
-                schematisation,
+        if file["data_type"] == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, file["descriptor_id"]
             )
+            if schematisation:
+                revision = schematisation["latest_revision"]
+                if not revision:
+                    self.communication.show_warn(
+                        "Cannot open a schematisation without a revision."
+                    )
+                    return
+                self.layer_manager.add_from_schematisation(
+                    project["name"], schematisation["schematisation"], revision
+                )
+        elif file["data_type"] in ["scenario", "vector", "raster"]:
+            self.layer_manager.add_from_file(project["name"], local_file_path, file)
         self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 
@@ -548,7 +478,11 @@ class Loader(QObject):
         if simulation_init_wizard.exec() == QDialog.Rejected:
             self.simulation_wizard_cancelled.emit()
             return
-
+        layer_parents = (
+            [project["name"]]
+            + file["id"].split("/")[:-1]
+            + [f"Rana schematisation: {Path(file['id']).stem} {revision['number']}"]
+        )
         if simulation_init_wizard.open_wizard:
             simulation_wizard = SimulationWizard(
                 self.simulation_runner_pool,
@@ -558,6 +492,8 @@ class Loader(QObject):
                 current_model,
                 threedi_api,
                 self.communication,
+                self.layer_manager,
+                layer_parents,
                 simulation_init_wizard,
                 self.parent(),
             )
@@ -680,10 +616,11 @@ class Loader(QObject):
         schematisation_id = meta["schematisation"]["id"]
         revision_number = meta["schematisation"]["version"]
         simulation_name = meta["simulation"]["name"]
+        simulation_id = meta["simulation"].get("id")
         # Simulation name is only set after post-processing is fully finished
         if not simulation_name:
-            if meta["simulation"].get("id"):
-                simulation_name = tc.fetch_simulation(meta["simulation"].get("id")).name
+            if simulation_id:
+                simulation_name = tc.fetch_simulation(simulation_id).name
             else:
                 self.communication.show_warn(
                     "Post-processing results not yet available"
@@ -710,6 +647,7 @@ class Loader(QObject):
             schematisation_name.replace("/", "-").replace("\\", "-"),
             revision_number,
             simulation_name.replace("/", "-").replace("\\", "-"),
+            simulation_id,
         )
         os.makedirs(target_folder, exist_ok=True)
         link = next(

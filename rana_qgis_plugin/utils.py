@@ -1,5 +1,6 @@
 import math
 import os
+from pathlib import Path
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
@@ -78,6 +79,7 @@ def add_layer_to_qgis(
     schematisation_instance: dict,
     revision_instance: dict = None,
 ):
+    # TODO: remove this
     path = file["id"]
     file_name = os.path.basename(path.rstrip("/"))
     data_type = descriptor["data_type"]
@@ -210,22 +212,24 @@ def get_threedi_schematisation_simulation_results_folder(
     schematisation_name: str,
     revision_number: int,
     simulation_name: str,
+    simulation_id: int,
 ) -> str:
     local_schematisations = list_local_schematisations(working_dir)
-
     if schematisation_id:
-        try:
-            local_schematisation = local_schematisations[schematisation_id]
-        except KeyError:
+        local_schematisation = local_schematisations.get(schematisation_id)
+        if not local_schematisation:
             local_schematisation = LocalSchematisation(
                 working_dir, schematisation_id, schematisation_name, create=True
             )
-        try:
-            local_revision = local_schematisation.revisions[revision_number]
-        except KeyError:
+        local_revision = local_schematisation.revisions.get(revision_number)
+        if not local_revision:
             local_revision = LocalRevision(local_schematisation, revision_number)
             local_revision.make_revision_structure()
-        result = os.path.join(local_revision.results_dir, simulation_name)
+        result = str(
+            Path(local_revision.results_dir).joinpath(
+                f"{simulation_name} ({simulation_id})"
+            )
+        )
         # replace colons, invalid for Windows paths (don't replace drive colon)
         return result[:3] + result[3:].replace(":", "_")
 

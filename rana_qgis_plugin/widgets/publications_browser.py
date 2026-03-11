@@ -74,7 +74,6 @@ class PublicationsBrowser(QWidget):
         layout.addWidget(self.publications_tv)
         layout.addWidget(create_publication_btn)
         self.setLayout(layout)
-
         self.publications_tv.doubleClicked.connect(self.on_publication_clicked)
 
     def on_publication_clicked(self, index):
