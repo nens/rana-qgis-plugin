@@ -13,6 +13,7 @@ History
 - Take buttons in the file view out of the scroll area (nens/rana#3630)
 - Make creating avatars safe for users without given and/or family name
 - Download results folder "<simulation name> (<simulation id>)" (nens/rana#3678)
+- Match update interval of project monitoring to update interval in rana
 
 
 1.2.6 (2026-02-19)

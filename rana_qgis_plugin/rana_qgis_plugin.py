@@ -365,7 +365,7 @@ class RanaQgisPlugin:
             self.loader.new_file_upload_finished.connect(self.rana_browser.refresh)
             self.loader.vector_style_finished.connect(self.rana_browser.enable)
             self.loader.vector_style_finished.connect(self.rana_browser.refresh)
-            self.loader.vector_style_failed.connect(self.rana_browser.enable)
+            self.loader.vector_stylr_style_failed.connect(self.rana_browser.enable)
             self.loader.raster_style_finished.connect(self.rana_browser.enable)
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
