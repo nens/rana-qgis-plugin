@@ -138,6 +138,7 @@ class PublicationView(QWidget):
         self.current_version: Optional[dict] = None
         self.project: Optional[dict] = None
         self.file_map: Optional[dict[str:dict]] = None
+        self.root_item: FolderItemData = FolderItemData(name="root", sub_items=[])
         self.setup_ui()
 
     def setup_ui(self):
@@ -180,7 +181,9 @@ class PublicationView(QWidget):
 
         button_layout = QHBoxLayout()
         btn_open = QPushButton("Open all maps in QGIS")
+        btn_open.clicked.connect(lambda: self.open_all_maps)
         btn_rana = QPushButton("Open publication in Rana (web)")
+        btn_rana.clicked.connect(lambda: self.open_in_rana())
         button_layout.addWidget(btn_open)
         button_layout.addWidget(btn_rana)
 
@@ -291,15 +294,12 @@ class PublicationView(QWidget):
         self.general_box.setLayout(layout)
         self.general_box.setCollapsed(False)
 
-    @staticmethod
-    def get_button_item(label: str, func=None, tooltip: str = None) -> QPushButton:
-        btn = QPushButton(label)
-        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        if func:
-            btn.clicked.connect(func)
-        if tooltip:
-            btn.setToolTip(tooltip)
-        return btn
+    def open_all_maps(self):
+        self.open_maps(self.root_item)
+
+    def open_in_rana(self):
+        self.communication.show_info("Open in Rana is not yet implemented.")
+        pass
 
     def open_maps(self, map_item: MapItemData):
         # TODO: recurse through map_item and open stuff
@@ -312,9 +312,11 @@ class PublicationView(QWidget):
         pass
 
     def get_button_container(self, map_item: MapItemData) -> QWidget:
-        open_btn = PublicationView.get_button_item("Open in QGIS")
+        open_btn = QPushButton("Open in QGIS")
+        open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         open_btn.clicked.connect(lambda: self.open_maps(map_item))
-        save_btn = PublicationView.get_button_item("Save style to Rana")
+        save_btn = QPushButton("Save style to Rana")
+        save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         save_btn.clicked.connect(lambda: self.open_maps(map_item))
         btn_container = QWidget()
         layout = QHBoxLayout()
@@ -415,9 +417,11 @@ class PublicationView(QWidget):
                 parent_item.appendRow(
                     [layer_item, QStandardItem(data_type_str), QStandardItem()]
                 )
+                # TODO: only add buttons for compatible files!!
                 btn_container = self.get_button_container(map_item)
                 self.add_buttons_to_row(btn_container, parent_item)
             elif isinstance(map_item, FolderItemData):
+                # TODO: add button tooltip to make clear only compatible items are included
                 folder_item = QStandardItem(map_item.name)
                 parent_item.appendRow([folder_item, QStandardItem(), QStandardItem()])
                 btn_container = self.get_button_container(map_item)
@@ -429,23 +433,29 @@ class PublicationView(QWidget):
                 self.add_map_layers(folder_item, map_item.sub_items)
 
     def update_maps_box(self):
+        # TODO: freeze UI or load on the fly / load on the fly / open before loading
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
-        data = {
-            map["name"]: self.collect_map_data(map.get("layers", []))
-            for map in self.current_version.get("maps", [])
-        }
-        for name, map_data in data.items():
-            name_item = QStandardItem(name)
+        all_maps = [
+            FolderItemData(
+                publication_map["name"],
+                self.collect_map_data(publication_map.get("layers", [])),
+            )
+            for publication_map in self.current_version.get("maps", [])
+        ]
+        self.root_item = FolderItemData("root", all_maps)
+        # for map_item in self.publication_maps:
+        for map_item in self.root_item.sub_items:
+            name_item = QStandardItem(map_item.name)
             bold_font = QFont()
             bold_font.setBold(True)
             name_item.setFont(bold_font)
             self.maps_model.appendRow([name_item, QStandardItem(), QStandardItem()])
             btn_container = self.get_button_container(
-                FolderItemData(name=name, sub_items=map_data)
+                FolderItemData(name=map_item.name, sub_items=map_item.sub_items)
             )
             self.add_buttons_to_row(btn_container)
-            self.add_map_layers(name_item, map_data)
+            self.add_map_layers(name_item, map_item.sub_items)
             map_index = self.maps_model.indexFromItem(name_item)
             self.maps_tv.expand(map_index)
         self.maps_tv.resize_columns_aware_of_collapsed_items()
