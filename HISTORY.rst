@@ -31,6 +31,7 @@ History
 - Enable results downloading for results without lizard data and results not linked to a simulation (nens/rana#3710)
 - Organize opened layers under Rana projects (nens/rana-qgis#57)
 - Basic setup for end-to-end testing (nens/rana-plugin#3196)
+- Match update interval of project monitoring to update interval in rana
 
 
 1.2.6 (2026-02-19)

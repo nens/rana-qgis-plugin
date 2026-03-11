@@ -1243,7 +1243,7 @@ class Loader(QObject):
         worker.jobs_added.connect(self.project_jobs_added)
         worker.job_updated.connect(self.project_job_updated)
         worker.failed.connect(self.communication.show_warn)
-        self.persistent_scheduler.add_task(worker, 1)
+        self.persistent_scheduler.add_task(worker, 10)
 
     def start_publication_monitoring(self, project_id):
         worker = PublicationMonitorWorker(project_id=project_id, parent=self)
