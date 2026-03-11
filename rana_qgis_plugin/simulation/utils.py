@@ -662,6 +662,7 @@ def load_remote_schematisation(
     progress_bar,
     working_dir,
     threedi_api,
+    parents=None,
 ):
     """Download and load a schematisation from the server."""
     if isinstance(schematisation, dict):
@@ -697,6 +698,7 @@ def load_remote_schematisation(
             else downloaded_local_schematisation.revisions[revision.number],
             action=BuildOptionActions.DOWNLOADED,
             custom_geopackage_filepath=custom_geopackage_filepath,
+            parents=parents,
         )
         wip_revision = downloaded_local_schematisation.wip_revision
         if wip_revision is not None:
@@ -926,6 +928,7 @@ def load_local_schematisation(
     local_schematisation=None,
     action=BuildOptionActions.LOADED,
     custom_geopackage_filepath=None,
+    parents=None,
 ):
     if local_schematisation and (
         custom_geopackage_filepath or local_schematisation.schematisation_db_filepath
@@ -942,7 +945,19 @@ def load_local_schematisation(
             schematisation_editor = get_plugin_instance("threedi_schematisation_editor")
             communication.log_info(f"Loading {geopackage_filepath}")
             if schematisation_editor:
-                schematisation_editor.load_schematisation(geopackage_filepath)
+                try:
+                    schematisation_editor.load_schematisation(
+                        geopackage_filepath, parents=parents
+                    )
+                except TypeError as e:
+                    if "parents" in str(e):
+                        # Warn and all back on old syntax and behavior
+                        communication.show_warn(
+                            "Rana schematisation editor is not up to date and therefore the schematisation layers will not be properly organized. Please update the plugin."
+                        )
+                        schematisation_editor.load_schematisation(geopackage_filepath)
+                    else:
+                        raise
             else:
                 msg += (
                     "Please use the Rana Schematisation Editor to load it to your project from the GeoPackage:"
