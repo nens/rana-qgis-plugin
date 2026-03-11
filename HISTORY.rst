@@ -16,6 +16,7 @@ History
 - Match update interval of project monitoring to update interval in rana
 - Organize opened layers under Rana projects (nens/rana-qgis#57)
 - Add publications browser (nens/rana#302)
+- Match update interval of project monitoring to update interval in rana
 
 
 1.2.6 (2026-02-19)
