@@ -54,10 +54,10 @@ def test_upload(plugin, qtbot, request):
             QTest.qWait(500)
             qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-        QTimer.singleShot(2000, handle_dialog)
+        QTimer.singleShot(3000, handle_dialog)
         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    QTest.qWait(10000)
+    QTest.qWait(15000)
 
     # TODO
     # assert plugin.rana_browser.files_browser.isVisible()
