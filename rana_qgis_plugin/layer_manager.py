@@ -24,6 +24,7 @@ from rana_qgis_plugin.simulation.utils import load_remote_schematisation
 from rana_qgis_plugin.utils import get_threedi_api
 from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.utils_scenario import get_is_3di_simulation
 from rana_qgis_plugin.utils_settings import hcc_working_dir
 
 STYLE_DIR = Path(__file__).parent / "styles"
@@ -44,7 +45,11 @@ class LayerManager(QObject):
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
         if file.get("data_type") == "scenario":
-            self._add_layer_from_scenario(local_file_path, file, project=project_name)
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+            if get_is_3di_simulation(descriptor):
+                self._add_layer_from_scenario(
+                    local_file_path, file, project=project_name
+                )
         elif file.get("data_type") == "raster":
             self._add_layer_from_raster_file(local_file_path, file, parents=parents)
         elif file.get("data_type") == "vector":
