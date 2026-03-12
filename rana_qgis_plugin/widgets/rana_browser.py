@@ -50,6 +50,7 @@ from rana_qgis_plugin.icons import (
     dir_icon,
     ellipsis_icon,
     file_icon,
+    open_folder_icon,
     refresh_icon,
     separator_icon,
 )
@@ -756,6 +757,7 @@ class RanaBrowser(QWidget):
     project_job_updated = pyqtSignal(dict)
     update_avatar_cache = pyqtSignal(list)
     view_file_after_open = pyqtSignal(dict)
+    open_explorer_selected = pyqtSignal(dict, dict)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -824,10 +826,21 @@ class RanaBrowser(QWidget):
         self.project_widget = QTabWidget()
         self.rana_browser.addWidget(self.project_widget)
         self.rana_browser.setCurrentIndex(0)
+        tool_button_widget = QWidget(self.project_widget)
+        tool_button_widget_layout = QHBoxLayout(tool_button_widget)
+        tool_button_widget_layout.setContentsMargins(0, 0, 0, 0)
+
+        open_folder_btn = QToolButton()
+        open_folder_btn.setToolTip("Open Folder")
+        open_folder_btn.setIcon(open_folder_icon)
+        tool_button_widget_layout.addWidget(open_folder_btn)
+
         refresh_btn = QToolButton()
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
-        self.project_widget.setCornerWidget(refresh_btn)
+        tool_button_widget_layout.addWidget(refresh_btn)
+
+        self.project_widget.setCornerWidget(tool_button_widget)
         self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Create stacked widget for file browsing
         self.rana_files = QStackedWidget()
@@ -885,9 +898,15 @@ class RanaBrowser(QWidget):
         self.project_jobs_added.connect(self.processes_browser.add_items)
         self.project_job_updated.connect(self.processes_browser.update_job_state)
 
-        # Connect refresh buttons
+        # Connect refresh and explorer buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
+        open_folder_btn.clicked.connect(
+            lambda _,: self.open_explorer_selected.emit(
+                self.project, self.selected_item
+            )
+        )
+
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path

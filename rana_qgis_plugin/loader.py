@@ -9,8 +9,12 @@ from qgis.PyQt.QtCore import (
     QSettings,
     QThread,
     QThreadPool,
+    QUrl,
     pyqtSignal,
     pyqtSlot,
+)
+from qgis.PyQt.QtGui import (
+    QDesktopServices,
 )
 from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException, SchematisationRevision
@@ -40,6 +44,7 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
     get_local_file_path,
+    get_local_folder_path,
     get_threedi_api,
     get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
@@ -168,6 +173,13 @@ class Loader(QObject):
             project["name"], schematisation, revision
         )
         self.file_download_finished.emit(None)
+
+    @pyqtSlot(dict, dict)
+    def open_in_explorer(self, project: dict, file: dict):
+        self.communication.log_info(f"Opening file explorer at file {str(file)}")
+        local_dir_structure = get_local_folder_path(project["slug"], file)
+        self.communication.log_info(f"Opening file explorer at {local_dir_structure}")
+        QDesktopServices.openUrl(QUrl.fromLocalFile(local_dir_structure))
 
     def on_file_download_finished(
         self, project, file, local_file_path: str, from_thread=True
