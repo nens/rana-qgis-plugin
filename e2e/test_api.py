@@ -1,24 +1,9 @@
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox, QTreeView
+from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox
 
+from e2e.test_utils import click_tree_item
 from rana_qgis_plugin.utils_api import delete_tenant_project_file
-
-
-def click_tree_item(tree: QTreeView, index, qtbot):
-    # Ensure item is visible
-    qtbot.waitExposed(tree)
-    tree.setFocus()
-    tree.scrollTo(index)
-
-    # Get item rectangle
-    rect = tree.visualRect(index)
-    assert rect.isValid()
-
-    with qtbot.waitSignal(tree.doubleClicked):
-        qtbot.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
-        QTest.qWait(50)
-        qtbot.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
 
 
 def test_smoke(plugin, request):
