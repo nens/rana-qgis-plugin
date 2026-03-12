@@ -1,5 +1,6 @@
 name: pytest
 
+# Run on pull requests and on the master branch itself.
 on:
   push:
     branches:
@@ -7,6 +8,7 @@ on:
     tags:
       - "*"
   pull_request:
+
 
 jobs:
   test:

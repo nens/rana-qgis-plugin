@@ -1,4 +1,3 @@
-import gc
 import os
 from unittest.mock import Mock, patch
 
@@ -83,13 +82,13 @@ def qgis_application() -> QgsApplication:
 
 @pytest.fixture
 def qgis_iface(qgis_application):
-    """Real QGIS interface with visible windows"""
+    """QGIS interface with visible windows"""
     # Create real main window
     main_window = QMainWindow()
     main_window.setWindowTitle("QGIS Test Window")
     main_window.resize(1200, 800)
 
-    # Add plugin menu storage to main window
+    # Add plugin menus to main window
     main_window._plugin_menus = {}
 
     # Add getPluginMenu method to main window
@@ -103,7 +102,7 @@ def qgis_iface(qgis_application):
     main_window.getPluginMenu = get_plugin_menu
     main_window.show()
 
-    # Create mock iface with real GUI components
+    # Create mock iface with real mainwindow and canvas, and real toolbar/dock widget methods
     iface = Mock()
     iface.mainWindow.return_value = main_window
 
@@ -113,13 +112,12 @@ def qgis_iface(qgis_application):
 
     main_window.setCentralWidget(centerWidget)
 
-    # Create real map canvas
     canvas = QgsMapCanvas(main_window)
     iface.mapCanvas.return_value = canvas
 
+    # Connect our local canvas to the layer tree
     bridge = QgsLayerTreeMapCanvasBridge(QgsProject.instance().layerTreeRoot(), canvas)
 
-    # Create real message bar
     message_bar = QgsMessageBar(main_window)
     iface.messageBar.return_value = message_bar
     center_layout.addWidget(message_bar)
@@ -134,7 +132,6 @@ def qgis_iface(qgis_application):
     iface.addToolBar.side_effect = add_toolbar
     iface.removeToolBarIcon.return_value = None
 
-    # Real dock widget methods
     def add_dock_widget(area, widget):
         main_window.addDockWidget(area, widget)
 
