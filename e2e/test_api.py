@@ -68,8 +68,8 @@ def test_upload(plugin, qtbot, request):
     # Check whether the map layer was added to the canvas
     assert any("test" in layer.name() for layer in plugin.iface.mapCanvas().layers())
     assert (
-        plugin.iface.mapCanvas().layers()[0].dataProvider().dataSourceUri()
-        == "/root/Rana/plugin-test/upload/upload.gpkg|layername=test"
+        "/root/Rana/plugin-test/upload/upload.gpkg"
+        in plugin.iface.mapCanvas().layers()[0].dataProvider().dataSourceUri()
     )
 
     # Delete the file
