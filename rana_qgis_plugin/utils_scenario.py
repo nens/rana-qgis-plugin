@@ -13,16 +13,18 @@ def get_ready_state_from_descriptor(descriptor: dict) -> bool:
 
 
 def get_is_3di_simulation(descriptor: dict) -> bool:
-    return (descriptor.get("meta") or {})["simulation"].get("software", {}).get(
-        "id"
-    ) == "3Di"
+    if descriptor.get("data_type") != "scenario":
+        return False
+    if descriptor.get("status") is None:
+        return False
+    return (descriptor["meta"]["simulation"].get("software") or {}).get("id") == "3Di"
 
 
 class ScenarioInfo:
     def __init__(self, descriptor: dict):
         # Cannot be initialized for a descriptor without meta data or of any other type then scenario
         assert descriptor["data_type"] == "scenario"
-        assert descriptor["meta"]
+        assert "meta" in descriptor
         self.descriptor = descriptor
         self.meta = descriptor["meta"]
         # set simulation info from metadata
@@ -103,9 +105,10 @@ class ScenarioInfo:
 
     @cached_property
     def lizard_results(self):
-        return get_tenant_file_descriptor_view(
-            self.descriptor.get("id"), "lizard-scenario-results"
-        )
+        if self.has_lizard_results:
+            return get_tenant_file_descriptor_view(
+                self.descriptor.get("id"), "lizard-scenario-results"
+            )
 
     @cached_property
     def grid(self):
@@ -117,4 +120,4 @@ class ScenarioInfo:
 
     @cached_property
     def pixel_size(self):
-        return self.grid.get("x", {}).get("cell_size", 1)
+        return (self.grid.get("x") or {}).get("cell_size", 1)
