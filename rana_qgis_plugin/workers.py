@@ -313,6 +313,7 @@ class VectorStyleWorker(QThread):
 
         # Save QML style files for each layer to local directory
         temp_dir = Path(tempfile.mkdtemp())
+        temp_dir = Path("/home/margriet/temp")
 
         for layer in layers:
             qml_path = os.path.join(temp_dir, f"{layer.name()}.qml")
@@ -329,6 +330,9 @@ class VectorStyleWorker(QThread):
             files = self.collect_json_files(temp_dir, [("style", mb_style)])
             # Save sprite sheet to file
             if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
+                from qgis.core import Qgis, QgsMessageLog
+
+                QgsMessageLog.logMessage(f"Save sprites", "DEBUG", Qgis.Info)
                 files += self.collect_json_files(
                     temp_dir,
                     [
@@ -350,7 +354,7 @@ class VectorStyleWorker(QThread):
             # Upload everything to rana
             upload_file_descriptor_style(descriptor_id, files)
             # Finish
-            shutil.rmtree(temp_dir)
+            # shutil.rmtree(temp_dir)
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
