@@ -11,7 +11,7 @@ fluxbox &
 # Start VNC server for visual inspection (optional)
 x11vnc -display :99 -nopw -forever -shared &
 
-ffmpeg -y -f x11grab -video_size 1920x1080 -framerate 15 -i :99 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart output.mp4 &
+ffmpeg -loglevel error -y -f x11grab -video_size 1920x1080 -framerate 15 -i :99 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart output.mp4 &
 FFMPEG_PROC=$!
 
 sleep 1

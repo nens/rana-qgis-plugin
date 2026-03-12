@@ -16,6 +16,9 @@ def test_smoke(plugin, request):
 
 
 def test_upload(plugin, qtbot, request):
+    # Delete the file from previous runs if it exists
+    delete_tenant_project_file("NEEjN2HZ", {"path": "upload.gpkg"})
+
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
