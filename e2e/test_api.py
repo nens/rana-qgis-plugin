@@ -2,7 +2,7 @@ from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox
 
-from e2e.test_utils import click_tree_item
+from e2e.test_utils import click_tree_item, press_button_with_moderator
 from rana_qgis_plugin.utils_api import delete_tenant_project_file
 
 
@@ -36,11 +36,7 @@ def test_upload(plugin, qtbot, request):
         assert isinstance(modal, QMessageBox)
         modal.setFocus()
         QTest.qWait(1000)
-        qtbot.keyPress(modal, Qt.Key_Shift)
-        qtbot.keyPress(modal, Qt.Key_Tab)
-        QTest.qWait(100)
-        qtbot.keyRelease(modal, Qt.Key_Tab)
-        qtbot.keyRelease(modal, Qt.Key_Shift)
+        press_button_with_moderator(qtbot, modal, Qt.Key_Tab)
         QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
@@ -60,7 +56,7 @@ def test_upload(plugin, qtbot, request):
         QTimer.singleShot(3000, handle_dialog)
         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    QTest.qWait(15000)
+    QTest.qWait(13000)
 
     # TODO
     # assert plugin.rana_browser.files_browser.isVisible()
