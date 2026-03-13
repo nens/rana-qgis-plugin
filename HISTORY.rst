@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.7 (unreleased)
+1.2.7 (2026-03-13)
 ------------------
 
 - Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
