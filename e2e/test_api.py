@@ -1,8 +1,16 @@
+import os
+
 from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox
 
-from e2e.test_utils import click_tree_item, press_button_with_moderator
+from e2e.test_utils import (
+    canvas_to_image,
+    click_tree_item,
+    images_equal,
+    press_button_with_moderator,
+)
 from rana_qgis_plugin.utils_api import delete_tenant_project_file
 
 
@@ -31,6 +39,9 @@ def test_upload(plugin, qtbot, request):
     )
     QTest.qWait(2000)
 
+    # Check we don't start in file detail view
+    assert plugin.rana_browser.rana_files.currentIndex() != 1
+
     def handle_dialog_load_layer():
         # Note that this might not for native widgets (in that case dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True) should be set)
         modal = QApplication.activeModalWidget()
@@ -45,7 +56,7 @@ def test_upload(plugin, qtbot, request):
 
     with qtbot.waitSignal(plugin.loader.file_upload_finished):
 
-        def handle_dialog():
+        def handle_dialog_select_file():
             modal = QApplication.activeModalWidget()
             assert isinstance(modal, QFileDialog)
             QTest.qWait(500)
@@ -54,19 +65,29 @@ def test_upload(plugin, qtbot, request):
             QTest.qWait(500)
             qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-        QTimer.singleShot(3000, handle_dialog)
+        QTimer.singleShot(3000, handle_dialog_select_file)
         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
     QTest.qWait(13000)
 
-    # TODO
-    # assert plugin.rana_browser.files_browser.isVisible()
+    # Check we end in file detail view
+    assert plugin.rana_browser.rana_files.currentIndex() == 1
 
     # Check whether the map layer was added to the canvas
     assert any("test" in layer.name() for layer in plugin.iface.mapCanvas().layers())
     assert (
         "/root/Rana/plugin-test/upload/upload.gpkg"
         in plugin.iface.mapCanvas().layers()[0].dataProvider().dataSourceUri()
+    )
+    expected_image = QImage(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "data", "upload_rendering.png"
+        )
+    )
+    actual_image = canvas_to_image(plugin.iface.mapCanvas())
+    assert images_equal(
+        expected_image.convertToFormat(QImage.Format_ARGB32),
+        actual_image.convertToFormat(QImage.Format_ARGB32),
     )
 
     # Delete the file

@@ -1,4 +1,6 @@
-from qgis.PyQt.QtCore import Qt
+from qgis.core import QgsMapRendererParallelJob
+from qgis.PyQt.QtCore import QSize, Qt
+from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QTreeView
 
@@ -19,6 +21,37 @@ def click_tree_item(tree: QTreeView, index, qtbot):
         qtbot.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
         QTest.qWait(50)
         qtbot.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
+
+
+def canvas_to_image(canvas) -> QImage:
+    """Renders the QgsMapCanvas to a QImage and returns it. Useful for pixelperfect assertions."""
+    settings = canvas.mapSettings()
+    settings.setFlag(settings.Antialiasing, False)
+    settings.setFlag(settings.UseAdvancedEffects, False)
+
+    width = canvas.size().width()
+    height = canvas.size().height()
+    settings.setOutputSize(QSize(width, height))
+
+    job = QgsMapRendererParallelJob(settings)
+    job.start()
+    job.waitForFinished()
+
+    return job.renderedImage()
+
+
+def images_equal(img1: QImage, img2: QImage) -> bool:
+    if img1.size() != img2.size() or img1.format() != img2.format():
+        return False
+
+    width = img1.width()
+    height = img1.height()
+
+    for y in range(height):
+        for x in range(width):
+            if img1.pixel(x, y) != img2.pixel(x, y):
+                return False
+    return True
 
 
 def press_button_with_moderator(qtbot, modal, key, moderator_key=Qt.Key_Shift):
