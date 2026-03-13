@@ -42,6 +42,9 @@ def canvas_to_image(canvas) -> QImage:
 
 def images_equal(img1: QImage, img2: QImage) -> bool:
     if img1.size() != img2.size() or img1.format() != img2.format():
+        print(
+            f"Image size or format mismatch: {img1.size()} != {img2.size()} or {img1.format()} != {img2.format()}"
+        )
         return False
 
     width = img1.width()
@@ -50,6 +53,9 @@ def images_equal(img1: QImage, img2: QImage) -> bool:
     for y in range(height):
         for x in range(width):
             if img1.pixel(x, y) != img2.pixel(x, y):
+                print(
+                    f"Pixel mismatch at ({x}, {y}): {img1.pixel(x, y)} != {img2.pixel(x, y)}"
+                )
                 return False
     return True
 

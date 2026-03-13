@@ -84,6 +84,9 @@ def test_upload(plugin, qtbot, request):
             os.path.dirname(os.path.abspath(__file__)), "data", "upload_rendering.png"
         )
     )
+    assert not expected_image.isNull(), (
+        "Expected image failed to load, check the path and file integrity"
+    )
     actual_image = canvas_to_image(plugin.iface.mapCanvas())
     assert images_equal(
         expected_image.convertToFormat(QImage.Format_ARGB32),
