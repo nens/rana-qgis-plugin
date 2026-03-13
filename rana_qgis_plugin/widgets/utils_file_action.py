@@ -62,6 +62,10 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     return sorted(actions)
 
 
+def can_open_in_qgis(selected_item: dict) -> bool:
+    return selected_item.get("data_type") in SUPPORTED_DATA_TYPES
+
+
 class FileActionSignals(QObject):
     file_deletion_requested = pyqtSignal(dict)
     file_rename_requested = pyqtSignal(dict, str)

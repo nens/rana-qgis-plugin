@@ -322,6 +322,11 @@ class PublicationView(QWidget):
         save_btn = QPushButton("Save style to Rana")
         save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         save_btn.clicked.connect(lambda: self.open_maps(map_item))
+        if isinstance(map_item, LayerItemData):
+            if map_item.data_type not in SUPPORTED_DATA_TYPES:
+                open_btn.setEnabled(False)
+            if map_item.data_type not in ["vector", "raster"]:
+                save_btn.setEnabled(False)
         btn_container = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
