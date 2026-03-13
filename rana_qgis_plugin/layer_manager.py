@@ -87,9 +87,10 @@ class LayerManager(QObject):
             self.communication.show_warn(f"No layers found in {file_name}.")
             return
         for file_layer in layers:
+            layer_uri = f"{local_file_path}|layername={file_layer['name']}"
             layer = self._create_and_add_layer(
                 QgsVectorLayer,
-                layer_args=[local_file_path, file_layer["name"], "ogr"],
+                layer_args=[layer_uri, file_layer["name"], "ogr"],
                 parents=parents,
             )
             if layer:

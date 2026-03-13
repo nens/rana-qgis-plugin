@@ -5,7 +5,7 @@ History
 1.2.8 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Proper loading of downloaded geopackages (nens/rana#3781)
 
 
 1.2.7 (2026-03-13)
