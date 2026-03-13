@@ -709,6 +709,7 @@ class RanaBrowser(QWidget):
             and self.rana_files.currentIndex() in [1, 2, 3]
         ) or self.rana_browser.currentIndex() == 1:
             self.refresh()
+        # TODO: consider refresh of publications
 
     def refresh_projects_browser(self):
         self.projects_browser.refresh()

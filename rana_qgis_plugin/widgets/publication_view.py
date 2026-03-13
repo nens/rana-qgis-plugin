@@ -41,6 +41,10 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
 )
 from rana_qgis_plugin.utils_time import format_activity_timestamp_str
+from rana_qgis_plugin.widgets.utils_file_action import (
+    FileAction,
+    get_file_actions_by_data_type,
+)
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
 
 
@@ -68,6 +72,7 @@ class LayerItemData(MapItemData):
     data_type: str
     file: dict
     file_descriptor: dict
+    type_in_file: Optional[str] = None
     layer_in_file: Optional[dict] = None
 
 
@@ -323,9 +328,16 @@ class PublicationView(QWidget):
         save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         save_btn.clicked.connect(lambda: self.open_maps(map_item))
         if isinstance(map_item, LayerItemData):
-            if map_item.data_type not in SUPPORTED_DATA_TYPES:
+            supported_actions = get_file_actions_by_data_type(
+                map_item.type_in_file or map_item.data_type
+            )
+            # TODO: handle scenarios
+            if FileAction.OPEN_IN_QGIS not in supported_actions:
                 open_btn.setEnabled(False)
-            if map_item.data_type not in ["vector", "raster"]:
+            if (
+                FileAction.SAVE_VECTOR_STYLING not in supported_actions
+                and FileAction.SAVE_RASTER_STYLING not in supported_actions
+            ):
                 save_btn.setEnabled(False)
         btn_container = QWidget()
         layout = QHBoxLayout()
@@ -364,7 +376,10 @@ class PublicationView(QWidget):
                 if not file_descriptor:
                     continue
                 # For scenario and vector files the layer is extracted from the file
-                if file.get("data_type", "") in ["scenario", "vector"]:
+                layer_in_file = None
+                type_in_file = None
+                data_type = file.get("data_type", "")
+                if data_type in ["scenario", "vector"]:
                     layers_in_file = (file_descriptor.get("meta") or {}).get(
                         "layers", []
                     )
@@ -375,11 +390,7 @@ class PublicationView(QWidget):
                         ),
                         None,
                     )
-                else:
-                    layer_in_file = None
-                data_type = file.get("data_type", "")
-                if data_type == "vector":
-                    data_type = (file_descriptor.get("meta") or {}).get(
+                    type_in_file = (file_descriptor.get("meta") or {}).get(
                         "type", data_type
                     )
                 # Collect data needed for UI and to open and edit the layer
@@ -387,6 +398,7 @@ class PublicationView(QWidget):
                     LayerItemData(
                         name=layer["name"],
                         data_type=data_type,
+                        type_in_file=type_in_file,
                         layer_in_file=layer_in_file,
                         file=file,
                         file_descriptor=file_descriptor,
