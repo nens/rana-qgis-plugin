@@ -77,6 +77,18 @@ isolated environment. To start the development environment, run the following co
     $ xhost +local:docker
     $ docker compose up
 
+
+## Handling unhandled errors
+
+The plugin has its own excepthook that handles any error that is not caught. Such errors result in a warning for the user, with an error message that can be copied, and after closing the dialog the rana browser will be enabled. 
+
+This hook can be quite annoying during development so it can be manually turned of by adding:
+```
+use_plugin_excepthook=false
+```
+to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
+
+
 ## Releasing
 
 Make sure you have `zest.releaser` with `qgispluginreleaser` installed. The

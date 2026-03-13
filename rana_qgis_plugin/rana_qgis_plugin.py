@@ -29,6 +29,7 @@ from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
 from rana_qgis_plugin.utils_qgis import get_plugin_instance
 from rana_qgis_plugin.utils_settings import (
     get_tenant_id,
+    get_use_plugin_excepthook,
     initialize_settings,
     set_tenant_id,
 )
@@ -107,7 +108,8 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
-        install_exception_hook()
+        if get_use_plugin_excepthook():
+            install_exception_hook()
         self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
