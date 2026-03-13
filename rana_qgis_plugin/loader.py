@@ -673,7 +673,7 @@ class Loader(QObject):
             # If there is no link to HCC, download the raw results to the cache folder
             if not has_3di_simulation:
                 self.communication.show_info(
-                    "This scenario is not linked to a 3Di simulation. Only raw results will be downloade and they will be download to your cache directory instead of your simulation directory."
+                    "This scenario is not linked to a 3Di simulation. Only raw results will be downloaded and they will be download to your cache directory instead of your simulation directory."
                 )
             # If there is no lizard data, download raw results only to simulation directory (as is the default)
             elif not has_lizard_results:
