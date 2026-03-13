@@ -577,19 +577,29 @@ class RanaBrowser(QWidget):
             )
         )
         # Open publication view
+        # Open widget, disable UI and load publication
+        self.publications_browser.publication_selected.connect(
+            lambda _: self.show_project_data(self.rana_publications, 1)
+        )
+        self.publications_browser.publication_selected.connect(lambda _: self.disable())
         self.publications_browser.publication_selected.connect(
             lambda publication_id: self.publication_view.show_details(
                 self.project, publication_id
             )
         )
-        self.publication_view.show_success.connect(
-            lambda _: self.show_project_data(self.rana_publications, 1)
-        )
+        # On success, update breadcrumbs and enable
         self.publication_view.show_success.connect(
             lambda publication_name: self.publications_breadcrumbs.add_detail_view(
                 publication_name
             )
         )
+        self.publication_view.show_success.connect(lambda _: self.enable())
+        # On missing publication, return to browser and enable
+        self.publication_view.show_failed.connect(
+            lambda _: self.show_project_data(self.rana_publications, 0)
+        )
+        self.publication_view.show_failed.connect(lambda _: self.enable())
+
         # Update breadcrumbs when file browser path changes
         for breadcrumb_widget in self.breadcrumbs_manager.widgets:
             self.projects_browser.project_selected.connect(

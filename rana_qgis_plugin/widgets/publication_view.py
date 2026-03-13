@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
@@ -144,13 +144,15 @@ class PublicationView(QWidget):
     def setup_ui(self):
         self.general_box = QgsCollapsibleGroupBox("General")
         self.general_box.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
         )
         self.general_box.setAlignment(Qt.AlignTop)
         self.general_box.setContentsMargins(0, 0, 0, 0)
+        self.general_box.setMaximumHeight(0)
+
         self.maps_box = QgsCollapsibleGroupBox("Maps")
         self.maps_box.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
         )
         self.maps_model = QStandardItemModel()
         self.maps_tv = PublicationMapsTreeView()
@@ -222,6 +224,9 @@ class PublicationView(QWidget):
             self.update_general_box()
             self.update_maps_box()
             self.show_success.emit(self.publication["name"])
+        else:
+            self.communication.show_warn("Cannot find selected publication")
+            self.show_failed.emit()
 
     def update_general_box(self):
         # collect all contents as a list of layouts
@@ -286,7 +291,6 @@ class PublicationView(QWidget):
                 line = QFrame()
                 line.setFrameStyle(QFrame.HLine | QFrame.Sunken)
                 frame_layout.addWidget(line)
-
         # assign existing layout to temporary widget
         # this will be deleted once the scope of this method is over
         if self.general_box.layout():
@@ -359,7 +363,6 @@ class PublicationView(QWidget):
                     layers_in_file = (file_descriptor.get("meta") or {}).get(
                         "layers", []
                     )
-                    # TODO: make sure slayer_in_file refers to id!!!
                     layer_in_file = next(
                         (
                             layers["id"] == layer["layer_in_file"]
@@ -433,7 +436,7 @@ class PublicationView(QWidget):
                 self.add_map_layers(folder_item, map_item.sub_items)
 
     def update_maps_box(self):
-        # TODO: freeze UI or load on the fly / load on the fly / open before loading
+        self.communication.progress_bar("Loading maps...", clear_msg_bar=True)
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
         all_maps = [
@@ -459,3 +462,4 @@ class PublicationView(QWidget):
             map_index = self.maps_model.indexFromItem(name_item)
             self.maps_tv.expand(map_index)
         self.maps_tv.resize_columns_aware_of_collapsed_items()
+        self.communication.clear_message_bar()
