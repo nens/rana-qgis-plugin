@@ -32,12 +32,13 @@ def canvas_to_image(canvas) -> QImage:
     width = canvas.size().width()
     height = canvas.size().height()
     settings.setOutputSize(QSize(width, height))
+    settings.setDevicePixelRatio(1)
 
     job = QgsMapRendererParallelJob(settings)
     job.start()
     job.waitForFinished()
 
-    return job.renderedImage()
+    return job.renderedImage().convertToFormat(QImage.Format_ARGB32)
 
 
 def images_equal(img1: QImage, img2: QImage) -> bool:

@@ -81,7 +81,9 @@ def test_upload(plugin, qtbot, request):
     )
     expected_image = QImage(
         os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "data", "upload_rendering.png"
+            os.path.dirname(os.path.abspath(__file__)),
+            "data",
+            "actual_upload_rendering.png",
         )
     )
     assert not expected_image.isNull(), (
