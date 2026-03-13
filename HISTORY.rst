@@ -14,6 +14,7 @@ History
 - Make creating avatars safe for users without given and/or family name
 - Download results folder "<simulation name> (<simulation id>)" (nens/rana#3678)
 - Match update interval of project monitoring to update interval in rana
+- Enable results downloading for results without lizard data and results not linked to a simulation (nens/rana#3710)
 - Organize opened layers under Rana projects (nens/rana-qgis#57)
 - Basic setup for end-to-end testing (nens/rana-plugin#3196)
 
