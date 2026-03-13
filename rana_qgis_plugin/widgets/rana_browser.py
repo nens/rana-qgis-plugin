@@ -607,6 +607,16 @@ class RanaBrowser(QWidget):
                     selected_item["name"]
                 )
             )
+        self.projects_browser.project_selected.connect(
+            lambda selected_item: self.processes_breadcrumbs.add_project(
+                selected_item["name"]
+            )
+        )
+        self.projects_browser.project_selected.connect(
+            lambda selected_item: self.publications_breadcrumbs.add_project(
+                selected_item["name"]
+            )
+        )
         self.files_browser.folder_selected.connect(self.files_breadcrumbs.add_folder)
         self.files_browser.file_selected.connect(
             lambda selected_item: self.files_breadcrumbs.add_file(

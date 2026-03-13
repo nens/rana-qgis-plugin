@@ -13,6 +13,8 @@ History
 - Take buttons in the file view out of the scroll area (nens/rana#3630)
 - Make creating avatars safe for users without given and/or family name
 - Download results folder "<simulation name> (<simulation id>)" (nens/rana#3678)
+- Match update interval of project monitoring to update interval in rana
+- Organize opened layers under Rana projects (nens/rana-qgis#57)
 - Add publications browser (nens/rana#302)
 - Match update interval of project monitoring to update interval in rana
 
