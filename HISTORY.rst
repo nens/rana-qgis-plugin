@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.8 (unreleased)
+1.2.8 (2026-03-13)
 ------------------
 
 - Proper loading of downloaded geopackages (nens/rana#3781)
