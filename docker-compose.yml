@@ -1,18 +1,17 @@
-version: "1.0"
-
 services:
   qgis:
     build: .
     ports:
       - "7070:7070"
+      - "5900:5900" # x11vnc
+    tmpfs:
+      - /tmp
+      - /tmp/.X11-unix
     environment:
-      - DISPLAY=unix${DISPLAY}
-      # Note: run 'xhost +localhost' beforehand.
+      RANA_PAK: ${RANA_PAK}
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix  # Allow GUI application to run in docker
       - .:/tests_directory/
       - profile-dir:/root/.local/share/QGIS/QGIS3/profiles/default
-    command: qgis
 
 volumes:
   profile-dir:
