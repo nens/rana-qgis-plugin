@@ -808,7 +808,6 @@ class Loader(QObject):
             "Rasters (*.tif *.tiff);;"
             "Vector files (*.gpkg *.sqlite *.geojson *.shp)",
         )
-
         if not local_paths:
             self.loading_cancelled.emit()
             return
