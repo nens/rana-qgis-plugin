@@ -29,9 +29,7 @@ def canvas_to_image(canvas) -> QImage:
     settings.setFlag(settings.Antialiasing, False)
     settings.setFlag(settings.UseAdvancedEffects, False)
 
-    width = canvas.size().width()
-    height = canvas.size().height()
-    settings.setOutputSize(QSize(width, height))
+    settings.setOutputSize(QSize(800, 600))
     settings.setDevicePixelRatio(1)
 
     job = QgsMapRendererParallelJob(settings)
