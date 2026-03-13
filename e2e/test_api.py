@@ -32,6 +32,7 @@ def test_upload(plugin, qtbot, request):
     QTest.qWait(2000)
 
     def handle_dialog_load_layer():
+        # Note that this might not for native widgets (in that case dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True) should be set)
         modal = QApplication.activeModalWidget()
         assert isinstance(modal, QMessageBox)
         modal.setFocus()
