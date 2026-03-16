@@ -701,15 +701,19 @@ class RanaBrowser(QWidget):
             self.project_widget.cornerWidget().show()
 
     def auto_refresh(self):
-        # skip auto refresh for projects view to not mess up pagination
         if not self.rana_browser.isEnabled():
             return
-        if (
-            self.rana_browser.currentIndex() == 0
-            and self.rana_files.currentIndex() in [1, 2, 3]
-        ) or self.rana_browser.currentIndex() == 1:
-            self.refresh()
-        # TODO: consider refresh of publications
+        # skip auto refresh for projects view to not mess up pagination
+        if self.rana_browser.currentIndex() == 1:
+            # do auto refresh for all file widget
+            if self.project_widget.currentIndex() == 0:
+                self.refresh()
+            # do auto refresh on list of publications but not on single publication because loading may be slow
+            elif (
+                self.project_widget.currentIndex() == 2
+                and self.rana_publications.currentIndex() == 0
+            ):
+                self.refresh()
 
     def refresh_projects_browser(self):
         self.projects_browser.refresh()

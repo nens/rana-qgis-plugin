@@ -135,6 +135,7 @@ class PublicationView(QWidget):
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
+        self.no_refresh = False
         self.communication = communication
         self.avatar_cache = avatar_cache
         self.project: Optional[dict] = None
@@ -201,10 +202,12 @@ class PublicationView(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
-        self.update_publication(self.publication["id"])
+        from qgis.core import Qgis, QgsMessageLog
+
+        QgsMessageLog.logMessage("Refresh publciation view", "DEBUG", Qgis.Info)
+        self.show_details(self.project, self.publication["id"])
 
     def update_publication(self, publication_id: str):
-        self.current_version = None
         self.publication = get_publication_details(publication_id)
         if not self.publication:
             self.communication.show_warn("Cannot find loaded publication")
@@ -227,6 +230,10 @@ class PublicationView(QWidget):
             self.file_map = {}
 
     def show_details(self, project: dict, publication_id: str):
+        if self.no_refresh:
+            return
+        self.no_refresh = True
+        self.current_version = None
         self.project = project
         self.update_publication(publication_id)
         if self.publication:
@@ -236,6 +243,7 @@ class PublicationView(QWidget):
         else:
             self.communication.show_warn("Cannot find selected publication")
             self.show_failed.emit()
+        self.no_refresh = False
 
     def update_general_box(self):
         # collect all contents as a list of layouts
