@@ -248,6 +248,7 @@ class RanaQgisPlugin:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        QgsApplication.processingRegistry().removeProvider(self.provider)
         menu = self.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
         menu.clear()
         self.iface.removeToolBarIcon(self.action)
@@ -297,6 +298,11 @@ class RanaQgisPlugin:
             self.rana_browser.request_monitoring_project_jobs.connect(
                 self.loader.start_project_job_monitoring
             )
+            self.rana_browser.update_avatar_cache.connect(self.loader.update_avatars)
+            self.loader.avatar_updated.connect(
+                self.rana_browser.avatar_cache.update_avatar
+            )
+
             self.loader.project_jobs_added.connect(
                 self.rana_browser.project_jobs_added.emit
             )
@@ -305,6 +311,9 @@ class RanaQgisPlugin:
             )
             self.rana_browser.processes_browser.cancel_simulation.connect(
                 self.loader.cancel_simulation
+            )
+            self.loader.simulation_cancelled.connect(
+                self.rana_browser.processes_browser.on_simulation_cancelled
             )
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
@@ -413,7 +422,7 @@ class RanaQgisPlugin:
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
             self.loader.simulation_started.connect(self.rana_browser.enable)
-            self.loader.simulation_cancelled.connect(self.rana_browser.enable)
+            self.loader.simulation_wizard_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
             self.loader.schematisation_upload_cancelled.connect(
                 self.rana_browser.enable

@@ -5,6 +5,10 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils_scenario import (
+    get_is_3di_simulation,
+    get_ready_state_from_descriptor,
+)
 
 
 class FileAction(Enum):
@@ -52,13 +56,10 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     elif data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         meta = descriptor["meta"] if descriptor else None
-        if meta and "id" in meta:
+        if meta and "id" in meta and get_ready_state_from_descriptor(descriptor):
             actions.append(FileAction.DOWNLOAD_RESULTS)
-            if meta["simulation"]["software"]["id"] == "3Di":
+            if get_is_3di_simulation(descriptor):
                 actions.append(FileAction.OPEN_WMS)
-        # remove any interactions for objects that are being processed
-        elif descriptor.get("status", {}).get("id") == "processing":
-            actions = []
     return sorted(actions)
 
 
