@@ -13,14 +13,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
+
     steps:
-      # Checkout the code.
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: build
-        run: |
-          docker compose build qgis
+      - name: Build QGIS Docker image
+        run: docker compose build qgis
 
-      - name: test
-        run: |
-          docker compose run qgis pytest
+      - name: Run unit tests
+        run: 
+          docker compose run --rm qgis pytest -v tests
+
+      - name: Run e2e
+        run: 
+          docker compose run --service-ports --rm qgis pytest -v e2e
+        env:
+          RANA_PAK: ${{ secrets.RANA_PAK }}
+          ORG_3DI: ${{ secrets.ORG_3DI }}
+
+      - name: Upload recording if tests fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-recording
+          path: output.mp4
