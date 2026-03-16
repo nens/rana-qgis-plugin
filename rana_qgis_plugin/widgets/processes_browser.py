@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import (
     QStandardItem,
     QStandardItemModel,
@@ -88,6 +88,7 @@ class ProcessesBrowser(QWidget):
             for process_tag in ["model_tracker", "simulation_tracker"]
         }
         self.row_map = {}
+        self.cancelled_sim_map: dict[int, JobData] = {}
         self.project = {}
 
     def update_project(self, project: dict):
@@ -167,7 +168,7 @@ class ProcessesBrowser(QWidget):
         # connect cancel button to canceling a simulation
         if job.process_id == self.proces_map["simulation_tracker"]:
             cancel_button.clicked.connect(
-                lambda: self.cancel_simulation.emit(job.inputs["simulation_id"])
+                lambda _: self.on_simulation_cancel_requested(job)
             )
             if job.status == "running":
                 cancel_button.show()
@@ -184,6 +185,20 @@ class ProcessesBrowser(QWidget):
         self.row_map[job.id] = 0
         self.processes_tv.setIndexWidget(name_item.index(), name_link)
         self.processes_tv.resizeColumnToContents(0)
+
+    def on_simulation_cancel_requested(self, job):
+        # store cancellation related data on the fly to prevent a lot of bookkeeping
+        self.cancelled_sim_map[job.inputs["simulation_id"]] = job
+        # start cancel via Rana
+        self.cancel_simulation.emit(job.inputs["simulation_id"])
+        # wait for the signal to update the UI via on_simulation_cancelled
+
+    @pyqtSlot(int)
+    def on_simulation_cancelled(self, simulation_id: int):
+        job = self.cancelled_sim_map.get(simulation_id, None)
+        if job:
+            job.status = "cancelling"
+            self.update_state_for_job(job)
 
     @staticmethod
     def update_pb_progress(progress_bar, job):
@@ -210,7 +225,9 @@ class ProcessesBrowser(QWidget):
             self.add_item(JobData.from_job_dict(job))
 
     def update_job_state(self, job_dict: dict):
-        job = JobData.from_job_dict(job_dict)
+        self.update_state_for_job(JobData.from_job_dict(job_dict))
+
+    def update_state_for_job(self, job):
         row = self.row_map.get(job.id, -1)
         if row < 0:
             return

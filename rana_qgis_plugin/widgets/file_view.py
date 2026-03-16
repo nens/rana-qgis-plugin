@@ -205,6 +205,10 @@ class FileView(QWidget):
         collapsible_layout.addWidget(self.more_box)
         collapsible_layout.addWidget(self.files_box)
         collapsible_layout.addStretch()
+        # make container scrollable
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(collapsible_container)
 
         button_layout = QHBoxLayout()
         self.btn_start_simulation = QPushButton("Start Simulation")
@@ -228,21 +232,12 @@ class FileView(QWidget):
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
 
-        # Collect widgets and place in scroll area
-        scroll_content = QWidget()
-        scroll_content_layout = QVBoxLayout(scroll_content)
-        scroll_content_layout.addWidget(collapsible_container)
-        scroll_content_layout.addLayout(file_action_btn_layout)
-        scroll_content_layout.addLayout(button_layout)
-        scroll_content_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(scroll_content)
-
         # Put scroll area in layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(scroll_area)
+        layout.addLayout(file_action_btn_layout)
+        layout.addLayout(button_layout)
         self.setLayout(layout)
 
     def toggle_interactions(self, enabled: bool):

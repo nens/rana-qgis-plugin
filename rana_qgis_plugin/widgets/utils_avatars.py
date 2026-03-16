@@ -1,9 +1,7 @@
 from qgis.PyQt.QtCore import (
     QObject,
     QRectF,
-    QRunnable,
     Qt,
-    QThreadPool,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import QPainter, QPainterPath, QPixmap
@@ -97,33 +95,11 @@ def get_avatar(
         if bin_image:
             final_pixmap = create_user_image(bin_image)
     elif create_from_initials:
-        final_pixmap = get_user_image_from_initials(
-            user["given_name"][0] + user["family_name"][0]
+        initials = (user["given_name"][0] if user["given_name"] else "?") + (
+            user["family_name"][0] if user["family_name"] else "?"
         )
+        final_pixmap = get_user_image_from_initials(initials)
     return final_pixmap
-
-
-# We need a separate signals class since QRunnable cannot have signals
-class AvatarWorkerSignals(QObject):
-    finished = pyqtSignal()
-    avatar_ready = pyqtSignal(str, "QPixmap")
-
-
-class AvatarWorker(QRunnable):
-    def __init__(self, communication, users: list[dict]):
-        super().__init__()
-        self.communication = communication
-        self.users = users
-        self.signals = AvatarWorkerSignals()
-
-    def run(self):
-        for user in self.users:
-            new_avatar = get_avatar(
-                user, self.communication, create_from_initials=False
-            )
-            if new_avatar:
-                self.signals.avatar_ready.emit(user["id"], new_avatar)
-        self.signals.finished.emit()
 
 
 class AvatarCache(QObject):
@@ -134,7 +110,6 @@ class AvatarCache(QObject):
         super().__init__()
         self.communication = communication
         self.cache: dict[str, QPixmap] = {}
-        self.thread_pool = QThreadPool()
 
     def get_avatar_from_cache(self, user_id: str) -> QPixmap | None:
         return self.cache.get(user_id, None)
@@ -146,12 +121,7 @@ class AvatarCache(QObject):
             )
         return self.cache[user["id"]]
 
-    def update_users_in_thread(self, users: list[dict]):
-        worker = AvatarWorker(self.communication, users)
-        worker.signals.avatar_ready.connect(self._update_avatar)
-        self.thread_pool.start(worker)
-
-    def _update_avatar(self, user_id: str, new_avatar: QPixmap):
+    def update_avatar(self, user_id: str, new_avatar: QPixmap):
         current_avatar = self.cache.get(user_id, None)
         if not new_avatar or new_avatar.isNull():
             changed = False
