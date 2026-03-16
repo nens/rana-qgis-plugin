@@ -662,6 +662,14 @@ def get_publication_version_latest(publication_id: str):
     return fetch_first(url)
 
 
+def get_publication_version_details(publication_id: str, version: int) -> dict:
+    tenant = get_tenant_id()
+    url = (
+        f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}"
+    )
+    return simple_fetch(url)
+
+
 def get_publication_version_files(publication_id: str, version: int) -> list:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}/files"

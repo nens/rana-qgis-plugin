@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from qgis.core import Qgis, QgsMessageLog
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QSettings,
@@ -36,6 +37,7 @@ from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils import get_file_icon_name
 from rana_qgis_plugin.utils_api import (
     get_publication_details,
+    get_publication_version_details,
     get_publication_version_files,
     get_publication_version_latest,
     get_tenant_file_descriptor,
@@ -205,12 +207,17 @@ class PublicationView(QWidget):
         self.update_publication(self.publication["id"])
 
     def update_publication(self, publication_id: str):
+        self.current_version = None
         self.publication = get_publication_details(publication_id)
         if not self.publication:
             self.communication.show_warn("Cannot find loaded publication")
             self.show_failed.emit()
             return
-        self.current_version = get_publication_version_latest(self.publication["id"])
+        latest_publication = get_publication_version_latest(self.publication["id"])
+        if latest_publication:
+            self.current_version = get_publication_version_details(
+                self.publication["id"], latest_publication["version"]
+            )
         if self.current_version:
             self.file_map = {
                 item["file"]["id"]: item["file"]
