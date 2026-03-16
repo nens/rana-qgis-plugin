@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from functools import cached_property
 from typing import Optional
 
 from qgis.gui import QgsCollapsibleGroupBox
@@ -52,19 +53,57 @@ class MapItemType(Enum):
     FOLDER = "folder"
 
 
-@dataclass(frozen=True)
+@dataclass
 class MapItemData:
     name: str
 
+    @property
+    def support_open(self) -> bool:
+        return False
 
-@dataclass(frozen=True)
+    @property
+    def support_save(self) -> bool:
+        return False
+
+
+@dataclass
 class FolderItemData(MapItemData):
     """Data class to hold data about a folder in the map"""
 
     sub_items: list[MapItemData]
+    _support_save: bool = False
+    _support_open: bool = False
+    _support_flags_set: bool = False
+
+    def set_support_flags(self):
+        """
+        Recursively compute or update the support_open and support_save flags
+        for this folder and its sub-items.
+        """
+        if self._support_flags_set:
+            return
+
+        for item in self.sub_items:
+            if isinstance(item, FolderItemData):
+                item.set_support_flags()
+
+        # Compute current folder's flags based on its sub-items
+        self._support_open = any(item.support_open for item in self.sub_items)
+        self._support_save = any(item.support_save for item in self.sub_items)
+
+        # Mark this folder as computed
+        self._support_flags_set = True
+
+    @property
+    def support_open(self) -> bool:
+        return self._support_open
+
+    @property
+    def support_save(self) -> bool:
+        return self._support_save
 
 
-@dataclass(frozen=True)
+@dataclass
 class LayerItemData(MapItemData):
     """Data class to hold data about a layer in the map"""
 
@@ -73,6 +112,23 @@ class LayerItemData(MapItemData):
     file_descriptor: dict
     type_in_file: Optional[str] = None
     layer_in_file: Optional[dict] = None
+
+    @cached_property
+    def supported_actions(self) -> list[FileAction]:
+        return get_file_actions_by_data_type(self.type_in_file or self.data_type)
+
+    @property
+    def support_open(self) -> bool:
+        return (
+            FileAction.OPEN_IN_QGIS in self.supported_actions
+        ) or self.data_type == "scenario"
+
+    @property
+    def support_save(self) -> bool:
+        return (
+            FileAction.SAVE_RASTER_STYLING in self.supported_actions
+            or FileAction.SAVE_VECTOR_STYLING in self.supported_actions
+        )
 
 
 class PublicationMapsTreeView(QTreeView):
@@ -202,9 +258,6 @@ class PublicationView(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage("Refresh publciation view", "DEBUG", Qgis.Info)
         self.show_details(self.project, self.publication["id"])
 
     def update_publication(self, publication_id: str):
@@ -333,29 +386,20 @@ class PublicationView(QWidget):
         pass
 
     def get_button_container(self, map_item: MapItemData) -> QWidget:
-        open_btn = QPushButton("Open in QGIS")
-        open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        open_btn.clicked.connect(lambda: self.open_maps(map_item))
-        save_btn = QPushButton("Save style to Rana")
-        save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        save_btn.clicked.connect(lambda: self.open_maps(map_item))
-        if isinstance(map_item, LayerItemData):
-            supported_actions = get_file_actions_by_data_type(
-                map_item.type_in_file or map_item.data_type
-            )
-            # TODO: handle scenarios
-            if FileAction.OPEN_IN_QGIS not in supported_actions:
-                open_btn.setEnabled(False)
-            if (
-                FileAction.SAVE_VECTOR_STYLING not in supported_actions
-                and FileAction.SAVE_RASTER_STYLING not in supported_actions
-            ):
-                save_btn.setEnabled(False)
         btn_container = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(open_btn)
-        layout.addWidget(save_btn)
+        if map_item.support_open:
+            open_btn = QPushButton("Open in QGIS")
+            open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            open_btn.clicked.connect(lambda: self.open_maps(map_item))
+            layout.addWidget(open_btn)
+        layout.addStretch()
+        if map_item.support_save:
+            save_btn = QPushButton("Save style to Rana")
+            save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            save_btn.clicked.connect(lambda: self.open_maps(map_item))
+            layout.addWidget(save_btn)
         btn_container.setLayout(layout)
         return btn_container
 
@@ -444,17 +488,17 @@ class PublicationView(QWidget):
                 if data_type in ["scenario", "vector"]:
                     tooltip = map_item.file["id"]
                 layer_item = QStandardItem(layer_icon, map_item.name)
+                layer_item.setData(map_item, Qt.UserRole)
                 if tooltip:
                     layer_item.setToolTip(tooltip)
                 parent_item.appendRow(
                     [layer_item, QStandardItem(data_type_str), QStandardItem()]
                 )
-                # TODO: only add buttons for compatible files!!
                 btn_container = self.get_button_container(map_item)
                 self.add_buttons_to_row(btn_container, parent_item)
             elif isinstance(map_item, FolderItemData):
-                # TODO: add button tooltip to make clear only compatible items are included
                 folder_item = QStandardItem(map_item.name)
+                folder_item.setData(map_item, Qt.UserRole)
                 parent_item.appendRow([folder_item, QStandardItem(), QStandardItem()])
                 btn_container = self.get_button_container(map_item)
                 self.add_buttons_to_row(btn_container, parent_item)
@@ -476,16 +520,15 @@ class PublicationView(QWidget):
             for publication_map in self.current_version.get("maps", [])
         ]
         self.root_item = FolderItemData("root", all_maps)
-        # for map_item in self.publication_maps:
+        self.root_item.set_support_flags()
         for map_item in self.root_item.sub_items:
             name_item = QStandardItem(map_item.name)
             bold_font = QFont()
             bold_font.setBold(True)
             name_item.setFont(bold_font)
             self.maps_model.appendRow([name_item, QStandardItem(), QStandardItem()])
-            btn_container = self.get_button_container(
-                FolderItemData(name=map_item.name, sub_items=map_item.sub_items)
-            )
+            name_item.setData(map_item, Qt.UserRole)
+            btn_container = self.get_button_container(map_item)
             self.add_buttons_to_row(btn_container)
             self.add_map_layers(name_item, map_item.sub_items)
             map_index = self.maps_model.indexFromItem(name_item)
