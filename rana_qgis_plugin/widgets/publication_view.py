@@ -2,13 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from qgis.core import Qgis, QgsMessageLog
 from qgis.gui import QgsCollapsibleGroupBox
-from qgis.PyQt.QtCore import (
-    QSettings,
-    Qt,
-    pyqtSignal,
-)
+from qgis.PyQt.QtCore import QAbstractItemModel, QSettings, Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
     QColor,
     QFont,
@@ -28,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QTableView,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -48,6 +44,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_by_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
+from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
 
 
 class MapItemType(Enum):
@@ -487,3 +484,18 @@ class PublicationView(QWidget):
             self.maps_tv.expand(map_index)
         self.maps_tv.resize_columns_aware_of_collapsed_items()
         self.communication.clear_message_bar()
+        self.update_width()
+
+    def update_width(self):
+        update_width_with_wrapping(self.maps_tv, self.maps_model, wrap_column=0)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_width()
+
+    def resizeEvent(self, event):
+        """
+        Dynamically adjusts the first column's width when the widget is resized.
+        """
+        super().resizeEvent(event)
+        self.update_width()  # Recalculate the widths for dynamic resizing

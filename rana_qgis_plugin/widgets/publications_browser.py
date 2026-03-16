@@ -22,6 +22,7 @@ from rana_qgis_plugin.widgets.utils_delegates import (
     ContributorAvatarsDelegate,
     WordWrapDelegate,
 )
+from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
 
 
 class PublicationsBrowser(QWidget):
@@ -159,12 +160,4 @@ class PublicationsBrowser(QWidget):
         self.update_width()  # Recalculate the widths for dynamic resizing
 
     def update_width(self):
-        # The custom WordWrapDelegate sets a very small size hint and then uses that for wrapping
-        # to the contents of the first column cannot be used for resizing
-        # Instead we have to calculate and set the space manually
-        used_width = 0
-        for col in range(1, self.publications_model.columnCount()):
-            self.publications_tv.resizeColumnToContents(col)
-            used_width += self.publications_tv.columnWidth(col)
-        remaining_width = max(self.publications_tv.viewport().width() - used_width, 100)
-        self.publications_tv.setColumnWidth(0, remaining_width)
+        update_width_with_wrapping(self.publications_tv, self.publications_model, 0)
