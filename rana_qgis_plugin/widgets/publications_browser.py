@@ -22,9 +22,12 @@ from rana_qgis_plugin.widgets.utils_delegates import (
     ContributorAvatarsDelegate,
     WordWrapDelegate,
 )
+from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
 
 
 class PublicationsBrowser(QWidget):
+    publication_selected = pyqtSignal(str)
+
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
         self.communication = communication
@@ -72,6 +75,17 @@ class PublicationsBrowser(QWidget):
         layout.addWidget(self.publications_tv)
         layout.addWidget(create_publication_btn)
         self.setLayout(layout)
+        self.publications_tv.doubleClicked.connect(self.on_publication_clicked)
+
+    def on_publication_clicked(self, index):
+        # publication data is stored in the first column
+        # TODO: maybe this is a bit dirty, reconsider
+        name_index = index.sibling(index.row(), 0)
+        item = self.publications_model.itemFromIndex(name_index)
+        if item:
+            publication_id = item.data(Qt.ItemDataRole.UserRole + 1)
+            if publication_id:
+                self.publication_selected.emit(publication_id)
 
     def create_publication_online(self):
         link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&creating=true"
@@ -134,13 +148,16 @@ class PublicationsBrowser(QWidget):
         sort_order = header.sortIndicatorOrder()
         self.publications_tv.sortByColumn(sorted_column, sort_order)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_width()
+
+    def resizeEvent(self, event):
+        """
+        Dynamically adjusts the first column's width when the widget is resized.
+        """
+        super().resizeEvent(event)
+        self.update_width()  # Recalculate the widths for dynamic resizing
+
     def update_width(self):
-        # The custom WordWrapDelegate sets a very small size hint and then uses that for wrapping
-        # to the contents of the first column cannot be used for resizing
-        # Instead we have to calculate and set the space manually
-        used_width = 0
-        for col in range(1, self.publications_model.columnCount()):
-            self.publications_tv.resizeColumnToContents(col)
-            used_width += self.publications_tv.columnWidth(col)
-        remaining_width = max(self.publications_tv.viewport().width() - used_width, 100)
-        self.publications_tv.setColumnWidth(0, remaining_width)
+        update_width_with_wrapping(self.publications_tv, self.publications_model, 0)
