@@ -74,8 +74,34 @@ On Linux, local development happens with docker to make sure we're working in a 
 isolated environment. To start the development environment, run the following commands::
 
     $ docker compose build
-    $ xhost +local:docker
-    $ docker compose up
+
+The unit and e2e tests also run in this docker container. They can be started with 
+
+    $ docker compose run --rm qgis pytest -v tests
+    $ docker compose run --rm --service-ports qgis pytest -v e2e
+
+Note that the e2e tests require authentication, therefore use the following `docker-compose.override.yml`:
+```
+services:
+  qgis:
+    environment:
+      RANA_PAK: "ENTER_YOUR_PERSONAL_ACCESS_TOKEN_HERE"
+```
+
+Fuerhermore, note that the e2e tests can be visually inspected using `vncviewer`:
+    $ vncviewer localhost:5900
+
+
+## Handling unhandled errors
+
+The plugin has its own excepthook that handles any error that is not caught. Such errors result in a warning for the user, with an error message that can be copied, and after closing the dialog the rana browser will be enabled. 
+
+This hook can be quite annoying during development so it can be manually turned of by adding:
+```
+use_plugin_excepthook=false
+```
+to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
+
 
 ## Releasing
 

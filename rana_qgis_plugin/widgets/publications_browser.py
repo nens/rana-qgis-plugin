@@ -1,4 +1,4 @@
-from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,

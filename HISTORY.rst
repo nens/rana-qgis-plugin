@@ -2,7 +2,21 @@ History
 =======
 
 
-1.2.7 (unreleased)
+1.2.9 (unreleased)
+------------------
+
+- Add publications browser (nens/rana#302)
+- Replace usage of raster-style and vector-style endpoints with styles endpoint (nens/rana-qgis-plugin#320)
+- Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
+
+
+1.2.8 (2026-03-13)
+------------------
+
+- Proper loading of downloaded geopackages (nens/rana#3781)
+
+
+1.2.7 (2026-03-13)
 ------------------
 
 - Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
@@ -14,8 +28,9 @@ History
 - Make creating avatars safe for users without given and/or family name
 - Download results folder "<simulation name> (<simulation id>)" (nens/rana#3678)
 - Match update interval of project monitoring to update interval in rana
+- Enable results downloading for results without lizard data and results not linked to a simulation (nens/rana#3710)
 - Organize opened layers under Rana projects (nens/rana-qgis#57)
-- Add publications browser (nens/rana#302)
+- Basic setup for end-to-end testing (nens/rana-plugin#3196)
 - Match update interval of project monitoring to update interval in rana
 
 

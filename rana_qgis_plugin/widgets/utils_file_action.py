@@ -5,6 +5,10 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils_scenario import (
+    get_is_3di_simulation,
+    get_ready_state_from_descriptor,
+)
 
 
 class FileAction(Enum):
