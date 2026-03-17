@@ -279,6 +279,7 @@ class RevisionsView(QWidget):
 class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
+    open_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list, str)
     upload_file_selected = pyqtSignal(dict, dict)
     save_vector_styling_selected = pyqtSignal(dict, dict)
     save_raster_styling_selected = pyqtSignal(dict, dict)
@@ -521,6 +522,15 @@ class RanaBrowser(QWidget):
                 self.project, file, new_name
             )
         )
+        # Connect open signal from publication_view
+        self.publication_view.open_in_qgis.connect(
+            lambda file,
+            parents,
+            layer_name_in_file: self.open_in_qgis_from_publication_selected.emit(
+                self.project, file, parents, layer_name_in_file
+            )
+        )
+
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(

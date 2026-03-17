@@ -1,5 +1,4 @@
 import os
-from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.layer_manager import LayerManager
+from rana_qgis_plugin.layer_manager import FileLayerManager, PublicationLayerManager
 from rana_qgis_plugin.persistent_workers import (
     PersistentTaskScheduler,
     ProjectJobMonitorWorker,
@@ -148,7 +147,6 @@ class Loader(QObject):
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
 
-        self.layer_manager = LayerManager(self.communication, parent=parent)
         # Create persistent scheduler that handles background monitoring
         self.persistent_scheduler = PersistentTaskScheduler()
         self.persistent_scheduler.start()
@@ -161,7 +159,8 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def open_wms(self, project: dict, file: dict) -> bool:
-        self.layer_manager.add_from_wms(project["name"], file)
+        layer_manager = FileLayerManager(self.communication, parent=self.parent())
+        layer_manager.add_from_wms(project["name"], file)
         self.file_opened.emit(file)
 
     @pyqtSlot(dict, dict)
@@ -170,20 +169,43 @@ class Loader(QObject):
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
             _, local_file_path = get_local_file_path(project["slug"], file["id"])
-            self.initialize_file_download_worker(project, file)
+            layer_manager = FileLayerManager(self.communication, parent=self.parent())
+            self.initialize_file_download_worker(project, file, layer_manager)
+            self.file_download_worker.start()
+        else:
+            self.communication.show_warn(f"Unsupported data type: {data_type}")
+
+    @pyqtSlot(dict, dict, list, str)
+    def open_in_qgis_from_publication(
+        self,
+        project: dict,
+        file: dict,
+        publication_tree: list[str],
+        layer_name_in_file: str,
+    ):
+        """Start the worker to download and open files in QGIS"""
+        data_type = file["data_type"]
+        if data_type in SUPPORTED_DATA_TYPES.keys():
+            _, local_file_path = get_local_file_path(project["slug"], file["id"])
+            layer_manager = PublicationLayerManager(
+                self.communication,
+                parent=self.parent(),
+                publication_tree=publication_tree,
+                layer_name_in_file=layer_name_in_file,
+            )
+            self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
     @pyqtSlot(dict, dict, dict)
     def open_schematisation_with_revision(self, project, revision, schematisation):
-        self.layer_manager.add_from_schematisation(
-            project["name"], schematisation, revision
-        )
+        layer_manager = FileLayerManager(self.communication, parent=self.parent())
+        layer_manager.add_from_schematisation(project["name"], schematisation, revision)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
-        self, project, file, local_file_path: str, from_thread=True
+        self, project, file, local_file_path: str, layer_manager, from_thread=True
     ):
         self.communication.clear_message_bar()
         self.communication.bar_info(
@@ -193,7 +215,6 @@ class Loader(QObject):
             sender = self.sender()
             assert isinstance(sender, QThread)
             sender.wait()
-
         if file["data_type"] == "threedi_schematisation":
             schematisation = get_threedi_schematisation(
                 self.communication, file["descriptor_id"]
@@ -205,12 +226,14 @@ class Loader(QObject):
                         "Cannot open a schematisation without a revision."
                     )
                     return
-                self.layer_manager.add_from_schematisation(
+                layer_manager.add_from_schematisation(
                     project["name"], schematisation["schematisation"], revision
                 )
         elif file["data_type"] in ["scenario", "vector", "raster"]:
-            self.layer_manager.add_from_file(project["name"], local_file_path, file)
-        self.file_opened.emit(file)
+            layer_manager.add_from_file(project["name"], local_file_path, file)
+        # When opening a file via the file view of file browser, signal that the file is openend
+        if isinstance(layer_manager, FileLayerManager):
+            self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
@@ -228,13 +251,17 @@ class Loader(QObject):
         )
         self.file_download_progress.emit(progress, file_name)
 
-    def initialize_file_download_worker(self, project, file):
+    def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
         self.file_download_worker = FileDownloadWorker(
             project,
             file,
         )
-        self.file_download_worker.finished.connect(self.on_file_download_finished)
+        self.file_download_worker.finished.connect(
+            lambda _project, _file, _local_path: self.on_file_download_finished(
+                _project, _file, _local_path, layer_manager
+            )
+        )
         self.file_download_worker.failed.connect(self.on_file_download_failed)
         self.file_download_worker.progress.connect(self.on_file_download_progress)
 
@@ -485,6 +512,7 @@ class Loader(QObject):
             + [f"Rana schematisation: {Path(file['id']).stem} {revision['number']}"]
         )
         if simulation_init_wizard.open_wizard:
+            layer_manager = FileLayerManager(self.communication, self.parent())
             simulation_wizard = SimulationWizard(
                 self.simulation_runner_pool,
                 hcc_working_dir(),
@@ -493,7 +521,7 @@ class Loader(QObject):
                 current_model,
                 threedi_api,
                 self.communication,
-                self.layer_manager,
+                layer_manager,
                 layer_parents,
                 simulation_init_wizard,
                 self.parent(),
@@ -703,8 +731,11 @@ class Loader(QObject):
                 pixelsize=0,
                 download_raw=True,
             )
+        layer_manager = FileLayerManager(self.communication, parent=self.parent())
         self.lizard_result_download_worker.finished.connect(
-            self.on_file_download_finished
+            lambda _project, _file, _local_path: self.on_file_download_finished(
+                _project, _file, _local_path, layer_manager
+            )
         )
         self.lizard_result_download_worker.failed.connect(self.on_file_download_failed)
         self.lizard_result_download_worker.progress.connect(

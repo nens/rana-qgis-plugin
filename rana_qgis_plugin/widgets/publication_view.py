@@ -3,6 +3,7 @@ from enum import Enum
 from functools import cached_property
 from typing import Optional
 
+from qgis.core import Qgis, QgsMessageLog
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import QAbstractItemModel, QSettings, Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
@@ -59,6 +60,7 @@ class MapItemType(Enum):
 @dataclass
 class MapItemData:
     name: str
+    parents: list[str]
 
     @property
     def support_open(self) -> bool:
@@ -191,6 +193,7 @@ class PublicationMapsTreeView(QTreeView):
 class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
+    open_in_qgis = pyqtSignal(dict, list, str)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -202,7 +205,9 @@ class PublicationView(QWidget):
         self.current_version: Optional[dict] = None
         self.project: Optional[dict] = None
         self.file_map: Optional[dict[str:dict]] = None
-        self.root_item: FolderItemData = FolderItemData(name="root", sub_items=[])
+        self.root_item: FolderItemData = FolderItemData(
+            name="root", sub_items=[], parents=[]
+        )
         self.setup_ui()
 
     def setup_ui(self):
@@ -379,9 +384,28 @@ class PublicationView(QWidget):
         QDesktopServices.openUrl(QUrl(link))
 
     def open_maps(self, map_item: MapItemData):
-        # TODO: recurse through map_item and open stuff
-        self.communication.show_info("Opening maps is not yet implemented.")
-        pass
+        # TODO: consider batch download and open
+        # - single file: open -> move to open_map
+        # - multiple files: download first, than open
+        if isinstance(map_item, LayerItemData):
+            if map_item.data_type == "raster":
+                self.open_in_qgis.emit(
+                    map_item.file, map_item.parents + [map_item.name], ""
+                )
+            elif map_item.data_type == "vector" and map_item.layer_in_file:
+                self.open_in_qgis.emit(
+                    map_item.file,
+                    map_item.parents + [map_item.name],
+                    map_item.layer_in_file,
+                )
+            QgsMessageLog.logMessage(
+                f"Found layer: {map_item.name} of type {map_item.data_type} which is not supported yet",
+                "DEBUG",
+                Qgis.Info,
+            )
+        elif isinstance(map_item, FolderItemData):
+            for sub_item in map_item.sub_items:
+                self.open_maps(sub_item)
 
     def save_styles(self, map_item: MapItemData):
         # TODO: recurse through map_item and save styles
@@ -401,7 +425,7 @@ class PublicationView(QWidget):
         if map_item.support_save:
             save_btn = QPushButton("Save style to Rana")
             save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
-            save_btn.clicked.connect(lambda: self.open_maps(map_item))
+            save_btn.clicked.connect(lambda: self.save_styles(map_item))
             layout.addWidget(save_btn)
         btn_container.setLayout(layout)
         return btn_container
@@ -421,7 +445,7 @@ class PublicationView(QWidget):
             child_model_index = self.maps_model.index(self.maps_model.rowCount() - 1, 2)
         self.maps_tv.setIndexWidget(child_model_index, btn_container)
 
-    def collect_map_data(self, layers) -> list[MapItemData]:
+    def collect_map_data(self, layers, parents: list[str]) -> list[MapItemData]:
         """
         Recursively collect data from API needed to populate the maps table
         """
@@ -444,14 +468,18 @@ class PublicationView(QWidget):
                     )
                     layer_in_file = next(
                         (
-                            layers["id"] == layer["layer_in_file"]
-                            for layers in layers_in_file
+                            layer_in_file["name"]
+                            for layer_in_file in layers_in_file
+                            if layer_in_file["id"] == layer["layer_in_file"]
                         ),
                         None,
                     )
                     type_in_file = (file_descriptor.get("meta") or {}).get(
                         "type", data_type
                     )
+                    if not layer_in_file:
+                        # When the layer cannot be matched, something went really wrong in the backend
+                        continue
                 # Collect data needed for UI and to open and edit the layer
                 map_data.append(
                     LayerItemData(
@@ -461,13 +489,18 @@ class PublicationView(QWidget):
                         layer_in_file=layer_in_file,
                         file=file,
                         file_descriptor=file_descriptor,
+                        parents=parents,
                     )
                 )
             elif layer.get("type") == "folder":
                 map_data.append(
                     FolderItemData(
                         name=layer["name"],
-                        sub_items=self.collect_map_data(layer.get("layers", [])),
+                        sub_items=self.collect_map_data(
+                            layers=layer.get("layers", []),
+                            parents=parents + [layer["name"]],
+                        ),
+                        parents=parents,
                     )
                 )
 
@@ -517,12 +550,18 @@ class PublicationView(QWidget):
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
         all_maps = [
             FolderItemData(
-                publication_map["name"],
-                self.collect_map_data(publication_map.get("layers", [])),
+                name=publication_map["name"],
+                sub_items=self.collect_map_data(
+                    layers=publication_map.get("layers"),
+                    parents=[self.publication["name"], publication_map["name"]],
+                ),
+                parents=[self.publication["name"]],
             )
             for publication_map in self.current_version.get("maps", [])
         ]
-        self.root_item = FolderItemData("root", all_maps)
+        self.root_item = FolderItemData(
+            name="root", sub_items=all_maps, parents=[self.publication["name"]]
+        )
         self.root_item.set_support_flags()
         for map_item in self.root_item.sub_items:
             name_item = QStandardItem(map_item.name)

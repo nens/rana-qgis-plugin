@@ -445,6 +445,9 @@ class ProjectsBrowser(QWidget):
             project_item = self.projects_model.itemFromIndex(index)
             new_project = project_item.data(Qt.ItemDataRole.UserRole)
             self.project = new_project
+            from qgis.core import Qgis, QgsMessageLog
+
+            QgsMessageLog.logMessage(f'{new_project["id"]=}', "DEBUG", Qgis.Info)
             self.project_selected.emit(self.project)
         finally:
             self.communication.clear_message_bar()
