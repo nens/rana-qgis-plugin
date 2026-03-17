@@ -291,11 +291,21 @@ def build_vrt(output_filepath, raster_filepaths, **vrt_options):
 
 
 def get_file_icon_name(data_type: str) -> str:
+    # Ensure that data_type is a string so we can safely use string operations
+    if not data_type:
+        data_type = ""
     icon_map = {
         "scenario": "mIconTemporalRaster.svg",
         "threedi_schematisation": "mIconDbSchema.svg",
         "raster": "mIconRaster.svg",
         "vector": "mIconVector.svg",
         "sqlite": "mIconDbSchema.svg",
+        "polygon": "mIconPolygonLayer.svg",
+        "point": "mIconPointLayer.svg",
+        "linestring": "mIconLineLayer.svg",
+        "multipoint": "mIconPointLayer.svg",
+        "multilinestring": "mIconLineLayer.svg",
+        "multipolygon": "mIconPolygonLayer.svg",
+        "geometrycollection": "mIconGeometryCollection.svg",
     }
-    return icon_map.get(data_type, "mIconFile.svg")
+    return icon_map.get(data_type.lower(), "mIconFile.svg")

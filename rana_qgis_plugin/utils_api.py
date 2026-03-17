@@ -1,4 +1,3 @@
-import math
 from typing import Optional, TypedDict
 
 import requests
@@ -25,11 +24,11 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
-def single_fetch(
-    url: str, limit: int, offset: int, params: Optional[dict] = None
-) -> Optional[dict]:
+def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
+    """Run a simple fetch for any endpoint"""
+    if params is None:
+        params = {}
     authcfg_id = get_authcfg_id()
-    params.update({"limit": limit, "offset": offset})
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
     if status:
@@ -39,7 +38,25 @@ def single_fetch(
         raise FetchError(error, url, params)
 
 
+def single_fetch(
+    url: str, limit: int, offset: int, params: Optional[dict] = None
+) -> Optional[dict]:
+    """Perform a single fetch from a list endpoint."""
+    if params is None:
+        params = {}
+    params.update({"limit": limit, "offset": offset})
+    return simple_fetch(url, params)
+
+
+def fetch_first(url: str, params: Optional[dict] = None) -> Optional[dict]:
+    """Fetch the first item from a list endpoint."""
+    content = single_fetch(url, 1, 0, params)
+    if content["total"] == 1:
+        return content["items"][0]
+
+
 def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict:
+    """Fetch all items from a list endpoint."""
     offset = 0
     full_response = {"total": 0, "items": []}
     response = single_fetch(url, limit, offset, params)
@@ -629,3 +646,36 @@ def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional
     for process in processes:
         if tag in process["tags"]:
             return process["id"]
+
+
+def get_publication_details(publication_id: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}"
+    return simple_fetch(url)
+
+
+def get_publication_version_latest(publication_id: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
+    # Default sorting is version number from high to low, so first item should be latest
+    return fetch_first(url)
+
+
+def get_publication_version_details(publication_id: str, version: int) -> dict:
+    tenant = get_tenant_id()
+    url = (
+        f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}"
+    )
+    return simple_fetch(url)
+
+
+def get_publication_version_files(publication_id: str, version: int) -> list:
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}/files"
+    return paginated_fetch(url, 100)
+
+
+def get_project_file_details(project_id: str, file_path: str, file_ref: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
+    return simple_fetch(url, {"path": file_path, "ref": file_ref})
