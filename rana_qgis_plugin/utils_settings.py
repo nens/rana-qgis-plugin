@@ -104,3 +104,9 @@ def rana_cache_dir() -> str:
 
 def set_rana_cache_dir(cache_dir: str) -> str:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cache_dir", cache_dir)
+
+
+def get_use_plugin_excepthook() -> bool:
+    return QgsSettings().value(
+        f"{RANA_SETTINGS_ENTRY}/use_plugin_excepthook", True, type=bool
+    )

@@ -3,10 +3,12 @@ import io
 import json
 import math
 import os
+import shutil
+import tempfile
 import zipfile
 from pathlib import Path
 from time import sleep
-from typing import List
+from typing import Any, List
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
@@ -35,17 +37,15 @@ from .utils import (
 from .utils_api import (
     finish_file_upload,
     get_raster_file_link,
-    get_raster_style_file,
-    get_raster_style_upload_urls,
+    get_style_file,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
     get_tenant_project_file,
-    get_vector_style_file,
-    get_vector_style_upload_urls,
     map_result_to_file_name,
     request_raster_generate,
     start_file_upload,
+    upload_file_descriptor_style,
 )
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
@@ -92,9 +92,9 @@ class FileDownloadWorker(QThread):
             # Fetch and extract the QML zip for vector files
             if self.file["data_type"] in ["vector", "raster"]:
                 if self.file["data_type"] == "raster":
-                    qml_zip_content = get_raster_style_file(descriptor_id, "qml.zip")
+                    qml_zip_content = get_style_file(descriptor_id, "qml.zip")
                 else:
-                    qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+                    qml_zip_content = get_style_file(descriptor_id, "qml.zip")
                 if qml_zip_content:
                     stream = io.BytesIO(qml_zip_content)
                     if zipfile.is_zipfile(stream):
@@ -268,6 +268,26 @@ class VectorStyleWorker(QThread):
         except Exception as e:
             self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
+    @staticmethod
+    def collect_json_files(temp_dir: Path, json_data: list[tuple[str, dict]]) -> list:
+        files = []
+        for name, data in json_data:
+            json_path = temp_dir.joinpath(name).with_suffix(".json")
+            with open(json_path, "w") as f:
+                json.dump(data, f)
+            files.append(("files", json_path.name, str(json_path), "application/json"))
+        return files
+
+    @staticmethod
+    def collect_png_files(temp_dir: Path, png_data: list[tuple[str, Any]]) -> list:
+        files = []
+        for name, img_data in png_data:
+            png_path = temp_dir.joinpath(name).with_suffix(".png")
+            with open(png_path, "wb") as f:
+                f.write(image_to_bytes(img_data))
+            files.append(("files", png_path.name, str(png_path), "image/png"))
+        return files
+
     @pyqtSlot()
     def run(self):
         if not self.file:
@@ -290,10 +310,10 @@ class VectorStyleWorker(QThread):
         base_url = "http://baseUrl"
 
         # Save QML style files for each layer to local directory
-        local_dir, _ = get_local_file_path(self.project["slug"], path)
-        os.makedirs(local_dir, exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp())
+
         for layer in layers:
-            qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
+            qml_path = os.path.join(temp_dir, f"{layer.name()}.qml")
             layer.saveNamedStyle(str(qml_path))
 
         # Convert QGIS layers to styling files for the Rana Web Client
@@ -303,50 +323,35 @@ class VectorStyleWorker(QThread):
             )
             if warnings:
                 self.warning.emit(", ".join(set(warnings)))
-
-            # Get upload URLs to S3
-            upload_urls = get_vector_style_upload_urls(descriptor_id)
-
-            if not upload_urls:
-                self.failed.emit("Failed to get vector style upload URLs from the API.")
-                return
-
-            # Upload style.json
-            self.upload_to_s3(
-                upload_urls["style.json"],
-                json.dumps(mb_style).replace(r"\\n", r"\n").replace(r"\\t", r"\t"),
-                "application/json",
-            )
-
-            # Upload sprite images if available
+            # Save styling to file
+            files = self.collect_json_files(temp_dir, [("style", mb_style)])
+            # Save sprite sheet to file
             if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-                self.upload_to_s3(
-                    upload_urls["sprite.png"],
-                    image_to_bytes(sprite_sheet["img"]),
-                    "image/png",
-                )
-                self.upload_to_s3(
-                    upload_urls["sprite@2x.png"],
-                    image_to_bytes(sprite_sheet["img2x"]),
-                    "image/png",
-                )
-                self.upload_to_s3(
-                    upload_urls["sprite.json"], sprite_sheet["json"], "application/json"
-                )
-                self.upload_to_s3(
-                    upload_urls["sprite@2x.json"],
-                    sprite_sheet["json2x"],
-                    "application/json",
-                )
+                from qgis.core import Qgis, QgsMessageLog
 
-            # Zip and upload QML zip
-            zip_path = os.path.join(local_dir, "qml.zip")
-            self.create_qml_zip(local_dir, zip_path)
-            with open(zip_path, "rb") as file:
-                self.upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
-            os.remove(zip_path)
-
+                QgsMessageLog.logMessage(f"Save sprites", "DEBUG", Qgis.Info)
+                files += self.collect_json_files(
+                    temp_dir,
+                    [
+                        ("sprite", sprite_sheet["json"]),
+                        ("sprite@2x", sprite_sheet["json2x"]),
+                    ],
+                )
+                files += self.collect_png_files(
+                    temp_dir,
+                    [
+                        ("sprite", sprite_sheet["img"]),
+                        ("sprite@2x", sprite_sheet["img2x"]),
+                    ],
+                )
+            # Save qml to file
+            zip_path = os.path.join(temp_dir, "qml.zip")
+            self.create_qml_zip(temp_dir, zip_path)
+            files.append(("files", "qml.zip", zip_path, "application/zip"))
+            # Upload everything to rana
+            upload_file_descriptor_style(descriptor_id, files)
             # Finish
+            shutil.rmtree(temp_dir)
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
@@ -394,13 +399,11 @@ class RasterStyleWorker(QThread):
         layer = layers[0]
 
         # Save QML style files for each layer to local directory
-        local_dir, _ = get_local_file_path(self.project["slug"], path)
-        os.makedirs(local_dir, exist_ok=True)
-
+        temp_dir = tempfile.mkdtemp()
         qml_file_name = os.path.splitext(layer.name())[0] + ".qml"
-        qml_path = os.path.join(local_dir, qml_file_name)
+        qml_path = os.path.join(temp_dir, qml_file_name)
         layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(local_dir, "qml.zip")
+        zip_path = os.path.join(temp_dir, "qml.zip")
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.write(qml_path, qml_file_name)
 
@@ -443,7 +446,7 @@ class RasterStyleWorker(QThread):
             if warnings:
                 self.warning.emit(", ".join(set(warnings)))
 
-            lizard_styling_path = os.path.join(local_dir, "colormap.json")
+            lizard_styling_path = os.path.join(temp_dir, "colormap.json")
             with open(lizard_styling_path, "w") as f:
                 json.dump(lizard_styling, f)
 
@@ -451,11 +454,9 @@ class RasterStyleWorker(QThread):
                 ("files", "colormap.json", lizard_styling_path, "application/json"),
                 ("files", "qml.zip", zip_path, "application/zip"),
             ]
-            get_raster_style_upload_urls(descriptor_id, files)
+            upload_file_descriptor_style(descriptor_id, files)
 
-            os.remove(zip_path)
-            os.remove(lizard_styling_path)
-
+            shutil.rmtree(temp_dir)
             self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")

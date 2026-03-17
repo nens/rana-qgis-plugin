@@ -6,6 +6,8 @@ History
 ------------------
 
 - Add publications browser (nens/rana#302)
+- Replace usage of raster-style and vector-style endpoints with styles endpoint (nens/rana-qgis-plugin#320)
+- Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
 
 
 1.2.8 (2026-03-13)
