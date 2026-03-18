@@ -473,8 +473,16 @@ class RanaQgisPlugin:
         self.rana_browser.refresh()
         # TODO remove this
         # TODO really really really remove this
-        # from qgis.core import Qgis, QgsMessageLog
-        #
+        from qgis.core import Qgis, QgsMessageLog
+
+        self.rana_browser.projects_browser.set_project_from_id("2Q8UXRgQ")
+        self.rana_browser.projects_browser.project_selected.emit(
+            self.rana_browser.projects_browser.project
+        )
+        self.rana_browser.project_widget.setCurrentIndex(2)
+        self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
+
+        # # Test opening via files
         # # Select project
         # QgsMessageLog.logMessage(f"select project", "DEBUG", Qgis.Info)
         # self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")

@@ -252,7 +252,7 @@ class PublicationView(QWidget):
 
         button_layout = QHBoxLayout()
         btn_open = QPushButton("Open all maps in QGIS")
-        btn_open.clicked.connect(lambda: self.open_all_maps)
+        btn_open.clicked.connect(lambda _: self.open_maps(self.root_item))
         btn_rana = QPushButton("Open publication in Rana (web)")
         btn_rana.clicked.connect(lambda: self.open_in_rana())
         button_layout.addWidget(btn_open)
@@ -376,50 +376,57 @@ class PublicationView(QWidget):
         self.general_box.setLayout(layout)
         self.general_box.setCollapsed(False)
 
-    def open_all_maps(self):
-        self.open_maps(self.root_item)
-
     def open_in_rana(self):
         link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&publication={self.publication['id']}"
         QDesktopServices.openUrl(QUrl(link))
+
+    def open_map(self, map_item: LayerItemData):
+        if map_item.data_type == "raster":
+            self.open_in_qgis.emit(
+                map_item.file, map_item.parents + [map_item.name], ""
+            )
+        elif map_item.data_type == "vector" and map_item.layer_in_file:
+            self.open_in_qgis.emit(
+                map_item.file,
+                map_item.parents + [map_item.name],
+                map_item.layer_in_file,
+            )
+        QgsMessageLog.logMessage(
+            f"Found layer: {map_item.name} of type {map_item.data_type} which is not supported yet",
+            "DEBUG",
+            Qgis.Info,
+        )
 
     def open_maps(self, map_item: MapItemData):
         # TODO: consider batch download and open
         # - single file: open -> move to open_map
         # - multiple files: download first, than open
-        if isinstance(map_item, LayerItemData):
-            if map_item.data_type == "raster":
-                self.open_in_qgis.emit(
-                    map_item.file, map_item.parents + [map_item.name], ""
-                )
-            elif map_item.data_type == "vector" and map_item.layer_in_file:
-                self.open_in_qgis.emit(
-                    map_item.file,
-                    map_item.parents + [map_item.name],
-                    map_item.layer_in_file,
-                )
-            QgsMessageLog.logMessage(
-                f"Found layer: {map_item.name} of type {map_item.data_type} which is not supported yet",
-                "DEBUG",
-                Qgis.Info,
-            )
-        elif isinstance(map_item, FolderItemData):
-            for sub_item in map_item.sub_items:
-                self.open_maps(sub_item)
+        self.communication.show_info("Opening multiple map is not yet supported")
+        # if isinstance(map_item, LayerItemData):
+        #     self.open_map(map_item)
+        # elif isinstance(map_item, FolderItemData):
+        #     for sub_item in map_item.sub_items:
+        #         self.open_maps(sub_item)
 
     def save_styles(self, map_item: MapItemData):
         # TODO: recurse through map_item and save styles
         self.communication.show_info("Saving styles is not yet implemented.")
         pass
 
-    def get_button_container(self, map_item: MapItemData) -> QWidget:
+    def get_button_container(
+        self,
+        map_item: MapItemData,
+    ) -> QWidget:
         btn_container = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         if map_item.support_open:
             open_btn = QPushButton("Open in QGIS")
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
-            open_btn.clicked.connect(lambda: self.open_maps(map_item))
+            if isinstance(map_item, FolderItemData):
+                open_btn.clicked.connect(lambda: self.open_maps(map_item))
+            else:
+                open_btn.clicked.connect(lambda: self.open_map(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
