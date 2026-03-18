@@ -451,20 +451,40 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
-def upload_file_descriptor_style(descriptor_id: str, files):
+def get_vector_style_upload_urls(descriptor_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
+
     network_manager = NetworkManager(url, authcfg_id)
-    status, msg = network_manager.post_multipart(files=files)
-    if not status:
-        raise Exception(msg)
+    status = network_manager.put()
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
 
 
-def get_style_file(descriptor_id: str, file_name: str):
+def get_raster_style_upload_urls(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles/{file_name}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.put_multipart(files=files)
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
+def get_style_file(source_type: str, descriptor_id: str, file_name: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{source_type}-style/{file_name}"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch()
@@ -478,6 +498,14 @@ def get_style_file(descriptor_id: str, file_name: str):
             return None
     else:
         return None
+
+
+def get_raster_style_file(descriptor_id: str, file_name: str):
+    return get_style_file("raster", descriptor_id, file_name)
+
+
+def get_vector_style_file(descriptor_id: str, file_name: str):
+    return get_style_file("vector", descriptor_id, file_name)
 
 
 def get_schematisations(communication, icontains=""):
