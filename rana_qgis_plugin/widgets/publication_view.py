@@ -194,6 +194,7 @@ class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
     open_in_qgis = pyqtSignal(dict, list, str)
+    open_many_in_qgis = pyqtSignal(list)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -401,7 +402,21 @@ class PublicationView(QWidget):
         # TODO: consider batch download and open
         # - single file: open -> move to open_map
         # - multiple files: download first, than open
-        self.communication.show_info("Opening multiple map is not yet supported")
+        # self.communication.show_info("Opening multiple map is not yet supported")
+        all_items = self.collect_all_layer_items(map_item, [])
+        self.open_many_in_qgis.emit(all_items)
+
+    def collect_all_layer_items(
+        self, layer_item, collected_items: list[LayerItemData]
+    ) -> list[LayerItemData]:
+        if isinstance(layer_item, FolderItemData):
+            for sub_item in layer_item.sub_items:
+                self.collect_all_layer_items(sub_item, collected_items)
+        if isinstance(layer_item, LayerItemData):
+            # TODO: find a good way to send this!
+            collected_items.append(layer_item)
+        return collected_items
+
         # if isinstance(map_item, LayerItemData):
         #     self.open_map(map_item)
         # elif isinstance(map_item, FolderItemData):

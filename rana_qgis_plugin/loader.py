@@ -17,7 +17,11 @@ from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.layer_manager import FileLayerManager, PublicationLayerManager
+from rana_qgis_plugin.layer_manager import (
+    FileLayerManager,
+    PublicationLayerManager,
+    open_file_via_layer_manager,
+)
 from rana_qgis_plugin.persistent_workers import (
     PersistentTaskScheduler,
     ProjectJobMonitorWorker,
@@ -39,7 +43,6 @@ from rana_qgis_plugin.simulation.utils import (
     UploadFileType,
     extract_error_message,
     load_local_schematisation,
-    load_remote_schematisation,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
@@ -71,11 +74,13 @@ from rana_qgis_plugin.utils_qgis import (
 )
 from rana_qgis_plugin.utils_scenario import ScenarioInfo
 from rana_qgis_plugin.utils_settings import hcc_working_dir
+from rana_qgis_plugin.widgets.publication_view import LayerItemData
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
     AvatarWorker,
+    BatchFileDownloadWorker,
     ExistingFileUploadWorker,
     FileDownloadWorker,
     FileUploadWorker,
@@ -198,6 +203,46 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
+    @pyqtSlot(dict, list)
+    def open_many_in_qgis_from_publication(self, project: dict, layer_items: list):
+        # TODO: connect to UI
+        # TODO: extend for scenario and scheamtisation
+        items_to_download = [
+            layer_item
+            for layer_item in layer_items
+            if layer_item.data_type in ["raster", "vector"]
+        ]
+        files_to_download = [
+            layer_item.file for layer_item in layer_items if items_to_download
+        ]
+        self.communication.bar_info("Start downloading files...")
+        self.batch_file_download_worker = BatchFileDownloadWorker(
+            project, files_to_download
+        )
+
+        # TODO: see if we can open directly after download!
+        def on_all_files_downloaded(*args):
+            for layer_item in items_to_download:
+                # TODO: this could be cleaner
+                local_dir_structure, local_file_path = get_local_file_path(
+                    project["slug"], layer_item.file["id"]
+                )
+                layer_manager = PublicationLayerManager(
+                    self.communication,
+                    parent=self.parent(),
+                    publication_tree=layer_item.parents,
+                    layer_name_in_file=layer_item.layer_in_file,
+                )
+                open_file_via_layer_manager(
+                    project, layer_item.file, local_file_path, layer_manager
+                )
+            self.file_download_finished.emit(None)
+
+        self.batch_file_download_worker.all_finished.connect(on_all_files_downloaded)
+        self.batch_file_download_worker.failed.connect(self.on_file_download_failed)
+        self.batch_file_download_worker.progress.connect(self.on_file_download_progress)
+        self.batch_file_download_worker.start()
+
     @pyqtSlot(dict, dict, dict)
     def open_schematisation_with_revision(self, project, revision, schematisation):
         layer_manager = FileLayerManager(self.communication, parent=self.parent())
@@ -215,22 +260,11 @@ class Loader(QObject):
             sender = self.sender()
             assert isinstance(sender, QThread)
             sender.wait()
-        if file["data_type"] == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, file["descriptor_id"]
-            )
-            if schematisation:
-                revision = schematisation["latest_revision"]
-                if not revision:
-                    self.communication.show_warn(
-                        "Cannot open a schematisation without a revision."
-                    )
-                    return
-                layer_manager.add_from_schematisation(
-                    project["name"], schematisation["schematisation"], revision
-                )
-        elif file["data_type"] in ["scenario", "vector", "raster"]:
-            layer_manager.add_from_file(project["name"], local_file_path, file)
+        open_file_via_layer_manager(
+            project,
+            file,
+            local_file_path,
+        )
         # When opening a file via the file view of file browser, signal that the file is openend
         if isinstance(layer_manager, FileLayerManager):
             self.file_opened.emit(file)

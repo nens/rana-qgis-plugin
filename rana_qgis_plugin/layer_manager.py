@@ -22,7 +22,10 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
 from rana_qgis_plugin.utils import get_threedi_api
-from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils_api import (
+    get_tenant_file_descriptor,
+    get_threedi_schematisation,
+)
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.utils_scenario import get_is_3di_simulation
 from rana_qgis_plugin.utils_settings import hcc_working_dir
@@ -307,3 +310,24 @@ class PublicationLayerManager(LayerManger, QObject):
                 self.layer_name, local_file_path, file, parents=parents
             )
             # self._add_layers_from_vector_file(local_file_path, file, parents=parents)
+
+
+def open_file_via_layer_manager(
+    project: dict, file: dict, local_file_path: str, layer_manager: LayerManger
+):
+    if file["data_type"] == "threedi_schematisation":
+        schematisation = get_threedi_schematisation(
+            layer_manager.communication, file["descriptor_id"]
+        )
+        if schematisation:
+            revision = schematisation["latest_revision"]
+            if not revision:
+                layer_manager.communication.show_warn(
+                    "Cannot open a schematisation without a revision."
+                )
+                return
+            layer_manager.add_from_schematisation(
+                project["name"], schematisation["schematisation"], revision
+            )
+    elif file["data_type"] in ["scenario", "vector", "raster"]:
+        layer_manager.add_from_file(project["name"], local_file_path, file)

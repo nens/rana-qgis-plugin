@@ -332,6 +332,9 @@ class RanaQgisPlugin:
             self.rana_browser.open_in_qgis_from_publication_selected.connect(
                 self.loader.open_in_qgis_from_publication
             )
+            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+                self.loader.open_many_in_qgis_from_publication
+            )
 
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana

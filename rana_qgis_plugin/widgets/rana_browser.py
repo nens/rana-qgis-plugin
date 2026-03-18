@@ -280,6 +280,7 @@ class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
     open_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list, str)
+    open_many_in_qgis_from_publication_selected = pyqtSignal(dict, list)
     upload_file_selected = pyqtSignal(dict, dict)
     save_vector_styling_selected = pyqtSignal(dict, dict)
     save_raster_styling_selected = pyqtSignal(dict, dict)
@@ -528,6 +529,11 @@ class RanaBrowser(QWidget):
             parents,
             layer_name_in_file: self.open_in_qgis_from_publication_selected.emit(
                 self.project, file, parents, layer_name_in_file
+            )
+        )
+        self.publication_view.open_many_in_qgis.connect(
+            lambda files: self.open_many_in_qgis_from_publication_selected.emit(
+                self.project, files
             )
         )
 
