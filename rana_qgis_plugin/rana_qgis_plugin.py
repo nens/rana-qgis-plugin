@@ -485,8 +485,8 @@ class RanaQgisPlugin:
         self.rana_browser.project_widget.setCurrentIndex(2)
         self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
 
-        # # Test opening via files
-        # # Select project
+        # Test opening via files
+        # Select project
         # QgsMessageLog.logMessage(f"select project", "DEBUG", Qgis.Info)
         # self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
         # self.rana_browser.projects_browser.project_selected.emit(

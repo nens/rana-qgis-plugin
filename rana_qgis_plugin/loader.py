@@ -82,10 +82,10 @@ from rana_qgis_plugin.workers import (
     AvatarWorker,
     BatchFileDownloadWorker,
     ExistingFileUploadWorker,
-    FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
     RasterStyleWorker,
+    SingleFileDownloadWorker,
     VectorStyleWorker,
 )
 
@@ -258,13 +258,11 @@ class Loader(QObject):
         )
         if from_thread:
             sender = self.sender()
+            if not isinstance(sender, QThread):
+                self.communication.show_warn(f"sender type: {type(sender)}")
             assert isinstance(sender, QThread)
             sender.wait()
-        open_file_via_layer_manager(
-            project,
-            file,
-            local_file_path,
-        )
+        open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
         if isinstance(layer_manager, FileLayerManager):
             self.file_opened.emit(file)
@@ -287,7 +285,7 @@ class Loader(QObject):
 
     def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
-        self.file_download_worker = FileDownloadWorker(
+        self.file_download_worker = SingleFileDownloadWorker(
             project,
             file,
         )
