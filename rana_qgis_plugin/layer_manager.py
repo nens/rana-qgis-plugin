@@ -281,17 +281,18 @@ class PublicationLayerManager(LayerManger, QObject):
         communication,
         parent,
         publication_tree: list[str],
+        display_name: str,
         layer_name_in_file: Optional[str] = None,
     ):
         super().__init__(communication, parent)
-        self.publication_parents = publication_tree[:-1]
-        self.display_name = publication_tree[-1]
+        self.publication_tree = publication_tree
+        self.display_name = display_name
         self.layer_name = layer_name_in_file
 
     def add_from_file(self, project_name, local_file_path: str, file: dict):
         self.communication.clear_message_bar()
-        parents = [project_name] + self.publication_parents
         # Save the last modified date of the downloaded file in QSettings
+        parents = [project_name, "publications"] + self.publication_tree
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
         if file.get("data_type") == "scenario":

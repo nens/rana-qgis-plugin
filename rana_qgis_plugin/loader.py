@@ -68,6 +68,7 @@ from rana_qgis_plugin.utils_api import (
     move_file,
     start_tenant_process,
 )
+from rana_qgis_plugin.utils_data import RanaVectorFileData
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -82,10 +83,10 @@ from rana_qgis_plugin.workers import (
     AvatarWorker,
     BatchFileDownloadWorker,
     ExistingFileUploadWorker,
-    FileDownloadWorker,
     FileUploadWorker,
     LizardResultDownloadWorker,
     RasterStyleWorker,
+    SingleFileDownloadWorker,
     VectorStyleWorker,
 )
 
@@ -207,18 +208,33 @@ class Loader(QObject):
     def open_many_in_qgis_from_publication(self, project: dict, layer_items: list):
         # TODO: connect to UI
         # TODO: extend for scenario and scheamtisation
+        # TODO: fix typehint
+        # TODO: change file path
+        # TODO: change layer_item name
         items_to_download = [
             layer_item
             for layer_item in layer_items
-            if layer_item.data_type in ["raster", "vector"]
+            if layer_item.file["data_type"] in ["raster", "vector"]
         ]
-        files_to_download = [
-            layer_item.file for layer_item in layer_items if items_to_download
-        ]
+        files_to_download = [layer_item.file for layer_item in items_to_download]
         self.communication.bar_info("Start downloading files...")
         self.batch_file_download_worker = BatchFileDownloadWorker(
             project, files_to_download
         )
+        # Request confirmation when downloading more than 10 files (arbitrary number)
+        if self.batch_file_download_worker.nof_files > 10:
+            confirm_dialog = QMessageBox(
+                QMessageBox.Question,
+                "Confirm Download",
+                f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
+                QMessageBox.Yes | QMessageBox.No,
+                self.parent(),
+            )
+            response = confirm_dialog.exec()
+            if response == QMessageBox.No:
+                self.communication.clear_message_bar()
+                self.file_download_failed.emit("")
+                return
 
         # TODO: see if we can open directly after download!
         def on_all_files_downloaded(*args):
@@ -227,11 +243,17 @@ class Loader(QObject):
                 local_dir_structure, local_file_path = get_local_file_path(
                     project["slug"], layer_item.file["id"]
                 )
+                layer_name_in_file = (
+                    layer_item.layer_in_file
+                    if isinstance(layer_item, RanaVectorFileData)
+                    else None
+                )
                 layer_manager = PublicationLayerManager(
                     self.communication,
                     parent=self.parent(),
-                    publication_tree=layer_item.parents,
-                    layer_name_in_file=layer_item.layer_in_file,
+                    display_name=layer_item.display_name,
+                    publication_tree=layer_item.file_tree,
+                    layer_name_in_file=layer_name_in_file,
                 )
                 open_file_via_layer_manager(
                     project, layer_item.file, local_file_path, layer_manager
@@ -258,13 +280,11 @@ class Loader(QObject):
         )
         if from_thread:
             sender = self.sender()
+            if not isinstance(sender, QThread):
+                self.communication.show_warn(f"sender type: {type(sender)}")
             assert isinstance(sender, QThread)
             sender.wait()
-        open_file_via_layer_manager(
-            project,
-            file,
-            local_file_path,
-        )
+        open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
         if isinstance(layer_manager, FileLayerManager):
             self.file_opened.emit(file)
@@ -287,7 +307,7 @@ class Loader(QObject):
 
     def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
-        self.file_download_worker = FileDownloadWorker(
+        self.file_download_worker = SingleFileDownloadWorker(
             project,
             file,
         )

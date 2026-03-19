@@ -42,6 +42,7 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_id,
 )
+from rana_qgis_plugin.utils_data import RanaRasterFileData, RanaVectorFileData
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -382,46 +383,43 @@ class PublicationView(QWidget):
         QDesktopServices.openUrl(QUrl(link))
 
     def open_map(self, map_item: LayerItemData):
-        if map_item.data_type == "raster":
-            self.open_in_qgis.emit(
-                map_item.file, map_item.parents + [map_item.name], ""
-            )
-        elif map_item.data_type == "vector" and map_item.layer_in_file:
-            self.open_in_qgis.emit(
-                map_item.file,
-                map_item.parents + [map_item.name],
-                map_item.layer_in_file,
-            )
-        QgsMessageLog.logMessage(
-            f"Found layer: {map_item.name} of type {map_item.data_type} which is not supported yet",
-            "DEBUG",
-            Qgis.Info,
-        )
+        # TODO consider if this should go via the batch mode
+        self.open_maps(map_item)
 
     def open_maps(self, map_item: MapItemData):
         # TODO: consider batch download and open
         # - single file: open -> move to open_map
         # - multiple files: download first, than open
         # self.communication.show_info("Opening multiple map is not yet supported")
-        all_items = self.collect_all_layer_items(map_item, [])
+        all_items = self.collect_all_maps(map_item, [])
         self.open_many_in_qgis.emit(all_items)
 
-    def collect_all_layer_items(
-        self, layer_item, collected_items: list[LayerItemData]
-    ) -> list[LayerItemData]:
+    def collect_all_maps(
+        self, layer_item, collected_items: list[RanaRasterFileData | RanaVectorFileData]
+    ) -> list[RanaRasterFileData | RanaVectorFileData]:
         if isinstance(layer_item, FolderItemData):
             for sub_item in layer_item.sub_items:
-                self.collect_all_layer_items(sub_item, collected_items)
+                self.collect_all_maps(sub_item, collected_items)
         if isinstance(layer_item, LayerItemData):
             # TODO: find a good way to send this!
-            collected_items.append(layer_item)
+            if layer_item.data_type == "raster":
+                collected_items.append(
+                    RanaRasterFileData(
+                        display_name=layer_item.name,
+                        file=layer_item.file,
+                        file_tree=layer_item.parents,
+                    )
+                )
+            elif layer_item.data_type == "vector":
+                collected_items.append(
+                    RanaVectorFileData(
+                        display_name=layer_item.name,
+                        file=layer_item.file,
+                        file_tree=layer_item.parents,
+                        layer_in_file=layer_item.layer_in_file,
+                    )
+                )
         return collected_items
-
-        # if isinstance(map_item, LayerItemData):
-        #     self.open_map(map_item)
-        # elif isinstance(map_item, FolderItemData):
-        #     for sub_item in map_item.sub_items:
-        #         self.open_maps(sub_item)
 
     def save_styles(self, map_item: MapItemData):
         # TODO: recurse through map_item and save styles
@@ -503,6 +501,7 @@ class PublicationView(QWidget):
                         # When the layer cannot be matched, something went really wrong in the backend
                         continue
                 # Collect data needed for UI and to open and edit the layer
+                # from qgis.core import Qgis, QgsMessageLog
                 map_data.append(
                     LayerItemData(
                         name=layer["name"],
@@ -514,6 +513,9 @@ class PublicationView(QWidget):
                         parents=parents,
                     )
                 )
+                map_item = map_data[-1]
+                # QgsMessageLog.logMessage(f'Add layer item {map_item.name} {map_item.parents}', "DEBUG", Qgis.Info)
+
             elif layer.get("type") == "folder":
                 map_data.append(
                     FolderItemData(

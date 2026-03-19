@@ -332,10 +332,15 @@ class RanaQgisPlugin:
             self.rana_browser.open_in_qgis_from_publication_selected.connect(
                 self.loader.open_in_qgis_from_publication
             )
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+                self.rana_browser.disable
+            )
             self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
                 self.loader.open_many_in_qgis_from_publication
             )
-
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
             )
@@ -485,8 +490,8 @@ class RanaQgisPlugin:
         self.rana_browser.project_widget.setCurrentIndex(2)
         self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
 
-        # # Test opening via files
-        # # Select project
+        # Test opening via files
+        # Select project
         # QgsMessageLog.logMessage(f"select project", "DEBUG", Qgis.Info)
         # self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
         # self.rana_browser.projects_browser.project_selected.emit(
