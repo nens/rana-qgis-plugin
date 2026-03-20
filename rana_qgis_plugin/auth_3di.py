@@ -45,6 +45,16 @@ def set_3di_auth(personal_api_key: str, username="__key__"):
         settings.setValue(THREEDI_AUTHCFG_ENTRY, authcfg.id())
 
 
+def remove_3di_auth(communication: UICommunication):
+    authcf_id = get_3di_authcfg_id()
+    if authcf_id:
+        auth_manager = QgsApplication.authManager()
+        if not auth_manager.removeAuthenticationConfig(authcf_id):
+            communication.log_info("Authentication already configured")
+            return False
+    return True
+
+
 def setup_3di_auth(communication: UICommunication):
     authcf_id = get_3di_authcfg_id()
     if authcf_id:

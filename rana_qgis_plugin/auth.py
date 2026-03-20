@@ -42,12 +42,16 @@ def get_authcfg_id():
     return authcfg_id
 
 
-def remove_authcfg():
+def remove_authcfg(communication: UICommunication):
     settings = QSettings()
     authcfg_id = settings.value(RANA_AUTHCFG_ENTRY)
     auth_manager = QgsApplication.authManager()
-    auth_manager.removeAuthenticationConfig(authcfg_id)
+    if not auth_manager.removeAuthenticationConfig(authcfg_id):
+        communication.log_info("Authentication already configured")
+        return False
+
     settings.remove(RANA_AUTHCFG_ENTRY)
+    return True
 
 
 def setup_oauth2(communication: UICommunication, start_tenant_id) -> bool:
