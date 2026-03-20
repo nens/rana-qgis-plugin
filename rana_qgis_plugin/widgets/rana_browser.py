@@ -136,7 +136,7 @@ class RevisionsView(QWidget):
         threedi_revision, schematisation = data
         if threedi_revision:
             menu = QMenu(self)
-            action = QAction("Open in QGIS", self)
+            action = QAction("Add to Map", self)
             action.triggered.connect(
                 lambda _: self.open_schematisation_revision_in_qgis_requested.emit(
                     threedi_revision.to_dict(), schematisation["schematisation"]
@@ -383,8 +383,8 @@ class FilesBrowser(QWidget):
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
-        self.btn_new_schematisation = QPushButton("New schematisation")
-        self.btn_import_schematisation = QPushButton("Import schematisation")
+        self.btn_new_schematisation = QPushButton("New Schematisation")
+        self.btn_import_schematisation = QPushButton("Add Schematisation to Project")
         btn_layout = QGridLayout()
         btn_layout.addWidget(self.btn_upload, 0, 0)
         btn_layout.addWidget(btn_create_folder, 0, 1)
