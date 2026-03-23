@@ -222,13 +222,18 @@ class Loader(QObject):
         for layer_item in layer_items:
             if layer_item.file["data_type"] in ["raster", "vector"]:
                 items_to_download.append(layer_item)
+                layer_in_file = (
+                    layer_item.layer_in_file
+                    if layer_item.file["data_type"] == "vector"
+                    else None
+                )
                 downloader = FileDownloadForPublicationTree(
                     project=project,
                     file=layer_item.file,
                     publication_id=publication_id,
                     publication_tree=layer_item.file_tree,
                     style_id=layer_item.style_id,
-                    layer_in_file=layer_item.layer_in_file,
+                    layer_in_file=layer_in_file,
                 )
                 downloaders.append(downloader)
         self.communication.bar_info("Start downloading files...")

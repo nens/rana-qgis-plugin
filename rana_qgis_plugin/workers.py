@@ -3,7 +3,9 @@ import io
 import json
 import math
 import os
+import shutil
 import zipfile
+from functools import cached_property
 from pathlib import Path
 from time import sleep
 from typing import List, Optional
@@ -78,7 +80,7 @@ class FileDownloadBase:
     def get_style_zip(self):
         raise NotImplementedError
 
-    def download_file(self, signals: FileDownloadWorkerSignals):
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
         path = self.file["id"]
         descriptor_id = self.file["descriptor_id"]
@@ -86,23 +88,22 @@ class FileDownloadBase:
         local_dir_structure, local_file_path = self.get_local_file_path()
         os.makedirs(local_dir_structure, exist_ok=True)
         try:
-            with requests.get(url, stream=True) as response:
-                response.raise_for_status()
-                total_size = int(response.headers.get("content-length", 0))
-                downloaded_size = 0
-                previous_progress = -1
-                with open(local_file_path, "wb") as local_file:
-                    for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                        local_file.write(chunk)
-                        downloaded_size += len(chunk)
-                        progress = int((downloaded_size / total_size) * 100)
-                        if progress > previous_progress:
-                            signals.progress.emit(progress, "")
-                            previous_progress = progress
-
+            if download_file:
+                with requests.get(url, stream=True) as response:
+                    response.raise_for_status()
+                    total_size = int(response.headers.get("content-length", 0))
+                    downloaded_size = 0
+                    previous_progress = -1
+                    with open(local_file_path, "wb") as local_file:
+                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                            local_file.write(chunk)
+                            downloaded_size += len(chunk)
+                            progress = int((downloaded_size / total_size) * 100)
+                            if progress > previous_progress:
+                                signals.progress.emit(progress, "")
+                                previous_progress = progress
             # Handle QML files for vector and raster data
             self._handle_qml_extraction(descriptor_id, local_dir_structure)
-
             # Emit finished signal from the worker
             signals.finished.emit(self.project, self.file, local_file_path)
         except requests.exceptions.RequestException as e:
@@ -179,35 +180,58 @@ class SingleFileDownloadWorker(QThread):
 class BatchFileDownloadWorker(QThread):
     """Worker thread for downloading multiple files, one after the other."""
 
-    # TODO: do something smart to prevent duplicate downloading
-    # - keep track where downloader.file objects are downloaded to
-    # - check for every downloader if that object has already been downloaded
-    # - if so, copy file and only download styling
-    # Consider checksums??
-
     def __init__(self, downloaders: list[FileDownloadBase]):
         super().__init__()
         self.signals = FileDownloadWorkerSignals()
         self.downloaders = downloaders
+        self.downloaded_files = {str: str}
 
-    # @staticmethod
-    # def filter_unique_files(files: list[dict]) -> list[dict]:
-    #     files_to_download = []
-    #     seen = []
-    #     for file in files:
-    #         if file["id"] not in seen:
-    #             files_to_download.append(file)
-    #             seen.append(file["id"])
-    #     return files_to_download
-    #
+    @cached_property
+    def unique_file_ids(self):
+        return set([downloader.file["id"] for downloader in self.downloaders])
+
     @property
     def nof_files(self) -> int:
-        return len(self.downloaders)
+        """Count number of unique files"""
+        return len(self.unique_file_ids)
+
+    def handle_existing(self, downloader) -> bool:
+        """Check if a file was already downloaded by this worker. If so, just copy the file to the required destination"""
+        if downloader.file["id"] in self.downloaded_files:
+            _, download_path = downloader.get_local_file_path()
+            file_location = self.downloaded_files[downloader.file["id"]]
+            # make sure the file didn't disappear somehow
+            if file_location == download_path:
+                return True
+            if Path(file_location).exists():
+                try:
+                    Path(download_path).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(file_location, download_path)
+                    return True
+                except (FileNotFoundError, PermissionError, OSError) as e:
+                    # Don't raise for reasonable exceptions, just return False to redownload
+                    return False
+        else:
+            return False
 
     @pyqtSlot()
     def run(self):
-        for downloader in self.downloaders:
+        # Find the first downloader for each unique file id, download the file and remove the downloader
+        for file_id in self.unique_file_ids:
+            downloader = next(
+                downloader
+                for downloader in self.downloaders
+                if downloader.file["id"] == file_id
+            )
             downloader.download_file(self.signals)
+            _, download_path = downloader.get_local_file_path()
+            self.downloaded_files[downloader.file["id"]] = download_path
+            self.downloaders.remove(downloader)
+        # Iterate over the remaining downloaders and copy the existing file
+        for downloader in self.downloaders:
+            # copy existing, and if redownload if that was unsuccessful
+            download_file = not self.handle_existing(downloader)
+            downloader.download_file(self.signals, download_file)
         self.signals.all_finished.emit()
 
 
