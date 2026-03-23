@@ -11,7 +11,18 @@ from typing import List
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from bridgestyle.qgis import togeostyler
-from qgis.core import Qgis, QgsMessageLog, QgsProject
+from qgis.core import (
+    Qgis,
+    QgsLayerTree,
+    QgsLayoutExporter,
+    QgsLayoutItemLegend,
+    QgsLayoutSize,
+    QgsLegendStyle,
+    QgsMessageLog,
+    QgsPrintLayout,
+    QgsProject,
+    QgsUnitTypes,
+)
 from qgis.PyQt.QtCore import (
     QObject,
     QRunnable,
@@ -20,7 +31,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QPixmap
+from qgis.PyQt.QtGui import QFont, QPixmap
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.utils_api import get_user_image
@@ -298,7 +309,39 @@ class VectorStyleWorker(QThread):
             qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
             layer.saveNamedStyle(str(qml_path))
 
+        QgsMessageLog.logMessage(
+            "---------------------", level=Qgis.MessageLevel.Critical
+        )
+
         # Convert QGIS layers to styling files for the Rana Web Client
+        layout = QgsPrintLayout(QgsProject.instance())
+        layout.initializeDefaults()
+        layout.pageCollection().pages()[0].setPageSize(
+            QgsLayoutSize(100, 600, QgsUnitTypes.LayoutInches)
+        )
+        manager = QgsProject.instance().layoutManager()
+        manager.addLayout(layout)
+
+        legend = QgsLayoutItemLegend(layout)
+        legend.setTitle("title")
+
+        layerTree = QgsLayerTree()
+        for layer in layers:  # add layers that you want to see in legend
+            layerTree.addLayer(layer)
+
+        legend.model().setRootGroup(layerTree)
+        legend.setStyleFont(QgsLegendStyle.SymbolLabel, QFont("Arial", 4))
+        legend.setStyleFont(QgsLegendStyle.Subgroup, QFont("Arial", 4))
+        legend.setStyleFont(QgsLegendStyle.Title, QFont("Arial", 6))
+        layout.addLayoutItem(legend)
+
+        exporter = QgsLayoutExporter(layout)
+        res = exporter.exportToSvg(
+            os.path.join(local_dir, "legend.svg"), QgsLayoutExporter.SvgExportSettings()
+        )
+        if res != 0:
+            QgsMessageLog.logMessage(str(exporter.errorFile()))
+
         try:
             _, warnings, mb_style, sprite_sheet = convertGroup(
                 group, qgis_layers, base_url, workspace="workspace", name="default"
