@@ -9,6 +9,7 @@ from osgeo import gdal
 from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
+from slugify import slugify
 from threedi_mi_utils import (
     LocalRevision,
     LocalSchematisation,
@@ -37,6 +38,37 @@ def is_writable(working_dir: str) -> bool:
         return True
 
 
+def sanitize_path_for_filesystem(path: str) -> str:
+    """
+    Sanitize a path to be valid for Linux and Windows using python-slugify.
+    """
+    # Split into parts (directories and file)
+    slugify_kwargs = {"separator": "_", "lowercase": False, "allow_unicode": True}
+    if not path:
+        return path
+    path_obj = Path(path)
+    # Slugify each component of the path (excluding file extension)
+    sanitized_parts = [
+        slugify(part, **slugify_kwargs)
+        for part in path_obj.parts[:-1]  # Slugify directories
+    ]
+    # Handle the file name separately to preserve extensions
+    file_name = path_obj.name
+    file_stem = Path(file_name).stem
+    file_extension = Path(file_name).suffix
+
+    # Slugify file stem and attach the extension back
+    sanitized_file_name = f"{slugify(file_stem, **slugify_kwargs)}{file_extension}"
+    sanitized_parts.append(sanitized_file_name)
+
+    # prefix / for absolute paths
+    if path_obj.is_absolute():
+        sanitized_parts = ["/"] + sanitized_parts
+
+    # Rebuild sanitized path
+    return str(Path(*sanitized_parts))
+
+
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     file_name = Path(path).name
     file_name_without_extension = Path(path).stem
@@ -48,7 +80,9 @@ def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
         project_slug, "files", Path(path).parent, file_name_without_extension
     )
     local_file_path = local_dir_structure.joinpath(file_name)
-    return str(local_dir_structure), str(local_file_path)
+    return sanitize_path_for_filesystem(
+        str(local_dir_structure)
+    ), sanitize_path_for_filesystem(str(local_file_path))
 
 
 def get_publication_layer_path(
@@ -64,7 +98,9 @@ def get_publication_layer_path(
         project_slug, "publications", *publication_tree, file_name_without_extension
     )
     local_file_path = local_dir_structure.joinpath(file_name)
-    return str(local_dir_structure), str(local_file_path)
+    return sanitize_path_for_filesystem(
+        str(local_dir_structure)
+    ), sanitize_path_for_filesystem(str(local_file_path))
 
 
 def get_threedi_api():

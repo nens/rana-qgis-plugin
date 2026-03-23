@@ -489,7 +489,8 @@ class RanaQgisPlugin:
         )
         self.rana_browser.project_widget.setCurrentIndex(2)
         # self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
-        self.rana_browser.publications_browser.publication_selected.emit("rfau7fYB")
+        # self.rana_browser.publications_browser.publication_selected.emit("rfau7fYB")
+        self.rana_browser.publications_browser.publication_selected.emit("1RYqKuQ9")
 
         # Test opening via files
         # Select project
