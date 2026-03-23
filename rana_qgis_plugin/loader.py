@@ -1,6 +1,7 @@
 import os
 from functools import partial
 from pathlib import Path
+from typing import Optional
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import (
@@ -83,6 +84,7 @@ from rana_qgis_plugin.workers import (
     AvatarWorker,
     BatchFileDownloadWorker,
     ExistingFileUploadWorker,
+    FileDownloadForFileTree,
     FileUploadWorker,
     LizardResultDownloadWorker,
     RasterStyleWorker,
@@ -218,9 +220,10 @@ class Loader(QObject):
         ]
         files_to_download = [layer_item.file for layer_item in items_to_download]
         self.communication.bar_info("Start downloading files...")
-        self.batch_file_download_worker = BatchFileDownloadWorker(
-            project, files_to_download
-        )
+        downloaders = [
+            FileDownloadForFileTree(project, file) for file in files_to_download
+        ]
+        self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         # Request confirmation when downloading more than 10 files (arbitrary number)
         if self.batch_file_download_worker.nof_files > 10:
             confirm_dialog = QMessageBox(
@@ -236,8 +239,8 @@ class Loader(QObject):
                 self.file_download_failed.emit("")
                 return
 
-        # TODO: see if we can open directly after download!
         def on_all_files_downloaded(*args):
+            self.batch_file_download_worker.wait()
             for layer_item in items_to_download:
                 # TODO: this could be cleaner
                 local_dir_structure, local_file_path = get_local_file_path(
@@ -260,9 +263,15 @@ class Loader(QObject):
                 )
             self.file_download_finished.emit(None)
 
-        self.batch_file_download_worker.all_finished.connect(on_all_files_downloaded)
-        self.batch_file_download_worker.failed.connect(self.on_file_download_failed)
-        self.batch_file_download_worker.progress.connect(self.on_file_download_progress)
+        self.batch_file_download_worker.signals.all_finished.connect(
+            on_all_files_downloaded
+        )
+        self.batch_file_download_worker.signals.failed.connect(
+            self.on_file_download_failed
+        )
+        self.batch_file_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
         self.batch_file_download_worker.start()
 
     @pyqtSlot(dict, dict, dict)
@@ -272,18 +281,22 @@ class Loader(QObject):
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
-        self, project, file, local_file_path: str, layer_manager, from_thread=True
+        self,
+        project,
+        file,
+        local_file_path: str,
+        layer_manager,
+        thread_worker: Optional[QThread] = None,
     ):
         self.communication.clear_message_bar()
         self.communication.bar_info(
             f"File(s) downloaded to: {local_file_path}", dur=240
         )
-        if from_thread:
-            sender = self.sender()
-            if not isinstance(sender, QThread):
-                self.communication.show_warn(f"sender type: {type(sender)}")
-            assert isinstance(sender, QThread)
-            sender.wait()
+        if thread_worker is not None:
+            if not isinstance(thread_worker, QThread):
+                self.communication.show_warn(f"sender type: {type(thread_worker)}")
+            assert isinstance(thread_worker, QThread)
+            thread_worker.wait()
         open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
         if isinstance(layer_manager, FileLayerManager):
@@ -307,17 +320,21 @@ class Loader(QObject):
 
     def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
-        self.file_download_worker = SingleFileDownloadWorker(
-            project,
-            file,
-        )
-        self.file_download_worker.finished.connect(
+        downloader = FileDownloadForFileTree(project, file)
+        self.file_download_worker = SingleFileDownloadWorker(downloader)
+        self.file_download_worker.signals.finished.connect(
             lambda _project, _file, _local_path: self.on_file_download_finished(
-                _project, _file, _local_path, layer_manager
+                _project,
+                _file,
+                _local_path,
+                layer_manager,
+                thread_worker=self.file_download_worker,
             )
         )
-        self.file_download_worker.failed.connect(self.on_file_download_failed)
-        self.file_download_worker.progress.connect(self.on_file_download_progress)
+        self.file_download_worker.signals.failed.connect(self.on_file_download_failed)
+        self.file_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
 
     @pyqtSlot(dict, dict)
     def upload_file_to_rana(self, project, file):
@@ -788,7 +805,11 @@ class Loader(QObject):
         layer_manager = FileLayerManager(self.communication, parent=self.parent())
         self.lizard_result_download_worker.finished.connect(
             lambda _project, _file, _local_path: self.on_file_download_finished(
-                _project, _file, _local_path, layer_manager
+                _project,
+                _file,
+                _local_path,
+                layer_manager,
+                thread_worker=self.lizard_result_download_worker,
             )
         )
         self.lizard_result_download_worker.failed.connect(self.on_file_download_failed)

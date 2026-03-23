@@ -51,24 +51,38 @@ from .utils_api import (
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
-class FileDownloadBase(QObject):
+class FileDownloadWorkerSignals(QObject):
+    progress = pyqtSignal(
+        int, str
+    )  # Progress signal: emits progress percentage and additional info
+    finished = pyqtSignal(
+        dict, dict, str
+    )  # Finished signal: emits project, file, and local file path
+    failed = pyqtSignal(str)  # Failed signal: emits error messages
+    all_finished = pyqtSignal()
+
+
+class FileDownloadBase:
     """Base class that handles the common download logic."""
 
     # Note: The signals are removed from FileDownloadBase as they will now exist in the worker classes.
     def __init__(self, project, file):
-        super().__init__()
         self.project = project
         self.file = file
 
-    def download_file(self, worker):
+    def get_local_file_path(self) -> tuple[str, str]:
+        raise NotImplementedError
+
+    def get_style_zip(self):
+        raise NotImplementedError
+
+    def download_file(self, signals: FileDownloadWorkerSignals):
         """Handles the core logic for downloading a file and emits signals from the worker."""
-        project_slug = self.project["slug"]
         path = self.file["id"]
         descriptor_id = self.file["descriptor_id"]
         url = get_tenant_file_url(self.project["id"], {"path": path})
-        local_dir_structure, local_file_path = get_local_file_path(project_slug, path)
+        local_dir_structure, local_file_path = self.get_local_file_path()
         os.makedirs(local_dir_structure, exist_ok=True)
-
         try:
             with requests.get(url, stream=True) as response:
                 response.raise_for_status()
@@ -81,27 +95,23 @@ class FileDownloadBase(QObject):
                         downloaded_size += len(chunk)
                         progress = int((downloaded_size / total_size) * 100)
                         if progress > previous_progress:
-                            worker.progress.emit(progress, "")
+                            signals.progress.emit(progress, "")
                             previous_progress = progress
 
             # Handle QML files for vector and raster data
             self._handle_qml_extraction(descriptor_id, local_dir_structure)
 
             # Emit finished signal from the worker
-            worker.finished.emit(self.project, self.file, local_file_path)
+            signals.finished.emit(self.project, self.file, local_file_path)
         except requests.exceptions.RequestException as e:
-            # Emit failure signal from the worker
-            worker.failed.emit(f"Failed to download file: {str(e)}")
+            signals.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
-            worker.failed.emit(f"An error occurred: {str(e)}")
+            signals.failed.emit(f"An error occurred: {str(e)}")
 
     def _handle_qml_extraction(self, descriptor_id, local_dir_structure):
         """Handles the extraction of QML zip file if required."""
         if self.file["data_type"] in ["vector", "raster"]:
-            if self.file["data_type"] == "raster":
-                qml_zip_content = get_raster_style_file(descriptor_id, "qml.zip")
-            else:
-                qml_zip_content = get_vector_style_file(descriptor_id, "qml.zip")
+            qml_zip_content = self.get_style_zip()
             if qml_zip_content:
                 stream = io.BytesIO(qml_zip_content)
                 if zipfile.is_zipfile(stream):
@@ -109,55 +119,57 @@ class FileDownloadBase(QObject):
                         zip_file.extractall(local_dir_structure)
 
 
-class SingleFileDownloadWorker(QThread, FileDownloadBase):
+class FileDownloadForFileTree(FileDownloadBase):
+    def get_local_file_path(self) -> tuple[str, str]:
+        return get_local_file_path(self.project["slug"], self.file["id"])
+
+    def get_style_zip(self):
+        if self.file["data_type"] == "raster":
+            return get_raster_style_file(self.file["descriptor_id"], "qml.zip")
+        else:
+            return get_vector_style_file(self.file["descriptor_id"], "qml.zip")
+
+
+class SingleFileDownloadWorker(QThread):
     """Worker thread for downloading a single file."""
 
-    progress = pyqtSignal(int, str)
-    finished = pyqtSignal(dict, dict, str)
-    failed = pyqtSignal(str)
-
-    def __init__(self, project, file):
-        QThread.__init__(self)
-        FileDownloadBase.__init__(self, project, file)
+    def __init__(self, downloader: FileDownloadBase):
+        super().__init__()
+        self.signals = FileDownloadWorkerSignals()
+        self.downloader = downloader
 
     @pyqtSlot()
     def run(self):
-        self.download_file(self)  # Pass the worker itself to emit signals
+        self.downloader.download_file(self.signals)
 
 
-class BatchFileDownloadWorker(QThread, FileDownloadBase):
+class BatchFileDownloadWorker(QThread):
     """Worker thread for downloading multiple files, one after the other."""
 
-    progress = pyqtSignal(int, str)
-    finished = pyqtSignal(dict, dict, str)
-    failed = pyqtSignal(str)
-    all_finished = pyqtSignal()
+    def __init__(self, downloaders: list[FileDownloadBase]):
+        super().__init__()
+        self.signals = FileDownloadWorkerSignals()
+        self.downloaders = downloaders
 
-    def __init__(self, project, files):
-        QThread.__init__(self)
-        FileDownloadBase.__init__(self, project, None)
-        self.files = self.filter_unique_files(files)
-
-    @staticmethod
-    def filter_unique_files(files: list[dict]) -> list[dict]:
-        files_to_download = []
-        seen = []
-        for file in files:
-            if file["id"] not in seen:
-                files_to_download.append(file)
-                seen.append(file["id"])
-        return files_to_download
-
+    # @staticmethod
+    # def filter_unique_files(files: list[dict]) -> list[dict]:
+    #     files_to_download = []
+    #     seen = []
+    #     for file in files:
+    #         if file["id"] not in seen:
+    #             files_to_download.append(file)
+    #             seen.append(file["id"])
+    #     return files_to_download
+    #
     @property
     def nof_files(self) -> int:
-        return len(self.files)
+        return len(self.downloaders)
 
     @pyqtSlot()
     def run(self):
-        for file in self.files:
-            self.file = file
-            self.download_file(self)
-        self.all_finished.emit()
+        for downloader in self.downloaders:
+            downloader.download_file(self.signals)
+        self.signals.all_finished.emit()
 
 
 class FileUploadWorker(QThread):
