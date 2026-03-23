@@ -2,7 +2,21 @@ History
 =======
 
 
-1.2.7 (unreleased)
+1.2.9 (unreleased)
+------------------
+
+- Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
+- Modified (user facing) texts (nens/rana#3136)
+- Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)
+
+
+1.2.8 (2026-03-13)
+------------------
+
+- Proper loading of downloaded geopackages (nens/rana#3781)
+
+
+1.2.7 (2026-03-13)
 ------------------
 
 - Automatically open file detail when opening file in qgis via context menu (nens/rana-qgis-plugin#275)
@@ -13,6 +27,10 @@ History
 - Take buttons in the file view out of the scroll area (nens/rana#3630)
 - Make creating avatars safe for users without given and/or family name
 - Download results folder "<simulation name> (<simulation id>)" (nens/rana#3678)
+- Match update interval of project monitoring to update interval in rana
+- Enable results downloading for results without lizard data and results not linked to a simulation (nens/rana#3710)
+- Organize opened layers under Rana projects (nens/rana-qgis#57)
+- Basic setup for end-to-end testing (nens/rana-plugin#3196)
 
 
 1.2.6 (2026-02-19)

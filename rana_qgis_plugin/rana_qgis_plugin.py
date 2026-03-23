@@ -1,7 +1,12 @@
+from __future__ import annotations
+
+import sys
+import traceback
 from functools import partial
+from typing import Any, Callable, Optional
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtCore import QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAction,
     QButtonGroup,
@@ -13,7 +18,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
-from rana_qgis_plugin.auth_3di import setup_3di_auth
+from rana_qgis_plugin.auth_3di import remove_3di_auth, setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
@@ -24,6 +29,7 @@ from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
 from rana_qgis_plugin.utils_qgis import get_plugin_instance
 from rana_qgis_plugin.utils_settings import (
     get_tenant_id,
+    get_use_plugin_excepthook,
     initialize_settings,
     set_tenant_id,
 )
@@ -31,6 +37,49 @@ from rana_qgis_plugin.widgets.about_rana_dialog import AboutRanaDialog
 from rana_qgis_plugin.widgets.rana_browser import RanaBrowser
 from rana_qgis_plugin.widgets.settings_dialog import SettingsDialog
 from rana_qgis_plugin.widgets.tenant_selection_dialog import TenantSelectionDialog
+from rana_qgis_plugin.widgets.utils_dialog import (
+    show_error_dialog_with_helpdesk_message,
+)
+
+_original_excepthook: Optional[
+    Callable[[type[BaseException], BaseException, Any], None]
+] = None
+
+
+class ErrorSignals(QObject):
+    error_occurred = pyqtSignal(str)  # Signal with error message
+
+
+error_signals = ErrorSignals()
+
+
+def _plugin_excepthook(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_traceback: Any,
+) -> None:
+    """Handle uncaught exceptions from the plugin."""
+    # Check if this exception is from our plugin
+    if any(
+        "rana_qgis_plugin" in frame.filename
+        for frame in traceback.extract_tb(exc_traceback)
+    ):
+        message: str = "".join(
+            traceback.format_exception(exc_type, exc_value, exc_traceback)
+        )
+        error_signals.error_occurred.emit(message)
+        # Don't call the original exception hook for our plugin errors
+        return
+
+    # For other exceptions, use the original handler
+    if _original_excepthook is not None:
+        _original_excepthook(exc_type, exc_value, exc_traceback)
+
+
+def install_exception_hook() -> None:
+    global _original_excepthook
+    _original_excepthook = sys.excepthook
+    sys.excepthook = _plugin_excepthook
 
 
 class RanaQgisPlugin:
@@ -59,6 +108,8 @@ class RanaQgisPlugin:
 
     def initGui(self):
         """Create the (initial) menu entries and toolbar icons inside the QGIS GUI."""
+        if get_use_plugin_excepthook():
+            install_exception_hook()
         self.add_rana_menu(False)
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
@@ -78,7 +129,8 @@ class RanaQgisPlugin:
 
     def logout(self):
         self.communication.clear_message_bar()
-        remove_authcfg()
+        remove_authcfg(self.communication)
+        remove_3di_auth(self.communication)
         set_tenant_id("")
         self.add_rana_menu(False)
         self.communication.bar_info("You have been logged out.")
@@ -197,6 +249,7 @@ class RanaQgisPlugin:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        QgsApplication.processingRegistry().removeProvider(self.provider)
         menu = self.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
         menu.clear()
         self.iface.removeToolBarIcon(self.action)
@@ -393,6 +446,10 @@ class RanaQgisPlugin:
             self.loader.schematisation_upload_finished.connect(
                 self.rana_browser.refresh
             )
+            error_signals.error_occurred.connect(
+                show_error_dialog_with_helpdesk_message
+            )
+            error_signals.error_occurred.connect(self.rana_browser.enable)
 
         self.iface.addTabifiedDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.dock_widget, raiseTab=True

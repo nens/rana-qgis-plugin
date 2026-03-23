@@ -5,20 +5,24 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils_scenario import (
+    get_is_3di_simulation,
+    get_ready_state_from_descriptor,
+)
 
 
 class FileAction(Enum):
-    OPEN_IN_QGIS = "Open in QGIS"
-    OPEN_WMS = "Open WMS in QGIS"
-    SAVE_REVISION = "Save revision to Rana"
+    OPEN_IN_QGIS = "Add to Map"
+    OPEN_WMS = "Add WMS to Map"
+    SAVE_REVISION = "Upload to Rana"
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
     SAVE_RASTER_STYLING = "Save raster style to Rana"
-    UPLOAD_FILE = "Save data to Rana"
-    VIEW_REVISIONS = "View all revisions"
-    DOWNLOAD_RESULTS = "Download results"
+    UPLOAD_FILE = "Save Data to Rana"
+    VIEW_REVISIONS = "View all Revisions"
+    DOWNLOAD_RESULTS = "Download Results"
     RENAME = "Rename"
     DELETE = "Delete"
-    REMOVE_FROM_PROJECT = "Remove from project"
+    REMOVE_FROM_PROJECT = "Remove from Project"
 
     def __lt__(self, other):
         # sort a list of file actions by order of definition here
@@ -52,13 +56,10 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     elif data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         meta = descriptor["meta"] if descriptor else None
-        if meta and "id" in meta:
+        if meta and "id" in meta and get_ready_state_from_descriptor(descriptor):
             actions.append(FileAction.DOWNLOAD_RESULTS)
-            if meta["simulation"]["software"]["id"] == "3Di":
+            if get_is_3di_simulation(descriptor):
                 actions.append(FileAction.OPEN_WMS)
-        # remove any interactions for objects that are being processed
-        elif descriptor.get("status", {}).get("id") == "processing":
-            actions = []
     return sorted(actions)
 
 
