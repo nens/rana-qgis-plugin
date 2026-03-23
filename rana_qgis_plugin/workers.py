@@ -6,7 +6,7 @@ import os
 import zipfile
 from pathlib import Path
 from time import sleep
-from typing import List
+from typing import List, Optional
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
@@ -29,11 +29,13 @@ from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 from .utils import (
     build_vrt,
     get_local_file_path,
+    get_publication_layer_path,
     image_to_bytes,
     split_scenario_extent,
 )
 from .utils_api import (
     finish_file_upload,
+    get_publication_style,
     get_raster_file_link,
     get_raster_style_file,
     get_raster_style_upload_urls,
@@ -130,6 +132,37 @@ class FileDownloadForFileTree(FileDownloadBase):
             return get_vector_style_file(self.file["descriptor_id"], "qml.zip")
 
 
+class FileDownloadForPublicationTree(FileDownloadBase):
+    def __init__(
+        self,
+        project: dict,
+        file: dict,
+        publication_id: str,
+        publication_tree: list[str],
+        style_id: Optional[str] = None,
+        layer_in_file: Optional[str] = None,
+    ):
+        super().__init__(project, file)
+        self.publication_tree = publication_tree
+        self.publication_id = publication_id
+        self.layer_in_file = layer_in_file
+        self.style_id = style_id
+
+    def get_local_file_path(self) -> tuple[str, str]:
+        return get_publication_layer_path(
+            self.project["slug"], self.file["id"], self.publication_tree
+        )
+
+    def get_style_zip(self):
+        if self.style_id and self.file["data_type"] in ["raster", "vector"]:
+            return get_publication_style(
+                self.publication_id,
+                self.file["descriptor_id"],
+                self.style_id,
+                "qml.zip",
+            )
+
+
 class SingleFileDownloadWorker(QThread):
     """Worker thread for downloading a single file."""
 
@@ -145,6 +178,12 @@ class SingleFileDownloadWorker(QThread):
 
 class BatchFileDownloadWorker(QThread):
     """Worker thread for downloading multiple files, one after the other."""
+
+    # TODO: do something smart to prevent duplicate downloading
+    # - keep track where downloader.file objects are downloaded to
+    # - check for every downloader if that object has already been downloaded
+    # - if so, copy file and only download styling
+    # Consider checksums??
 
     def __init__(self, downloaders: list[FileDownloadBase]):
         super().__init__()

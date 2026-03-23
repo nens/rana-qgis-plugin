@@ -38,17 +38,33 @@ def is_writable(working_dir: str) -> bool:
 
 
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
-    file_name = os.path.basename(path.rstrip("/"))
-    file_name_without_extension = os.path.splitext(file_name)[0]
+    file_name = Path(path).name
+    file_name_without_extension = Path(path).stem
     if not rana_cache_dir():
-        base_dir = os.path.join(os.path.expanduser("~"), "Rana")
+        base_dir = Path.home() / "Rana"
     else:
-        base_dir = rana_cache_dir()
-    local_dir_structure = os.path.join(
-        base_dir, project_slug, os.path.dirname(path), file_name_without_extension
+        base_dir = Path(rana_cache_dir())
+    local_dir_structure = base_dir.joinpath(
+        project_slug, "files", Path(path).parent, file_name_without_extension
     )
-    local_file_path = os.path.join(local_dir_structure, file_name)
-    return local_dir_structure, local_file_path
+    local_file_path = local_dir_structure.joinpath(file_name)
+    return str(local_dir_structure), str(local_file_path)
+
+
+def get_publication_layer_path(
+    project_slug: str, path: str, publication_tree: list[str]
+) -> tuple[str, str]:
+    file_name = Path(path).name
+    file_name_without_extension = Path(path).stem
+    if not rana_cache_dir():
+        base_dir = Path.home() / "Rana"
+    else:
+        base_dir = Path(rana_cache_dir())
+    local_dir_structure = base_dir.joinpath(
+        project_slug, "publications", *publication_tree, file_name_without_extension
+    )
+    local_file_path = local_dir_structure.joinpath(file_name)
+    return str(local_dir_structure), str(local_file_path)
 
 
 def get_threedi_api():

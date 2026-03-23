@@ -508,6 +508,26 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
     return get_style_file("vector", descriptor_id, file_name)
 
 
+def get_publication_style(
+    publication_id: str, descriptor_id: str, style_id: str, file_name: str
+):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/file-descriptors/{descriptor_id}/styles/{file_name}"
+    params = {"style_id": style_id}
+    network_manager = NetworkManager(url, authcfg_id)
+    status, redirect_url = network_manager.fetch(params)
+    if status and redirect_url:
+        try:
+            headers = {"Content-Type": "application/zip"}
+            response = requests.get(redirect_url, headers=headers, timeout=10)
+            return response.content
+        except requests.RequestException as e:
+            return None
+    else:
+        return None
+
+
 def get_schematisations(communication, icontains=""):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

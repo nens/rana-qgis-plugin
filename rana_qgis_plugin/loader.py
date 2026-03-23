@@ -48,6 +48,7 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
     get_local_file_path,
+    get_publication_layer_path,
     get_threedi_api,
     get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
@@ -85,6 +86,7 @@ from rana_qgis_plugin.workers import (
     BatchFileDownloadWorker,
     ExistingFileUploadWorker,
     FileDownloadForFileTree,
+    FileDownloadForPublicationTree,
     FileUploadWorker,
     LizardResultDownloadWorker,
     RasterStyleWorker,
@@ -206,23 +208,30 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
-    @pyqtSlot(dict, list)
-    def open_many_in_qgis_from_publication(self, project: dict, layer_items: list):
+    @pyqtSlot(dict, str, list)
+    def open_many_in_qgis_from_publication(
+        self, project: dict, publication_id: str, layer_items: list
+    ):
         # TODO: connect to UI
         # TODO: extend for scenario and scheamtisation
         # TODO: fix typehint
         # TODO: change file path
         # TODO: change layer_item name
-        items_to_download = [
-            layer_item
-            for layer_item in layer_items
-            if layer_item.file["data_type"] in ["raster", "vector"]
-        ]
-        files_to_download = [layer_item.file for layer_item in items_to_download]
+        items_to_download = []
+        downloaders = []
+        for layer_item in layer_items:
+            if layer_item.file["data_type"] in ["raster", "vector"]:
+                items_to_download.append(layer_item)
+                downloader = FileDownloadForPublicationTree(
+                    project=project,
+                    file=layer_item.file,
+                    publication_id=publication_id,
+                    publication_tree=layer_item.file_tree,
+                    style_id=layer_item.style_id,
+                    layer_in_file=layer_item.layer_in_file,
+                )
+                downloaders.append(downloader)
         self.communication.bar_info("Start downloading files...")
-        downloaders = [
-            FileDownloadForFileTree(project, file) for file in files_to_download
-        ]
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         # Request confirmation when downloading more than 10 files (arbitrary number)
         if self.batch_file_download_worker.nof_files > 10:
@@ -243,8 +252,8 @@ class Loader(QObject):
             self.batch_file_download_worker.wait()
             for layer_item in items_to_download:
                 # TODO: this could be cleaner
-                local_dir_structure, local_file_path = get_local_file_path(
-                    project["slug"], layer_item.file["id"]
+                local_dir_structure, local_file_path = get_publication_layer_path(
+                    project["slug"], layer_item.file["id"], layer_item.file_tree
                 )
                 layer_name_in_file = (
                     layer_item.layer_in_file

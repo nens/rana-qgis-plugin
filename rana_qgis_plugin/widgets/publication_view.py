@@ -118,6 +118,7 @@ class LayerItemData(MapItemData):
     file_descriptor: dict
     type_in_file: Optional[str] = None
     layer_in_file: Optional[dict] = None
+    style_id: Optional[str] = None
 
     @cached_property
     def supported_actions(self) -> list[FileAction]:
@@ -195,7 +196,7 @@ class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
     open_in_qgis = pyqtSignal(dict, list, str)
-    open_many_in_qgis = pyqtSignal(list)
+    open_many_in_qgis = pyqtSignal(str, list)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -392,7 +393,7 @@ class PublicationView(QWidget):
         # - multiple files: download first, than open
         # self.communication.show_info("Opening multiple map is not yet supported")
         all_items = self.collect_all_maps(map_item, [])
-        self.open_many_in_qgis.emit(all_items)
+        self.open_many_in_qgis.emit(self.publication["id"], all_items)
 
     def collect_all_maps(
         self, layer_item, collected_items: list[RanaRasterFileData | RanaVectorFileData]
@@ -408,6 +409,7 @@ class PublicationView(QWidget):
                         display_name=layer_item.name,
                         file=layer_item.file,
                         file_tree=layer_item.parents,
+                        style_id=layer_item.style_id,
                     )
                 )
             elif layer_item.data_type == "vector":
@@ -417,6 +419,7 @@ class PublicationView(QWidget):
                         file=layer_item.file,
                         file_tree=layer_item.parents,
                         layer_in_file=layer_item.layer_in_file,
+                        style_id=layer_item.style_id,
                     )
                 )
         return collected_items
@@ -508,6 +511,7 @@ class PublicationView(QWidget):
                         data_type=data_type,
                         type_in_file=type_in_file,
                         layer_in_file=layer_in_file,
+                        style_id=layer.get("style_id"),
                         file=file,
                         file_descriptor=file_descriptor,
                         parents=parents,

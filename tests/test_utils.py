@@ -9,11 +9,30 @@ import rana_qgis_plugin.utils as utils
 def test_get_local_file_path():
     rana_root = "/root/Rana/"
     project = "foo"
-    file_id = "bar.txt"
+    file_id = "baz/bar.txt"
+    file_name = Path(file_id).name
     file_stem = Path(file_id).stem
     local_dir, local_path = utils.get_local_file_path(project, file_id)
-    assert local_dir == rana_root + project + "/" + file_stem
-    assert local_path == rana_root + project + "/" + file_stem + "/" + file_id
+    expected_local_dir = rana_root + project + "/files/baz/" + file_stem
+    assert local_dir == expected_local_dir
+    assert local_path == expected_local_dir + "/" + file_name
+
+
+def test_get_publication_layer_path():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "bar.txt"
+    file_stem = Path(file_id).stem
+    publication_tree = ["publication", "map", "folder"]
+    local_dir, local_path = utils.get_publication_layer_path(
+        project, file_id, publication_tree
+    )
+    publication_tree_path = "/".join(publication_tree)
+    expected_local_dir = (
+        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
+    )
+    assert local_dir == expected_local_dir
+    assert local_path == expected_local_dir + "/" + file_id
 
 
 @pytest.mark.parametrize(
