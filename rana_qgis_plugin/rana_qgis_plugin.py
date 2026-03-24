@@ -483,90 +483,81 @@ class RanaQgisPlugin:
         # TODO really really really remove this
         from qgis.core import Qgis, QgsMessageLog
 
-        self.rana_browser.projects_browser.set_project_from_id("2Q8UXRgQ")
+        # Test opening via files
+        # Select project
+        QgsMessageLog.logMessage(f"select project", "DEBUG", Qgis.Info)
+        self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
         self.rana_browser.projects_browser.project_selected.emit(
             self.rana_browser.projects_browser.project
         )
-        self.rana_browser.project_widget.setCurrentIndex(2)
-        # self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
-        # self.rana_browser.publications_browser.publication_selected.emit("rfau7fYB")
-        self.rana_browser.publications_browser.publication_selected.emit("1RYqKuQ9")
+        # Go into folder
+        index = self.rana_browser.files_browser.files_model.index(3, 0)
+        QgsMessageLog.logMessage(f"traverse into folder", "DEBUG", Qgis.Info)
+        self.rana_browser.files_browser.select_file_or_directory(index)
 
-        # Test opening via files
-        # Select project
-        # QgsMessageLog.logMessage(f"select project", "DEBUG", Qgis.Info)
-        # self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
-        # self.rana_browser.projects_browser.project_selected.emit(
-        #     self.rana_browser.projects_browser.project
-        # )
-        # # Go into folder
-        # index = self.rana_browser.files_browser.files_model.index(3, 0)
-        # QgsMessageLog.logMessage(f"traverse into folder", "DEBUG", Qgis.Info)
-        # self.rana_browser.files_browser.select_file_or_directory(index)
-        #
-        # def run_file_action(file_row: int, file_action, timeout_duration=10000):
-        #     """
-        #     Wait for a file download to finish using QEventLoop without blocking the UI.
-        #
-        #     Args:
-        #         file_row (int): The row of the file to process.
-        #         wait_time (int): Interval (in milliseconds) to check the condition.
-        #         timeout_duration (int): Maximum waiting time (in milliseconds) before timing out.
-        #     """
-        #     # Select vector file
-        #     index = self.rana_browser.files_browser.files_model.index(file_row, 0)
-        #     file_item = self.rana_browser.files_browser.files_model.itemFromIndex(index)
-        #     file = file_item.data(Qt.ItemDataRole.UserRole)
-        #     QgsMessageLog.logMessage(
-        #         f"load file: {file['id']} of type {file['data_type']}",
-        #         "DEBUG",
-        #         Qgis.Info,
-        #     )
-        #
-        #     # Define the helper function to mark the operation as complete
-        #     def finish_task(*args):
-        #         QgsMessageLog.logMessage("File download finished", "DEBUG", Qgis.Info)
-        #         loop.quit()  # Quit the event loop when the signal is received
-        #
-        #     # Connect the signal
-        #     self.loader.file_download_finished.connect(finish_task)
-        #
-        #     # Start the QGIS download process
-        #     file_action.emit(self.rana_browser.project, file)
-        #     # self.rana_browser.open_in_qgis_selected.emit(self.rana_browser.project, file)
-        #
-        #     # Create an event loop to wait for the signal or timeout
-        #     from qgis.PyQt.QtCore import QEventLoop
-        #
-        #     loop = QEventLoop()
-        #
-        #     # Set up a QTimer to handle timeout
-        #     timer = QTimer()
-        #     timer.setSingleShot(True)  # Ensure it only fires once
-        #     timer.setInterval(timeout_duration)
-        #
-        #     def handle_timeout():
-        #         QgsMessageLog.logMessage(
-        #             "Timeout waiting for file download", "DEBUG", Qgis.Warning
-        #         )
-        #         loop.quit()  # Quit the loop on timeout
-        #
-        #     # Connect the timer signal to quit the event loop on timeout
-        #     timer.timeout.connect(handle_timeout)
-        #     timer.start()  # Start the timer
-        #
-        #     # Start the event loop and wait for either the signal or timeout
-        #     loop.exec()
-        #
-        #     # Stop the timer to ensure no lingering timers
-        #     timer.stop()
-        #
-        #     # Disconnect the signal once done (clean-up)
-        #     self.loader.file_download_finished.disconnect(finish_task)
-        #
-        # open_in_qgis_action = self.rana_browser.open_in_qgis_selected
-        # run_file_action(0, open_in_qgis_action)  # vector file
-        # run_file_action(2, open_in_qgis_action)  # raster file
-        # run_file_action(1, open_in_qgis_action)  # scenario file
-        #
-        # run_file_action(3, self.rana_browser.download_results_selected)
+        def run_file_action(file_row: int, file_action, timeout_duration=10000):
+            """
+            Wait for a file download to finish using QEventLoop without blocking the UI.
+
+            Args:
+                file_row (int): The row of the file to process.
+                wait_time (int): Interval (in milliseconds) to check the condition.
+                timeout_duration (int): Maximum waiting time (in milliseconds) before timing out.
+            """
+            # Select vector file
+            index = self.rana_browser.files_browser.files_model.index(file_row, 0)
+            file_item = self.rana_browser.files_browser.files_model.itemFromIndex(index)
+            file = file_item.data(Qt.ItemDataRole.UserRole)
+            QgsMessageLog.logMessage(
+                f"load file: {file['id']} of type {file['data_type']}",
+                "DEBUG",
+                Qgis.Info,
+            )
+
+            # Define the helper function to mark the operation as complete
+            def finish_task(*args):
+                QgsMessageLog.logMessage("File download finished", "DEBUG", Qgis.Info)
+                loop.quit()  # Quit the event loop when the signal is received
+
+            # Connect the signal
+            self.loader.file_download_finished.connect(finish_task)
+
+            # Start the QGIS download process
+            file_action.emit(self.rana_browser.project, file)
+            # self.rana_browser.open_in_qgis_selected.emit(self.rana_browser.project, file)
+
+            # Create an event loop to wait for the signal or timeout
+            from qgis.PyQt.QtCore import QEventLoop
+
+            loop = QEventLoop()
+
+            # Set up a QTimer to handle timeout
+            timer = QTimer()
+            timer.setSingleShot(True)  # Ensure it only fires once
+            timer.setInterval(timeout_duration)
+
+            def handle_timeout():
+                QgsMessageLog.logMessage(
+                    "Timeout waiting for file download", "DEBUG", Qgis.Warning
+                )
+                loop.quit()  # Quit the loop on timeout
+
+            # Connect the timer signal to quit the event loop on timeout
+            timer.timeout.connect(handle_timeout)
+            timer.start()  # Start the timer
+
+            # Start the event loop and wait for either the signal or timeout
+            loop.exec()
+
+            # Stop the timer to ensure no lingering timers
+            timer.stop()
+
+            # Disconnect the signal once done (clean-up)
+            self.loader.file_download_finished.disconnect(finish_task)
+
+        open_in_qgis_action = self.rana_browser.open_in_qgis_selected
+        run_file_action(0, open_in_qgis_action)  # vector file
+        run_file_action(2, open_in_qgis_action)  # raster file
+        run_file_action(1, open_in_qgis_action)  # scenario file
+
+        run_file_action(3, self.rana_browser.download_results_selected)

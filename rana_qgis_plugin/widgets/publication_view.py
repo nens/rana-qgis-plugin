@@ -384,14 +384,10 @@ class PublicationView(QWidget):
         QDesktopServices.openUrl(QUrl(link))
 
     def open_map(self, map_item: LayerItemData):
-        # TODO consider if this should go via the batch mode
+        # Use batch mode to limit the number of signals
         self.open_maps(map_item)
 
     def open_maps(self, map_item: MapItemData):
-        # TODO: consider batch download and open
-        # - single file: open -> move to open_map
-        # - multiple files: download first, than open
-        # self.communication.show_info("Opening multiple map is not yet supported")
         all_items = self.collect_all_maps(map_item, [])
         self.open_many_in_qgis.emit(self.publication["id"], all_items)
 
@@ -402,7 +398,6 @@ class PublicationView(QWidget):
             for sub_item in layer_item.sub_items:
                 self.collect_all_maps(sub_item, collected_items)
         if isinstance(layer_item, LayerItemData):
-            # TODO: find a good way to send this!
             if layer_item.data_type == "raster":
                 collected_items.append(
                     RanaRasterFileData(

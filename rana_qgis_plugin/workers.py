@@ -100,7 +100,7 @@ class FileDownloadBase:
                             downloaded_size += len(chunk)
                             progress = int((downloaded_size / total_size) * 100)
                             if progress > previous_progress:
-                                signals.progress.emit(progress, "")
+                                signals.progress.emit(progress, local_file_path)
                                 previous_progress = progress
             # Handle QML files for vector and raster data
             self._handle_qml_extraction(descriptor_id, local_dir_structure)

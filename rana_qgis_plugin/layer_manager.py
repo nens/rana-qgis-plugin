@@ -290,13 +290,13 @@ class PublicationLayerManager(LayerManger, QObject):
         self.layer_name = layer_name_in_file
 
     def add_from_file(self, project_name, local_file_path: str, file: dict):
-        self.communication.clear_message_bar()
         # Save the last modified date of the downloaded file in QSettings
         parents = [project_name, "publications"] + self.publication_tree
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
         if file.get("data_type") == "scenario":
             pass
+            # TODO: handle scenario
             # descriptor = get_tenant_file_descriptor(file["descriptor_id"])
             # if get_is_3di_simulation(descriptor):
             #     self._add_layer_from_scenario(

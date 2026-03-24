@@ -85,6 +85,7 @@ from rana_qgis_plugin.workers import (
     AvatarWorker,
     BatchFileDownloadWorker,
     ExistingFileUploadWorker,
+    FileDownloadBase,
     FileDownloadForFileTree,
     FileDownloadForPublicationTree,
     FileUploadWorker,
@@ -212,11 +213,7 @@ class Loader(QObject):
     def open_many_in_qgis_from_publication(
         self, project: dict, publication_id: str, layer_items: list
     ):
-        # TODO: connect to UI
-        # TODO: extend for scenario and scheamtisation
-        # TODO: fix typehint
-        # TODO: change file path
-        # TODO: change layer_item name
+        # TODO: extend for scenario and schematisation
         items_to_download = []
         downloaders = []
         for layer_item in layer_items:
@@ -236,27 +233,26 @@ class Loader(QObject):
                     layer_in_file=layer_in_file,
                 )
                 downloaders.append(downloader)
-        self.communication.bar_info("Start downloading files...")
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         # Request confirmation when downloading more than 10 files (arbitrary number)
         if self.batch_file_download_worker.nof_files > 10:
-            confirm_dialog = QMessageBox(
-                QMessageBox.Question,
-                "Confirm Download",
-                f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
-                QMessageBox.Yes | QMessageBox.No,
-                self.parent(),
+            confirm_dialog = self.communication.ask(
+                parent=self.parent(),
+                title="Confirm download",
+                question=f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
             )
-            response = confirm_dialog.exec()
-            if response == QMessageBox.No:
+            if confirm_dialog == QMessageBox.No:
                 self.communication.clear_message_bar()
                 self.file_download_failed.emit("")
                 return
 
+        # Use a local function here to reduce the amount of data that is being passed
+        # This may be changed when more functionality is added
+        # TODO: update this comment if anything changes here
         def on_all_files_downloaded(*args):
+            self.communication.clear_message_bar()
             self.batch_file_download_worker.wait()
-            for layer_item in items_to_download:
-                # TODO: this could be cleaner
+            for i, layer_item in enumerate(items_to_download):
                 local_dir_structure, local_file_path = get_publication_layer_path(
                     project["slug"], layer_item.file["id"], layer_item.file_tree
                 )
@@ -285,6 +281,9 @@ class Loader(QObject):
         )
         self.batch_file_download_worker.signals.progress.connect(
             self.on_file_download_progress
+        )
+        self.communication.bar_info(
+            f"Start downloading {self.batch_file_download_worker.nof_files} files..."
         )
         self.batch_file_download_worker.start()
 
