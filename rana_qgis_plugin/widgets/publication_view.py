@@ -3,7 +3,6 @@ from enum import Enum
 from functools import cached_property
 from typing import Optional
 
-from qgis.core import Qgis, QgsMessageLog
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import QAbstractItemModel, QSettings, Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (
