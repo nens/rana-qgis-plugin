@@ -8,6 +8,7 @@ History
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
 - Modified (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)
+- Reset rana widget on logout (nens/rana-qgis-plugin#336)
 
 
 1.2.8 (2026-03-13)
