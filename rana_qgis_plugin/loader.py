@@ -70,7 +70,7 @@ from rana_qgis_plugin.utils_api import (
     move_file,
     start_tenant_process,
 )
-from rana_qgis_plugin.utils_data import RanaVectorFileData
+from rana_qgis_plugin.utils_data import RanaVectorPublicationFileData
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -229,6 +229,7 @@ class Loader(QObject):
                     file=layer_item.file,
                     publication_id=publication_id,
                     publication_tree=layer_item.file_tree,
+                    publication_version=layer_item.publication_version,
                     style_id=layer_item.style_id,
                     layer_in_file=layer_in_file,
                 )
@@ -258,7 +259,7 @@ class Loader(QObject):
                 )
                 layer_name_in_file = (
                     layer_item.layer_in_file
-                    if isinstance(layer_item, RanaVectorFileData)
+                    if isinstance(layer_item, RanaVectorPublicationFileData)
                     else None
                 )
                 layer_manager = PublicationLayerManager(

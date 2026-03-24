@@ -41,7 +41,10 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_id,
 )
-from rana_qgis_plugin.utils_data import RanaRasterFileData, RanaVectorFileData
+from rana_qgis_plugin.utils_data import (
+    RanaRasterPublicationFileData,
+    RanaVectorPublicationFileData,
+)
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -391,29 +394,35 @@ class PublicationView(QWidget):
         self.open_many_in_qgis.emit(self.publication["id"], all_items)
 
     def collect_all_maps(
-        self, layer_item, collected_items: list[RanaRasterFileData | RanaVectorFileData]
-    ) -> list[RanaRasterFileData | RanaVectorFileData]:
+        self,
+        layer_item,
+        collected_items: list[
+            RanaRasterPublicationFileData | RanaVectorPublicationFileData
+        ],
+    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
         if isinstance(layer_item, FolderItemData):
             for sub_item in layer_item.sub_items:
                 self.collect_all_maps(sub_item, collected_items)
         if isinstance(layer_item, LayerItemData):
             if layer_item.data_type == "raster":
                 collected_items.append(
-                    RanaRasterFileData(
+                    RanaRasterPublicationFileData(
                         display_name=layer_item.name,
                         file=layer_item.file,
                         file_tree=layer_item.parents,
                         style_id=layer_item.style_id,
+                        publication_version=self.current_version["version"],
                     )
                 )
             elif layer_item.data_type == "vector":
                 collected_items.append(
-                    RanaVectorFileData(
+                    RanaVectorPublicationFileData(
                         display_name=layer_item.name,
                         file=layer_item.file,
                         file_tree=layer_item.parents,
                         layer_in_file=layer_item.layer_in_file,
                         style_id=layer_item.style_id,
+                        publication_version=self.current_version["version"],
                     )
                 )
         return collected_items

@@ -140,12 +140,14 @@ class FileDownloadForPublicationTree(FileDownloadBase):
         file: dict,
         publication_id: str,
         publication_tree: list[str],
+        publication_version: int,
         style_id: Optional[str] = None,
         layer_in_file: Optional[str] = None,
     ):
         super().__init__(project, file)
         self.publication_tree = publication_tree
         self.publication_id = publication_id
+        self.publication_version = publication_version
         self.layer_in_file = layer_in_file
         self.style_id = style_id
 
@@ -156,12 +158,13 @@ class FileDownloadForPublicationTree(FileDownloadBase):
 
     def get_style_zip(self):
         if self.style_id and self.file["data_type"] in ["raster", "vector"]:
-            return get_publication_style(
+            style_zip = get_publication_style(
                 self.publication_id,
-                self.file["descriptor_id"],
                 self.style_id,
+                self.publication_version,
                 "qml.zip",
             )
+            return style_zip
 
 
 class SingleFileDownloadWorker(QThread):

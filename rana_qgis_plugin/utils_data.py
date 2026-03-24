@@ -9,13 +9,15 @@ class RanaFileData:
 
 
 @dataclass
-class RanaVectorFileData(RanaFileData):
+class RanaVectorPublicationFileData(RanaFileData):
     layer_in_file: str  # name of layer in gpkg
     display_name: str  # name for layer in Qgis layer panel
+    publication_version: int
     style_id: Optional[str] = None
 
 
 @dataclass
-class RanaRasterFileData(RanaFileData):
+class RanaRasterPublicationFileData(RanaFileData):
     display_name: str  # name for layer in Qgis layer panel
+    publication_version: int
     style_id: Optional[str] = None

@@ -509,12 +509,12 @@ def get_vector_style_file(descriptor_id: str, file_name: str):
 
 
 def get_publication_style(
-    publication_id: str, descriptor_id: str, style_id: str, file_name: str
+    publication_id: str, style_id: str, publication_version: int, file_name: str
 ):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/file-descriptors/{descriptor_id}/styles/{file_name}"
-    params = {"style_id": style_id}
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/styles/{style_id}/{file_name}"
+    params = {"version": publication_version}
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch(params)
     if status and redirect_url:
