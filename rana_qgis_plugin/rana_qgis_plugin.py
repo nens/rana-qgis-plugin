@@ -18,7 +18,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
-from rana_qgis_plugin.auth_3di import setup_3di_auth
+from rana_qgis_plugin.auth_3di import remove_3di_auth, setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
@@ -129,7 +129,8 @@ class RanaQgisPlugin:
 
     def logout(self):
         self.communication.clear_message_bar()
-        remove_authcfg()
+        remove_authcfg(self.communication)
+        remove_3di_auth(self.communication)
         set_tenant_id("")
         self.add_rana_menu(False)
         self.communication.bar_info("You have been logged out.")
