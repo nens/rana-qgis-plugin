@@ -84,11 +84,6 @@ class PublicationsBrowser(QWidget):
         item = self.publications_model.itemFromIndex(name_index)
         if item:
             publication_id = item.data(Qt.ItemDataRole.UserRole + 1)
-            from qgis.core import Qgis, QgsMessageLog
-
-            QgsMessageLog.logMessage(
-                f"Selected publication {publication_id}", "DEBUG", Qgis.Info
-            )
             if publication_id:
                 self.publication_selected.emit(publication_id)
 
