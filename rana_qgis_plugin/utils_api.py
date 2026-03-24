@@ -51,7 +51,7 @@ def single_fetch(
 def fetch_first(url: str, params: Optional[dict] = None) -> Optional[dict]:
     """Fetch the first item from a list endpoint."""
     content = single_fetch(url, 1, 0, params)
-    if content["total"] == 1:
+    if len(content["items"]) == 1:
         return content["items"][0]
 
 
