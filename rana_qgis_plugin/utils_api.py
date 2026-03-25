@@ -466,7 +466,7 @@ def get_vector_style_upload_urls(descriptor_id: str):
         return None
 
 
-def get_raster_style_upload_urls(descriptor_id: str, files):
+def upload_raster_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"

@@ -88,10 +88,10 @@ from rana_qgis_plugin.workers import (
     FileDownloadForPublicationTree,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    RasterStyleWorker,
+    RasterFileStyleUploader,
     SingleFileDownloadWorker,
     SingleStyleUploader,
-    VectorStyleWorker,
+    VectorFileStyleUploader,
 )
 
 STYLE_DIR = Path(__file__).parent / "styles"
@@ -976,12 +976,12 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def save_vector_style(self, project, file):
-        """Start the worker for saving vector styling files"""
+        """Start the uploader for saving vector styling files"""
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        worker = VectorStyleWorker(project, file)
-        self.vector_style_worker = SingleStyleUploader(worker, self.communication)
+        uploader = VectorFileStyleUploader(project, file)
+        self.vector_style_worker = SingleStyleUploader(uploader, self.communication)
         self.vector_style_worker.signals.finished.connect(self.on_vector_style_finished)
         self.vector_style_worker.signals.failed.connect(self.on_vector_style_failed)
         self.vector_style_worker.signals.warning.connect(self.communication.show_warn)
@@ -993,8 +993,8 @@ class Loader(QObject):
         self.communication.progress_bar(
             "Generating and saving raster styling files...", clear_msg_bar=True
         )
-        worker = RasterStyleWorker(project, file)
-        self.raster_style_worker = SingleStyleUploader(worker, self.communication)
+        uploader = RasterFileStyleUploader(project, file)
+        self.raster_style_worker = SingleStyleUploader(uploader, self.communication)
         self.raster_style_worker.signals.finished.connect(self.on_raster_style_finished)
         self.raster_style_worker.signals.failed.connect(self.on_raster_style_failed)
         self.raster_style_worker.signals.warning.connect(self.communication.show_warn)
