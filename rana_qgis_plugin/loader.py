@@ -1,7 +1,7 @@
 import os
-from copy import deepcopy
 from functools import partial
 from pathlib import Path
+from typing import Optional
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import (
@@ -18,7 +18,11 @@ from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.layer_manager import LayerManager
+from rana_qgis_plugin.layer_manager import (
+    FileLayerManager,
+    PublicationLayerManager,
+    open_file_via_layer_manager,
+)
 from rana_qgis_plugin.persistent_workers import (
     PersistentTaskScheduler,
     ProjectJobMonitorWorker,
@@ -40,11 +44,11 @@ from rana_qgis_plugin.simulation.utils import (
     UploadFileType,
     extract_error_message,
     load_local_schematisation,
-    load_remote_schematisation,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
     get_local_file_path,
+    get_publication_layer_path,
     get_threedi_api,
     get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
@@ -66,6 +70,7 @@ from rana_qgis_plugin.utils_api import (
     move_file,
     start_tenant_process,
 )
+from rana_qgis_plugin.utils_data import RanaVectorPublicationFileData
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -77,11 +82,14 @@ from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowse
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
     AvatarWorker,
+    BatchFileDownloadWorker,
     ExistingFileUploadWorker,
-    FileDownloadWorker,
+    FileDownloadForFileTree,
+    FileDownloadForPublicationTree,
     FileUploadWorker,
     LizardResultDownloadWorker,
     RasterStyleWorker,
+    SingleFileDownloadWorker,
     VectorStyleWorker,
 )
 
@@ -148,7 +156,6 @@ class Loader(QObject):
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
 
-        self.layer_manager = LayerManager(self.communication, parent=parent)
         # Create persistent scheduler that handles background monitoring
         self.persistent_scheduler = PersistentTaskScheduler()
         self.persistent_scheduler.start()
@@ -161,7 +168,8 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def open_wms(self, project: dict, file: dict) -> bool:
-        self.layer_manager.add_from_wms(project["name"], file)
+        layer_manager = FileLayerManager(self.communication, parent=self.parent())
+        layer_manager.add_from_wms(project["name"], file)
         self.file_opened.emit(file)
 
     @pyqtSlot(dict, dict)
@@ -170,47 +178,118 @@ class Loader(QObject):
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
             _, local_file_path = get_local_file_path(project["slug"], file["id"])
-            self.initialize_file_download_worker(project, file)
+            layer_manager = FileLayerManager(self.communication, parent=self.parent())
+            self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
+    @pyqtSlot(dict, dict, list)
+    def open_many_in_qgis_from_publication(
+        self, project: dict, publication_version: dict, layer_items: list
+    ):
+        # TODO: extend for scenario and schematisation
+        items_to_download = []
+        downloaders = []
+        for layer_item in layer_items:
+            if layer_item.file["data_type"] in ["raster", "vector"]:
+                items_to_download.append(layer_item)
+                layer_in_file = (
+                    layer_item.layer_in_file
+                    if layer_item.file["data_type"] == "vector"
+                    else None
+                )
+                downloader = FileDownloadForPublicationTree(
+                    project=project,
+                    file=layer_item.file,
+                    publication_id=publication_version["publication_id"],
+                    publication_tree=layer_item.file_tree,
+                    publication_version=publication_version["version"],
+                    style_id=layer_item.style_id,
+                    layer_in_file=layer_in_file,
+                )
+                downloaders.append(downloader)
+        self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
+        # Request confirmation when downloading more than 10 files (arbitrary number)
+        if self.batch_file_download_worker.nof_files > 10:
+            confirm_dialog = self.communication.ask(
+                parent=self.parent(),
+                title="Confirm download",
+                question=f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
+            )
+            if confirm_dialog == QMessageBox.No:
+                self.communication.clear_message_bar()
+                self.file_download_failed.emit("")
+                return
+
+        # Use a local function here to reduce the amount of data that is being passed
+        # This may be changed when more functionality is added
+        # TODO: update this comment if anything changes here
+        def on_all_files_downloaded(*args):
+            self.communication.clear_message_bar()
+            self.batch_file_download_worker.wait()
+            for i, layer_item in enumerate(items_to_download):
+                local_dir_structure, local_file_path = get_publication_layer_path(
+                    project["slug"], layer_item.file["id"], layer_item.file_tree
+                )
+                layer_name_in_file = (
+                    layer_item.layer_in_file
+                    if isinstance(layer_item, RanaVectorPublicationFileData)
+                    else None
+                )
+                layer_manager = PublicationLayerManager(
+                    self.communication,
+                    parent=self.parent(),
+                    display_name=layer_item.display_name,
+                    publication_tree=layer_item.file_tree,
+                    layer_name_in_file=layer_name_in_file,
+                )
+                open_file_via_layer_manager(
+                    project, layer_item.file, local_file_path, layer_manager
+                )
+            self.file_download_finished.emit(None)
+
+        self.batch_file_download_worker.signals.all_finished.connect(
+            on_all_files_downloaded
+        )
+        self.batch_file_download_worker.signals.failed.connect(
+            self.on_file_download_failed
+        )
+        self.batch_file_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
+        self.communication.bar_info(
+            f"Start downloading {self.batch_file_download_worker.nof_files} files..."
+        )
+        self.batch_file_download_worker.start()
+
     @pyqtSlot(dict, dict, dict)
     def open_schematisation_with_revision(self, project, revision, schematisation):
-        self.layer_manager.add_from_schematisation(
-            project["name"], schematisation, revision
-        )
+        layer_manager = FileLayerManager(self.communication, parent=self.parent())
+        layer_manager.add_from_schematisation(project["name"], schematisation, revision)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
-        self, project, file, local_file_path: str, from_thread=True
+        self,
+        project,
+        file,
+        local_file_path: str,
+        layer_manager,
+        thread_worker: Optional[QThread] = None,
     ):
         self.communication.clear_message_bar()
         self.communication.bar_info(
             f"File(s) downloaded to: {local_file_path}", dur=240
         )
-        if from_thread:
-            sender = self.sender()
-            assert isinstance(sender, QThread)
-            sender.wait()
-
-        if file["data_type"] == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, file["descriptor_id"]
-            )
-            if schematisation:
-                revision = schematisation["latest_revision"]
-                if not revision:
-                    self.communication.show_warn(
-                        "Cannot open a schematisation without a revision."
-                    )
-                    return
-                self.layer_manager.add_from_schematisation(
-                    project["name"], schematisation["schematisation"], revision
-                )
-        elif file["data_type"] in ["scenario", "vector", "raster"]:
-            self.layer_manager.add_from_file(project["name"], local_file_path, file)
-        self.file_opened.emit(file)
+        if thread_worker is not None:
+            if not isinstance(thread_worker, QThread):
+                self.communication.show_warn(f"sender type: {type(thread_worker)}")
+            assert isinstance(thread_worker, QThread)
+            thread_worker.wait()
+        open_file_via_layer_manager(project, file, local_file_path, layer_manager)
+        # When opening a file via the file view of file browser, signal that the file is openend
+        if isinstance(layer_manager, FileLayerManager):
+            self.file_opened.emit(file)
         self.file_download_finished.emit(local_file_path)
 
     def on_file_download_failed(self, error: str):
@@ -228,15 +307,23 @@ class Loader(QObject):
         )
         self.file_download_progress.emit(progress, file_name)
 
-    def initialize_file_download_worker(self, project, file):
+    def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
-        self.file_download_worker = FileDownloadWorker(
-            project,
-            file,
+        downloader = FileDownloadForFileTree(project, file)
+        self.file_download_worker = SingleFileDownloadWorker(downloader)
+        self.file_download_worker.signals.finished.connect(
+            lambda _project, _file, _local_path: self.on_file_download_finished(
+                _project,
+                _file,
+                _local_path,
+                layer_manager,
+                thread_worker=self.file_download_worker,
+            )
         )
-        self.file_download_worker.finished.connect(self.on_file_download_finished)
-        self.file_download_worker.failed.connect(self.on_file_download_failed)
-        self.file_download_worker.progress.connect(self.on_file_download_progress)
+        self.file_download_worker.signals.failed.connect(self.on_file_download_failed)
+        self.file_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
 
     @pyqtSlot(dict, dict)
     def upload_file_to_rana(self, project, file):
@@ -485,6 +572,7 @@ class Loader(QObject):
             + [f"Rana schematisation: {Path(file['id']).stem} {revision['number']}"]
         )
         if simulation_init_wizard.open_wizard:
+            layer_manager = FileLayerManager(self.communication, self.parent())
             simulation_wizard = SimulationWizard(
                 self.simulation_runner_pool,
                 hcc_working_dir(),
@@ -493,7 +581,7 @@ class Loader(QObject):
                 current_model,
                 threedi_api,
                 self.communication,
-                self.layer_manager,
+                layer_manager,
                 layer_parents,
                 simulation_init_wizard,
                 self.parent(),
@@ -703,8 +791,15 @@ class Loader(QObject):
                 pixelsize=0,
                 download_raw=True,
             )
+        layer_manager = FileLayerManager(self.communication, parent=self.parent())
         self.lizard_result_download_worker.finished.connect(
-            self.on_file_download_finished
+            lambda _project, _file, _local_path: self.on_file_download_finished(
+                _project,
+                _file,
+                _local_path,
+                layer_manager,
+                thread_worker=self.lizard_result_download_worker,
+            )
         )
         self.lizard_result_download_worker.failed.connect(self.on_file_download_failed)
         self.lizard_result_download_worker.progress.connect(
@@ -859,7 +954,8 @@ class Loader(QObject):
             self.parent(), "Load", "Would you like to load the uploaded file from Rana?"
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
-            self.initialize_file_download_worker(project, file)
+            layer_manager = FileLayerManager(self.communication, parent=self.parent())
+            self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
         self.new_file_upload_finished.emit(online_path)
 

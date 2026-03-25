@@ -5,8 +5,9 @@ History
 1.2.9 (unreleased)
 ------------------
 
-- Add publications browser (nens/rana#302)
-- Add publication view (nens/rana#303)
+- Add publications browser (nens/rana-qgis-plugin#302)
+- Add publication view (nens/rana-qgis-plugin#303)
+- Support opening layers in maps from vector and raster files (nens/rana-qgis-plugin#304)
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
 - Modified (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)

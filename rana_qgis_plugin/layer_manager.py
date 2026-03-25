@@ -22,7 +22,10 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
 from rana_qgis_plugin.utils import get_threedi_api
-from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils_api import (
+    get_tenant_file_descriptor,
+    get_threedi_schematisation,
+)
 from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
 from rana_qgis_plugin.utils_scenario import get_is_3di_simulation
 from rana_qgis_plugin.utils_settings import hcc_working_dir
@@ -39,29 +42,19 @@ class LayerManager(QObject):
         self.root = self.project_inst.layerTreeRoot()
 
     def add_from_file(self, project_name, local_file_path: str, file: dict):
-        self.communication.clear_message_bar()
-        parents = [project_name] + file["id"].split("/")[:-1]
-        # Save the last modified date of the downloaded file in QSettings
-        last_modified_key = f"{project_name}/{file['id']}/last_modified"
-        QSettings().setValue(last_modified_key, file["last_modified"])
-        if file.get("data_type") == "scenario":
-            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-            if get_is_3di_simulation(descriptor):
-                self._add_layer_from_scenario(
-                    local_file_path, file, project=project_name
-                )
-        elif file.get("data_type") == "raster":
-            self._add_layer_from_raster_file(local_file_path, file, parents=parents)
-        elif file.get("data_type") == "vector":
-            self._add_layers_from_vector_file(local_file_path, file, parents=parents)
+        raise NotImplementedError
 
     def _add_layer_from_raster_file(
-        self, local_file_path: str, file: dict, parents: list
+        self,
+        local_file_path: str,
+        file: dict,
+        parents: list,
+        display_name: Optional[str] = None,
     ):
         layer = self._create_and_add_layer(
             QgsRasterLayer,
             parents=parents,
-            layer_args=[local_file_path, Path(file["id"]).name],
+            layer_args=[local_file_path, display_name or Path(file["id"]).name],
         )
         file_name = Path(file["id"]).name
         if layer:
@@ -72,7 +65,7 @@ class LayerManager(QObject):
         else:
             self.communication.show_warn(f"Failed to add layer {file_name}.")
 
-    def _add_layers_from_vector_file(
+    def _add_all_layers_from_vector_file(
         self, local_file_path: str, file: dict, parents: Optional[list[str]] = None
     ):
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
@@ -87,27 +80,36 @@ class LayerManager(QObject):
             self.communication.show_warn(f"No layers found in {file_name}.")
             return
         for file_layer in layers:
-            layer_uri = f"{local_file_path}|layername={file_layer['name']}"
-            layer = self._create_and_add_layer(
-                QgsVectorLayer,
-                layer_args=[layer_uri, file_layer["name"], "ogr"],
-                parents=parents,
+            self._add_layers_from_vector_file(
+                file_layer["name"], local_file_path, file, parents=parents
             )
-            if layer:
-                qml_path = Path(local_file_path).parent.joinpath(
-                    f"{file_layer['name']}.qml"
-                )
-                if qml_path.exists():
-                    layer.loadNamedStyle(str(qml_path))
-                    layer.triggerRepaint()
-            else:
-                self.communication.show_error(
-                    f"Failed to add {file_layer['name']} layer from: {file_name}"
-                )
         self.communication.bar_info(
             f"Added layers from {file_name}"
             + (f" to group {'/'.join(parents)}." if parents else ".")
         )
+
+    def _add_layers_from_vector_file(
+        self,
+        layer_name,
+        local_file_path: str,
+        file: dict,
+        parents: Optional[list[str]] = None,
+    ):
+        layer_uri = f"{local_file_path}|layername={layer_name}"
+        layer = self._create_and_add_layer(
+            QgsVectorLayer,
+            layer_args=[layer_uri, layer_name, "ogr"],
+            parents=parents,
+        )
+        if layer:
+            qml_path = Path(local_file_path).parent.joinpath(f"{layer_name}.qml")
+            if qml_path.exists():
+                layer.loadNamedStyle(str(qml_path))
+                layer.triggerRepaint()
+        else:
+            self.communication.show_error(
+                f"Failed to add {layer_name} layer from: {Path(file['id']).name}"
+            )
 
     def _add_layer_from_scenario(self, local_file_path: str, file: dict, project: str):
         # if zip file, do nothing, else try to load in results analysis
@@ -250,3 +252,83 @@ class LayerManager(QObject):
             parents=[project_name],
         )
         self.communication.clear_message_bar()
+
+
+class FileLayerManager(LayerManager):
+    def add_from_file(self, project_name, local_file_path: str, file: dict):
+        self.communication.clear_message_bar()
+        parents = [project_name] + file["id"].split("/")[:-1]
+        # Save the last modified date of the downloaded file in QSettings
+        last_modified_key = f"{project_name}/{file['id']}/last_modified"
+        QSettings().setValue(last_modified_key, file["last_modified"])
+        if file.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+            if get_is_3di_simulation(descriptor):
+                self._add_layer_from_scenario(
+                    local_file_path, file, project=project_name
+                )
+        elif file.get("data_type") == "raster":
+            self._add_layer_from_raster_file(local_file_path, file, parents=parents)
+        elif file.get("data_type") == "vector":
+            self._add_all_layers_from_vector_file(
+                local_file_path, file, parents=parents
+            )
+
+
+class PublicationLayerManager(LayerManager):
+    def __init__(
+        self,
+        communication,
+        parent,
+        publication_tree: list[str],
+        display_name: str,
+        layer_name_in_file: Optional[str] = None,
+    ):
+        super().__init__(communication, parent)
+        self.publication_tree = publication_tree
+        self.display_name = display_name
+        self.layer_name = layer_name_in_file
+
+    def add_from_file(self, project_name, local_file_path: str, file: dict):
+        # Save the last modified date of the downloaded file in QSettings
+        parents = [project_name, "publications"] + self.publication_tree
+        last_modified_key = f"{project_name}/{file['id']}/last_modified"
+        QSettings().setValue(last_modified_key, file["last_modified"])
+        if file.get("data_type") == "scenario":
+            pass
+            # TODO: handle scenario
+            # descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+            # if get_is_3di_simulation(descriptor):
+            #     self._add_layer_from_scenario(
+            #         local_file_path, file, project=project_name
+            #     )
+        elif file.get("data_type") == "raster":
+            self._add_layer_from_raster_file(
+                local_file_path, file, parents=parents, display_name=self.display_name
+            )
+        elif file.get("data_type") == "vector" and self.layer_name:
+            self._add_layers_from_vector_file(
+                self.layer_name, local_file_path, file, parents=parents
+            )
+            # self._add_layers_from_vector_file(local_file_path, file, parents=parents)
+
+
+def open_file_via_layer_manager(
+    project: dict, file: dict, local_file_path: str, layer_manager: LayerManager
+):
+    if file["data_type"] == "threedi_schematisation":
+        schematisation = get_threedi_schematisation(
+            layer_manager.communication, file["descriptor_id"]
+        )
+        if schematisation:
+            revision = schematisation["latest_revision"]
+            if not revision:
+                layer_manager.communication.show_warn(
+                    "Cannot open a schematisation without a revision."
+                )
+                return
+            layer_manager.add_from_schematisation(
+                project["name"], schematisation["schematisation"], revision
+            )
+    elif file["data_type"] in ["scenario", "vector", "raster"]:
+        layer_manager.add_from_file(project["name"], local_file_path, file)

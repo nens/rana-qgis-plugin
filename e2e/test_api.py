@@ -76,7 +76,7 @@ def test_upload(plugin, qtbot, request):
     # Check whether the map layer was added to the canvas
     assert any("test" in layer.name() for layer in plugin.iface.mapCanvas().layers())
     assert (
-        "/root/Rana/plugin-test/upload/upload.gpkg"
+        "/root/Rana/plugin_test/files/upload/upload.gpkg"
         in plugin.iface.mapCanvas().layers()[0].dataProvider().dataSourceUri()
     )
     expected_image = QImage(

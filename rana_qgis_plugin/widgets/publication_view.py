@@ -41,6 +41,10 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_id,
 )
+from rana_qgis_plugin.utils_data import (
+    RanaRasterPublicationFileData,
+    RanaVectorPublicationFileData,
+)
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_file_action import (
@@ -59,6 +63,7 @@ class MapItemType(Enum):
 @dataclass
 class MapItemData:
     name: str
+    parents: list[str]
 
     @property
     def support_open(self) -> bool:
@@ -115,6 +120,7 @@ class LayerItemData(MapItemData):
     file_descriptor: dict
     type_in_file: Optional[str] = None
     layer_in_file: Optional[dict] = None
+    style_id: Optional[str] = None
 
     @cached_property
     def supported_actions(self) -> list[FileAction]:
@@ -191,6 +197,7 @@ class PublicationMapsTreeView(QTreeView):
 class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
+    open_many_in_qgis = pyqtSignal(dict, list)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -202,7 +209,9 @@ class PublicationView(QWidget):
         self.current_version: Optional[dict] = None
         self.project: Optional[dict] = None
         self.file_map: Optional[dict[str:dict]] = None
-        self.root_item: FolderItemData = FolderItemData(name="root", sub_items=[])
+        self.root_item: FolderItemData = FolderItemData(
+            name="root", sub_items=[], parents=[]
+        )
         self.setup_ui()
 
     def setup_ui(self):
@@ -247,7 +256,7 @@ class PublicationView(QWidget):
 
         button_layout = QHBoxLayout()
         btn_open = QPushButton("Open all maps in QGIS")
-        btn_open.clicked.connect(lambda: self.open_all_maps)
+        btn_open.clicked.connect(lambda _: self.open_maps(self.root_item))
         btn_rana = QPushButton("Open publication in Rana (web)")
         btn_rana.clicked.connect(lambda: self.open_in_rana())
         button_layout.addWidget(btn_open)
@@ -371,37 +380,75 @@ class PublicationView(QWidget):
         self.general_box.setLayout(layout)
         self.general_box.setCollapsed(False)
 
-    def open_all_maps(self):
-        self.open_maps(self.root_item)
-
     def open_in_rana(self):
         link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&publication={self.publication['id']}"
         QDesktopServices.openUrl(QUrl(link))
 
+    def open_map(self, map_item: LayerItemData):
+        # Use batch mode to limit the number of signals
+        self.open_maps(map_item)
+
     def open_maps(self, map_item: MapItemData):
-        # TODO: recurse through map_item and open stuff
-        self.communication.show_info("Opening maps is not yet implemented.")
-        pass
+        all_items = self.collect_all_maps(map_item, [])
+        self.open_many_in_qgis.emit(self.current_version, all_items)
+
+    def collect_all_maps(
+        self,
+        layer_item,
+        collected_items: list[
+            RanaRasterPublicationFileData | RanaVectorPublicationFileData
+        ],
+    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        if isinstance(layer_item, FolderItemData):
+            for sub_item in layer_item.sub_items:
+                self.collect_all_maps(sub_item, collected_items)
+        if isinstance(layer_item, LayerItemData):
+            if layer_item.data_type == "raster":
+                collected_items.append(
+                    RanaRasterPublicationFileData(
+                        display_name=layer_item.name,
+                        file=layer_item.file,
+                        file_tree=layer_item.parents,
+                        style_id=layer_item.style_id,
+                    )
+                )
+            elif layer_item.data_type == "vector":
+                collected_items.append(
+                    RanaVectorPublicationFileData(
+                        display_name=layer_item.name,
+                        file=layer_item.file,
+                        file_tree=layer_item.parents,
+                        layer_in_file=layer_item.layer_in_file,
+                        style_id=layer_item.style_id,
+                    )
+                )
+        return collected_items
 
     def save_styles(self, map_item: MapItemData):
         # TODO: recurse through map_item and save styles
         self.communication.show_info("Saving styles is not yet implemented.")
         pass
 
-    def get_button_container(self, map_item: MapItemData) -> QWidget:
+    def get_button_container(
+        self,
+        map_item: MapItemData,
+    ) -> QWidget:
         btn_container = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         if map_item.support_open:
             open_btn = QPushButton("Open in QGIS")
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
-            open_btn.clicked.connect(lambda: self.open_maps(map_item))
+            if isinstance(map_item, FolderItemData):
+                open_btn.clicked.connect(lambda: self.open_maps(map_item))
+            else:
+                open_btn.clicked.connect(lambda: self.open_map(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
             save_btn = QPushButton("Save style to Rana")
             save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
-            save_btn.clicked.connect(lambda: self.open_maps(map_item))
+            save_btn.clicked.connect(lambda: self.save_styles(map_item))
             layout.addWidget(save_btn)
         btn_container.setLayout(layout)
         return btn_container
@@ -421,7 +468,7 @@ class PublicationView(QWidget):
             child_model_index = self.maps_model.index(self.maps_model.rowCount() - 1, 2)
         self.maps_tv.setIndexWidget(child_model_index, btn_container)
 
-    def collect_map_data(self, layers) -> list[MapItemData]:
+    def collect_map_data(self, layers, parents: list[str]) -> list[MapItemData]:
         """
         Recursively collect data from API needed to populate the maps table
         """
@@ -444,30 +491,44 @@ class PublicationView(QWidget):
                     )
                     layer_in_file = next(
                         (
-                            layers["id"] == layer["layer_in_file"]
-                            for layers in layers_in_file
+                            layer_in_file["name"]
+                            for layer_in_file in layers_in_file
+                            if layer_in_file["id"] == layer["layer_in_file"]
                         ),
                         None,
                     )
                     type_in_file = (file_descriptor.get("meta") or {}).get(
                         "type", data_type
                     )
+                    if not layer_in_file:
+                        # When the layer cannot be matched, something went really wrong in the backend
+                        continue
                 # Collect data needed for UI and to open and edit the layer
+                # from qgis.core import Qgis, QgsMessageLog
                 map_data.append(
                     LayerItemData(
                         name=layer["name"],
                         data_type=data_type,
                         type_in_file=type_in_file,
                         layer_in_file=layer_in_file,
+                        style_id=layer.get("style_id"),
                         file=file,
                         file_descriptor=file_descriptor,
+                        parents=parents,
                     )
                 )
+                map_item = map_data[-1]
+                # QgsMessageLog.logMessage(f'Add layer item {map_item.name} {map_item.parents}', "DEBUG", Qgis.Info)
+
             elif layer.get("type") == "folder":
                 map_data.append(
                     FolderItemData(
                         name=layer["name"],
-                        sub_items=self.collect_map_data(layer.get("layers", [])),
+                        sub_items=self.collect_map_data(
+                            layers=layer.get("layers", []),
+                            parents=parents + [layer["name"]],
+                        ),
+                        parents=parents,
                     )
                 )
 
@@ -517,12 +578,18 @@ class PublicationView(QWidget):
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
         all_maps = [
             FolderItemData(
-                publication_map["name"],
-                self.collect_map_data(publication_map.get("layers", [])),
+                name=publication_map["name"],
+                sub_items=self.collect_map_data(
+                    layers=publication_map.get("layers"),
+                    parents=[self.publication["name"], publication_map["name"]],
+                ),
+                parents=[self.publication["name"]],
             )
             for publication_map in self.current_version.get("maps", [])
         ]
-        self.root_item = FolderItemData("root", all_maps)
+        self.root_item = FolderItemData(
+            name="root", sub_items=all_maps, parents=[self.publication["name"]]
+        )
         self.root_item.set_support_flags()
         for map_item in self.root_item.sub_items:
             name_item = QStandardItem(map_item.name)

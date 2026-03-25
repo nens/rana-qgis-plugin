@@ -327,6 +327,12 @@ class RanaQgisPlugin:
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
+            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+                self.loader.open_many_in_qgis_from_publication
+            )
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
             )
@@ -416,7 +422,6 @@ class RanaQgisPlugin:
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_opened.connect(self.rana_browser.view_file_after_open)
-            self.loader.file_download_finished.connect(self.rana_browser.refresh)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.refresh)

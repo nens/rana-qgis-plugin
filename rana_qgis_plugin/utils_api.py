@@ -51,7 +51,7 @@ def single_fetch(
 def fetch_first(url: str, params: Optional[dict] = None) -> Optional[dict]:
     """Fetch the first item from a list endpoint."""
     content = single_fetch(url, 1, 0, params)
-    if content["total"] == 1:
+    if len(content["items"]) == 1:
         return content["items"][0]
 
 
@@ -395,7 +395,7 @@ def get_tenant_processes(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes"
-    params = {"limit": 1000}
+    params = {"limit": 100}
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
@@ -506,6 +506,26 @@ def get_raster_style_file(descriptor_id: str, file_name: str):
 
 def get_vector_style_file(descriptor_id: str, file_name: str):
     return get_style_file("vector", descriptor_id, file_name)
+
+
+def get_publication_style(
+    publication_id: str, style_id: str, publication_version: int, file_name: str
+):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/styles/{style_id}/{file_name}"
+    params = {"version": publication_version}
+    network_manager = NetworkManager(url, authcfg_id)
+    status, redirect_url = network_manager.fetch(params)
+    if status and redirect_url:
+        try:
+            headers = {"Content-Type": "application/zip"}
+            response = requests.get(redirect_url, headers=headers, timeout=10)
+            return response.content
+        except requests.RequestException as e:
+            return None
+    else:
+        return None
 
 
 def get_schematisations(communication, icontains=""):

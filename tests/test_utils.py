@@ -6,14 +6,59 @@ import pytest
 import rana_qgis_plugin.utils as utils
 
 
+@pytest.mark.parametrize(
+    "input_path,expected_output",
+    [
+        ("/folder/invalid:name.txt", "/folder/invalid_name.txt"),
+        (
+            "/path/with/<special>|chars/file?name*.txt",
+            "/path/with/special_chars/file_name.txt",
+        ),
+        ("/folder/my:important:file", "/folder/my_important_file"),
+        ("/path/to/valid_file.txt", "/path/to/valid_file.txt"),
+        ("", ""),
+        (
+            "/root/folder/sub:folder<name>/invalid|file:name*.csv",
+            "/root/folder/sub_folder_name/invalid_file_name.csv",
+        ),
+        ("/path/to/file.name.with.dots.ext", "/path/to/file_name_with_dots.ext"),
+        ("/folder/файл/tość/файл.txt", "/folder/файл/tość/файл.txt"),
+        ("/folder/SubFolder/File.Name.TXT", "/folder/SubFolder/File_Name.TXT"),
+    ],
+)
+def test_sanitize_path_for_filesystem(input_path, expected_output):
+    # Would be great to test this on windows somehow
+    result = utils.sanitize_path_for_filesystem(input_path)
+    assert result == expected_output
+
+
 def test_get_local_file_path():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "baz/bar.txt"
+    file_name = Path(file_id).name
+    file_stem = Path(file_id).stem
+    local_dir, local_path = utils.get_local_file_path(project, file_id)
+    expected_local_dir = rana_root + project + "/files/baz/" + file_stem
+    assert local_dir == expected_local_dir
+    assert local_path == expected_local_dir + "/" + file_name
+
+
+def test_get_publication_layer_path():
     rana_root = "/root/Rana/"
     project = "foo"
     file_id = "bar.txt"
     file_stem = Path(file_id).stem
-    local_dir, local_path = utils.get_local_file_path(project, file_id)
-    assert local_dir == rana_root + project + "/" + file_stem
-    assert local_path == rana_root + project + "/" + file_stem + "/" + file_id
+    publication_tree = ["publication", "map", "folder"]
+    local_dir, local_path = utils.get_publication_layer_path(
+        project, file_id, publication_tree
+    )
+    publication_tree_path = "/".join(publication_tree)
+    expected_local_dir = (
+        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
+    )
+    assert local_dir == expected_local_dir
+    assert local_path == expected_local_dir + "/" + file_id
 
 
 @pytest.mark.parametrize(
