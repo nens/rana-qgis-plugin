@@ -360,21 +360,40 @@ class ExistingFileUploadWorker(FileUploadWorker):
         QSettings().setValue(self.last_modified_key, self.last_modified)
 
 
-class VectorStyleWorker(QThread):
-    """Worker thread for generating vector styling files"""
-
+class StyleWorkerSignals(QObject):
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
+
+
+class SingleStyleUploader(QThread):
+    """Handles processing of style tasks using workers."""
+
+    def __init__(self, worker, communication):
+        """
+        :param communication: Communication object for showing progress bars, warnings, info, etc.
+        """
+        super().__init__()
+        self.communication = communication
+        self.worker = worker
+        self.signals = StyleWorkerSignals()
+
+    @pyqtSlot()
+    def run(self):
+        self.worker.run(self.signals)
+
+
+class VectorStyleWorker:
+    """Worker thread for generating vector styling files"""
 
     def __init__(
         self,
         project: dict,
         file: dict,
     ):
-        super().__init__()
         self.project = project
         self.file = file
+        self.signals = StyleWorkerSignals()
 
     def upload_to_s3(self, url: str, data: dict, content_type: str):
         """Method to upload to S3"""
@@ -383,7 +402,7 @@ class VectorStyleWorker(QThread):
             response = requests.put(url, data=data, headers=headers)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
+            self.signals.failed.emit(f"Failed to upload file to S3: {str(e)}")
 
     def create_qml_zip(self, local_dir: str, zip_path: str):
         """Craete a QML zip file for all the qml files in the local directory"""
@@ -397,12 +416,11 @@ class VectorStyleWorker(QThread):
                                 file_path, os.path.relpath(file_path, local_dir)
                             )
         except Exception as e:
-            self.failed.emit(f"Failed to create QML zip: {str(e)}")
+            self.signals.failed.emit(f"Failed to create QML zip: {str(e)}")
 
-    @pyqtSlot()
-    def run(self):
+    def run(self, signals):
         if not self.file:
-            self.failed.emit("File not found.")
+            signals.failed.emit("File not found.")
             return
         path = self.file["id"]
         file_name = os.path.basename(path.rstrip("/"))
@@ -411,7 +429,7 @@ class VectorStyleWorker(QThread):
         layers = [layer for layer in all_layers if file_name in layer.source()]
 
         if not layers:
-            self.failed.emit(
+            signals.failed.emit(
                 f"No layers found for {file_name}. Open the file in QGIS and try again."
             )
             return
@@ -439,7 +457,9 @@ class VectorStyleWorker(QThread):
             upload_urls = get_vector_style_upload_urls(descriptor_id)
 
             if not upload_urls:
-                self.failed.emit("Failed to get vector style upload URLs from the API.")
+                signals.failed.emit(
+                    "Failed to get vector style upload URLs from the API."
+                )
                 return
 
             # Upload style.json
@@ -478,31 +498,30 @@ class VectorStyleWorker(QThread):
             os.remove(zip_path)
 
             # Finish
-            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+            signals.finished.emit(
+                f"Styling files uploaded successfully for {file_name}."
+            )
         except Exception as e:
-            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+            signals.failed.emit(
+                f"Failed to generate and upload styling files: {str(e)}"
+            )
 
 
-class RasterStyleWorker(QThread):
+class RasterStyleWorker:
     """Worker thread for generating and uploading raster styling files"""
-
-    finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
-    warning = pyqtSignal(str)
 
     def __init__(
         self,
         project: dict,
         file: dict,
     ):
-        super().__init__()
         self.project = project
         self.file = file
 
     @pyqtSlot()
-    def run(self):
+    def run(self, signals):
         if not self.file:
-            self.failed.emit("File not found.")
+            signals.failed.emit("File not found.")
             return
         path = self.file["id"]
         file_name = os.path.basename(path.rstrip("/"))
@@ -511,13 +530,13 @@ class RasterStyleWorker(QThread):
         layers = [layer for layer in all_layers if file_name in layer.source()]
 
         if not layers:
-            self.failed.emit(
+            signals.failed.emit(
                 f"No layers found for {file_name}. Open the file in QGIS and try again."
             )
             return
 
         if not len(layers) == 1:
-            self.failed.emit(
+            self.signals.failed.emit(
                 f"Multiple layers found for {file_name}. Open the file in QGIS and try again."
             )
             return
@@ -539,10 +558,10 @@ class RasterStyleWorker(QThread):
         try:
             geostyler, _, _, warnings = togeostyler.convert(layer)
             if len(geostyler["rules"]) != 1:
-                self.failed.emit(f"Multiple rules found for {file_name}.")
+                signals.failed.emit(f"Multiple rules found for {file_name}.")
                 return
             if len(geostyler["rules"][0]["symbolizers"]) != 1:
-                self.failed.emit(f"Multiple symbolizers found for {file_name}.")
+                signals.failed.emit(f"Multiple symbolizers found for {file_name}.")
                 return
 
             lizard_styling = import_from_geostyler(
@@ -566,13 +585,13 @@ class RasterStyleWorker(QThread):
             if lizard_styling["type"] == "DiscreteColormap":
                 for entry, _ in lizard_styling["data"]:
                     if isinstance(entry, float):
-                        self.failed.emit(
+                        self.signals.failed.emit(
                             f"Failed to generate and upload styling files: DiscreteColormap cannot contain float quantities."
                         )
                         return
 
             if warnings:
-                self.warning.emit(", ".join(set(warnings)))
+                signals.warning.emit(", ".join(set(warnings)))
 
             lizard_styling_path = os.path.join(local_dir, "colormap.json")
             with open(lizard_styling_path, "w") as f:
@@ -587,9 +606,13 @@ class RasterStyleWorker(QThread):
             os.remove(zip_path)
             os.remove(lizard_styling_path)
 
-            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+            signals.finished.emit(
+                f"Styling files uploaded successfully for {file_name}."
+            )
         except Exception as e:
-            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
+            signals.failed.emit(
+                f"Failed to generate and upload styling files: {str(e)}"
+            )
 
 
 class LizardResultDownloadWorker(QThread):

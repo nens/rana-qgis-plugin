@@ -90,6 +90,7 @@ from rana_qgis_plugin.workers import (
     LizardResultDownloadWorker,
     RasterStyleWorker,
     SingleFileDownloadWorker,
+    SingleStyleUploader,
     VectorStyleWorker,
 )
 
@@ -979,13 +980,11 @@ class Loader(QObject):
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        self.vector_style_worker = VectorStyleWorker(
-            project,
-            file,
-        )
-        self.vector_style_worker.finished.connect(self.on_vector_style_finished)
-        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
+        worker = VectorStyleWorker(project, file)
+        self.vector_style_worker = SingleStyleUploader(worker, self.communication)
+        self.vector_style_worker.signals.finished.connect(self.on_vector_style_finished)
+        self.vector_style_worker.signals.failed.connect(self.on_vector_style_failed)
+        self.vector_style_worker.signals.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
 
     @pyqtSlot(dict, dict)
@@ -994,13 +993,11 @@ class Loader(QObject):
         self.communication.progress_bar(
             "Generating and saving raster styling files...", clear_msg_bar=True
         )
-        self.raster_style_worker = RasterStyleWorker(
-            project,
-            file,
-        )
-        self.raster_style_worker.finished.connect(self.on_raster_style_finished)
-        self.raster_style_worker.failed.connect(self.on_raster_style_failed)
-        self.raster_style_worker.warning.connect(self.communication.show_warn)
+        worker = RasterStyleWorker(project, file)
+        self.raster_style_worker = SingleStyleUploader(worker, self.communication)
+        self.raster_style_worker.signals.finished.connect(self.on_raster_style_finished)
+        self.raster_style_worker.signals.failed.connect(self.on_raster_style_failed)
+        self.raster_style_worker.signals.warning.connect(self.communication.show_warn)
         self.raster_style_worker.start()
 
     def on_vector_style_finished(self, msg: str):
