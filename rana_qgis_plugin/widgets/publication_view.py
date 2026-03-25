@@ -198,6 +198,7 @@ class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
     open_many_in_qgis = pyqtSignal(dict, list)
+    save_many_styles = pyqtSignal(dict, list)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -384,25 +385,44 @@ class PublicationView(QWidget):
         link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&publication={self.publication['id']}"
         QDesktopServices.openUrl(QUrl(link))
 
-    def open_map(self, map_item: LayerItemData):
-        # Use batch mode to limit the number of signals
-        self.open_maps(map_item)
-
     def open_maps(self, map_item: MapItemData):
-        all_items = self.collect_all_maps(map_item, [])
+        all_items = self.collect_all_open_items(map_item, [])
         self.open_many_in_qgis.emit(self.current_version, all_items)
 
-    def collect_all_maps(
+    def save_styles(self, map_item: MapItemData):
+        all_items = self.collect_all_save_items(map_item, [])
+        self.save_many_styles.emit(self.current_version, all_items)
+
+    def collect_all_open_items(
         self,
-        layer_item,
+        layer_item: MapItemData,
+        collected_items: list[
+            RanaRasterPublicationFileData | RanaVectorPublicationFileData
+        ],
+    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        return self.collect_all_items(layer_item, "support_open", collected_items)
+
+    def collect_all_save_items(
+        self,
+        layer_item: MapItemData,
+        collected_items: list[
+            RanaRasterPublicationFileData | RanaVectorPublicationFileData
+        ],
+    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        return self.collect_all_items(layer_item, "support_save", collected_items)
+
+    def collect_all_items(
+        self,
+        layer_item: MapItemData,
+        support_attr: str,
         collected_items: list[
             RanaRasterPublicationFileData | RanaVectorPublicationFileData
         ],
     ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
         if isinstance(layer_item, FolderItemData):
             for sub_item in layer_item.sub_items:
-                self.collect_all_maps(sub_item, collected_items)
-        if isinstance(layer_item, LayerItemData):
+                self.collect_all_items(sub_item, support_attr, collected_items)
+        if isinstance(layer_item, LayerItemData) and getattr(layer_item, support_attr):
             if layer_item.data_type == "raster":
                 collected_items.append(
                     RanaRasterPublicationFileData(
@@ -424,11 +444,6 @@ class PublicationView(QWidget):
                 )
         return collected_items
 
-    def save_styles(self, map_item: MapItemData):
-        # TODO: recurse through map_item and save styles
-        self.communication.show_info("Saving styles is not yet implemented.")
-        pass
-
     def get_button_container(
         self,
         map_item: MapItemData,
@@ -439,10 +454,7 @@ class PublicationView(QWidget):
         if map_item.support_open:
             open_btn = QPushButton("Open in QGIS")
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
-            if isinstance(map_item, FolderItemData):
-                open_btn.clicked.connect(lambda: self.open_maps(map_item))
-            else:
-                open_btn.clicked.connect(lambda: self.open_map(map_item))
+            open_btn.clicked.connect(lambda: self.open_maps(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
