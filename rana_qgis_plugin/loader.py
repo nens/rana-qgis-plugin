@@ -209,9 +209,9 @@ class Loader(QObject):
         else:
             self.communication.show_warn(f"Unsupported data type: {data_type}")
 
-    @pyqtSlot(dict, str, list)
+    @pyqtSlot(dict, dict, list)
     def open_many_in_qgis_from_publication(
-        self, project: dict, publication_id: str, layer_items: list
+        self, project: dict, publication_version: dict, layer_items: list
     ):
         # TODO: extend for scenario and schematisation
         items_to_download = []
@@ -227,9 +227,9 @@ class Loader(QObject):
                 downloader = FileDownloadForPublicationTree(
                     project=project,
                     file=layer_item.file,
-                    publication_id=publication_id,
+                    publication_id=publication_version["publication_id"],
                     publication_tree=layer_item.file_tree,
-                    publication_version=layer_item.publication_version,
+                    publication_version=publication_version["version"],
                     style_id=layer_item.style_id,
                     layer_in_file=layer_in_file,
                 )

@@ -197,8 +197,7 @@ class PublicationMapsTreeView(QTreeView):
 class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
-    open_in_qgis = pyqtSignal(dict, list, str)
-    open_many_in_qgis = pyqtSignal(str, list)
+    open_many_in_qgis = pyqtSignal(dict, list)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -391,7 +390,7 @@ class PublicationView(QWidget):
 
     def open_maps(self, map_item: MapItemData):
         all_items = self.collect_all_maps(map_item, [])
-        self.open_many_in_qgis.emit(self.publication["id"], all_items)
+        self.open_many_in_qgis.emit(self.current_version, all_items)
 
     def collect_all_maps(
         self,
@@ -411,7 +410,6 @@ class PublicationView(QWidget):
                         file=layer_item.file,
                         file_tree=layer_item.parents,
                         style_id=layer_item.style_id,
-                        publication_version=self.current_version["version"],
                     )
                 )
             elif layer_item.data_type == "vector":
@@ -422,7 +420,6 @@ class PublicationView(QWidget):
                         file_tree=layer_item.parents,
                         layer_in_file=layer_item.layer_in_file,
                         style_id=layer_item.style_id,
-                        publication_version=self.current_version["version"],
                     )
                 )
         return collected_items
