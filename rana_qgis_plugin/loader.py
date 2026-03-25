@@ -969,6 +969,10 @@ class Loader(QObject):
         )
         self.file_upload_progress.emit(progress)
 
+    @pyqtSlot(dict, dict, list)
+    def save_styles_from_publication(self, project, publication_version, items):
+        self.communication.show_info(f"Request syncing styles for {len(items)} items")
+
     @pyqtSlot(dict, dict)
     def save_vector_style(self, project, file):
         """Start the worker for saving vector styling files"""

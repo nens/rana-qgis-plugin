@@ -279,7 +279,8 @@ class RevisionsView(QWidget):
 class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
-    open_many_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list)
+    open_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list)
+    save_styles_from_publication_selected = pyqtSignal(dict, dict, list)
     upload_file_selected = pyqtSignal(dict, dict)
     save_vector_styling_selected = pyqtSignal(dict, dict)
     save_raster_styling_selected = pyqtSignal(dict, dict)
@@ -525,7 +526,14 @@ class RanaBrowser(QWidget):
         # Connect open signal from publication_view
         self.publication_view.open_many_in_qgis.connect(
             lambda publication_version,
-            items: self.open_many_in_qgis_from_publication_selected.emit(
+            items: self.open_in_qgis_from_publication_selected.emit(
+                self.project, publication_version, items
+            )
+        )
+        # Save styles to rana from publication_view
+        self.publication_view.save_many_styles.connect(
+            lambda publication_version,
+            items: self.save_styles_from_publication_selected.emit(
                 self.project, publication_version, items
             )
         )

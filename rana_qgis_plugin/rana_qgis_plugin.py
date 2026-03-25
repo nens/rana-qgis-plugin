@@ -327,11 +327,14 @@ class RanaQgisPlugin:
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
-            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
                 self.rana_browser.disable
             )
-            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
                 self.loader.open_many_in_qgis_from_publication
+            )
+            self.rana_browser.save_styles_from_publication_selected.connect(
+                self.loader.save_styles_from_publication
             )
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
@@ -471,3 +474,13 @@ class RanaQgisPlugin:
             )
 
         self.rana_browser.refresh()
+        # TESTING
+        # TODO remove this
+        self.rana_browser.projects_browser.set_project_from_id("2Q8UXRgQ")
+        self.rana_browser.projects_browser.project_selected.emit(
+            self.rana_browser.projects_browser.project
+        )
+        self.rana_browser.project_widget.setCurrentIndex(2)
+        # self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
+        # self.rana_browser.publications_browser.publication_selected.emit("rfau7fYB")
+        self.rana_browser.publications_browser.publication_selected.emit("1RYqKuQ9")
