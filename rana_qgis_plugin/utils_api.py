@@ -395,7 +395,7 @@ def get_tenant_processes(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes"
-    params = {"limit": 1000}
+    params = {"limit": 100}
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
