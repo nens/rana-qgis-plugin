@@ -954,7 +954,8 @@ class Loader(QObject):
             self.parent(), "Load", "Would you like to load the uploaded file from Rana?"
         ):
             file = get_tenant_project_file(project["id"], {"path": online_path})
-            self.initialize_file_download_worker(project, file)
+            layer_manager = FileLayerManager(self.communication, parent=self.parent())
+            self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
         self.new_file_upload_finished.emit(online_path)
 
