@@ -33,7 +33,7 @@ from rana_qgis_plugin.utils_settings import hcc_working_dir
 STYLE_DIR = Path(__file__).parent / "styles"
 
 
-class LayerManger(QObject):
+class LayerManager(QObject):
     # NOTE: not really sure why this is a class, there is barely any state
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -254,7 +254,7 @@ class LayerManger(QObject):
         self.communication.clear_message_bar()
 
 
-class FileLayerManager(LayerManger, QObject):
+class FileLayerManager(LayerManager):
     def add_from_file(self, project_name, local_file_path: str, file: dict):
         self.communication.clear_message_bar()
         parents = [project_name] + file["id"].split("/")[:-1]
@@ -275,7 +275,7 @@ class FileLayerManager(LayerManger, QObject):
             )
 
 
-class PublicationLayerManager(LayerManger, QObject):
+class PublicationLayerManager(LayerManager):
     def __init__(
         self,
         communication,
@@ -314,7 +314,7 @@ class PublicationLayerManager(LayerManger, QObject):
 
 
 def open_file_via_layer_manager(
-    project: dict, file: dict, local_file_path: str, layer_manager: LayerManger
+    project: dict, file: dict, local_file_path: str, layer_manager: LayerManager
 ):
     if file["data_type"] == "threedi_schematisation":
         schematisation = get_threedi_schematisation(

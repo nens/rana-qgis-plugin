@@ -279,7 +279,6 @@ class RevisionsView(QWidget):
 class RanaBrowser(QWidget):
     open_wms_selected = pyqtSignal(dict, dict)
     open_in_qgis_selected = pyqtSignal(dict, dict)
-    open_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list, str)
     open_many_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list)
     upload_file_selected = pyqtSignal(dict, dict)
     save_vector_styling_selected = pyqtSignal(dict, dict)

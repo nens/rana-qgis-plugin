@@ -77,7 +77,6 @@ from rana_qgis_plugin.utils_qgis import (
 )
 from rana_qgis_plugin.utils_scenario import ScenarioInfo
 from rana_qgis_plugin.utils_settings import hcc_working_dir
-from rana_qgis_plugin.widgets.publication_view import LayerItemData
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
@@ -85,7 +84,6 @@ from rana_qgis_plugin.workers import (
     AvatarWorker,
     BatchFileDownloadWorker,
     ExistingFileUploadWorker,
-    FileDownloadBase,
     FileDownloadForFileTree,
     FileDownloadForPublicationTree,
     FileUploadWorker,
@@ -181,29 +179,6 @@ class Loader(QObject):
         if data_type in SUPPORTED_DATA_TYPES.keys():
             _, local_file_path = get_local_file_path(project["slug"], file["id"])
             layer_manager = FileLayerManager(self.communication, parent=self.parent())
-            self.initialize_file_download_worker(project, file, layer_manager)
-            self.file_download_worker.start()
-        else:
-            self.communication.show_warn(f"Unsupported data type: {data_type}")
-
-    @pyqtSlot(dict, dict, list, str)
-    def open_in_qgis_from_publication(
-        self,
-        project: dict,
-        file: dict,
-        publication_tree: list[str],
-        layer_name_in_file: str,
-    ):
-        """Start the worker to download and open files in QGIS"""
-        data_type = file["data_type"]
-        if data_type in SUPPORTED_DATA_TYPES.keys():
-            _, local_file_path = get_local_file_path(project["slug"], file["id"])
-            layer_manager = PublicationLayerManager(
-                self.communication,
-                parent=self.parent(),
-                publication_tree=publication_tree,
-                layer_name_in_file=layer_name_in_file,
-            )
             self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
         else:

@@ -327,15 +327,6 @@ class RanaQgisPlugin:
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
-            self.rana_browser.open_in_qgis_from_publication_selected.connect(
-                self.rana_browser.disable
-            )
-            self.rana_browser.open_in_qgis_from_publication_selected.connect(
-                self.loader.open_in_qgis_from_publication
-            )
-            self.rana_browser.open_in_qgis_from_publication_selected.connect(
-                self.rana_browser.disable
-            )
             self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
                 self.rana_browser.disable
             )
