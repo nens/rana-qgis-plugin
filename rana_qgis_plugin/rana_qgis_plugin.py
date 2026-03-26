@@ -134,6 +134,7 @@ class RanaQgisPlugin:
         set_tenant_id("")
         self.add_rana_menu(False)
         self.communication.bar_info("You have been logged out.")
+        self.rana_browser.reset()
         if self.dock_widget:
             self.dock_widget.close()
 
