@@ -1,7 +1,6 @@
 import copy
 import json
 import math
-import os
 import shutil
 import tempfile
 import zipfile
@@ -40,9 +39,8 @@ class StyleBuilder(QObject):
         raise NotImplementedError
 
     @cached_property
-    def tempdir(self) -> str:
-        # TODO: return Path?
-        return tempfile.mkdtemp()
+    def tempdir(self) -> Path:
+        return Path(tempfile.mkdtemp())
 
     @cached_property
     def all_layers(self):
@@ -60,23 +58,18 @@ class StyleBuilder(QObject):
         """Craete a QML zip file for all the qml files in the local directory"""
         try:
             with zipfile.ZipFile(zip_path, "w") as zip_file:
-                for root, _, files in os.walk(self.tempdir):
-                    for file in files:
-                        if file.endswith(".qml"):
-                            file_path = os.path.join(root, file)
-                            zip_file.write(
-                                file_path, os.path.relpath(file_path, self.tempdir)
-                            )
+                for file_path in self.tempdir.rglob("*.qml"):
+                    zip_file.write(file_path, file_path.relative_to(self.tempdir))
         except Exception as e:
             self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
     def save_qml_style_to_file(self) -> tuple:
         # Save QML style files for each layer to local directory
         for layer in self.layers:
-            # TODO: this breaks with non writable paths!
-            qml_path = Path(self.tempdir).joinpath(f"{layer.name()}.qml")
+            # TODO: this breaks with non writable paths due to illegal characters
+            qml_path = self.tempdir.joinpath(f"{layer.name()}.qml")
             layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(self.tempdir, "qml.zip")
+        zip_path = str(self.tempdir.joinpath("qml.zip"))
         self._create_qml_zip(zip_path)
         return ("files", "qml.zip", zip_path, "application/zip")
 
@@ -121,10 +114,10 @@ class RasterStyleBuilder(StyleBuilder):
                     return
         if warnings:
             self.warning.emit(", ".join(set(warnings)))
-        lizard_styling_path = os.path.join(self.tempdir, "colormap.json")
+        lizard_styling_path = self.tempdir.joinpath("colormap.json")
         with open(lizard_styling_path, "w") as f:
             json.dump(lizard_styling, f)
-        return ("files", "colormap.json", lizard_styling_path, "application/json")
+        return ("files", "colormap.json", str(lizard_styling_path), "application/json")
 
 
 class VectorStyleBuilder(StyleBuilder):
@@ -151,21 +144,19 @@ class VectorStyleBuilder(StyleBuilder):
     def validate_layers(self) -> bool:
         return self.layer is not None
 
-    @staticmethod
-    def _collect_json_files(temp_dir: Path, json_data: list[tuple[str, dict]]) -> list:
+    def _collect_json_files(self, json_data: list[tuple[str, dict]]) -> list:
         files = []
         for name, data in json_data:
-            json_path = temp_dir.joinpath(name).with_suffix(".json")
+            json_path = self.tempdir.joinpath(name).with_suffix(".json")
             with open(json_path, "w") as f:
                 json.dump(data, f)
             files.append(("files", json_path.name, str(json_path), "application/json"))
         return files
 
-    @staticmethod
-    def _collect_png_files(temp_dir: Path, png_data: list[tuple[str, Any]]) -> list:
+    def _collect_png_files(self, png_data: list[tuple[str, Any]]) -> list:
         files = []
         for name, img_data in png_data:
-            png_path = temp_dir.joinpath(name).with_suffix(".png")
+            png_path = self.tempdir.joinpath(name).with_suffix(".png")
             with open(png_path, "wb") as f:
                 f.write(image_to_bytes(img_data))
             files.append(("files", png_path.name, str(png_path), "image/png"))
@@ -188,18 +179,16 @@ class VectorStyleBuilder(StyleBuilder):
             self.failed.emit(f"Failed to convert local styling: {str(e)}")
             return files
         # Save styling to file
-        files += self._collect_json_files(Path(self.tempdir), [("style", mb_style)])
+        files += self._collect_json_files(self.tempdir, [("style", mb_style)])
         # Save sprite sheet to file
         if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
             files += self._collect_json_files(
-                Path(self.tempdir),
                 [
                     ("sprite", sprite_sheet["json"]),
                     ("sprite@2x", sprite_sheet["json2x"]),
                 ],
             )
             files += self._collect_png_files(
-                Path(self.tempdir),
                 [
                     ("sprite", sprite_sheet["img"]),
                     ("sprite@2x", sprite_sheet["img2x"]),
@@ -359,7 +348,7 @@ class FileDescriptorStyleUploadWorker(QThread):
                 f"Layer not found for {self.file_ref_str}. Add file to map and try again"
             )
             return
-        os.makedirs(self.builder.tempdir, exist_ok=True)
+        self.builder.tempdir.mkdir(parents=True, exist_ok=True)
         files = self.builder.get_files()
         self.uploader.upload_to_rana(files)
         # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
@@ -425,7 +414,7 @@ class PublicationStyleUploadWorker(QThread):
                 if not builder.validate_layers():
                     not_fount_cnt += 1
                     continue
-                os.makedirs(builder.tempdir, exist_ok=True)
+                builder.tempdir.mkdir(parents=True, exist_ok=True)
                 files = builder.get_files()
             if files:
                 # pass
