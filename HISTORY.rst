@@ -5,6 +5,7 @@ History
 1.2.9 (unreleased)
 ------------------
 
+- Replace usage of raster-style and vector-style endpoints with styles endpoint (nens/rana-qgis-plugin#320)
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
 - Modified (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)
