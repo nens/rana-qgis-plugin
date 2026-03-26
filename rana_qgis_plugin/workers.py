@@ -276,14 +276,16 @@ class VectorStyleWorker(QThread):
             self.failed.emit("File not found.")
             return
         path = self.file["id"]
-        file_name = os.path.basename(path.rstrip("/"))
+        file_ref_str = f"file {path} from {self.project['name']}"  # string used to refer to current file
+        local_dir, local_file_path = get_local_file_path(self.project["slug"], path)
+
         descriptor_id = self.file["descriptor_id"]
         all_layers = QgsProject.instance().mapLayers().values()
-        layers = [layer for layer in all_layers if file_name in layer.source()]
+        layers = [layer for layer in all_layers if local_file_path in layer.source()]
 
         if not layers:
             self.failed.emit(
-                f"No layers found for {file_name}. Open the file in QGIS and try again."
+                f"No layers found for {file_ref_str}. Add file to map and try again"
             )
             return
 
@@ -292,7 +294,6 @@ class VectorStyleWorker(QThread):
         base_url = "http://baseUrl"
 
         # Save QML style files for each layer to local directory
-        local_dir, _ = get_local_file_path(self.project["slug"], path)
         os.makedirs(local_dir, exist_ok=True)
         for layer in layers:
             qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
@@ -349,7 +350,9 @@ class VectorStyleWorker(QThread):
             os.remove(zip_path)
 
             # Finish
-            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+            self.finished.emit(
+                f"Styling files uploaded successfully for {file_ref_str}."
+            )
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
 
@@ -376,20 +379,21 @@ class RasterStyleWorker(QThread):
             self.failed.emit("File not found.")
             return
         path = self.file["id"]
-        file_name = os.path.basename(path.rstrip("/"))
+        local_dir, local_file_path = get_local_file_path(self.project["slug"], path)
+        file_ref_str = f"file {path} from {self.project['name']}"  # string used to refer to current file
         descriptor_id = self.file["descriptor_id"]
         all_layers = QgsProject.instance().mapLayers().values()
-        layers = [layer for layer in all_layers if file_name in layer.source()]
+        layers = [layer for layer in all_layers if local_file_path in layer.source()]
 
         if not layers:
             self.failed.emit(
-                f"No layers found for {file_name}. Open the file in QGIS and try again."
+                f"No layers found for {file_ref_str}. Add file to map and try again"
             )
             return
 
         if not len(layers) == 1:
             self.failed.emit(
-                f"Multiple layers found for {file_name}. Open the file in QGIS and try again."
+                f"Multiple layers found for {file_ref_str}. Add file to map and try again"
             )
             return
 
@@ -410,10 +414,10 @@ class RasterStyleWorker(QThread):
         try:
             geostyler, _, _, warnings = togeostyler.convert(layer)
             if len(geostyler["rules"]) != 1:
-                self.failed.emit(f"Multiple rules found for {file_name}.")
+                self.failed.emit(f"Multiple rules found for {file_ref_str}.")
                 return
             if len(geostyler["rules"][0]["symbolizers"]) != 1:
-                self.failed.emit(f"Multiple symbolizers found for {file_name}.")
+                self.failed.emit(f"Multiple symbolizers found for {file_ref_str}.")
                 return
 
             lizard_styling = import_from_geostyler(
@@ -458,7 +462,9 @@ class RasterStyleWorker(QThread):
             os.remove(zip_path)
             os.remove(lizard_styling_path)
 
-            self.finished.emit(f"Styling files uploaded successfully for {file_name}.")
+            self.finished.emit(
+                f"Styling files uploaded successfully for {file_ref_str}."
+            )
         except Exception as e:
             self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
 

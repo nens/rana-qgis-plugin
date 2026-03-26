@@ -9,6 +9,8 @@ History
 - Modified (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)
 - Reset rana widget on logout (nens/rana-qgis-plugin#336)
+- Fix bug where incorrect layer style was saved (nens/rana#3615)
+- Fix bug with saving style when same gpkg was opened as vector and via results-analysis (nens/rana#3850)
 
 
 1.2.8 (2026-03-13)
