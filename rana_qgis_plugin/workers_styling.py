@@ -17,7 +17,11 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
 )
 
-from rana_qgis_plugin.utils import get_local_file_path, image_to_bytes
+from rana_qgis_plugin.utils import (
+    get_local_file_path,
+    get_publication_layer_path,
+    image_to_bytes,
+)
 from rana_qgis_plugin.utils_api import (
     get_vector_style_upload_urls,
     upload_raster_styling,
@@ -31,19 +35,15 @@ class StyleBuilder(QObject):
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
 
-    def __init__(self, project: dict, file: dict):
+    def __init__(self, local_file_path: str, file_ref_str: str):
         super().__init__()
-        self.project = project
-        self.file = file
-
-    @property
-    def filename(self):
-        return os.path.basename(self.file["id"].rstrip("/"))
+        self.local_file_path = local_file_path
+        self.file_ref_str = file_ref_str
 
     @cached_property
     def layers(self):
         all_layers = QgsProject.instance().mapLayers().values()
-        return [layer for layer in all_layers if self.filename in layer.source()]
+        return [layer for layer in all_layers if self.local_file_path in layer.source()]
 
     def validate_layers(self) -> bool:
         raise NotImplementedError
@@ -59,12 +59,12 @@ class RasterStyleBuilder(StyleBuilder):
     def validate_layers(self) -> bool:
         if not self.layers:
             self.failed.emit(
-                f"No layers found for {self.filename}. Open the file in QGIS and try again."
+                f"No layers found for {self.file_ref_str}. Open the file in QGIS and try again."
             )
             return False
         elif not len(self.layers) == 1:
             self.failed.emit(
-                f"Multiple layers found for {self.filename}. Open the file in QGIS and try again."
+                f"Multiple layers found for {self.file_ref_str}. Open the file in QGIS and try again."
             )
             return False
         return True
@@ -91,10 +91,10 @@ class RasterStyleBuilder(StyleBuilder):
         layer = self.layers[0]
         geostyler, _, _, warnings = togeostyler.convert(layer)
         if len(geostyler["rules"]) != 1:
-            self.failed.emit(f"Multiple rules found for {self.filename}.")
+            self.failed.emit(f"Multiple rules found for {self.file_ref_str}.")
             return
         if len(geostyler["rules"][0]["symbolizers"]) != 1:
-            self.failed.emit(f"Multiple symbolizers found for {self.filename}.")
+            self.failed.emit(f"Multiple symbolizers found for {self.file_ref_str}.")
             return
         lizard_styling = import_from_geostyler(geostyler["rules"][0]["symbolizers"][0])
         # Do some corrections and checks
@@ -138,7 +138,7 @@ class VectorStyleBuilderOld(StyleBuilder):
     def validate_layers(self) -> bool:
         if not self.layers:
             self.failed.emit(
-                f"No layers found for {self.filename}. Open the file in QGIS and try again."
+                f"No layers found for {self.file_ref_str}. Open the file in QGIS and try again."
             )
             return False
         return True
@@ -239,7 +239,7 @@ class StyleUploader(QObject):
             # TODO: use a nicer file structure
             os.remove(item[2])
         signals.finished.emit(
-            f"Styling files uploaded successfully for {self.builder.filename}."
+            f"Styling files uploaded successfully for {self.builder.file_ref_str}."
         )
 
 
@@ -251,7 +251,11 @@ class RasterFileStyleUploader(StyleUploader):
         project: dict,
         file: dict,
     ):
-        super().__init__(project, file, RasterStyleBuilder(project, file))
+        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        file_ref_str = f"file {file['id']} from {project['name']}"
+        super().__init__(
+            project, file, RasterStyleBuilder(local_file_path, file_ref_str)
+        )
 
     def upload_to_rana(self, files):
         try:
@@ -264,10 +268,14 @@ class PublicationStyleUploader(StyleUploader):
     """Uploads style for a publication layer"""
 
     def __init__(self, project: dict, file: dict, layer_in_file: Optional[str]):
+        local_file_path, _ = get_publication_layer_path(
+            project["slug"], file["id"], layer_in_file
+        )
+        file_ref_str = f"file {file['id']} from {project['name']}"
         if file["data_type"] == "raster":
-            builder = RasterStyleBuilder(project, file)
+            builder = RasterStyleBuilder(local_file_path, file_ref_str)
         elif file["data_type"] == "vector":
-            builder = VectorStyleBuilder(project, file, layer_in_file)
+            builder = VectorStyleBuilder(local_file_path, file_ref_str)
         super().__init__(project, file, builder)
 
 
@@ -279,7 +287,11 @@ class VectorFileStyleUploaderOld(StyleUploader):
         project: dict,
         file: dict,
     ):
-        super().__init__(project, file, VectorStyleBuilderOld(project, file))
+        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        file_ref_str = f"file {file['id']} from {project['name']}"
+        super().__init__(
+            project, file, VectorStyleBuilderOld(local_file_path, file_ref_str)
+        )
 
     def upload_to_rana(self, files):
         descriptor_id = self.file["descriptor_id"]
