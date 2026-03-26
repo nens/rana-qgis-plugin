@@ -37,7 +37,6 @@ from rana_qgis_plugin.utils_api import (
     get_publication_details,
     get_publication_version_details,
     get_publication_version_files,
-    get_publication_version_latest,
     get_tenant_file_descriptor,
     get_tenant_id,
 )
@@ -279,11 +278,9 @@ class PublicationView(QWidget):
             self.communication.show_warn("Cannot find loaded publication")
             self.show_failed.emit()
             return
-        latest_publication = get_publication_version_latest(self.publication["id"])
-        if latest_publication:
-            self.current_version = get_publication_version_details(
-                self.publication["id"], latest_publication["version"]
-            )
+        self.current_version = get_publication_version_details(
+            self.publication["id"], latest=True
+        )
         if self.current_version:
             self.file_map = {
                 item["file"]["id"]: item["file"]

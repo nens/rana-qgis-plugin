@@ -694,18 +694,12 @@ def get_publication_details(publication_id: str):
     return simple_fetch(url)
 
 
-def get_publication_version_latest(publication_id: str):
+def get_publication_version_details(
+    publication_id: str, version: Optional[int] = None, latest: Optional[bool] = True
+) -> dict:
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
-    # Default sorting is version number from high to low, so first item should be latest
-    return fetch_first(url)
-
-
-def get_publication_version_details(publication_id: str, version: int) -> dict:
-    tenant = get_tenant_id()
-    url = (
-        f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}"
-    )
+    requested_version = "latest" if latest else str(version)
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{requested_version}"
     return simple_fetch(url)
 
 
