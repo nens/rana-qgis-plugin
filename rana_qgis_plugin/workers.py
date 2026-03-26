@@ -300,12 +300,15 @@ class VectorStyleWorker(QThread):
             layer.saveNamedStyle(str(qml_path))
 
         # Convert QGIS layers to styling files for the Rana Web Client
+        QgsMessageLog.logMessage("--------------")
         try:
             _, warnings, mb_style, sprite_sheet = convertGroup(
                 group, qgis_layers, base_url, workspace="workspace", name="default"
             )
             if warnings:
                 self.warning.emit(", ".join(set(warnings)))
+
+            QgsMessageLog.logMessage(str(mb_style))
 
             # Get upload URLs to S3
             upload_urls = get_vector_style_upload_urls(descriptor_id)

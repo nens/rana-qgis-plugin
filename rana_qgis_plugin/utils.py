@@ -40,6 +40,34 @@ def is_writable(working_dir: str) -> bool:
         return True
 
 
+def get_local_folder_path(project_slug: str, file: dict) -> str:
+    """Retrieve the path on the local filesystem where the folder should be stored based on the project slug and file descriptor."""
+    if not rana_cache_dir():
+        base_dir = os.path.join(os.path.expanduser("~"), "Rana")
+    else:
+        base_dir = rana_cache_dir()
+
+    if file["type"] == "directory":
+        return os.path.join(base_dir, project_slug, file["id"])
+    elif file["type"] == "file":
+        if file.get("data_type") == "threedi_schematisation":
+            pass
+        elif file.get("data_type") == "scenario":
+            target_folder = get_threedi_schematisation_simulation_results_folder(
+                QgsSettings().value("threedi/working_dir"),
+                schematisation_id,
+                schematisation_name.replace("/", "-").replace("\\", "-"),
+                revision_number,
+                simulation_name.replace("/", "-").replace("\\", "-"),
+                simulation_id,
+            )
+            pass
+        else:
+            return get_local_file_path(project_slug, file["id"])[0]
+    else:
+        assert False, f"Unknown file type {file['type']} for file {file['id']}"
+
+
 def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     file_name = os.path.basename(path.rstrip("/"))
     file_name_without_extension = os.path.splitext(file_name)[0]
