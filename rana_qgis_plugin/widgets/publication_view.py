@@ -255,7 +255,7 @@ class PublicationView(QWidget):
         scroll_area.setWidget(collapsible_container)
 
         button_layout = QHBoxLayout()
-        btn_open = QPushButton("Open all maps in QGIS")
+        btn_open = QPushButton("Add all to Map")
         btn_open.clicked.connect(lambda _: self.open_maps(self.root_item))
         btn_rana = QPushButton("Open publication in Rana (web)")
         btn_rana.clicked.connect(lambda: self.open_in_rana())
@@ -449,13 +449,13 @@ class PublicationView(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         if map_item.support_open:
-            open_btn = QPushButton("Open in QGIS")
+            open_btn = QPushButton(FileAction.OPEN_IN_QGIS.value)
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
             open_btn.clicked.connect(lambda: self.open_maps(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
-            save_btn = QPushButton("Save style to Rana")
+            save_btn = QPushButton(FileAction.SAVE_STYLING.value)
             save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
             save_btn.clicked.connect(lambda: self.save_styles(map_item))
             layout.addWidget(save_btn)

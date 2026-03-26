@@ -17,6 +17,7 @@ class FileAction(Enum):
     SAVE_REVISION = "Upload to Rana"
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
     SAVE_RASTER_STYLING = "Save raster style to Rana"
+    SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
     VIEW_REVISIONS = "View all Revisions"
     DOWNLOAD_RESULTS = "Download Results"
