@@ -178,9 +178,33 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     def open_in_explorer(self, project: dict, file: dict):
         self.communication.log_info(f"Opening file explorer at file {str(file)}")
-        local_dir_structure = get_local_folder_path(project["slug"], file)
-        self.communication.log_info(f"Opening file explorer at {local_dir_structure}")
-        QDesktopServices.openUrl(QUrl.fromLocalFile(local_dir_structure))
+        local_dir = get_local_folder_path(project["slug"], file)
+
+        if file["type"] == "directory":
+            # In case of a folder, we create the folder if missing and open there.
+            if not os.path.exists(local_dir):
+                os.makedirs(local_dir)
+        else:
+            # For schematisations and scenarios (results), we need different folders
+            if not os.path.exists(get_local_file_path(project["slug"], file["id"])[1]):
+                # The folder does not even exists
+                open_explorer = self.communication.custom_ask(
+                    self.parent(),
+                    "Open explorer",
+                    f"This file has not already been downloaded before. Do you want to download the file or just open the folder?",
+                    "Cancel",
+                    "Download",
+                    "Open folder",
+                )
+                if open_explorer == "Cancel":
+                    return
+                elif open_explorer == "Open folder":
+                    os.makedirs(local_dir)
+                else:
+                    pass
+
+        self.communication.log_info(f"Opening file explorer at {local_dir}")
+        QDesktopServices.openUrl(QUrl.fromLocalFile(local_dir))
 
     def on_file_download_finished(
         self, project, file, local_file_path: str, from_thread=True
@@ -712,13 +736,6 @@ class Loader(QObject):
         )
         self.lizard_result_download_worker.start()
         return
-
-    @pyqtSlot(dict, dict)
-    def download_file(self, project, file):
-        assert file["data_type"] == "scenario"
-
-        self.initialize_file_download_worker(project, file)
-        self.file_download_worker.start()
 
     @pyqtSlot(dict, dict)
     def upload_new_file_to_rana(self, project, file):

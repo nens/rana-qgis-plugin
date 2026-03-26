@@ -72,7 +72,6 @@ class FileActionSignals(QObject):
     save_raster_styling_requested = pyqtSignal(dict)
     save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
-    download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
     view_all_revisions_requested = pyqtSignal(dict, dict)
 
