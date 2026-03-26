@@ -91,10 +91,9 @@ from rana_qgis_plugin.workers import (
     SingleFileDownloadWorker,
 )
 from rana_qgis_plugin.workers_styling import (
-    PublicationStyleUploader,
+    FileDescriptorStyleUploadWorker,
     RasterFileDescriptorStyleUploader,
     RasterStyleBuilder,
-    SingleStyleUploadWorker,
     VectorFileDescriptorStyleUploader,
     VectorStyleBuilderOld,
 )
@@ -981,19 +980,19 @@ class Loader(QObject):
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        uploader = PublicationStyleUploader()
+        # uploader = PublicationStyleUploader()
 
     def save_style_with_descriptor(self, builder, uploader):
         """Start the uploader for saving vector styling files"""
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        self.vector_style_worker = SingleStyleUploadWorker(
+        self.vector_style_worker = FileDescriptorStyleUploadWorker(
             uploader, builder, self.communication
         )
-        self.vector_style_worker.signals.finished.connect(self.on_vector_style_finished)
-        self.vector_style_worker.signals.failed.connect(self.on_vector_style_failed)
-        self.vector_style_worker.signals.warning.connect(self.communication.show_warn)
+        self.vector_style_worker.finished.connect(self.on_vector_style_finished)
+        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
+        self.vector_style_worker.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
 
     @pyqtSlot(dict, dict)
