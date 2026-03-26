@@ -83,17 +83,7 @@ class StyleBuilder(QObject):
 
 class RasterStyleBuilder(StyleBuilder):
     def validate_layers(self) -> bool:
-        if not self.layers:
-            self.failed.emit(
-                f"No layers found for {self.file_ref_str}. Open the file in QGIS and try again."
-            )
-            return False
-        elif not len(self.layers) == 1:
-            self.failed.emit(
-                f"Multiple layers found for {self.file_ref_str}. Open the file in QGIS and try again."
-            )
-            return False
-        return True
+        return len(self.layers) == 1
 
     def get_files(self) -> list:
         zip_files = self.save_qml_style_to_file()
@@ -159,12 +149,7 @@ class VectorStyleBuilder(StyleBuilder):
         )
 
     def validate_layers(self) -> bool:
-        if not self.layer:
-            self.failed.emit(
-                f"Layer {self.layer_in_file} not found for {self.file_ref_str}"
-            )
-            return False
-        return True
+        return self.layer is not None
 
     @staticmethod
     def _collect_json_files(temp_dir: Path, json_data: list[tuple[str, dict]]) -> list:
@@ -230,12 +215,7 @@ class VectorStyleBuilderOld(StyleBuilder):
         return [self.save_qml_style_to_file()]
 
     def validate_layers(self) -> bool:
-        if not self.layers:
-            self.failed.emit(
-                f"No layers found for {self.file_ref_str}. Open the file in QGIS and try again."
-            )
-            return False
-        return True
+        return len(self.layers) > 0
 
 
 class StyleUploader(QObject):
@@ -375,6 +355,9 @@ class FileDescriptorStyleUploadWorker(QThread):
 
     def run(self):
         if not self.builder.validate_layers():
+            self.failed.emit(
+                f"Layer not found for {self.file_ref_str}. Add file to map and try again"
+            )
             return
         os.makedirs(self.builder.tempdir, exist_ok=True)
         files = self.builder.get_files()
@@ -436,11 +419,11 @@ class PublicationStyleUploadWorker(QThread):
                     continue
 
     def run(self):
+        not_fount_cnt = 0
         for builder in self.builders:
-            from qgis.core import Qgis, QgsMessageLog
-
             with self.builder_signal_connections(builder):
                 if not builder.validate_layers():
+                    not_fount_cnt += 1
                     continue
                 os.makedirs(builder.tempdir, exist_ok=True)
                 files = builder.get_files()
@@ -455,8 +438,15 @@ class PublicationStyleUploadWorker(QThread):
                 shutil.rmtree(builder.tempdir)
             except (FileNotFoundError, PermissionError, OSError) as e:
                 pass
-        nof_success = len(self.builders) - self.fail_cnt
-        msg = f"Styling files uploaded successfully for {nof_success} layers."
+        nof_success = len(self.builders) - self.fail_cnt - not_fount_cnt
+        if nof_success > 0:
+            msg = f"Styling files uploaded successfully for {nof_success} layers."
+        else:
+            msg = "No styling files uploaded."
+        if not_fount_cnt > 0:
+            msg += (
+                f"\n{not_fount_cnt} layers not found. Add layers to map and try again."
+            )
         if self.fail_cnt > 0:
             msg += "\nUpload failed for {self.fail_cnt} layers, see the logs for more information."
         if self.warning_cnt > 0:
