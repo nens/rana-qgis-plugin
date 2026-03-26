@@ -2,8 +2,11 @@ import copy
 import json
 import math
 import os
+import shutil
+import tempfile
 import zipfile
 from functools import cached_property
+from pathlib import Path
 from typing import Optional
 
 import requests
@@ -41,6 +44,10 @@ class StyleBuilder(QObject):
         self.file_ref_str = file_ref_str
 
     @cached_property
+    def tempdir(self) -> str:
+        return tempfile.mkdtemp()
+
+    @cached_property
     def layers(self):
         all_layers = QgsProject.instance().mapLayers().values()
         return [layer for layer in all_layers if self.local_file_path in layer.source()]
@@ -48,10 +55,10 @@ class StyleBuilder(QObject):
     def validate_layers(self) -> bool:
         raise NotImplementedError
 
-    def save_qml_style_to_file(self, local_dir: str) -> str:
+    def save_qml_style_to_file(self) -> str:
         raise NotImplementedError
 
-    def get_files(self, local_dir: str) -> list:
+    def get_files(self) -> list:
         raise NotImplementedError
 
 
@@ -69,25 +76,26 @@ class RasterStyleBuilder(StyleBuilder):
             return False
         return True
 
-    def save_qml_style_to_file(self, local_dir: str) -> str:
+    def save_qml_style_to_file(self) -> str:
         layer = self.layers[0]
-        qml_file_name = os.path.splitext(layer.name())[0] + ".qml"
-        qml_path = os.path.join(local_dir, qml_file_name)
+        qml_file_name = Path(layer.name()).with_suffix(".qml").name
+        qml_path = str(Path(self.tempdir).joinpath(qml_file_name))
+        # qml_path = os.path.join(self.tempdir, qml_file_name)
         layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(local_dir, "qml.zip")
+        zip_path = os.path.join(self.tempdir, "qml.zip")
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.write(qml_path, qml_file_name)
         return zip_path
 
-    def get_files(self, local_dir: str) -> list:
-        zip_path = self.save_qml_style_to_file(local_dir)
-        lizard_styling_path = self._save_lizard_style_to_file(local_dir)
+    def get_files(self) -> list:
+        zip_path = self.save_qml_style_to_file()
+        lizard_styling_path = self._save_lizard_style_to_file()
         return [
             ("files", "colormap.json", lizard_styling_path, "application/json"),
             ("files", "qml.zip", zip_path, "application/zip"),
         ]
 
-    def _save_lizard_style_to_file(self, local_dir: str):
+    def _save_lizard_style_to_file(self):
         layer = self.layers[0]
         geostyler, _, _, warnings = togeostyler.convert(layer)
         if len(geostyler["rules"]) != 1:
@@ -118,7 +126,7 @@ class RasterStyleBuilder(StyleBuilder):
                     return
         if warnings:
             self.warning.emit(", ".join(set(warnings)))
-        lizard_styling_path = os.path.join(local_dir, "colormap.json")
+        lizard_styling_path = os.path.join(self.tempdir, "colormap.json")
         with open(lizard_styling_path, "w") as f:
             json.dump(lizard_styling, f)
         return lizard_styling_path
@@ -143,31 +151,31 @@ class VectorStyleBuilderOld(StyleBuilder):
             return False
         return True
 
-    def _create_qml_zip(self, local_dir: str, zip_path: str):
+    def _create_qml_zip(self, zip_path: str):
         """Craete a QML zip file for all the qml files in the local directory"""
         try:
             with zipfile.ZipFile(zip_path, "w") as zip_file:
-                for root, _, files in os.walk(local_dir):
+                for root, _, files in os.walk(self.tempdir):
                     for file in files:
                         if file.endswith(".qml"):
                             file_path = os.path.join(root, file)
                             zip_file.write(
-                                file_path, os.path.relpath(file_path, local_dir)
+                                file_path, os.path.relpath(file_path, self.tempdir)
                             )
         except Exception as e:
             self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
-    def save_qml_style_to_file(self, local_dir) -> str:
+    def save_qml_style_to_file(self) -> str:
         # Save QML style files for each layer to local directory
         for layer in self.layers:
-            qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
+            qml_path = os.path.join(self.tempdir, f"{layer.name()}.qml")
             layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(local_dir, "qml.zip")
-        self._create_qml_zip(local_dir, zip_path)
+        zip_path = os.path.join(self.tempdir, "qml.zip")
+        self._create_qml_zip(zip_path)
         return zip_path
 
-    def get_files(self, local_dir: str) -> list:
-        zip_path = self.save_qml_style_to_file(local_dir)
+    def get_files(self) -> list:
+        zip_path = self.save_qml_style_to_file()
         return [("files", "qml.zip", zip_path, "application/zip")]
 
 
@@ -213,12 +221,6 @@ class StyleUploader(QObject):
     def upload_to_rana(self, files):
         raise NotImplementedError
 
-    @property
-    def local_dir(self):
-        # TODO: make this temp!
-        local_dir, _ = get_local_file_path(self.project["slug"], self.file["id"])
-        return local_dir
-
     def run(self, signals):
         # connect signals
         self.builder.failed.connect(signals.failed.emit)
@@ -228,16 +230,16 @@ class StyleUploader(QObject):
         # validate
         if not self.builder.validate_layers():
             return
-        os.makedirs(self.local_dir, exist_ok=True)
+        os.makedirs(self.builder.tempdir, exist_ok=True)
         # Collect files
-        files = self.builder.get_files(self.local_dir)
+        files = self.builder.get_files()
         # Upload styling files to rana
         self.upload_to_rana(files)
-        # Clean up
-        for item in files:
-            # TODO: handle filesystem issue?
-            # TODO: use a nicer file structure
-            os.remove(item[2])
+        # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
+        try:
+            shutil.rmtree(self.builder.tempdir)
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            pass
         signals.finished.emit(
             f"Styling files uploaded successfully for {self.builder.file_ref_str}."
         )
