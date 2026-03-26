@@ -88,10 +88,12 @@ from rana_qgis_plugin.workers import (
     FileDownloadForPublicationTree,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    RasterFileStyleUploader,
     SingleFileDownloadWorker,
+)
+from rana_qgis_plugin.workers_styling import (
+    RasterFileStyleUploader,
     SingleStyleUploader,
-    VectorFileStyleUploader,
+    VectorFileStyleUploaderOld,
 )
 
 STYLE_DIR = Path(__file__).parent / "styles"
@@ -980,7 +982,7 @@ class Loader(QObject):
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        uploader = VectorFileStyleUploader(project, file)
+        uploader = VectorFileStyleUploaderOld(project, file)
         self.vector_style_worker = SingleStyleUploader(uploader, self.communication)
         self.vector_style_worker.signals.finished.connect(self.on_vector_style_finished)
         self.vector_style_worker.signals.failed.connect(self.on_vector_style_failed)
