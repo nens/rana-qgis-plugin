@@ -72,8 +72,7 @@ class NetworkManager(object):
         )
         return self.process_request()
 
-    def put_multipart(self, params: dict = None, files: dict = None):
-        self.prepare_request(params)
+    def get_multipart(self, files: dict = None):
         # Create multipart object
         multipart = QHttpMultiPart(QHttpMultiPart.ContentType.FormDataType)
 
@@ -95,13 +94,26 @@ class NetworkManager(object):
                     part.setBody(file_data)
                     multipart.append(part)
 
+        return multipart
+
+    def put_multipart(self, params: dict = None, files: dict = None):
+        self.prepare_request(params)
+        multipart = self.get_multipart(files)
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
         # Remove the content-type header from prepare_request
         self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
-
         self._reply = self._network_manager.put(self._request, multipart)
         multipart.setParent(self._reply)  # Delete multipart with reply
+        return self.process_request()
 
+    def post_multipart(self, params: dict = None, files: dict = None):
+        self.prepare_request(params)
+        multipart = self.get_multipart(files)
+        # Don't set ContentTypeHeader manually - multipart sets it with boundary
+        # Remove the content-type header from prepare_request
+        self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
+        self._reply = self._network_manager.post(self._request, multipart)
+        multipart.setParent(self._reply)  # Delete multipart with reply
         return self.process_request()
 
     def delete(self, params: dict = None):

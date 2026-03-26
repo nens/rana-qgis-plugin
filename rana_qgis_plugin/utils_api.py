@@ -528,6 +528,22 @@ def get_publication_style(
         return None
 
 
+def upload_publication_style(
+    publication_id: str, publicaton_version: str, files: list
+) -> Optional[str]:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/version/{publicaton_version}/styles"
+    network_manager = NetworkManager(url, authcfg_id)
+    status = network_manager.post_multipart(files=files)
+    if status:
+        response = network_manager.content
+        # TODO unpack response
+        return response
+    else:
+        return None
+
+
 def get_schematisations(communication, icontains=""):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

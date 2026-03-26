@@ -91,9 +91,12 @@ from rana_qgis_plugin.workers import (
     SingleFileDownloadWorker,
 )
 from rana_qgis_plugin.workers_styling import (
-    RasterFileStyleUploader,
-    SingleStyleUploader,
-    VectorFileStyleUploaderOld,
+    PublicationStyleUploader,
+    RasterFileDescriptorStyleUploader,
+    RasterStyleBuilder,
+    SingleStyleUploadWorker,
+    VectorFileDescriptorStyleUploader,
+    VectorStyleBuilderOld,
 )
 
 STYLE_DIR = Path(__file__).parent / "styles"
@@ -975,32 +978,41 @@ class Loader(QObject):
     @pyqtSlot(dict, dict, list)
     def save_styles_from_publication(self, project, publication_version, items):
         self.communication.show_info(f"Request syncing styles for {len(items)} items")
+        self.communication.progress_bar(
+            "Generating and saving vector styling files...", clear_msg_bar=True
+        )
+        uploader = PublicationStyleUploader()
 
-    @pyqtSlot(dict, dict)
-    def save_vector_style(self, project, file):
+    def save_style_with_descriptor(self, builder, uploader):
         """Start the uploader for saving vector styling files"""
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        uploader = VectorFileStyleUploaderOld(project, file)
-        self.vector_style_worker = SingleStyleUploader(uploader, self.communication)
+        self.vector_style_worker = SingleStyleUploadWorker(
+            uploader, builder, self.communication
+        )
         self.vector_style_worker.signals.finished.connect(self.on_vector_style_finished)
         self.vector_style_worker.signals.failed.connect(self.on_vector_style_failed)
         self.vector_style_worker.signals.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
 
     @pyqtSlot(dict, dict)
+    def save_vector_style(self, project, file):
+        """Start the uploader for saving vector styling files"""
+        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        file_ref_str = f"file {file['id']} from {project['name']}"
+        builder = VectorStyleBuilderOld(local_file_path, file_ref_str)
+        uploader = VectorFileDescriptorStyleUploader(file["descriptor_id"], builder)
+        self.save_style_with_descriptor(builder, uploader)
+
+    @pyqtSlot(dict, dict)
     def save_raster_style(self, project, file):
         """Start the worker for saving raster styling files"""
-        self.communication.progress_bar(
-            "Generating and saving raster styling files...", clear_msg_bar=True
-        )
-        uploader = RasterFileStyleUploader(project, file)
-        self.raster_style_worker = SingleStyleUploader(uploader, self.communication)
-        self.raster_style_worker.signals.finished.connect(self.on_raster_style_finished)
-        self.raster_style_worker.signals.failed.connect(self.on_raster_style_failed)
-        self.raster_style_worker.signals.warning.connect(self.communication.show_warn)
-        self.raster_style_worker.start()
+        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        file_ref_str = f"file {file['id']} from {project['name']}"
+        builder = RasterStyleBuilder(local_file_path, file_ref_str)
+        uploader = RasterFileDescriptorStyleUploader(file["descriptor_id"])
+        self.save_style_with_descriptor(builder, uploader)
 
     def on_vector_style_finished(self, msg: str):
         self.communication.clear_message_bar()
