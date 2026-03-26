@@ -92,9 +92,11 @@ from rana_qgis_plugin.workers import (
 )
 from rana_qgis_plugin.workers_styling import (
     FileDescriptorStyleUploadWorker,
+    PublicationStyleUploadWorker,
     RasterFileDescriptorStyleUploader,
     RasterStyleBuilder,
     VectorFileDescriptorStyleUploader,
+    VectorStyleBuilder,
     VectorStyleBuilderOld,
 )
 
@@ -111,6 +113,7 @@ class Loader(QObject):
     file_upload_conflict = pyqtSignal()
     new_file_upload_finished = pyqtSignal(str)
     vector_style_finished = pyqtSignal()
+    publication_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     raster_style_finished = pyqtSignal()
     raster_style_failed = pyqtSignal(str)
@@ -146,6 +149,7 @@ class Loader(QObject):
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
         self.raster_style_worker: QThread = None
+        self.publication_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.communication = communication
 
@@ -976,11 +980,50 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict, list)
     def save_styles_from_publication(self, project, publication_version, items):
-        self.communication.show_info(f"Request syncing styles for {len(items)} items")
+        # self.communication.show_info(f"Request syncing styles for {len(items)} items")
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        # uploader = PublicationStyleUploader()
+        builders = []
+        from qgis.core import Qgis, QgsMessageLog
+
+        QgsMessageLog.logMessage(
+            f"Open data for {publication_version['publication_id']}", "DEBUG", Qgis.Info
+        )
+        for layer_item in items:
+            if layer_item.file["data_type"] not in ["raster", "vector"]:
+                continue
+            _, local_file_path = get_publication_layer_path(
+                project["slug"], layer_item.file["id"], layer_item.file_tree
+            )
+            file_ref_str = (
+                f"layer {layer_item.display_name} from {'/'.join(layer_item.file_tree)}"
+            )
+            if layer_item.file["data_type"] == "raster":
+                builders.append(RasterStyleBuilder(local_file_path, file_ref_str))
+            elif layer_item.file["data_type"] == "vector":
+                builders.append(
+                    VectorStyleBuilder(
+                        local_file_path, file_ref_str, layer_item.layer_in_file
+                    )
+                )
+        self.publication_style_worker = PublicationStyleUploadWorker(
+            publication_version, builders, self.communication
+        )
+        QgsMessageLog.logMessage(
+            f"Build {len(self.publication_style_worker.builders)} styles",
+            "DEBUG",
+            Qgis.Info,
+        )
+        self.publication_style_worker.finished.connect(self.on_publication_style_done)
+        # TODO: progress
+        # self.publication_style_worker.progress.connect(self.on_style_upload_progress)
+        self.publication_style_worker.start()
+
+    def on_publication_style_done(self, msg):
+        self.communication.show_info(msg)
+        self.communication.clear_message_bar()
+        self.publication_style_finished.emit()
 
     def save_style_with_descriptor(self, builder, uploader):
         """Start the uploader for saving vector styling files"""

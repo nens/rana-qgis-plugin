@@ -72,7 +72,7 @@ class NetworkManager(object):
         )
         return self.process_request()
 
-    def get_multipart(self, files: dict = None):
+    def get_multipart(self, files: list):
         # Create multipart object
         multipart = QHttpMultiPart(QHttpMultiPart.ContentType.FormDataType)
 

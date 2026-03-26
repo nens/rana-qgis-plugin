@@ -8,24 +8,15 @@ import zipfile
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from bridgestyle.qgis import togeostyler
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import (
-    QObject,
-    QSettings,
-    QThread,
-    pyqtSignal,
-)
+from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
 
-from rana_qgis_plugin.utils import (
-    get_local_file_path,
-    get_publication_layer_path,
-    image_to_bytes,
-)
+from rana_qgis_plugin.utils import image_to_bytes
 from rana_qgis_plugin.utils_api import (
     get_vector_style_upload_urls,
     upload_publication_style,
@@ -45,23 +36,49 @@ class StyleBuilder(QObject):
         self.local_file_path = local_file_path
         self.file_ref_str = file_ref_str
 
+    def get_files(self) -> list:
+        raise NotImplementedError
+
     @cached_property
     def tempdir(self) -> str:
+        # TODO: return Path?
         return tempfile.mkdtemp()
 
     @cached_property
-    def layers(self):
+    def all_layers(self):
         all_layers = QgsProject.instance().mapLayers().values()
         return [layer for layer in all_layers if self.local_file_path in layer.source()]
+
+    @property
+    def layers(self):
+        return self.all_layers
 
     def validate_layers(self) -> bool:
         raise NotImplementedError
 
-    def save_qml_style_to_file(self) -> str:
-        raise NotImplementedError
+    def _create_qml_zip(self, zip_path: str):
+        """Craete a QML zip file for all the qml files in the local directory"""
+        try:
+            with zipfile.ZipFile(zip_path, "w") as zip_file:
+                for root, _, files in os.walk(self.tempdir):
+                    for file in files:
+                        if file.endswith(".qml"):
+                            file_path = os.path.join(root, file)
+                            zip_file.write(
+                                file_path, os.path.relpath(file_path, self.tempdir)
+                            )
+        except Exception as e:
+            self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
-    def get_files(self) -> list:
-        raise NotImplementedError
+    def save_qml_style_to_file(self) -> tuple:
+        # Save QML style files for each layer to local directory
+        for layer in self.layers:
+            # TODO: this breaks with non writable paths!
+            qml_path = Path(self.tempdir).joinpath(f"{layer.name()}.qml")
+            layer.saveNamedStyle(str(qml_path))
+        zip_path = os.path.join(self.tempdir, "qml.zip")
+        self._create_qml_zip(zip_path)
+        return ("files", "qml.zip", zip_path, "application/zip")
 
 
 class RasterStyleBuilder(StyleBuilder):
@@ -78,26 +95,12 @@ class RasterStyleBuilder(StyleBuilder):
             return False
         return True
 
-    def save_qml_style_to_file(self) -> str:
-        layer = self.layers[0]
-        qml_file_name = Path(layer.name()).with_suffix(".qml").name
-        qml_path = str(Path(self.tempdir).joinpath(qml_file_name))
-        # qml_path = os.path.join(self.tempdir, qml_file_name)
-        layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(self.tempdir, "qml.zip")
-        with zipfile.ZipFile(zip_path, "w") as zipf:
-            zipf.write(qml_path, qml_file_name)
-        return zip_path
-
     def get_files(self) -> list:
-        zip_path = self.save_qml_style_to_file()
-        lizard_styling_path = self._save_lizard_style_to_file()
-        return [
-            ("files", "colormap.json", lizard_styling_path, "application/json"),
-            ("files", "qml.zip", zip_path, "application/zip"),
-        ]
+        zip_files = self.save_qml_style_to_file()
+        lizard_styling_files = self._save_lizard_style_to_file()
+        return [zip_files, lizard_styling_files]
 
-    def _save_lizard_style_to_file(self):
+    def _save_lizard_style_to_file(self) -> tuple:
         layer = self.layers[0]
         geostyler, _, _, warnings = togeostyler.convert(layer)
         if len(geostyler["rules"]) != 1:
@@ -131,19 +134,100 @@ class RasterStyleBuilder(StyleBuilder):
         lizard_styling_path = os.path.join(self.tempdir, "colormap.json")
         with open(lizard_styling_path, "w") as f:
             json.dump(lizard_styling, f)
-        return lizard_styling_path
+        return ("files", "colormap.json", lizard_styling_path, "application/json")
 
 
 class VectorStyleBuilder(StyleBuilder):
-    def __init__(self, project: dict, file: dict, layer_in_file: Optional[str] = None):
-        super().__init__(project, file)
+    def __init__(self, local_file_path: str, file_ref_str: str, layer_in_file: str):
+        super().__init__(local_file_path, file_ref_str)
         self.layer_in_file = layer_in_file
 
-    pass
+    def get_files(self) -> list:
+        zip_path = self.save_qml_style_to_file()
+        qgis_styling_files = self.get_qgis_styling_files()
+        return [zip_path] + qgis_styling_files
+
+    @property
+    def layers(self):
+        return [self.layer] if self.layer else []
+
+    @cached_property
+    def layer(self):
+        return next(
+            (layer for layer in super().layers if layer.name() == self.layer_in_file),
+            None,
+        )
+
+    def validate_layers(self) -> bool:
+        if not self.layer:
+            self.failed.emit(
+                f"Layer {self.layer_in_file} not found for {self.file_ref_str}"
+            )
+            return False
+        return True
+
+    @staticmethod
+    def _collect_json_files(temp_dir: Path, json_data: list[tuple[str, dict]]) -> list:
+        files = []
+        for name, data in json_data:
+            json_path = temp_dir.joinpath(name).with_suffix(".json")
+            with open(json_path, "w") as f:
+                json.dump(data, f)
+            files.append(("files", json_path.name, str(json_path), "application/json"))
+        return files
+
+    @staticmethod
+    def _collect_png_files(temp_dir: Path, png_data: list[tuple[str, Any]]) -> list:
+        files = []
+        for name, img_data in png_data:
+            png_path = temp_dir.joinpath(name).with_suffix(".png")
+            with open(png_path, "wb") as f:
+                f.write(image_to_bytes(img_data))
+            files.append(("files", png_path.name, str(png_path), "image/png"))
+        return files
+
+    def get_qgis_styling_files(self) -> list:
+        files = []
+        # Convert QGIS layers to styling files for the Rana Web Client
+        try:
+            _, warnings, mb_style, sprite_sheet = convertGroup(
+                {"layers": [self.layer.name()]},
+                {self.layer.name(): self.layer},
+                "http://baseUrl",
+                workspace="workspace",
+                name="default",
+            )
+            if warnings:
+                self.warning.emit(", ".join(set(warnings)))
+        except Exception as e:
+            self.failed.emit(f"Failed to convert local styling: {str(e)}")
+            return files
+        # Save styling to file
+        files += self._collect_json_files(Path(self.tempdir), [("style", mb_style)])
+        # Save sprite sheet to file
+        if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
+            files += self._collect_json_files(
+                Path(self.tempdir),
+                [
+                    ("sprite", sprite_sheet["json"]),
+                    ("sprite@2x", sprite_sheet["json2x"]),
+                ],
+            )
+            files += self._collect_png_files(
+                Path(self.tempdir),
+                [
+                    ("sprite", sprite_sheet["img"]),
+                    ("sprite@2x", sprite_sheet["img2x"]),
+                ],
+            )
+        return files
 
 
 class VectorStyleBuilderOld(StyleBuilder):
     """Collects style files for all layers in a vector file."""
+
+    def get_files(self) -> list:
+        return [self.save_qml_style_to_file()]
 
     def validate_layers(self) -> bool:
         if not self.layers:
@@ -152,33 +236,6 @@ class VectorStyleBuilderOld(StyleBuilder):
             )
             return False
         return True
-
-    def _create_qml_zip(self, zip_path: str):
-        """Craete a QML zip file for all the qml files in the local directory"""
-        try:
-            with zipfile.ZipFile(zip_path, "w") as zip_file:
-                for root, _, files in os.walk(self.tempdir):
-                    for file in files:
-                        if file.endswith(".qml"):
-                            file_path = os.path.join(root, file)
-                            zip_file.write(
-                                file_path, os.path.relpath(file_path, self.tempdir)
-                            )
-        except Exception as e:
-            self.failed.emit(f"Failed to create QML zip: {str(e)}")
-
-    def save_qml_style_to_file(self) -> str:
-        # Save QML style files for each layer to local directory
-        for layer in self.layers:
-            qml_path = os.path.join(self.tempdir, f"{layer.name()}.qml")
-            layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(self.tempdir, "qml.zip")
-        self._create_qml_zip(zip_path)
-        return zip_path
-
-    def get_files(self) -> list:
-        zip_path = self.save_qml_style_to_file()
-        return [("files", "qml.zip", zip_path, "application/zip")]
 
 
 class StyleUploader(QObject):
@@ -189,53 +246,6 @@ class StyleUploader(QObject):
 
     def upload_to_rana(self, files):
         raise NotImplementedError
-
-    def connect_external_signals(self, signals, builder: StyleBuilder):
-        builder.failed.connect(signals.failed.emit)
-        self.failed.connect(signals.failed.emit)
-        builder.warning.connect(signals.warning.emit)
-        self.warning.connect(signals.warning.emit)
-
-    def disconnect_external_signals(self, signals, builder: StyleBuilder):
-        for signal, func in [
-            (builder.failed, signals.failed.emit),
-            (builder.warning, signals.warning.emit),
-            (signals.failed, builder.failed.disconnect),
-            (signals.warning, builder.warning.disconnect),
-        ]:
-            try:
-                signal.disconnect(func)
-            except TypeError:
-                # TypeError is raised when signal is not connected
-                continue
-
-    @contextmanager
-    def signal_connections(self, signals, builder: StyleBuilder):
-        """Context manager to ensure signals are always connected and disconnected properly."""
-        self.connect_external_signals(signals, builder)
-        try:
-            yield
-        finally:
-            self.disconnect_external_signals(signals, builder)
-
-    def run(self, builder: StyleBuilder, signals):
-        with self.signal_connections(signals, builder):
-            # validate
-            if not builder.validate_layers():
-                return
-            os.makedirs(builder.tempdir, exist_ok=True)
-            # Collect files
-            files = builder.get_files()
-            # Upload styling files to rana
-            self.upload_to_rana(files)
-            # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
-            try:
-                shutil.rmtree(builder.tempdir)
-            except (FileNotFoundError, PermissionError, OSError) as e:
-                pass
-            signals.finished.emit(
-                f"Styling files uploaded successfully for {builder.file_ref_str}."
-            )
 
 
 class RasterFileDescriptorStyleUploader(StyleUploader):
@@ -348,11 +358,20 @@ class FileDescriptorStyleUploadWorker(QThread):
         self.communication = communication
         self.uploader = uploader
         self.builder = builder
+        self.success = True
         # Connect signals from uploader and builder
-        self.uploader.failed.connect(self.failed.emit)
         self.uploader.warning.connect(self.warning.emit)
-        self.builder.failed.connect(self.failed.emit)
         self.builder.warning.connect(self.warning.emit)
+        self.uploader.failed.connect(
+            self.mark_as_failed, Qt.ConnectionType.DirectConnection
+        )
+        self.builder.failed.connect(
+            self.mark_as_failed, Qt.ConnectionType.DirectConnection
+        )
+
+    def mark_as_failed(self, msg):
+        self.success = False
+        self.failed.emit(msg)
 
     def run(self):
         if not self.builder.validate_layers():
@@ -365,63 +384,81 @@ class FileDescriptorStyleUploadWorker(QThread):
             shutil.rmtree(self.builder.tempdir)
         except (FileNotFoundError, PermissionError, OSError) as e:
             pass
-        self.finished.emit(
-            f"Styling files uploaded successfully for {self.builder.file_ref_str}."
-        )
+        if self.success:
+            self.finished.emit(
+                f"Styling files uploaded successfully for {self.builder.file_ref_str}."
+            )
 
 
 class PublicationStyleUploadWorker(QThread):
     """Handle uploading many styles associated to single publication version"""
 
     finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
-    warning = pyqtSignal(str)
 
-    def __init__(self, publication_version, communication):
+    def __init__(
+        self, publication_version: dict, builders: list[StyleBuilder], communication
+    ):
         super().__init__()
         self.communication = communication
         self.publication_version = publication_version["version"]
         self.publication_id = publication_version["publication_id"]
+        self.builders = builders
+        self.warning_cnt = 0
+        self.fail_cnt = 0
 
-    def connect_builder_signals(self, builder: StyleBuilder):
-        builder.failed.connect(self.failed.emit)
-        builder.warning.connect(self.warning.emit)
+    @pyqtSlot(str)
+    def pass_fail_to_logging(self, msg):
+        self.communication.log_err(msg)
+        self.fail_cnt += 1
 
-    def disconnect_builder_signals(self, builder: StyleBuilder):
-        for signal, func in [
-            (builder.failed, self.failed.emit),
-            (builder.warning, self.warning.emit),
-        ]:
-            try:
-                signal.disconnect(func)
-            except TypeError:
-                # TypeError is raised when signal is not connected
-                continue
+    @pyqtSlot(str)
+    def pass_warning_to_logging(self, msg):
+        self.communication.log_warn(msg)
+        self.warning_cnt += 1
 
     @contextmanager
     def builder_signal_connections(self, builder: StyleBuilder):
+        connections = [
+            (builder.failed, self.pass_fail_to_logging),
+            (builder.warning, self.pass_warning_to_logging),
+        ]
         """Context manager to ensure signals are always connected and disconnected properly."""
-        self.connect_builder_signals(builder)
+        for signal, func in connections:
+            signal.connect(func)
         try:
             yield
         finally:
-            self.disconnect_builder_signals(builder)
+            for signal, func in connections:
+                try:
+                    signal.disconnect(func)
+                except TypeError:
+                    # TypeError is raised when signal is not connected
+                    continue
 
-    def run(self, builders):
-        for builder in builders:
+    def run(self):
+        for builder in self.builders:
+            from qgis.core import Qgis, QgsMessageLog
+
             with self.builder_signal_connections(builder):
                 if not builder.validate_layers():
-                    return
+                    continue
                 os.makedirs(builder.tempdir, exist_ok=True)
                 files = builder.get_files()
-            upload_publication_style(
-                self.publication_id, self.publication_version, files
-            )
+            if files:
+                # pass
+                # TODO: fix upload_publication_styling
+                resp = upload_publication_style(
+                    self.publication_id, self.publication_version, files
+                )
             # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
             try:
                 shutil.rmtree(builder.tempdir)
             except (FileNotFoundError, PermissionError, OSError) as e:
                 pass
-            self.finished.emit(
-                f"Styling files uploaded successfully for {builder.file_ref_str}."
-            )
+        nof_success = len(self.builders) - self.fail_cnt
+        msg = f"Styling files uploaded successfully for {nof_success} layers."
+        if self.fail_cnt > 0:
+            msg += "\nUpload failed for {self.fail_cnt} layers, see the logs for more information."
+        if self.warning_cnt > 0:
+            msg += f"\n{self.warning_cnt} warnings were generated, see the logs for more information."
+        self.finished.emit(msg)

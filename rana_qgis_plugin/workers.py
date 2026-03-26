@@ -218,7 +218,7 @@ class BatchFileDownloadWorker(QThread):
                 if downloader.file["id"] == file_id
             )
             downloader.download_file(self.signals)
-            download_path = downloader.get_local_file_path()
+            _, download_path = downloader.get_local_file_path()
             self.downloaded_files[downloader.file["id"]] = download_path
             self.downloaders.remove(downloader)
         # Iterate over the remaining downloaders and copy the existing file
