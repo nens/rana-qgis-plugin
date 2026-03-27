@@ -72,6 +72,7 @@ from rana_qgis_plugin.utils_api import (
     move_directory,
     move_file,
     start_tenant_process,
+    upload_publication_version,
 )
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
@@ -1015,21 +1016,28 @@ class Loader(QObject):
 
     def on_publication_style_done(self, msg, publication_version, tasks):
         # Update publication
-        new_publication_version = publication_version.copy()
-        for task, new_style_id in tasks:
-            tree_in_maps = task.file_tree[1:] + [task.display_name]
-            node = find_publication_map_layer_from_tree(
-                new_publication_version, tree_in_maps
+        style_update_map = {}
+        if len(tasks) > 0:
+            new_publication_version = publication_version.copy()
+            for task, new_style_id in tasks:
+                tree_in_maps = task.file_tree[1:] + [task.display_name]
+                node = find_publication_map_layer_from_tree(
+                    new_publication_version, tree_in_maps
+                )
+                if node:
+                    node["style_id"] = new_style_id
+            # Set version number at the latest moment possible
+            latest_publication_version = get_publication_version_details(
+                publication_version["publication_id"], latest=True
             )
-            if node:
-                node["style_id"] = new_style_id
-        # Set version number at the latest moment possible
-        latest_publication_version = get_publication_version_details(
-            publication_version["publication_id"], latest=True
-        )
-        new_publication_version["version"] = latest_publication_version["version"] + 1
-        # TODO: send to API
-        self.communication.show_info(msg)
+            new_publication_version["version"] = (
+                latest_publication_version["version"] + 1
+            )
+            upload_publication_version(
+                publication_version["publication_id"], new_publication_version
+            )
+        # self.communication.show_info(msg)
+        self.communication.show_info(f"Created new publication with version {new_publication_version['version']}")
         self.communication.clear_message_bar()
         self.publication_style_finished.emit()
 

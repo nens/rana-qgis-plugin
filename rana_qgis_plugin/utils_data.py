@@ -24,7 +24,6 @@ class RanaPublicationFileData(RanaFileData):
 @dataclass
 class RanaRasterPublicationFileData(RanaPublicationFileData):
     data_type: DataType = field(default=DataType.raster, init=False)
-    layer_in_file: str  # name of layer in gpkg
 
 
 @dataclass

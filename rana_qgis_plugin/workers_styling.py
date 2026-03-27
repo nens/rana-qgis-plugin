@@ -17,6 +17,7 @@ from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSl
 
 from rana_qgis_plugin.utils import get_publication_layer_path, image_to_bytes
 from rana_qgis_plugin.utils_api import (
+    FetchError,
     get_vector_style_upload_urls,
     upload_publication_style,
     upload_raster_styling,
@@ -41,6 +42,8 @@ class StyleBuilder(QObject):
 
     @cached_property
     def tempdir(self) -> Path:
+        import uuid
+        # return Path.home().joinpath("temp", 'rana', uuid.uuid4().hex)
         return Path(tempfile.mkdtemp())
 
     @cached_property
@@ -444,21 +447,36 @@ class PublicationStyleUploadWorker(QThread):
                 builder.tempdir.mkdir(parents=True, exist_ok=True)
                 files = builder.get_files()
             if files:
+                from qgis.core import Qgis, QgsMessageLog
+
+                # QgsMessageLog.logMessage(f"{files=}", "DEBUG", Qgis.Info)
+
                 # TODO: fix upload_publication_styling once I understand what "ref" is
-                resp = upload_publication_style(
-                    publication_id=self.publication_version["publication_id"],
-                    publication_version=self.publication_version["version"],
-                    file_path=task.file["id"],
-                    files=files,
-                )
-                resp = "foo"
-                new_style_ids.append((task, resp))
+                try:
+                    style_id = upload_publication_style(
+                        publication_id=self.publication_version["publication_id"],
+                        publication_version=self.publication_version["version"],
+                        file_path=task.file["id"],
+                        files=files,
+                    )
+                    new_style_ids.append((task, style_id))
+                    from qgis.core import Qgis, QgsMessageLog
+
+                    # QgsMessageLog.logMessage(f"{files=}", "DEBUG", Qgis.Info)
+
+                    QgsMessageLog.logMessage(
+                        f'Uploaded styling: {self.publication_version["publication_id"]=}; {style_id=}; {self.publication_version["version"]=}',
+                        "DEBUG",
+                        Qgis.Info,
+                    )
+                except FetchError as e:
+                    # mark as failed and continue with clean up
+                    self.pass_fail_to_logging(f"Failed to upload styling files: {e}")
             # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
             try:
                 shutil.rmtree(builder.tempdir)
             except (FileNotFoundError, PermissionError, OSError) as e:
                 pass
-        # TODO: build and upload new publication version
         if len(new_style_ids) > 0:
             msg = (
                 f"Styling files uploaded successfully for {len(new_style_ids)} layers."

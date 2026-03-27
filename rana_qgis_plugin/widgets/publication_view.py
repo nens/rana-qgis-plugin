@@ -59,6 +59,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
 from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
+from rana_qgis_plugin.utils import find_publication_map_layer_from_tree
 
 
 class MapItemType(Enum):
@@ -281,10 +282,15 @@ class PublicationView(QWidget):
 
     @pyqtSlot()
     def update_publication_version(self):
-        self.communication.show_info("Updating publication version not yet implemented")
-        # self.current_version = get_publication_version_details(
-        #     self.publication["id"], latest=True
-        # )
+        # self.communication.show_info("Updating publication version not yet implemented")
+        # TODO: somehow update the style_id; or can we just do this for all without updating UI
+        self.current_version = get_publication_version_details(
+            self.publication["id"], latest=True
+        )
+        self.update_style_ids(self.maps_model, is_root=True)
+        # TODO: signal from here so we know the styles are updated before enabling
+        self.communication.show_info(f"Updated publication version to {self.current_version['version']}")
+
 
     def update_publication(self, publication_id: str):
         self.publication = get_publication_details(publication_id)
@@ -551,6 +557,23 @@ class PublicationView(QWidget):
                     )
                 )
         return map_data
+
+    def update_style_ids(self, item, is_root=False):
+        from qgis.core import Qgis, QgsMessageLog
+        QgsMessageLog.logMessage(f'update style ids', "DEBUG", Qgis.Info)
+        if item.rowCount() == 0:
+            layer_item = item.data(Qt.UserRole)
+            QgsMessageLog.logMessage(f'found layer item: {layer_item.name}', "DEBUG", Qgis.Info)
+            tree_in_maps = layer_item.parents[1:] + [layer_item.name]
+            node = find_publication_map_layer_from_tree(self.current_version, tree_in_maps)
+            if node:
+                QgsMessageLog.logMessage(f'set style_id to {node["style_id"]}', "DEBUG", Qgis.Info)
+                layer_item.style_id = node["style_id"]
+        else:
+            for row in range(item.rowCount()):
+                child_item = item.item(row) if is_root else item.child(row, 0)
+                self.update_style_ids(child_item, is_root=False)
+
 
     def add_map_layers(self, parent_item, map_data: list[MapItemData]):
         """

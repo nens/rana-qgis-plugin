@@ -484,20 +484,24 @@ class RanaQgisPlugin:
         self.rana_browser.refresh()
         # TESTING
         # TODO remove this
-        self.rana_browser.projects_browser.set_project_from_id("2Q8UXRgQ")
+        from qgis.core import QgsProject
+
+        project_inst = QgsProject.instance()
+        root = project_inst.layerTreeRoot()
+        root.clear()
+        self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
+        # self.rana_browser.projects_browser.set_project_from_id("2Q8UXRgQ")
         self.rana_browser.projects_browser.project_selected.emit(
             self.rana_browser.projects_browser.project
         )
         self.rana_browser.project_widget.setCurrentIndex(2)
+        self.rana_browser.publications_browser.publication_selected.emit("BToE3oPs")
+
         # self.rana_browser.publications_browser.publication_selected.emit("TTTJnEAt")
         # self.rana_browser.publications_browser.publication_selected.emit("rfau7fYB")
-        self.rana_browser.publications_browser.publication_selected.emit("1RYqKuQ9")
+        # self.rana_browser.publications_browser.publication_selected.emit("1RYqKuQ9")
 
-        # from qgis.core import QgsProject
-        #
-        # project_inst = QgsProject.instance()
-        # root = project_inst.layerTreeRoot()
-        # root.clear()
+
         #
         # from qgis.core import Qgis, QgsMessageLog
         #

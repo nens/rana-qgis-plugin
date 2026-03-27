@@ -149,6 +149,9 @@ class FileDownloadForPublicationTree(FileDownloadBase):
 
     def get_style_zip(self):
         if self.style_id and self.file["data_type"] in ["raster", "vector"]:
+            from qgis.core import Qgis, QgsMessageLog
+
+            QgsMessageLog.logMessage(f'Get style for {self.publication_id=}; {self.style_id=}; {self.publication_version=}', "DEBUG", Qgis.Info)
             style_zip = get_publication_style(
                 self.publication_id,
                 self.style_id,

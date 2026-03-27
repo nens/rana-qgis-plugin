@@ -537,15 +537,15 @@ def upload_publication_style(
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/version/{publication_version}/styles"
-    # TODO fix this
     network_manager = NetworkManager(url, authcfg_id)
-    # status = network_manager.post_multipart(files=files, multipart_data={"file_path": file_path})
-    # if status:
-    #     response = network_manager.content
-    #     # TODO unpack response
-    #     return response
-    # else:
-    #     return None
+    status, msg = network_manager.post_multipart(
+        files=files, multipart_data={"file_path": file_path}
+    )
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        raise FetchError(msg, url, {})
 
 
 def get_schematisations(communication, icontains=""):
@@ -701,6 +701,25 @@ def get_publication_version_details(
     requested_version = "latest" if latest else str(version)
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{requested_version}"
     return simple_fetch(url)
+
+
+def upload_publication_version(publication_id: str, publication_version: dict):
+    tenant = get_tenant_id()
+    authcfg_id = get_authcfg_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
+    network_manager = NetworkManager(url, authcfg_id)
+    payload = {
+        "version": publication_version["version"],
+        "files": publication_version.get("files", []),
+        "maps": publication_version.get("maps", []),
+        "studies": publication_version.get("studies", []),
+    }
+    status, error = network_manager.post(payload=payload)
+    if status:
+        return network_manager.content
+    else:
+        # Raise when fetch failed, error should be handled downstream
+        raise Exception(f"Failed to upload publication version: {error=}; {url=}")
 
 
 def get_publication_version_files(publication_id: str, version: int) -> list:
