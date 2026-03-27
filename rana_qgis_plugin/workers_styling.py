@@ -448,6 +448,7 @@ class PublicationStyleUploadWorker(QThread):
                 resp = upload_publication_style(
                     publication_id=self.publication_version["publication_id"],
                     publication_version=self.publication_version["version"],
+                    file_path=task.file["id"],
                     files=files,
                 )
                 resp = "foo"

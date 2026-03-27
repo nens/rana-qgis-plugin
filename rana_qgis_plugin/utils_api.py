@@ -532,14 +532,14 @@ def get_publication_style(
 
 
 def upload_publication_style(
-    publication_id: str, publication_version: str, files: list
+    publication_id: str, publication_version: str, file_path: str, files: list
 ) -> Optional[str]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/version/{publication_version}/styles"
     # TODO fix this
-    # network_manager = NetworkManager(url, authcfg_id)
-    # status = network_manager.post_multipart(files=files)
+    network_manager = NetworkManager(url, authcfg_id)
+    # status = network_manager.post_multipart(files=files, multipart_data={"file_path": file_path})
     # if status:
     #     response = network_manager.content
     #     # TODO unpack response
