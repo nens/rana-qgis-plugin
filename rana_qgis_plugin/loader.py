@@ -1195,6 +1195,7 @@ class Loader(QObject):
                     local_schematisation,
                     organisation,
                     current_user,
+                    schematisation,
                     self.parent(),
                 )
 
