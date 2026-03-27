@@ -15,12 +15,13 @@ from bridgestyle.qgis import togeostyler
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
 
-from rana_qgis_plugin.utils import image_to_bytes
+from rana_qgis_plugin.utils import get_publication_layer_path, image_to_bytes
 from rana_qgis_plugin.utils_api import (
     get_vector_style_upload_urls,
     upload_publication_style,
     upload_raster_styling,
 )
+from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils_lizard import import_from_geostyler
 
 
@@ -179,7 +180,7 @@ class VectorStyleBuilder(StyleBuilder):
             self.failed.emit(f"Failed to convert local styling: {str(e)}")
             return files
         # Save styling to file
-        files += self._collect_json_files(self.tempdir, [("style", mb_style)])
+        files += self._collect_json_files([("style", mb_style)])
         # Save sprite sheet to file
         if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
             files += self._collect_json_files(
@@ -342,6 +343,8 @@ class FileDescriptorStyleUploadWorker(QThread):
         self.success = False
         self.failed.emit(msg)
 
+    # def _make_builder(self, task) -> StyleBuilder:
+
     def run(self):
         if not self.builder.validate_layers():
             self.failed.emit(
@@ -365,16 +368,21 @@ class FileDescriptorStyleUploadWorker(QThread):
 class PublicationStyleUploadWorker(QThread):
     """Handle uploading many styles associated to single publication version"""
 
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(str, list)
+    progress = pyqtSignal(int)
 
     def __init__(
-        self, publication_version: dict, builders: list[StyleBuilder], communication
+        self,
+        project: dict,
+        publication_version: dict,
+        tasks: list[RanaPublicationFileData],
+        communication,
     ):
         super().__init__()
         self.communication = communication
-        self.publication_version = publication_version["version"]
-        self.publication_id = publication_version["publication_id"]
-        self.builders = builders
+        self.project = project
+        self.publication_version = publication_version
+        self.tasks = tasks
         self.warning_cnt = 0
         self.fail_cnt = 0
 
@@ -407,9 +415,28 @@ class PublicationStyleUploadWorker(QThread):
                     # TypeError is raised when signal is not connected
                     continue
 
+    def _make_builder(self, task) -> StyleBuilder:
+        if task.data_type not in [DataType.raster, DataType.vector]:
+            raise ValueError(f"Unknown file type: {task.data_type.value}")
+        _, local_file_path = get_publication_layer_path(
+            self.project["slug"], task.file["id"], task.file_tree
+        )
+        file_ref_str = f"layer {task.display_name} from {'/'.join(task.file_tree)}"
+        if task.data_type == DataType.raster:
+            return RasterStyleBuilder(local_file_path, file_ref_str)
+        elif task.data_type == DataType.vector:
+            return VectorStyleBuilder(local_file_path, file_ref_str, task.layer_in_file)
+
     def run(self):
         not_fount_cnt = 0
-        for builder in self.builders:
+        new_style_ids = []
+        for i, task in enumerate(self.tasks):
+            self.progress.emit(i)
+            try:
+                builder = self._make_builder(task)
+            except ValueError:
+                not_fount_cnt += 1
+                continue
             with self.builder_signal_connections(builder):
                 if not builder.validate_layers():
                     not_fount_cnt += 1
@@ -417,19 +444,24 @@ class PublicationStyleUploadWorker(QThread):
                 builder.tempdir.mkdir(parents=True, exist_ok=True)
                 files = builder.get_files()
             if files:
-                # pass
-                # TODO: fix upload_publication_styling
+                # TODO: fix upload_publication_styling once I understand what "ref" is
                 resp = upload_publication_style(
-                    self.publication_id, self.publication_version, files
+                    publication_id=self.publication_version["publication_id"],
+                    publication_version=self.publication_version["version"],
+                    files=files,
                 )
+                resp = "foo"
+                new_style_ids.append((task, resp))
             # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
             try:
                 shutil.rmtree(builder.tempdir)
             except (FileNotFoundError, PermissionError, OSError) as e:
                 pass
-        nof_success = len(self.builders) - self.fail_cnt - not_fount_cnt
-        if nof_success > 0:
-            msg = f"Styling files uploaded successfully for {nof_success} layers."
+        # TODO: build and upload new publication version
+        if len(new_style_ids) > 0:
+            msg = (
+                f"Styling files uploaded successfully for {len(new_style_ids)} layers."
+            )
         else:
             msg = "No styling files uploaded."
         if not_fount_cnt > 0:
@@ -440,4 +472,4 @@ class PublicationStyleUploadWorker(QThread):
             msg += "\nUpload failed for {self.fail_cnt} layers, see the logs for more information."
         if self.warning_cnt > 0:
             msg += f"\n{self.warning_cnt} warnings were generated, see the logs for more information."
-        self.finished.emit(msg)
+        self.finished.emit(msg, new_style_ids)

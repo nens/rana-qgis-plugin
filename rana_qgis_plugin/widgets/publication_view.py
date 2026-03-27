@@ -4,7 +4,14 @@ from functools import cached_property
 from typing import Optional
 
 from qgis.gui import QgsCollapsibleGroupBox
-from qgis.PyQt.QtCore import QAbstractItemModel, QSettings, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import (
+    QAbstractItemModel,
+    QSettings,
+    Qt,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
 from qgis.PyQt.QtGui import (
     QColor,
     QDesktopServices,
@@ -272,6 +279,13 @@ class PublicationView(QWidget):
     def refresh(self):
         self.show_details(self.project, self.publication["id"])
 
+    @pyqtSlot()
+    def update_publication_version(self):
+        self.communication.show_info("Updating publication version not yet implemented")
+        # self.current_version = get_publication_version_details(
+        #     self.publication["id"], latest=True
+        # )
+
     def update_publication(self, publication_id: str):
         self.publication = get_publication_details(publication_id)
         if not self.publication:
@@ -513,7 +527,6 @@ class PublicationView(QWidget):
                         # When the layer cannot be matched, something went really wrong in the backend
                         continue
                 # Collect data needed for UI and to open and edit the layer
-                # from qgis.core import Qgis, QgsMessageLog
                 map_data.append(
                     LayerItemData(
                         name=layer["name"],
@@ -526,9 +539,6 @@ class PublicationView(QWidget):
                         parents=parents,
                     )
                 )
-                map_item = map_data[-1]
-                # QgsMessageLog.logMessage(f'Add layer item {map_item.name} {map_item.parents}', "DEBUG", Qgis.Info)
-
             elif layer.get("type") == "folder":
                 map_data.append(
                     FolderItemData(
@@ -540,7 +550,6 @@ class PublicationView(QWidget):
                         parents=parents,
                     )
                 )
-
         return map_data
 
     def add_map_layers(self, parent_item, map_data: list[MapItemData]):

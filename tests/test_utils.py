@@ -184,3 +184,35 @@ def test_get_threedi_schematisation_simulation_results_folder_with_colon(
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
     assert results_folder == expected_folder
+
+
+def test_find_publication_map_layer_from_tree():
+    publication_version = {
+        "maps": [
+            {
+                "name": "map_1",
+                "layers": [
+                    {"type": "layer", "name": "foo", "some_id": 1},
+                    {
+                        "type": "folder",
+                        "name": "bar",
+                        "layers": [{"type": "layer", "name": "foo", "some_id": 2}],
+                    },
+                ],
+            }
+        ]
+    }
+    tree_1 = ["map_1", "foo"]
+    tree_2 = ["map_1", "bar", "foo"]
+    assert (
+        utils.find_publication_map_layer_from_tree(publication_version, tree_1)[
+            "some_id"
+        ]
+        == 1
+    )
+    assert (
+        utils.find_publication_map_layer_from_tree(publication_version, tree_2)[
+            "some_id"
+        ]
+        == 2
+    )
