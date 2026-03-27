@@ -11,7 +11,7 @@ History
 - Reset rana widget on logout (nens/rana-qgis-plugin#336)
 - Fix bug where incorrect layer style was saved (nens/rana#3615)
 - Fix bug with saving style when same gpkg was opened as vector and via results-analysis (nens/rana#3850)
-
+- Model limit now correctly retrieved so user can delete models (nens/rana#3716)
 
 1.2.8 (2026-03-13)
 ------------------

@@ -21,8 +21,6 @@ uicls, basecls = uic.loadUiType(
 
 logger = logging.getLogger(__name__)
 
-MAX_SCHEMATISATION_MODELS = 32767
-
 
 class ModelDeletionDialog(uicls, basecls):
     """Dialog for model(s) deletion."""
@@ -34,6 +32,7 @@ class ModelDeletionDialog(uicls, basecls):
         local_schematisation,
         organisation,
         current_user,
+        schematisation,
         parent,
     ):
         super().__init__(parent)
@@ -41,6 +40,7 @@ class ModelDeletionDialog(uicls, basecls):
         self.communication = communication
         self.threedi_api = threedi_api
         self.local_schematisation = local_schematisation
+        self.schematisation = schematisation
         self.organisation = organisation
         self.current_user = current_user
         self.label_template = self.label.text()
@@ -84,7 +84,7 @@ class ModelDeletionDialog(uicls, basecls):
                 "limit": tc.FETCH_LIMIT,
                 "schematisation_name": self.local_schematisation.name,
             }
-            schematisation_limit = MAX_SCHEMATISATION_MODELS
+            schematisation_limit = self.schematisation.threedimodel_limit
             threedi_models, models_count = tc.fetch_3di_models_with_count(
                 **schematisation_limit_filters
             )
