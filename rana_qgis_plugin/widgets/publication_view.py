@@ -39,7 +39,10 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.utils import get_file_icon_name
+from rana_qgis_plugin.utils import (
+    find_publication_map_layer_from_tree,
+    get_file_icon_name,
+)
 from rana_qgis_plugin.utils_api import (
     get_publication_details,
     get_publication_version_details,
@@ -59,7 +62,6 @@ from rana_qgis_plugin.widgets.utils_file_action import (
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
 from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
-from rana_qgis_plugin.utils import find_publication_map_layer_from_tree
 
 
 class MapItemType(Enum):
@@ -204,8 +206,9 @@ class PublicationMapsTreeView(QTreeView):
 class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
-    open_many_in_qgis = pyqtSignal(dict, list)
-    save_many_styles = pyqtSignal(dict, list)
+    open_in_qgis = pyqtSignal(dict, list)
+    save_styles_to_rana = pyqtSignal(dict, list)
+    save_styles_finished = pyqtSignal()
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -282,15 +285,12 @@ class PublicationView(QWidget):
 
     @pyqtSlot()
     def update_publication_version(self):
-        # self.communication.show_info("Updating publication version not yet implemented")
-        # TODO: somehow update the style_id; or can we just do this for all without updating UI
+        # Set current version to latest after saving styling
         self.current_version = get_publication_version_details(
             self.publication["id"], latest=True
         )
         self.update_style_ids(self.maps_model, is_root=True)
-        # TODO: signal from here so we know the styles are updated before enabling
-        self.communication.show_info(f"Updated publication version to {self.current_version['version']}")
-
+        self.save_styles_finished.emit()
 
     def update_publication(self, publication_id: str):
         self.publication = get_publication_details(publication_id)
@@ -298,6 +298,7 @@ class PublicationView(QWidget):
             self.communication.show_warn("Cannot find loaded publication")
             self.show_failed.emit()
             return
+        # this breaks with no version?
         self.current_version = get_publication_version_details(
             self.publication["id"], latest=True
         )
@@ -404,11 +405,11 @@ class PublicationView(QWidget):
 
     def open_maps(self, map_item: MapItemData):
         all_items = self.collect_all_open_items(map_item, [])
-        self.open_many_in_qgis.emit(self.current_version, all_items)
+        self.open_in_qgis.emit(self.current_version, all_items)
 
     def save_styles(self, map_item: MapItemData):
         all_items = self.collect_all_save_items(map_item, [])
-        self.save_many_styles.emit(self.current_version, all_items)
+        self.save_styles_to_rana.emit(self.current_version, all_items)
 
     def collect_all_open_items(
         self,
@@ -559,21 +560,18 @@ class PublicationView(QWidget):
         return map_data
 
     def update_style_ids(self, item, is_root=False):
-        from qgis.core import Qgis, QgsMessageLog
-        QgsMessageLog.logMessage(f'update style ids', "DEBUG", Qgis.Info)
         if item.rowCount() == 0:
             layer_item = item.data(Qt.UserRole)
-            QgsMessageLog.logMessage(f'found layer item: {layer_item.name}', "DEBUG", Qgis.Info)
             tree_in_maps = layer_item.parents[1:] + [layer_item.name]
-            node = find_publication_map_layer_from_tree(self.current_version, tree_in_maps)
+            node = find_publication_map_layer_from_tree(
+                self.current_version, tree_in_maps
+            )
             if node:
-                QgsMessageLog.logMessage(f'set style_id to {node["style_id"]}', "DEBUG", Qgis.Info)
                 layer_item.style_id = node["style_id"]
         else:
             for row in range(item.rowCount()):
                 child_item = item.item(row) if is_root else item.child(row, 0)
                 self.update_style_ids(child_item, is_root=False)
-
 
     def add_map_layers(self, parent_item, map_data: list[MapItemData]):
         """

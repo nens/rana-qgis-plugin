@@ -1036,8 +1036,7 @@ class Loader(QObject):
             upload_publication_version(
                 publication_version["publication_id"], new_publication_version
             )
-        # self.communication.show_info(msg)
-        self.communication.show_info(f"Created new publication with version {new_publication_version['version']}")
+        self.communication.show_info(msg)
         self.communication.clear_message_bar()
         self.publication_style_finished.emit()
 

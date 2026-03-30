@@ -43,6 +43,7 @@ class StyleBuilder(QObject):
     @cached_property
     def tempdir(self) -> Path:
         import uuid
+
         # return Path.home().joinpath("temp", 'rana', uuid.uuid4().hex)
         return Path(tempfile.mkdtemp())
 
@@ -67,11 +68,14 @@ class StyleBuilder(QObject):
         except Exception as e:
             self.failed.emit(f"Failed to create QML zip: {str(e)}")
 
+    def layer_qml_path(self, layer_name: str) -> Path:
+        return self.tempdir.joinpath(f"{layer_name}.qml")
+
     def save_qml_style_to_file(self) -> tuple:
         # Save QML style files for each layer to local directory
         for layer in self.layers:
             # TODO: this breaks with non writable paths due to illegal characters
-            qml_path = self.tempdir.joinpath(f"{layer.name()}.qml")
+            qml_path = self.layer_qml_path(layer.name())
             layer.saveNamedStyle(str(qml_path))
         zip_path = str(self.tempdir.joinpath("qml.zip"))
         self._create_qml_zip(zip_path)
@@ -81,6 +85,11 @@ class StyleBuilder(QObject):
 class RasterStyleBuilder(StyleBuilder):
     def validate_layers(self) -> bool:
         return len(self.layers) == 1
+
+    def layer_qml_path(self, layer_name: str) -> Path:
+        return self.tempdir.joinpath(
+            Path(self.local_file_path).with_suffix(".qml").name
+        )
 
     def get_files(self) -> list:
         zip_files = self.save_qml_style_to_file()
@@ -447,10 +456,6 @@ class PublicationStyleUploadWorker(QThread):
                 builder.tempdir.mkdir(parents=True, exist_ok=True)
                 files = builder.get_files()
             if files:
-                from qgis.core import Qgis, QgsMessageLog
-
-                # QgsMessageLog.logMessage(f"{files=}", "DEBUG", Qgis.Info)
-
                 # TODO: fix upload_publication_styling once I understand what "ref" is
                 try:
                     style_id = upload_publication_style(
@@ -460,15 +465,6 @@ class PublicationStyleUploadWorker(QThread):
                         files=files,
                     )
                     new_style_ids.append((task, style_id))
-                    from qgis.core import Qgis, QgsMessageLog
-
-                    # QgsMessageLog.logMessage(f"{files=}", "DEBUG", Qgis.Info)
-
-                    QgsMessageLog.logMessage(
-                        f'Uploaded styling: {self.publication_version["publication_id"]=}; {style_id=}; {self.publication_version["version"]=}',
-                        "DEBUG",
-                        Qgis.Info,
-                    )
                 except FetchError as e:
                     # mark as failed and continue with clean up
                     self.pass_fail_to_logging(f"Failed to upload styling files: {e}")

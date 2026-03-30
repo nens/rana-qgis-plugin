@@ -524,20 +524,21 @@ class RanaBrowser(QWidget):
             )
         )
         # Connect open signal from publication_view
-        self.publication_view.open_many_in_qgis.connect(
+        self.publication_view.open_in_qgis.connect(
             lambda publication_version,
             items: self.open_in_qgis_from_publication_selected.emit(
                 self.project, publication_version, items
             )
         )
         # Save styles to rana from publication_view
-        self.publication_view.save_many_styles.connect(
+        self.publication_view.save_styles_to_rana.connect(
             lambda publication_version,
             items: self.save_styles_from_publication_selected.emit(
                 self.project, publication_version, items
             )
         )
-
+        self.publication_view.save_styles_to_rana.connect(self.disable)
+        self.publication_view.save_styles_finished.connect(self.enable)
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(

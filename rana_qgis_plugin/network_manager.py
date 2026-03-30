@@ -97,10 +97,6 @@ class NetworkManager(object):
     ):
         self.prepare_request(params)
         multipart = self.get_multipart_for_files(files)
-        from qgis.core import Qgis, QgsMessageLog
-
-        QgsMessageLog.logMessage(f"{multipart=}", "DEBUG", Qgis.Info)
-
         for field_name, field_value in multipart_data.items():
             field_part = QHttpPart()
             field_part.setHeader(
@@ -109,14 +105,12 @@ class NetworkManager(object):
             )
             field_part.setBody(field_value.encode("utf-8"))  # Ensure it's sent as bytes
             multipart.append(field_part)
-        QgsMessageLog.logMessage(f"{multipart=}", "DEBUG", Qgis.Info)
-
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
         # Remove the content-type header from prepare_request
         self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
         self._reply = self._network_manager.post(self._request, multipart)
         multipart.setParent(self._reply)  # Delete multipart with reply
-        return self.process_request(silent=False)
+        return self.process_request()
 
     def put_multipart(self, params: dict = None, files: dict = None):
         self.prepare_request(params)
@@ -151,7 +145,7 @@ class NetworkManager(object):
         if self._auth_cfg:
             self._auth_manager.updateNetworkRequest(self._request, self._auth_cfg)
 
-    def process_request(self, silent=True):
+    def process_request(self):
         self._reply.finished.connect(self.fetch_finished)
         self._network_manager.requestTimedOut.connect(self.request_timeout)
 
@@ -191,16 +185,6 @@ class NetworkManager(object):
 
             raw_content = self._reply.readAll()
             content_type = self._reply.header(QNetworkRequest.ContentTypeHeader)
-            if not silent:
-                from qgis.core import Qgis, QgsMessageLog
-
-                code = self._reply.attribute(
-                    QNetworkRequest.Attribute.HttpStatusCodeAttribute
-                )
-                QgsMessageLog.logMessage(f"{code=}", "DEBUG", Qgis.Info)
-                QgsMessageLog.logMessage(f"{content_type=}", "DEBUG", Qgis.Info)
-                QgsMessageLog.logMessage(f"{raw_content=}", "DEBUG", Qgis.Info)
-
             if content_type.startswith("application/json"):
                 json_doc = QJsonDocument.fromJson(raw_content)
                 if json_doc.isObject():
