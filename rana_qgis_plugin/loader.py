@@ -980,17 +980,14 @@ class Loader(QObject):
         self.file_upload_progress.emit(progress)
 
     @pyqtSlot(dict, dict, list)
-    def save_styles_from_publication(self, project, publication_version, items):
+    def save_styles_from_publication(self, project, publication_version, tasks):
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        valid_items = [
-            layer_item
-            for layer_item in items
-            if layer_item.file["data_type"] in ["raster", "vector"]
-        ]
+        for layer_item in tasks:
+            assert layer_item.file["data_type"] in ["raster", "vector"]
         self.publication_style_worker = PublicationStyleUploadWorker(
-            project, publication_version, valid_items, self.communication
+            project, publication_version, tasks, self.communication
         )
         self.publication_style_worker.finished.connect(
             lambda msg, tasks: self.on_publication_style_done(
@@ -998,7 +995,7 @@ class Loader(QObject):
             )
         )
         self.publication_style_worker.progress.connect(
-            lambda progress: self.on_publication_style_progress(progress, len(items))
+            lambda progress: self.on_publication_style_progress(progress, len(tasks))
         )
         self.publication_style_worker.start()
 

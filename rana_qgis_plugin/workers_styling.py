@@ -42,9 +42,6 @@ class StyleBuilder(QObject):
 
     @cached_property
     def tempdir(self) -> Path:
-        import uuid
-
-        # return Path.home().joinpath("temp", 'rana', uuid.uuid4().hex)
         return Path(tempfile.mkdtemp())
 
     @cached_property
@@ -440,23 +437,22 @@ class PublicationStyleUploadWorker(QThread):
             return VectorStyleBuilder(local_file_path, file_ref_str, task.layer_in_file)
 
     def run(self):
-        not_fount_cnt = 0
+        not_found_cnt = 0
         new_style_ids = []
         for i, task in enumerate(self.tasks):
             self.progress.emit(i)
             try:
                 builder = self._make_builder(task)
             except ValueError:
-                not_fount_cnt += 1
+                not_found_cnt += 1
                 continue
             with self.builder_signal_connections(builder):
                 if not builder.validate_layers():
-                    not_fount_cnt += 1
+                    not_found_cnt += 1
                     continue
                 builder.tempdir.mkdir(parents=True, exist_ok=True)
                 files = builder.get_files()
             if files:
-                # TODO: fix upload_publication_styling once I understand what "ref" is
                 try:
                     style_id = upload_publication_style(
                         publication_id=self.publication_version["publication_id"],
@@ -479,9 +475,9 @@ class PublicationStyleUploadWorker(QThread):
             )
         else:
             msg = "No styling files uploaded."
-        if not_fount_cnt > 0:
+        if not_found_cnt > 0:
             msg += (
-                f"\n{not_fount_cnt} layers not found. Add layers to map and try again."
+                f"\n{not_found_cnt} layers not found. Add layers to map and try again."
             )
         if self.fail_cnt > 0:
             msg += "\nUpload failed for {self.fail_cnt} layers, see the logs for more information."

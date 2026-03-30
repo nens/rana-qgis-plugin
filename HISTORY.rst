@@ -14,7 +14,6 @@ History
 1.2.9 (2026-03-30)
 ------------------
 
->>>>>>> publications
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
 - Modified some (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)

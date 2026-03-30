@@ -15,8 +15,10 @@ class FileAction(Enum):
     OPEN_IN_QGIS = "Open in QGIS"
     OPEN_WMS = "Open WMS in QGIS"
     SAVE_REVISION = "Upload to Rana"
+    # Saving vector and raster styling follows a different path and thus there are different actions
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
     SAVE_RASTER_STYLING = "Save raster style to Rana"
+    # SAVE_STYLING action is not used atm, only defined for naming
     SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
     VIEW_REVISIONS = "View all Revisions"
