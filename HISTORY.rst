@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.9 (unreleased)
+1.2.9 (2026-03-30)
 ------------------
 
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
