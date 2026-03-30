@@ -77,6 +77,7 @@ class LayerManager(QObject):
     ):
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         file_name = Path(file["id"]).name
+        parents = parents + [file_name]
         if descriptor["meta"] is None:
             self.communication.show_warn(
                 f"No metadata found for {file_name}, processing probably has not finished yet."
