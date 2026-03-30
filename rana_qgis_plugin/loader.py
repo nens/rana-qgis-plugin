@@ -925,7 +925,6 @@ class Loader(QObject):
         self.file_upload_worker.warning.connect(
             lambda msg: self.communication.show_warn(msg)
         )
-        self.file_upload_worker.start()
 
     def handle_file_conflict(self):
         warn_and_ask_msg = (

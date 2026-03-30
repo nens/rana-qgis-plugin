@@ -276,10 +276,13 @@ class FileUploadWorker(QThread):
                 )
             self.finished.emit(self.project)
 
+    def get_online_path(self, local_path: Path) -> str:
+        return f"{self.online_dir}{local_path.name}"
+
     def upload_single_file(
         self, local_path: Path, progress_start, progress_step
     ) -> bool:
-        online_path = f"{self.online_dir}{local_path.name}"
+        online_path = self.get_online_path(local_path)
         # Check if file exists locally before uploading
         if not local_path.exists():
             self.failed.emit(f"File not found: {local_path}")
@@ -331,12 +334,16 @@ class ExistingFileUploadWorker(FileUploadWorker):
             online_dir = ""
         else:
             online_dir = file["id"][: file["id"].rindex("/") + 1]
+        self.online_path = file["id"]
         super().__init__(project, [local_file], online_dir)
 
         self.file_overwrite = False
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
         self.finished.connect(self._finish)
+
+    def get_online_path(self, local_path: Path) -> str:
+        return self.online_path
 
     def handle_file_conflict(self, online_path):
         local_last_modified = QSettings().value(self.last_modified_key)
