@@ -85,11 +85,13 @@ from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowse
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
 from rana_qgis_plugin.workers import (
     AvatarWorker,
-    BatchFileDownloadWorker,
     ExistingFileUploadWorker,
+    FileUploadWorker,
+)
+from rana_qgis_plugin.workers_download import (
+    BatchFileDownloadWorker,
     FileDownloadForFileTree,
     FileDownloadForPublicationTree,
-    FileUploadWorker,
     LizardResultDownloadWorker,
     SingleFileDownloadWorker,
 )
