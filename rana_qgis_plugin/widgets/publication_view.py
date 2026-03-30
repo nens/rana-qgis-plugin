@@ -48,7 +48,7 @@ from rana_qgis_plugin.utils_api import (
     get_publication_version_details,
     get_publication_version_files,
     get_tenant_file_descriptor,
-    get_tenant_id,
+    get_tenant_id, FetchError,
 )
 from rana_qgis_plugin.utils_data import (
     RanaRasterPublicationFileData,
@@ -298,10 +298,14 @@ class PublicationView(QWidget):
             self.communication.show_warn("Cannot find loaded publication")
             self.show_failed.emit()
             return
-        # this breaks with no version?
-        self.current_version = get_publication_version_details(
-            self.publication["id"], latest=True
-        )
+        try:
+            self.current_version = get_publication_version_details(
+                self.publication["id"], latest=True
+            )
+        except FetchError as e:
+            # FetchError is raised when the publication version cannot be retrieved
+            self.communication.log_warn(str(e))
+            self.current_version = None
         if self.current_version:
             self.file_map = {
                 item["file"]["id"]: item["file"]
