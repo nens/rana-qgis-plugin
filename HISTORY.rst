@@ -6,7 +6,7 @@ History
 ------------------
 
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
-- Modified (user facing) texts (nens/rana#3136)
+- Modified some (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)
 - Reset rana widget on logout (nens/rana-qgis-plugin#336)
 - Fix bug where incorrect layer style was saved (nens/rana#3615)

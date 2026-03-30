@@ -12,8 +12,8 @@ from rana_qgis_plugin.utils_scenario import (
 
 
 class FileAction(Enum):
-    OPEN_IN_QGIS = "Add to Map"
-    OPEN_WMS = "Add WMS to Map"
+    OPEN_IN_QGIS = "Open in QGIS"
+    OPEN_WMS = "Open WMS in QGIS"
     SAVE_REVISION = "Upload to Rana"
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
     SAVE_RASTER_STYLING = "Save raster style to Rana"
