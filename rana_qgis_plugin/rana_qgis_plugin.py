@@ -328,11 +328,14 @@ class RanaQgisPlugin:
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
-            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
                 self.rana_browser.disable
             )
-            self.rana_browser.open_many_in_qgis_from_publication_selected.connect(
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
                 self.loader.open_many_in_qgis_from_publication
+            )
+            self.rana_browser.save_styles_from_publication_selected.connect(
+                self.loader.save_styles_from_publication
             )
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
@@ -436,6 +439,9 @@ class RanaQgisPlugin:
             self.loader.raster_style_finished.connect(self.rana_browser.enable)
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
+            self.loader.publication_style_finished.connect(
+                self.rana_browser.publication_view.update_after_save_styles
+            )
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_wizard_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)

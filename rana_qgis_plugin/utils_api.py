@@ -466,14 +466,12 @@ def get_vector_style_upload_urls(descriptor_id: str):
         return None
 
 
-def get_raster_style_upload_urls(descriptor_id: str, files):
+def upload_raster_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"
-
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.put_multipart(files=files)
-
     if status:
         response = network_manager.content
         return response
@@ -526,6 +524,23 @@ def get_publication_style(
             return None
     else:
         return None
+
+
+def upload_publication_style(
+    publication_id: str, publication_version: str, file_path: str, files: list
+) -> Optional[str]:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/version/{publication_version}/styles"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, msg = network_manager.post_multipart(
+        files=files, multipart_data={"file_path": file_path}
+    )
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        raise FetchError(msg, url, {})
 
 
 def get_schematisations(communication, icontains=""):
@@ -674,19 +689,32 @@ def get_publication_details(publication_id: str):
     return simple_fetch(url)
 
 
-def get_publication_version_latest(publication_id: str):
+def get_publication_version_details(
+    publication_id: str, version: Optional[int] = None, latest: Optional[bool] = True
+) -> dict:
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
-    # Default sorting is version number from high to low, so first item should be latest
-    return fetch_first(url)
-
-
-def get_publication_version_details(publication_id: str, version: int) -> dict:
-    tenant = get_tenant_id()
-    url = (
-        f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}"
-    )
+    requested_version = "latest" if latest else str(version)
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{requested_version}"
     return simple_fetch(url)
+
+
+def upload_publication_version(publication_id: str, publication_version: dict):
+    tenant = get_tenant_id()
+    authcfg_id = get_authcfg_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
+    network_manager = NetworkManager(url, authcfg_id)
+    payload = {
+        "version": publication_version["version"],
+        "files": publication_version.get("files", []),
+        "maps": publication_version.get("maps", []),
+        "studies": publication_version.get("studies", []),
+    }
+    status, error = network_manager.post(payload=payload)
+    if status:
+        return network_manager.content
+    else:
+        # Raise when upload failed, error should be handled downstream
+        raise Exception(f"Failed to upload publication version: {error=}; {url=}")
 
 
 def get_publication_version_files(publication_id: str, version: int) -> list:

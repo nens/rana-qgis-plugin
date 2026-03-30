@@ -1,7 +1,4 @@
-import copy
 import io
-import json
-import math
 import os
 import shutil
 import zipfile
@@ -11,9 +8,7 @@ from time import sleep
 from typing import List, Optional
 
 import requests
-from bridgestyle.mapboxgl.fromgeostyler import convertGroup
-from bridgestyle.qgis import togeostyler
-from qgis.core import Qgis, QgsMessageLog, QgsProject
+from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt.QtCore import (
     QObject,
     QRunnable,
@@ -25,14 +20,12 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QPixmap
 from threedi_mi_utils import bypass_max_path_limit
 
-from rana_qgis_plugin.utils_lizard import import_from_geostyler
 from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 
 from .utils import (
     build_vrt,
     get_local_file_path,
     get_publication_layer_path,
-    image_to_bytes,
     split_scenario_extent,
 )
 from .utils_api import (
@@ -40,13 +33,11 @@ from .utils_api import (
     get_publication_style,
     get_raster_file_link,
     get_raster_style_file,
-    get_raster_style_upload_urls,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
     get_tenant_project_file,
     get_vector_style_file,
-    get_vector_style_upload_urls,
     map_result_to_file_name,
     request_raster_generate,
     start_file_upload,
@@ -123,7 +114,7 @@ class FileDownloadBase:
 
 
 class FileDownloadForFileTree(FileDownloadBase):
-    def get_local_file_path(self) -> tuple[str, str]:
+    def get_local_file_path(self) -> str:
         return get_local_file_path(self.project["slug"], self.file["id"])
 
     def get_style_zip(self):
@@ -365,244 +356,6 @@ class ExistingFileUploadWorker(FileUploadWorker):
 
     def _finish(self):
         QSettings().setValue(self.last_modified_key, self.last_modified)
-
-
-class VectorStyleWorker(QThread):
-    """Worker thread for generating vector styling files"""
-
-    finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
-    warning = pyqtSignal(str)
-
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-    ):
-        super().__init__()
-        self.project = project
-        self.file = file
-
-    def upload_to_s3(self, url: str, data: dict, content_type: str):
-        """Method to upload to S3"""
-        try:
-            headers = {"Content-Type": content_type}
-            response = requests.put(url, data=data, headers=headers)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
-
-    def create_qml_zip(self, local_dir: str, zip_path: str):
-        """Craete a QML zip file for all the qml files in the local directory"""
-        try:
-            with zipfile.ZipFile(zip_path, "w") as zip_file:
-                for root, _, files in os.walk(local_dir):
-                    for file in files:
-                        if file.endswith(".qml"):
-                            file_path = os.path.join(root, file)
-                            zip_file.write(
-                                file_path, os.path.relpath(file_path, local_dir)
-                            )
-        except Exception as e:
-            self.failed.emit(f"Failed to create QML zip: {str(e)}")
-
-    @pyqtSlot()
-    def run(self):
-        if not self.file:
-            self.failed.emit("File not found.")
-            return
-        path = self.file["id"]
-        file_ref_str = f"file {path} from {self.project['name']}"  # string used to refer to current file
-        local_dir, local_file_path = get_local_file_path(self.project["slug"], path)
-
-        descriptor_id = self.file["descriptor_id"]
-        all_layers = QgsProject.instance().mapLayers().values()
-        layers = [layer for layer in all_layers if local_file_path in layer.source()]
-
-        if not layers:
-            self.failed.emit(
-                f"No layers found for {file_ref_str}. Add file to map and try again"
-            )
-            return
-
-        qgis_layers = {layer.name(): layer for layer in layers}
-        group = {"layers": list(qgis_layers.keys())}
-        base_url = "http://baseUrl"
-
-        # Save QML style files for each layer to local directory
-        os.makedirs(local_dir, exist_ok=True)
-        for layer in layers:
-            qml_path = os.path.join(local_dir, f"{layer.name()}.qml")
-            layer.saveNamedStyle(str(qml_path))
-
-        # Convert QGIS layers to styling files for the Rana Web Client
-        try:
-            _, warnings, mb_style, sprite_sheet = convertGroup(
-                group, qgis_layers, base_url, workspace="workspace", name="default"
-            )
-            if warnings:
-                self.warning.emit(", ".join(set(warnings)))
-
-            # Get upload URLs to S3
-            upload_urls = get_vector_style_upload_urls(descriptor_id)
-
-            if not upload_urls:
-                self.failed.emit("Failed to get vector style upload URLs from the API.")
-                return
-
-            # Upload style.json
-            self.upload_to_s3(
-                upload_urls["style.json"],
-                json.dumps(mb_style).replace(r"\\n", r"\n").replace(r"\\t", r"\t"),
-                "application/json",
-            )
-
-            # Upload sprite images if available
-            if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-                self.upload_to_s3(
-                    upload_urls["sprite.png"],
-                    image_to_bytes(sprite_sheet["img"]),
-                    "image/png",
-                )
-                self.upload_to_s3(
-                    upload_urls["sprite@2x.png"],
-                    image_to_bytes(sprite_sheet["img2x"]),
-                    "image/png",
-                )
-                self.upload_to_s3(
-                    upload_urls["sprite.json"], sprite_sheet["json"], "application/json"
-                )
-                self.upload_to_s3(
-                    upload_urls["sprite@2x.json"],
-                    sprite_sheet["json2x"],
-                    "application/json",
-                )
-
-            # Zip and upload QML zip
-            zip_path = os.path.join(local_dir, "qml.zip")
-            self.create_qml_zip(local_dir, zip_path)
-            with open(zip_path, "rb") as file:
-                self.upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
-            os.remove(zip_path)
-
-            # Finish
-            self.finished.emit(
-                f"Styling files uploaded successfully for {file_ref_str}."
-            )
-        except Exception as e:
-            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
-
-
-class RasterStyleWorker(QThread):
-    """Worker thread for generating and uploading raster styling files"""
-
-    finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
-    warning = pyqtSignal(str)
-
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-    ):
-        super().__init__()
-        self.project = project
-        self.file = file
-
-    @pyqtSlot()
-    def run(self):
-        if not self.file:
-            self.failed.emit("File not found.")
-            return
-        path = self.file["id"]
-        local_dir, local_file_path = get_local_file_path(self.project["slug"], path)
-        file_ref_str = f"file {path} from {self.project['name']}"  # string used to refer to current file
-        descriptor_id = self.file["descriptor_id"]
-        all_layers = QgsProject.instance().mapLayers().values()
-        layers = [layer for layer in all_layers if local_file_path in layer.source()]
-
-        if not layers:
-            self.failed.emit(
-                f"No layers found for {file_ref_str}. Add file to map and try again"
-            )
-            return
-
-        if not len(layers) == 1:
-            self.failed.emit(
-                f"Multiple layers found for {file_ref_str}. Add file to map and try again"
-            )
-            return
-
-        layer = layers[0]
-
-        # Save QML style files for each layer to local directory
-        local_dir, _ = get_local_file_path(self.project["slug"], path)
-        os.makedirs(local_dir, exist_ok=True)
-
-        qml_file_name = os.path.splitext(layer.name())[0] + ".qml"
-        qml_path = os.path.join(local_dir, qml_file_name)
-        layer.saveNamedStyle(str(qml_path))
-        zip_path = os.path.join(local_dir, "qml.zip")
-        with zipfile.ZipFile(zip_path, "w") as zipf:
-            zipf.write(qml_path, qml_file_name)
-
-        # Raster styling to geostyler, and then to lizard styling
-        try:
-            geostyler, _, _, warnings = togeostyler.convert(layer)
-            if len(geostyler["rules"]) != 1:
-                self.failed.emit(f"Multiple rules found for {file_ref_str}.")
-                return
-            if len(geostyler["rules"][0]["symbolizers"]) != 1:
-                self.failed.emit(f"Multiple symbolizers found for {file_ref_str}.")
-                return
-
-            lizard_styling = import_from_geostyler(
-                geostyler["rules"][0]["symbolizers"][0]
-            )
-
-            # Do some corrections and checks
-            labels = copy.deepcopy(lizard_styling.get("labels", {}))
-            for language, ranges in labels.items():
-                new_labels = []
-                for quantity, label in ranges:
-                    if math.isinf(quantity):
-                        warnings.append(
-                            f"Label '{label}' with infinite quantity cannot be used and will be ignored."
-                        )
-                    else:
-                        new_labels.append([quantity, label])
-
-                lizard_styling["labels"][language] = new_labels
-
-            if lizard_styling["type"] == "DiscreteColormap":
-                for entry, _ in lizard_styling["data"]:
-                    if isinstance(entry, float):
-                        self.failed.emit(
-                            f"Failed to generate and upload styling files: DiscreteColormap cannot contain float quantities."
-                        )
-                        return
-
-            if warnings:
-                self.warning.emit(", ".join(set(warnings)))
-
-            lizard_styling_path = os.path.join(local_dir, "colormap.json")
-            with open(lizard_styling_path, "w") as f:
-                json.dump(lizard_styling, f)
-
-            files = [
-                ("files", "colormap.json", lizard_styling_path, "application/json"),
-                ("files", "qml.zip", zip_path, "application/zip"),
-            ]
-            get_raster_style_upload_urls(descriptor_id, files)
-
-            os.remove(zip_path)
-            os.remove(lizard_styling_path)
-
-            self.finished.emit(
-                f"Styling files uploaded successfully for {file_ref_str}."
-            )
-        except Exception as e:
-            self.failed.emit(f"Failed to generate and upload styling files: {str(e)}")
 
 
 class LizardResultDownloadWorker(QThread):

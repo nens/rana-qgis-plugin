@@ -16,6 +16,7 @@ from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
+import rana_qgis_plugin.utils_data as dm
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.layer_manager import (
@@ -47,6 +48,7 @@ from rana_qgis_plugin.simulation.utils import (
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
+    find_publication_map_layer_from_tree,
     get_local_file_path,
     get_publication_layer_path,
     get_threedi_api,
@@ -59,6 +61,7 @@ from rana_qgis_plugin.utils_api import (
     delete_tenant_project_directory,
     delete_tenant_project_file,
     get_process_id_for_tag,
+    get_publication_version_details,
     get_tenant_details,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
@@ -69,8 +72,8 @@ from rana_qgis_plugin.utils_api import (
     move_directory,
     move_file,
     start_tenant_process,
+    upload_publication_version,
 )
-from rana_qgis_plugin.utils_data import RanaVectorPublicationFileData
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -88,9 +91,16 @@ from rana_qgis_plugin.workers import (
     FileDownloadForPublicationTree,
     FileUploadWorker,
     LizardResultDownloadWorker,
-    RasterStyleWorker,
     SingleFileDownloadWorker,
-    VectorStyleWorker,
+)
+from rana_qgis_plugin.workers_styling import (
+    FileDescriptorStyleUploadWorker,
+    PublicationStyleUploadWorker,
+    RasterFileDescriptorStyleUploader,
+    RasterStyleBuilder,
+    VectorFileDescriptorStyleUploader,
+    VectorStyleBuilder,
+    VectorStyleBuilderOld,
 )
 
 STYLE_DIR = Path(__file__).parent / "styles"
@@ -106,6 +116,7 @@ class Loader(QObject):
     file_upload_conflict = pyqtSignal()
     new_file_upload_finished = pyqtSignal(str)
     vector_style_finished = pyqtSignal()
+    publication_style_finished = pyqtSignal()
     vector_style_failed = pyqtSignal(str)
     raster_style_finished = pyqtSignal()
     raster_style_failed = pyqtSignal(str)
@@ -141,6 +152,7 @@ class Loader(QObject):
         self.file_upload_worker: QThread = None
         self.vector_style_worker: QThread = None
         self.raster_style_worker: QThread = None
+        self.publication_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.communication = communication
 
@@ -221,36 +233,10 @@ class Loader(QObject):
                 self.communication.clear_message_bar()
                 self.file_download_failed.emit("")
                 return
-
-        # Use a local function here to reduce the amount of data that is being passed
-        # This may be changed when more functionality is added
-        # TODO: update this comment if anything changes here
-        def on_all_files_downloaded(*args):
-            self.communication.clear_message_bar()
-            self.batch_file_download_worker.wait()
-            for i, layer_item in enumerate(items_to_download):
-                local_dir_structure, local_file_path = get_publication_layer_path(
-                    project["slug"], layer_item.file["id"], layer_item.file_tree
-                )
-                layer_name_in_file = (
-                    layer_item.layer_in_file
-                    if isinstance(layer_item, RanaVectorPublicationFileData)
-                    else None
-                )
-                layer_manager = PublicationLayerManager(
-                    self.communication,
-                    parent=self.parent(),
-                    display_name=layer_item.display_name,
-                    publication_tree=layer_item.file_tree,
-                    layer_name_in_file=layer_name_in_file,
-                )
-                open_file_via_layer_manager(
-                    project, layer_item.file, local_file_path, layer_manager
-                )
-            self.file_download_finished.emit(None)
-
         self.batch_file_download_worker.signals.all_finished.connect(
-            on_all_files_downloaded
+            lambda: self.on_many_publication_files_downloaded(
+                project, items_to_download
+            )
         )
         self.batch_file_download_worker.signals.failed.connect(
             self.on_file_download_failed
@@ -262,6 +248,30 @@ class Loader(QObject):
             f"Start downloading {self.batch_file_download_worker.nof_files} files..."
         )
         self.batch_file_download_worker.start()
+
+    def on_many_publication_files_downloaded(self, project: dict, tasks: list):
+        self.communication.clear_message_bar()
+        self.batch_file_download_worker.wait()
+        for i, layer_item in enumerate(tasks):
+            local_dir_structure, local_file_path = get_publication_layer_path(
+                project["slug"], layer_item.file["id"], layer_item.file_tree
+            )
+            layer_name_in_file = (
+                layer_item.layer_in_file
+                if isinstance(layer_item, dm.RanaVectorPublicationFileData)
+                else None
+            )
+            layer_manager = PublicationLayerManager(
+                self.communication,
+                parent=self.parent(),
+                display_name=layer_item.display_name,
+                publication_tree=layer_item.file_tree,
+                layer_name_in_file=layer_name_in_file,
+            )
+            open_file_via_layer_manager(
+                project, layer_item.file, local_file_path, layer_manager
+            )
+        self.file_download_finished.emit(None)
 
     @pyqtSlot(dict, dict, dict)
     def open_schematisation_with_revision(self, project, revision, schematisation):
@@ -968,15 +978,73 @@ class Loader(QObject):
         )
         self.file_upload_progress.emit(progress)
 
-    @pyqtSlot(dict, dict)
-    def save_vector_style(self, project, file):
-        """Start the worker for saving vector styling files"""
+    @pyqtSlot(dict, dict, list)
+    def save_styles_from_publication(self, project, publication_version, tasks):
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        self.vector_style_worker = VectorStyleWorker(
-            project,
-            file,
+        for layer_item in tasks:
+            assert layer_item.file["data_type"] in ["raster", "vector"]
+        self.publication_style_worker = PublicationStyleUploadWorker(
+            project, publication_version, tasks, self.communication
+        )
+        self.publication_style_worker.finished.connect(
+            lambda msg, tasks: self.on_publication_style_done(
+                msg, publication_version, tasks
+            )
+        )
+        self.publication_style_worker.progress.connect(
+            lambda progress: self.on_publication_style_progress(progress, len(tasks))
+        )
+        self.publication_style_worker.start()
+
+    def on_publication_style_progress(self, progress: int, max: int):
+        self.communication.progress_bar(
+            f"Generating and saving styling files ({progress + 1} out of {max})",
+            0,
+            max,
+            progress,
+            clear_msg_bar=True,
+        )
+
+    def on_publication_style_done(self, msg, publication_version, tasks):
+        # Update publication
+        style_update_map = {}
+        if len(tasks) > 0:
+            new_publication_version = publication_version.copy()
+            for task, new_style_id in tasks:
+                tree_in_maps = task.file_tree[1:] + [task.display_name]
+                node = find_publication_map_layer_from_tree(
+                    new_publication_version, tree_in_maps
+                )
+                if node:
+                    node["style_id"] = new_style_id
+            # Set version number at the latest moment possible
+            latest_publication_version = get_publication_version_details(
+                publication_version["publication_id"], latest=True
+            )
+            new_publication_version["version"] = (
+                latest_publication_version["version"] + 1
+            )
+            upload_publication_version(
+                publication_version["publication_id"], new_publication_version
+            )
+        self.communication.show_info(msg)
+        self.communication.clear_message_bar()
+        self.publication_style_finished.emit()
+
+    @pyqtSlot(dict, dict)
+    def save_vector_style(self, project, file):
+        """Start the uploader for saving vector styling files"""
+        self.communication.progress_bar(
+            "Generating and saving vector styling files...", clear_msg_bar=True
+        )
+        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        file_ref_str = f"file {file['id']} from {project['name']}"
+        builder = VectorStyleBuilderOld(local_file_path, file_ref_str)
+        uploader = VectorFileDescriptorStyleUploader(file["descriptor_id"], builder)
+        self.vector_style_worker = FileDescriptorStyleUploadWorker(
+            uploader, builder, self.communication
         )
         self.vector_style_worker.finished.connect(self.on_vector_style_finished)
         self.vector_style_worker.failed.connect(self.on_vector_style_failed)
@@ -986,12 +1054,12 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     def save_raster_style(self, project, file):
         """Start the worker for saving raster styling files"""
-        self.communication.progress_bar(
-            "Generating and saving raster styling files...", clear_msg_bar=True
-        )
-        self.raster_style_worker = RasterStyleWorker(
-            project,
-            file,
+        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        file_ref_str = f"file {file['id']} from {project['name']}"
+        builder = RasterStyleBuilder(local_file_path, file_ref_str)
+        uploader = RasterFileDescriptorStyleUploader(file["descriptor_id"])
+        self.raster_style_worker = FileDescriptorStyleUploadWorker(
+            uploader, builder, self.communication
         )
         self.raster_style_worker.finished.connect(self.on_raster_style_finished)
         self.raster_style_worker.failed.connect(self.on_raster_style_failed)

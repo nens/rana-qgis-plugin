@@ -4,7 +4,14 @@ from functools import cached_property
 from typing import Optional
 
 from qgis.gui import QgsCollapsibleGroupBox
-from qgis.PyQt.QtCore import QAbstractItemModel, QSettings, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import (
+    QAbstractItemModel,
+    QSettings,
+    Qt,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
 from qgis.PyQt.QtGui import (
     QColor,
     QDesktopServices,
@@ -32,12 +39,15 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.utils import get_file_icon_name
+from rana_qgis_plugin.utils import (
+    find_publication_map_layer_from_tree,
+    get_file_icon_name,
+)
 from rana_qgis_plugin.utils_api import (
+    FetchError,
     get_publication_details,
     get_publication_version_details,
     get_publication_version_files,
-    get_publication_version_latest,
     get_tenant_file_descriptor,
     get_tenant_id,
 )
@@ -197,7 +207,9 @@ class PublicationMapsTreeView(QTreeView):
 class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
-    open_many_in_qgis = pyqtSignal(dict, list)
+    open_in_qgis = pyqtSignal(dict, list)
+    save_styles_to_rana = pyqtSignal(dict, list)
+    save_styles_finished = pyqtSignal()
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -272,17 +284,29 @@ class PublicationView(QWidget):
     def refresh(self):
         self.show_details(self.project, self.publication["id"])
 
+    @pyqtSlot()
+    def update_after_save_styles(self):
+        # Set current version to latest after saving styling
+        self.current_version = get_publication_version_details(
+            self.publication["id"], latest=True
+        )
+        self.update_style_ids(self.maps_model, is_root=True)
+        self.save_styles_finished.emit()
+
     def update_publication(self, publication_id: str):
         self.publication = get_publication_details(publication_id)
         if not self.publication:
             self.communication.show_warn("Cannot find loaded publication")
             self.show_failed.emit()
             return
-        latest_publication = get_publication_version_latest(self.publication["id"])
-        if latest_publication:
+        try:
             self.current_version = get_publication_version_details(
-                self.publication["id"], latest_publication["version"]
+                self.publication["id"], latest=True
             )
+        except FetchError as e:
+            # FetchError is raised when the publication version cannot be retrieved
+            self.communication.log_warn(str(e))
+            self.current_version = None
         if self.current_version:
             self.file_map = {
                 item["file"]["id"]: item["file"]
@@ -384,25 +408,44 @@ class PublicationView(QWidget):
         link = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=3&publication={self.publication['id']}"
         QDesktopServices.openUrl(QUrl(link))
 
-    def open_map(self, map_item: LayerItemData):
-        # Use batch mode to limit the number of signals
-        self.open_maps(map_item)
-
     def open_maps(self, map_item: MapItemData):
-        all_items = self.collect_all_maps(map_item, [])
-        self.open_many_in_qgis.emit(self.current_version, all_items)
+        all_items = self.collect_all_open_items(map_item, [])
+        self.open_in_qgis.emit(self.current_version, all_items)
 
-    def collect_all_maps(
+    def save_styles(self, map_item: MapItemData):
+        all_items = self.collect_all_save_items(map_item, [])
+        self.save_styles_to_rana.emit(self.current_version, all_items)
+
+    def collect_all_open_items(
         self,
-        layer_item,
+        layer_item: MapItemData,
+        collected_items: list[
+            RanaRasterPublicationFileData | RanaVectorPublicationFileData
+        ],
+    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        return self.collect_all_items(layer_item, "support_open", collected_items)
+
+    def collect_all_save_items(
+        self,
+        layer_item: MapItemData,
+        collected_items: list[
+            RanaRasterPublicationFileData | RanaVectorPublicationFileData
+        ],
+    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        return self.collect_all_items(layer_item, "support_save", collected_items)
+
+    def collect_all_items(
+        self,
+        layer_item: MapItemData,
+        support_attr: str,
         collected_items: list[
             RanaRasterPublicationFileData | RanaVectorPublicationFileData
         ],
     ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
         if isinstance(layer_item, FolderItemData):
             for sub_item in layer_item.sub_items:
-                self.collect_all_maps(sub_item, collected_items)
-        if isinstance(layer_item, LayerItemData):
+                self.collect_all_items(sub_item, support_attr, collected_items)
+        if isinstance(layer_item, LayerItemData) and getattr(layer_item, support_attr):
             if layer_item.data_type == "raster":
                 collected_items.append(
                     RanaRasterPublicationFileData(
@@ -424,11 +467,6 @@ class PublicationView(QWidget):
                 )
         return collected_items
 
-    def save_styles(self, map_item: MapItemData):
-        # TODO: recurse through map_item and save styles
-        self.communication.show_info("Saving styles is not yet implemented.")
-        pass
-
     def get_button_container(
         self,
         map_item: MapItemData,
@@ -437,16 +475,13 @@ class PublicationView(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         if map_item.support_open:
-            open_btn = QPushButton("Open in QGIS")
+            open_btn = QPushButton(FileAction.OPEN_IN_QGIS.value)
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
-            if isinstance(map_item, FolderItemData):
-                open_btn.clicked.connect(lambda: self.open_maps(map_item))
-            else:
-                open_btn.clicked.connect(lambda: self.open_map(map_item))
+            open_btn.clicked.connect(lambda: self.open_maps(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
-            save_btn = QPushButton("Save style to Rana")
+            save_btn = QPushButton(FileAction.SAVE_STYLING.value)
             save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
             save_btn.clicked.connect(lambda: self.save_styles(map_item))
             layout.addWidget(save_btn)
@@ -504,7 +539,6 @@ class PublicationView(QWidget):
                         # When the layer cannot be matched, something went really wrong in the backend
                         continue
                 # Collect data needed for UI and to open and edit the layer
-                # from qgis.core import Qgis, QgsMessageLog
                 map_data.append(
                     LayerItemData(
                         name=layer["name"],
@@ -517,9 +551,6 @@ class PublicationView(QWidget):
                         parents=parents,
                     )
                 )
-                map_item = map_data[-1]
-                # QgsMessageLog.logMessage(f'Add layer item {map_item.name} {map_item.parents}', "DEBUG", Qgis.Info)
-
             elif layer.get("type") == "folder":
                 map_data.append(
                     FolderItemData(
@@ -531,8 +562,21 @@ class PublicationView(QWidget):
                         parents=parents,
                     )
                 )
-
         return map_data
+
+    def update_style_ids(self, item, is_root=False):
+        if item.rowCount() == 0:
+            layer_item = item.data(Qt.UserRole)
+            tree_in_maps = layer_item.parents[1:] + [layer_item.name]
+            node = find_publication_map_layer_from_tree(
+                self.current_version, tree_in_maps
+            )
+            if node:
+                layer_item.style_id = node["style_id"]
+        else:
+            for row in range(item.rowCount()):
+                child_item = item.item(row) if is_root else item.child(row, 0)
+                self.update_style_ids(child_item, is_root=False)
 
     def add_map_layers(self, parent_item, map_data: list[MapItemData]):
         """

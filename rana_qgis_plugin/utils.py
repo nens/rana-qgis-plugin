@@ -267,3 +267,19 @@ def get_file_icon_name(data_type: str) -> str:
         "geometrycollection": "mIconGeometryCollection.svg",
     }
     return icon_map.get(data_type.lower(), "mIconFile.svg")
+
+
+def find_publication_map_layer_from_tree(publication_version: dict, tree: list[str]):
+    def traverse_layers(layers, path):
+        for layer in layers:
+            if layer["name"] == path[0]:
+                if layer["type"] == "layer" and len(path) == 1:
+                    return layer
+                # Continue recursion in nested layers
+                return traverse_layers(layer.get("layers", []), path[1:])
+        return None  # No match found
+
+    for map_ in publication_version.get("maps", []):
+        if map_["name"] == tree[0]:
+            return traverse_layers(map_.get("layers", []), tree[1:])
+    return None

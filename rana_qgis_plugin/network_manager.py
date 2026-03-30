@@ -2,9 +2,7 @@ import json
 import urllib.parse
 
 from qgis.core import (
-    Qgis,
     QgsApplication,
-    QgsMessageLog,
     QgsNetworkAccessManager,
     QgsProcessingException,
 )
@@ -72,11 +70,9 @@ class NetworkManager(object):
         )
         return self.process_request()
 
-    def put_multipart(self, params: dict = None, files: dict = None):
-        self.prepare_request(params)
+    def get_multipart_for_files(self, files: list):
         # Create multipart object
         multipart = QHttpMultiPart(QHttpMultiPart.ContentType.FormDataType)
-
         if files:
             for field_name, file_name, file_path, content_type in files:
                 file = QFile(file_path)
@@ -94,14 +90,36 @@ class NetworkManager(object):
                     )
                     part.setBody(file_data)
                     multipart.append(part)
+        return multipart
 
+    def post_multipart(
+        self, params: dict = None, files: list = None, multipart_data: dict = None
+    ):
+        self.prepare_request(params)
+        multipart = self.get_multipart_for_files(files)
+        for field_name, field_value in multipart_data.items():
+            field_part = QHttpPart()
+            field_part.setHeader(
+                QNetworkRequest.KnownHeaders.ContentDispositionHeader,
+                f'form-data; name="{field_name}"',
+            )
+            field_part.setBody(field_value.encode("utf-8"))  # Ensure it's sent as bytes
+            multipart.append(field_part)
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
         # Remove the content-type header from prepare_request
         self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
+        self._reply = self._network_manager.post(self._request, multipart)
+        multipart.setParent(self._reply)  # Delete multipart with reply
+        return self.process_request()
 
+    def put_multipart(self, params: dict = None, files: dict = None):
+        self.prepare_request(params)
+        multipart = self.get_multipart_for_files(files)
+        # Don't set ContentTypeHeader manually - multipart sets it with boundary
+        # Remove the content-type header from prepare_request
+        self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
         self._reply = self._network_manager.put(self._request, multipart)
         multipart.setParent(self._reply)  # Delete multipart with reply
-
         return self.process_request()
 
     def delete(self, params: dict = None):
@@ -158,7 +176,6 @@ class NetworkManager(object):
             description = self._reply.errorString()
         else:
             status = True
-
             if (
                 self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
                 == 204
@@ -168,7 +185,6 @@ class NetworkManager(object):
 
             raw_content = self._reply.readAll()
             content_type = self._reply.header(QNetworkRequest.ContentTypeHeader)
-
             if content_type.startswith("application/json"):
                 json_doc = QJsonDocument.fromJson(raw_content)
                 if json_doc.isObject():

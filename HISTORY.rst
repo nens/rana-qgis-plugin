@@ -8,6 +8,7 @@ History
 - Add publications browser (nens/rana-qgis-plugin#302)
 - Add publication view (nens/rana-qgis-plugin#303)
 - Support opening layers in maps from vector and raster files (nens/rana-qgis-plugin#304)
+- Support saving style from map layers to Rana (nens/rana-qgis-plugin#305)
 
 
 1.2.9 (2026-03-30)
