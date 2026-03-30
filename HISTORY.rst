@@ -5,7 +5,7 @@ History
 1.2.10 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Group vector layers under filename (nens/rana#3889)
 
 
 1.2.9 (2026-03-30)
