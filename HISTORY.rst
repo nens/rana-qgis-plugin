@@ -12,6 +12,7 @@ History
 - Fix bug where incorrect layer style was saved (nens/rana#3615)
 - Fix bug with saving style when same gpkg was opened as vector and via results-analysis (nens/rana#3850)
 - Model limit now correctly retrieved so user can delete models (nens/rana#3716)
+- Added support for atan2 in styling (GeoCat/bridge-style#126)
 
 1.2.8 (2026-03-13)
 ------------------
