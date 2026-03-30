@@ -44,11 +44,12 @@ from rana_qgis_plugin.utils import (
     get_file_icon_name,
 )
 from rana_qgis_plugin.utils_api import (
+    FetchError,
     get_publication_details,
     get_publication_version_details,
     get_publication_version_files,
     get_tenant_file_descriptor,
-    get_tenant_id, FetchError,
+    get_tenant_id,
 )
 from rana_qgis_plugin.utils_data import (
     RanaRasterPublicationFileData,
@@ -266,7 +267,7 @@ class PublicationView(QWidget):
         scroll_area.setWidget(collapsible_container)
 
         button_layout = QHBoxLayout()
-        btn_open = QPushButton("Add all to Map")
+        btn_open = QPushButton("Open all maps in QGIS")
         btn_open.clicked.connect(lambda _: self.open_maps(self.root_item))
         btn_rana = QPushButton("Open publication in Rana (web)")
         btn_rana.clicked.connect(lambda: self.open_in_rana())
@@ -284,7 +285,7 @@ class PublicationView(QWidget):
         self.show_details(self.project, self.publication["id"])
 
     @pyqtSlot()
-    def update_publication_version(self):
+    def update_after_save_styles(self):
         # Set current version to latest after saving styling
         self.current_version = get_publication_version_details(
             self.publication["id"], latest=True

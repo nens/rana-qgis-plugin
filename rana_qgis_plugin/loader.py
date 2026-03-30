@@ -233,36 +233,10 @@ class Loader(QObject):
                 self.communication.clear_message_bar()
                 self.file_download_failed.emit("")
                 return
-
-        # Use a local function here to reduce the amount of data that is being passed
-        # This may be changed when more functionality is added
-        # TODO: update this comment if anything changes here
-        def on_all_files_downloaded(*args):
-            self.communication.clear_message_bar()
-            self.batch_file_download_worker.wait()
-            for i, layer_item in enumerate(items_to_download):
-                local_dir_structure, local_file_path = get_publication_layer_path(
-                    project["slug"], layer_item.file["id"], layer_item.file_tree
-                )
-                layer_name_in_file = (
-                    layer_item.layer_in_file
-                    if isinstance(layer_item, dm.RanaVectorPublicationFileData)
-                    else None
-                )
-                layer_manager = PublicationLayerManager(
-                    self.communication,
-                    parent=self.parent(),
-                    display_name=layer_item.display_name,
-                    publication_tree=layer_item.file_tree,
-                    layer_name_in_file=layer_name_in_file,
-                )
-                open_file_via_layer_manager(
-                    project, layer_item.file, local_file_path, layer_manager
-                )
-            self.file_download_finished.emit(None)
-
         self.batch_file_download_worker.signals.all_finished.connect(
-            on_all_files_downloaded
+            lambda: self.on_many_publication_files_downloaded(
+                project, items_to_download
+            )
         )
         self.batch_file_download_worker.signals.failed.connect(
             self.on_file_download_failed
@@ -274,6 +248,30 @@ class Loader(QObject):
             f"Start downloading {self.batch_file_download_worker.nof_files} files..."
         )
         self.batch_file_download_worker.start()
+
+    def on_many_publication_files_downloaded(self, project: dict, tasks: list):
+        self.communication.clear_message_bar()
+        self.batch_file_download_worker.wait()
+        for i, layer_item in enumerate(tasks):
+            local_dir_structure, local_file_path = get_publication_layer_path(
+                project["slug"], layer_item.file["id"], layer_item.file_tree
+            )
+            layer_name_in_file = (
+                layer_item.layer_in_file
+                if isinstance(layer_item, dm.RanaVectorPublicationFileData)
+                else None
+            )
+            layer_manager = PublicationLayerManager(
+                self.communication,
+                parent=self.parent(),
+                display_name=layer_item.display_name,
+                publication_tree=layer_item.file_tree,
+                layer_name_in_file=layer_name_in_file,
+            )
+            open_file_via_layer_manager(
+                project, layer_item.file, local_file_path, layer_manager
+            )
+        self.file_download_finished.emit(None)
 
     @pyqtSlot(dict, dict, dict)
     def open_schematisation_with_revision(self, project, revision, schematisation):

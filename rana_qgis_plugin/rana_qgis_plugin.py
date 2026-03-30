@@ -440,7 +440,7 @@ class RanaQgisPlugin:
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
             self.loader.publication_style_finished.connect(
-                self.rana_browser.publication_view.update_publication_version
+                self.rana_browser.publication_view.update_after_save_styles
             )
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_wizard_cancelled.connect(self.rana_browser.enable)
