@@ -2,19 +2,27 @@ History
 =======
 
 
-1.2.9 (unreleased)
-------------------
+1.2.10 (unreleased)
+-------------------
 
 - Add publications browser (nens/rana-qgis-plugin#302)
 - Add publication view (nens/rana-qgis-plugin#303)
 - Support opening layers in maps from vector and raster files (nens/rana-qgis-plugin#304)
 - Support saving style from map layers to Rana (nens/rana-qgis-plugin#305)
+
+
+1.2.9 (2026-03-30)
+------------------
+
+>>>>>>> publications
 - Handle uncaught errors via custom excepthook (nens/rana-qgis-plugin#254)
-- Modified (user facing) texts (nens/rana#3136)
+- Modified some (user facing) texts (nens/rana#3136)
 - Remove 3Di authentication when logging out (nens/rana-qgis-plugin#337)
 - Reset rana widget on logout (nens/rana-qgis-plugin#336)
 - Fix bug where incorrect layer style was saved (nens/rana#3615)
 - Fix bug with saving style when same gpkg was opened as vector and via results-analysis (nens/rana#3850)
+- Model limit now correctly retrieved so user can delete models (nens/rana#3716)
+- Added support for atan2 in styling (GeoCat/bridge-style#126)
 
 
 1.2.8 (2026-03-13)

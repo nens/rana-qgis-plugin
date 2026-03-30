@@ -125,7 +125,7 @@ class RevisionsView(QWidget):
         threedi_revision, schematisation = data
         if threedi_revision:
             menu = QMenu(self)
-            action = QAction("Add to Map", self)
+            action = QAction("Open in QGIS", self)
             action.triggered.connect(
                 lambda _: self.open_schematisation_revision_in_qgis_requested.emit(
                     threedi_revision.to_dict(), schematisation["schematisation"]
