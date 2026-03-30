@@ -472,11 +472,6 @@ def upload_raster_styling(descriptor_id: str, files):
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.put_multipart(files=files)
-    from qgis.core import Qgis, QgsMessageLog
-
-    QgsMessageLog.logMessage(
-        f"{status}; {network_manager.content=}", "DEBUG", Qgis.Info
-    )
     if status:
         response = network_manager.content
         return response
@@ -718,7 +713,7 @@ def upload_publication_version(publication_id: str, publication_version: dict):
     if status:
         return network_manager.content
     else:
-        # Raise when fetch failed, error should be handled downstream
+        # Raise when upload failed, error should be handled downstream
         raise Exception(f"Failed to upload publication version: {error=}; {url=}")
 
 

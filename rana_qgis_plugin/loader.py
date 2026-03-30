@@ -997,7 +997,6 @@ class Loader(QObject):
                 msg, publication_version, tasks
             )
         )
-        # TODO: progress?
         self.publication_style_worker.progress.connect(
             lambda progress: self.on_publication_style_progress(progress, len(items))
         )
