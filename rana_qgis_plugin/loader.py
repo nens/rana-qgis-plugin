@@ -16,7 +16,6 @@ from qgis.PyQt.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
-import rana_qgis_plugin.utils_data as dm
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.layer_manager import (
@@ -258,17 +257,12 @@ class Loader(QObject):
             local_dir_structure, local_file_path = get_publication_layer_path(
                 project["slug"], layer_item.file["id"], layer_item.file_tree
             )
-            layer_name_in_file = (
-                layer_item.layer_in_file
-                if isinstance(layer_item, dm.RanaVectorPublicationFileData)
-                else None
-            )
             layer_manager = PublicationLayerManager(
                 self.communication,
                 parent=self.parent(),
                 display_name=layer_item.display_name,
                 publication_tree=layer_item.file_tree,
-                layer_name_in_file=layer_name_in_file,
+                layer_name_in_file=layer_item.layer_in_file,
             )
             open_file_via_layer_manager(
                 project, layer_item.file, local_file_path, layer_manager

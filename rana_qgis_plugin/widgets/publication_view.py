@@ -38,6 +38,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+import rana_qgis_plugin.utils_data as dm
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils import (
     find_publication_map_layer_from_tree,
@@ -50,10 +51,6 @@ from rana_qgis_plugin.utils_api import (
     get_publication_version_files,
     get_tenant_file_descriptor,
     get_tenant_id,
-)
-from rana_qgis_plugin.utils_data import (
-    RanaRasterPublicationFileData,
-    RanaVectorPublicationFileData,
 )
 from rana_qgis_plugin.utils_settings import base_url
 from rana_qgis_plugin.utils_time import format_activity_timestamp_str
@@ -419,52 +416,37 @@ class PublicationView(QWidget):
     def collect_all_open_items(
         self,
         layer_item: MapItemData,
-        collected_items: list[
-            RanaRasterPublicationFileData | RanaVectorPublicationFileData
-        ],
-    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        collected_items: list[dm.RanaPublicationFileData],
+    ) -> list[dm.RanaPublicationFileData]:
         return self.collect_all_items(layer_item, "support_open", collected_items)
 
     def collect_all_save_items(
         self,
         layer_item: MapItemData,
-        collected_items: list[
-            RanaRasterPublicationFileData | RanaVectorPublicationFileData
-        ],
-    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        collected_items: list[dm.RanaPublicationFileData],
+    ) -> list[dm.RanaPublicationFileData]:
         return self.collect_all_items(layer_item, "support_save", collected_items)
 
     def collect_all_items(
         self,
         layer_item: MapItemData,
         support_attr: str,
-        collected_items: list[
-            RanaRasterPublicationFileData | RanaVectorPublicationFileData
-        ],
-    ) -> list[RanaRasterPublicationFileData | RanaVectorPublicationFileData]:
+        collected_items: list[dm.RanaPublicationFileData],
+    ) -> list[dm.RanaPublicationFileData]:
         if isinstance(layer_item, FolderItemData):
             for sub_item in layer_item.sub_items:
                 self.collect_all_items(sub_item, support_attr, collected_items)
         if isinstance(layer_item, LayerItemData) and getattr(layer_item, support_attr):
-            if layer_item.data_type == "raster":
-                collected_items.append(
-                    RanaRasterPublicationFileData(
-                        display_name=layer_item.name,
-                        file=layer_item.file,
-                        file_tree=layer_item.parents,
-                        style_id=layer_item.style_id,
-                    )
+            collected_items.append(
+                dm.RanaPublicationFileData(
+                    data_type=dm.DataType.from_value(layer_item.data_type),
+                    file=layer_item.file,
+                    file_tree=layer_item.parents,
+                    style_id=layer_item.style_id,
+                    display_name=layer_item.name,
+                    layer_in_file=layer_item.layer_in_file,
                 )
-            elif layer_item.data_type == "vector":
-                collected_items.append(
-                    RanaVectorPublicationFileData(
-                        display_name=layer_item.name,
-                        file=layer_item.file,
-                        file_tree=layer_item.parents,
-                        layer_in_file=layer_item.layer_in_file,
-                        style_id=layer_item.style_id,
-                    )
-                )
+            )
         return collected_items
 
     def get_button_container(
