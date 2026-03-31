@@ -295,13 +295,9 @@ class PublicationLayerManager(LayerManager):
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
         if file.get("data_type") == "scenario":
-            pass
-            # TODO: handle scenario
-            # descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-            # if get_is_3di_simulation(descriptor):
-            #     self._add_layer_from_scenario(
-            #         local_file_path, file, project=project_name
-            #     )
+            self._add_layer_from_raster_file(
+                local_file_path, file, parents=parents, display_name=self.display_name
+            )
         elif file.get("data_type") == "raster":
             self._add_layer_from_raster_file(
                 local_file_path, file, parents=parents, display_name=self.display_name
@@ -310,7 +306,6 @@ class PublicationLayerManager(LayerManager):
             self._add_layers_from_vector_file(
                 self.layer_name, local_file_path, file, parents=parents
             )
-            # self._add_layers_from_vector_file(local_file_path, file, parents=parents)
 
 
 def open_file_via_layer_manager(

@@ -13,9 +13,6 @@ from qgis.PyQt.QtGui import QPixmap
 
 from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 
-from .utils import (
-    get_local_file_path,
-)
 from .utils_api import (
     finish_file_upload,
     get_tenant_project_file,
@@ -114,7 +111,7 @@ class ExistingFileUploadWorker(FileUploadWorker):
     """Worker thread for uploading files."""
 
     def __init__(self, project: dict, file: dict):
-        local_file = Path(get_local_file_path(project["slug"], file["id"])[1])
+        local_file = Path(get_local_file_path(project["slug"], file["id"]))
         if "/" not in file["id"]:
             online_dir = ""
         else:

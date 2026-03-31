@@ -520,6 +520,22 @@ class PublicationView(QWidget):
                     if not layer_in_file:
                         # When the layer cannot be matched, something went really wrong in the backend
                         continue
+                elif data_type == "scenario":
+                    layer_in_file = layer["layer_in_file"]
+                    from qgis.core import Qgis, QgsMessageLog
+
+                    QgsMessageLog.logMessage(
+                        f"Add scenario with {layer_in_file=}", "DEBUG", Qgis.Info
+                    )
+                else:
+                    from qgis.core import Qgis, QgsMessageLog
+
+                    QgsMessageLog.logMessage(
+                        f'Add item of type {data_type} with {layer["name"]=}',
+                        "DEBUG",
+                        Qgis.Info,
+                    )
+
                 # Collect data needed for UI and to open and edit the layer
                 map_data.append(
                     LayerItemData(
@@ -607,13 +623,13 @@ class PublicationView(QWidget):
         # Mock scenario data because the BE doesn't allow adding scenarios atm
         maps[0]["layers"].append(
             {
-              "file_path": "Run run run-name_43859_results.zip",
-              "layer_in_file": "Max water depth",
-              "name": "Max water depth",
-              "opacity": 1,
-              "style_id": None,
-              "type": "layer",
-              "visible": True
+                "file_path": "Run run run-name_43859_results.zip",
+                "layer_in_file": "max water depth (file)",
+                "name": "Max water depth",
+                "opacity": 1,
+                "style_id": None,
+                "type": "layer",
+                "visible": True,
             }
         )
         all_maps = [

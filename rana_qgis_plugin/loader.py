@@ -48,8 +48,7 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils import (
     find_publication_map_layer_from_tree,
-    get_local_file_path,
-    get_publication_layer_path,
+    get_local_dir_structure,
     get_threedi_api,
     get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
@@ -72,7 +71,11 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
     upload_publication_version,
 )
-from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utils_data import (
+    DataType,
+    LocalPublicationFileData,
+    RanaPublicationFileData,
+)
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -93,6 +96,7 @@ from rana_qgis_plugin.workers_download import (
     LizardResultDownloadWorker,
     PublicationFileDownloadContext,
     RanaFileDownloader,
+    RanaScenarioFileDownloader,
     SingleFileDownloadWorker,
 )
 from rana_qgis_plugin.workers_styling import (
@@ -190,7 +194,8 @@ class Loader(QObject):
         """Start the worker to download and open files in QGIS"""
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
-            _, local_file_path = get_local_file_path(project["slug"], file["id"])
+            # TODO: remove?
+            # local_file_path = get_local_file_path(project["slug"], file["id"])
             layer_manager = FileLayerManager(self.communication, parent=self.parent())
             self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
@@ -212,14 +217,24 @@ class Loader(QObject):
                 project, publication_version, layer_item
             )
             if layer_item.data_type in [DataType.vector, DataType.raster]:
-                downloaders.append(
-                    RanaFileDownloader(
-                        project, layer_item.file, download_context=context
-                    )
+                downloader = RanaFileDownloader(
+                    project, layer_item.file, download_context=context
+                )
+            elif layer_item.data_type == DataType.scenario:
+                downloader = RanaScenarioFileDownloader(
+                    project,
+                    layer_item.file,
+                    result_name=layer_item.layer_in_file,
+                    download_context=context,
                 )
             else:
                 continue
-            items_to_download.append(layer_item)
+            downloaders.append(downloader)
+            local_item = LocalPublicationFileData.from_file_data(
+                local_path=downloader.local_file_path, file_data=layer_item
+            )
+            # somehow pass local_file_path
+            items_to_download.append(local_item)
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         # Request confirmation when downloading more than 10 files (arbitrary number)
         if self.batch_file_download_worker.nof_files > 10:
@@ -252,9 +267,9 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.batch_file_download_worker.wait()
         for i, layer_item in enumerate(tasks):
-            local_dir_structure, local_file_path = get_publication_layer_path(
-                project["slug"], layer_item.file["id"], layer_item.file_tree
-            )
+            # TODO: modify to work with scenario - local_file_path not correct!
+            local_file_path = layer_item.local_path
+            local_dir_structure = Path(local_file_path).parent
             layer_manager = PublicationLayerManager(
                 self.communication,
                 parent=self.parent(),
@@ -713,7 +728,8 @@ class Loader(QObject):
             )
         else:
             # If there is no 3di simulation attached we cannot download to the simulation folder
-            target_folder = get_local_file_path(project["slug"], file["id"])[0]
+            target_folder = get_local_dir_structure(project["slug"], file["id"])
+
         os.makedirs(target_folder, exist_ok=True)
 
         if has_lizard_results and has_3di_simulation:
@@ -1035,7 +1051,7 @@ class Loader(QObject):
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
-        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        local_file_path = get_local_dir_structure(project["slug"], file["id"])
         file_ref_str = f"file {file['id']} from {project['name']}"
         builder = VectorStyleBuilderOld(local_file_path, file_ref_str)
         uploader = VectorFileDescriptorStyleUploader(file["descriptor_id"], builder)
@@ -1050,7 +1066,7 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     def save_raster_style(self, project, file):
         """Start the worker for saving raster styling files"""
-        local_file_path, _ = get_local_file_path(project["slug"], file["id"])
+        local_file_path = get_local_dir_structure(project["slug"], file["id"])
         file_ref_str = f"file {file['id']} from {project['name']}"
         builder = RasterStyleBuilder(local_file_path, file_ref_str)
         uploader = RasterFileDescriptorStyleUploader(file["descriptor_id"])

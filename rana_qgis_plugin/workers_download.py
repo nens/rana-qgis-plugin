@@ -19,8 +19,10 @@ from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.utils import (
     build_vrt,
+    get_local_dir_structure,
     get_local_file_path,
-    get_publication_layer_path,
+    get_local_publication_dir_structure,
+    get_local_publication_file_path,
     split_scenario_extent,
 )
 from rana_qgis_plugin.utils_api import (
@@ -35,6 +37,7 @@ from rana_qgis_plugin.utils_api import (
     request_raster_generate,
 )
 from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utils_scenario import ScenarioInfo
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -51,7 +54,12 @@ class FileDownloadWorkerSignals(QObject):
 
 
 class AbstractDownloadContext:
-    def get_local_file_path(self) -> tuple[str, str]:
+    @property
+    def local_dir(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def local_file_path(self) -> str:
         raise NotImplementedError
 
     def get_style_zip(self):
@@ -63,7 +71,12 @@ class FileDownloadContext(AbstractDownloadContext):
         self.project = project
         self.file = file
 
-    def get_local_file_path(self) -> str:
+    @property
+    def local_dir(self) -> str:
+        return get_local_dir_structure(self.project["slug"], self.file["id"])
+
+    @property
+    def local_file_path(self) -> str:
         return get_local_file_path(self.project["slug"], self.file["id"])
 
     def get_style_zip(self):
@@ -84,8 +97,15 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
         self.publication_version = publication_version
         self.file_data = file_data
 
-    def get_local_file_path(self) -> tuple[str, str]:
-        return get_publication_layer_path(
+    @property
+    def local_dir(self) -> str:
+        return get_local_publication_dir_structure(
+            self.project["slug"], self.file_data.file["id"], self.file_data.file_tree
+        )
+
+    @property
+    def local_file_path(self) -> str:
+        return get_local_publication_file_path(
             self.project["slug"], self.file_data.file["id"], self.file_data.file_tree
         )
 
@@ -115,14 +135,19 @@ class RanaDownloader:
     def url(self) -> str:
         raise NotImplementedError
 
+    @property
+    def local_dir(self) -> str:
+        return self.download_context.local_dir
+
+    @property
+    def local_file_path(self):
+        return self.download_context.local_file_path
+
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
         descriptor_id = self.file["descriptor_id"]
+        os.makedirs(self.local_dir, exist_ok=True)
         # TODO: get rid of double return here
-        local_dir_structure, local_file_path = (
-            self.download_context.get_local_file_path()
-        )
-        os.makedirs(local_dir_structure, exist_ok=True)
         try:
             if download_file:
                 with requests.get(self.url, stream=True) as response:
@@ -130,22 +155,23 @@ class RanaDownloader:
                     total_size = int(response.headers.get("content-length", 0))
                     downloaded_size = 0
                     previous_progress = -1
-                    with open(local_file_path, "wb") as local_file:
+                    with open(self.local_file_path, "wb") as local_file:
                         for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                             local_file.write(chunk)
                             downloaded_size += len(chunk)
                             progress = int((downloaded_size / total_size) * 100)
                             if progress > previous_progress:
-                                signals.progress.emit(progress, local_file_path)
+                                signals.progress.emit(progress, self.local_file_path)
                                 previous_progress = progress
             # Handle QML files for vector and raster data
-            self._handle_qml_extraction(descriptor_id, local_dir_structure)
+            self._handle_qml_extraction(descriptor_id, self.local_dir)
             # Emit finished signal from the worker
-            signals.finished.emit(self.project, self.file, local_file_path)
+            signals.finished.emit(self.project, self.file, self.local_file_path)
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
-            signals.failed.emit(f"An error occurred: {str(e)}")
+            raise
+            # signals.failed.emit(f"An error occurred: {str(e)}")
 
     def _handle_qml_extraction(self, descriptor_id, local_dir_structure):
         """Handles the extraction of QML zip file if required."""
@@ -162,6 +188,42 @@ class RanaFileDownloader(RanaDownloader):
     @property
     def url(self) -> str:
         return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+
+
+class RanaScenarioFileDownloader(RanaDownloader):
+    def __init__(
+        self,
+        project: dict,
+        file: dict,
+        result_name: str,
+        download_context: AbstractDownloadContext,
+    ):
+        super().__init__(project, file, download_context)
+        self.result_name = result_name
+        self.ScenarioInfo = ScenarioInfo(
+            get_tenant_file_descriptor(self.file["descriptor_id"])
+        )
+
+    @cached_property
+    def result(self):
+        results_view = get_tenant_file_descriptor_view(
+            self.file["descriptor_id"], "lizard-scenario-results"
+        )
+        return next(
+            (r for r in results_view if r["name"].lower() == self.result_name), None
+        )
+
+    @property
+    def url(self) -> str:
+        if self.result:
+            return self.result.get("attachment_url")
+        raise
+        # TODO: handle problems
+
+    @property
+    def local_file_path(self) -> str:
+        file_name = map_result_to_file_name(self.result)
+        return bypass_max_path_limit(os.path.join(self.local_dir, file_name))
 
 
 class SingleFileDownloadWorker(QThread):
@@ -198,7 +260,7 @@ class BatchFileDownloadWorker(QThread):
     def handle_existing(self, downloader) -> bool:
         """Check if a file was already downloaded by this worker. If so, just copy the file to the required destination"""
         if downloader.file["id"] in self.downloaded_files:
-            _, download_path = downloader.get_local_file_path()
+            _, download_path = downloader.get_local_file_paths()
             file_location = self.downloaded_files[downloader.file["id"]]
             # make sure the file didn't disappear somehow
             if file_location == download_path:
@@ -224,7 +286,7 @@ class BatchFileDownloadWorker(QThread):
                 if downloader.file["id"] == file_id
             )
             downloader.download_file(self.signals)
-            _, download_path = downloader.download_context.get_local_file_path()
+            download_path = downloader.download_context.local_file_path
             self.downloaded_files[downloader.file["id"]] = download_path
             self.downloaders.remove(downloader)
         # Iterate over the remaining downloaders and copy the existing file
@@ -272,9 +334,8 @@ class LizardResultDownloadWorker(QThread):
             path = self.file["id"]
             descriptor_id = self.file["descriptor_id"]
             url = get_tenant_file_url(self.project["id"], {"path": path})
-            local_dir_structure, local_file_path = get_local_file_path(
-                project_slug, path
-            )
+            local_dir_structure = get_local_dir_structure(project_slug, path)
+            local_file_path = get_local_file_path(project_slug, path)
             os.makedirs(local_dir_structure, exist_ok=True)
             try:
                 with requests.get(url, stream=True) as response:
