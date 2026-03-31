@@ -520,7 +520,7 @@ class PublicationView(QWidget):
                 layer_in_file = None
                 type_in_file = None
                 data_type = file.get("data_type", "")
-                if data_type in ["scenario", "vector"]:
+                if data_type == "vector":
                     layers_in_file = (file_descriptor.get("meta") or {}).get(
                         "layers", []
                     )
@@ -620,6 +620,20 @@ class PublicationView(QWidget):
         self.communication.progress_bar("Loading maps...", clear_msg_bar=True)
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
+        maps = self.current_version.get("maps", [])
+        # TODO: remove
+        # Mock scenario data because the BE doesn't allow adding scenarios atm
+        maps[0]["layers"].append(
+            {
+              "file_path": "Run run run-name_43859_results.zip",
+              "layer_in_file": "Max water depth",
+              "name": "Max water depth",
+              "opacity": 1,
+              "style_id": None,
+              "type": "layer",
+              "visible": True
+            }
+        )
         all_maps = [
             FolderItemData(
                 name=publication_map["name"],
@@ -629,7 +643,7 @@ class PublicationView(QWidget):
                 ),
                 parents=[self.publication["name"]],
             )
-            for publication_map in self.current_version.get("maps", [])
+            for publication_map in maps
         ]
         self.root_item = FolderItemData(
             name="root", sub_items=all_maps, parents=[self.publication["name"]]
