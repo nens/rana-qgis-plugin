@@ -34,6 +34,7 @@ from rana_qgis_plugin.utils_api import (
     map_result_to_file_name,
     request_raster_generate,
 )
+from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -49,30 +50,82 @@ class FileDownloadWorkerSignals(QObject):
     all_finished = pyqtSignal()
 
 
-class FileDownloadBase:
-    """Base class that handles the common download logic."""
-
-    # Note: The signals are removed from FileDownloadBase as they will now exist in the worker classes.
-    def __init__(self, project, file):
-        self.project = project
-        self.file = file
-
+class AbstractDownloadContext:
     def get_local_file_path(self) -> tuple[str, str]:
         raise NotImplementedError
 
     def get_style_zip(self):
         raise NotImplementedError
 
+
+class FileDownloadContext(AbstractDownloadContext):
+    def __init__(self, project: dict, file: dict):
+        self.project = project
+        self.file = file
+
+    def get_local_file_path(self) -> str:
+        return get_local_file_path(self.project["slug"], self.file["id"])
+
+    def get_style_zip(self):
+        if self.file["data_type"] == "raster":
+            return get_raster_style_file(self.file["descriptor_id"], "qml.zip")
+        else:
+            return get_vector_style_file(self.file["descriptor_id"], "qml.zip")
+
+
+class PublicationFileDownloadContext(AbstractDownloadContext):
+    def __init__(
+        self,
+        project: dict,
+        publication_version: dict,
+        file_data: RanaPublicationFileData,
+    ):
+        self.project = project
+        self.publication_version = publication_version
+        self.file_data = file_data
+
+    def get_local_file_path(self) -> tuple[str, str]:
+        return get_publication_layer_path(
+            self.project["slug"], self.file_data.file["id"], self.file_data.file_tree
+        )
+
+    def get_style_zip(self) -> Optional["bytes"]:
+        if self.file_data.style_id and self.file_data.data_type in [
+            DataType.raster,
+            DataType.vector,
+        ]:
+            style_zip = get_publication_style(
+                self.publication_version["id"],
+                self.file_data.style_id,
+                self.publication_version["version"],
+                "qml.zip",
+            )
+            return style_zip
+
+
+class RanaDownloader:
+    def __init__(
+        self, project: dict, file: dict, download_context: AbstractDownloadContext
+    ):
+        self.project = project
+        self.file = file
+        self.download_context = download_context
+
+    @property
+    def url(self) -> str:
+        raise NotImplementedError
+
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
-        path = self.file["id"]
         descriptor_id = self.file["descriptor_id"]
-        url = get_tenant_file_url(self.project["id"], {"path": path})
-        local_dir_structure, local_file_path = self.get_local_file_path()
+        # TODO: get rid of double return here
+        local_dir_structure, local_file_path = (
+            self.download_context.get_local_file_path()
+        )
         os.makedirs(local_dir_structure, exist_ok=True)
         try:
             if download_file:
-                with requests.get(url, stream=True) as response:
+                with requests.get(self.url, stream=True) as response:
                     response.raise_for_status()
                     total_size = int(response.headers.get("content-length", 0))
                     downloaded_size = 0
@@ -97,7 +150,7 @@ class FileDownloadBase:
     def _handle_qml_extraction(self, descriptor_id, local_dir_structure):
         """Handles the extraction of QML zip file if required."""
         if self.file["data_type"] in ["vector", "raster"]:
-            qml_zip_content = self.get_style_zip()
+            qml_zip_content = self.download_context.get_style_zip()
             if qml_zip_content:
                 stream = io.BytesIO(qml_zip_content)
                 if zipfile.is_zipfile(stream):
@@ -105,55 +158,16 @@ class FileDownloadBase:
                         zip_file.extractall(local_dir_structure)
 
 
-class FileDownloadForFileTree(FileDownloadBase):
-    def get_local_file_path(self) -> str:
-        return get_local_file_path(self.project["slug"], self.file["id"])
-
-    def get_style_zip(self):
-        if self.file["data_type"] == "raster":
-            return get_raster_style_file(self.file["descriptor_id"], "qml.zip")
-        else:
-            return get_vector_style_file(self.file["descriptor_id"], "qml.zip")
-
-
-class FileDownloadForPublicationTree(FileDownloadBase):
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-        publication_id: str,
-        publication_tree: list[str],
-        publication_version: int,
-        style_id: Optional[str] = None,
-        layer_in_file: Optional[str] = None,
-    ):
-        super().__init__(project, file)
-        self.publication_tree = publication_tree
-        self.publication_id = publication_id
-        self.publication_version = publication_version
-        self.layer_in_file = layer_in_file
-        self.style_id = style_id
-
-    def get_local_file_path(self) -> tuple[str, str]:
-        return get_publication_layer_path(
-            self.project["slug"], self.file["id"], self.publication_tree
-        )
-
-    def get_style_zip(self):
-        if self.style_id and self.file["data_type"] in ["raster", "vector"]:
-            style_zip = get_publication_style(
-                self.publication_id,
-                self.style_id,
-                self.publication_version,
-                "qml.zip",
-            )
-            return style_zip
+class RanaFileDownloader(RanaDownloader):
+    @property
+    def url(self) -> str:
+        return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
 
 
 class SingleFileDownloadWorker(QThread):
     """Worker thread for downloading a single file."""
 
-    def __init__(self, downloader: FileDownloadBase):
+    def __init__(self, downloader: RanaDownloader):
         super().__init__()
         self.signals = FileDownloadWorkerSignals()
         self.downloader = downloader
@@ -166,7 +180,7 @@ class SingleFileDownloadWorker(QThread):
 class BatchFileDownloadWorker(QThread):
     """Worker thread for downloading multiple files, one after the other."""
 
-    def __init__(self, downloaders: list[FileDownloadBase]):
+    def __init__(self, downloaders: list[RanaDownloader]):
         super().__init__()
         self.signals = FileDownloadWorkerSignals()
         self.downloaders = downloaders
@@ -210,7 +224,7 @@ class BatchFileDownloadWorker(QThread):
                 if downloader.file["id"] == file_id
             )
             downloader.download_file(self.signals)
-            _, download_path = downloader.get_local_file_path()
+            _, download_path = downloader.download_context.get_local_file_path()
             self.downloaded_files[downloader.file["id"]] = download_path
             self.downloaders.remove(downloader)
         # Iterate over the remaining downloaders and copy the existing file

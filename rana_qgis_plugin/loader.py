@@ -63,7 +63,6 @@ from rana_qgis_plugin.utils_api import (
     get_publication_version_details,
     get_tenant_details,
     get_tenant_file_descriptor,
-    get_tenant_file_descriptor_view,
     get_tenant_project_file,
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -73,6 +72,7 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
     upload_publication_version,
 )
+from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -89,9 +89,10 @@ from rana_qgis_plugin.workers import (
 )
 from rana_qgis_plugin.workers_download import (
     BatchFileDownloadWorker,
-    FileDownloadForFileTree,
-    FileDownloadForPublicationTree,
+    FileDownloadContext,
     LizardResultDownloadWorker,
+    PublicationFileDownloadContext,
+    RanaFileDownloader,
     SingleFileDownloadWorker,
 )
 from rana_qgis_plugin.workers_styling import (
@@ -100,7 +101,6 @@ from rana_qgis_plugin.workers_styling import (
     RasterFileDescriptorStyleUploader,
     RasterStyleBuilder,
     VectorFileDescriptorStyleUploader,
-    VectorStyleBuilder,
     VectorStyleBuilderOld,
 )
 
@@ -199,29 +199,27 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict, list)
     def open_many_in_qgis_from_publication(
-        self, project: dict, publication_version: dict, layer_items: list
+        self,
+        project: dict,
+        publication_version: dict,
+        layer_items: list[RanaPublicationFileData],
     ):
         # TODO: extend for scenario and schematisation
         items_to_download = []
         downloaders = []
         for layer_item in layer_items:
-            if layer_item.file["data_type"] in ["raster", "vector"]:
-                items_to_download.append(layer_item)
-                layer_in_file = (
-                    layer_item.layer_in_file
-                    if layer_item.file["data_type"] == "vector"
-                    else None
+            context = PublicationFileDownloadContext(
+                project, publication_version, layer_item
+            )
+            if layer_item.data_type in [DataType.vector, DataType.raster]:
+                downloaders.append(
+                    RanaFileDownloader(
+                        project, layer_item.file, download_context=context
+                    )
                 )
-                downloader = FileDownloadForPublicationTree(
-                    project=project,
-                    file=layer_item.file,
-                    publication_id=publication_version["publication_id"],
-                    publication_tree=layer_item.file_tree,
-                    publication_version=publication_version["version"],
-                    style_id=layer_item.style_id,
-                    layer_in_file=layer_in_file,
-                )
-                downloaders.append(downloader)
+            else:
+                continue
+            items_to_download.append(layer_item)
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         # Request confirmation when downloading more than 10 files (arbitrary number)
         if self.batch_file_download_worker.nof_files > 10:
@@ -315,7 +313,9 @@ class Loader(QObject):
 
     def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
-        downloader = FileDownloadForFileTree(project, file)
+        download_context = FileDownloadContext(project, file)
+        downloader = RanaFileDownloader(project, file, download_context)
+        # downloader = FileDownloadForFileTree(project, file)
         self.file_download_worker = SingleFileDownloadWorker(downloader)
         self.file_download_worker.signals.finished.connect(
             lambda _project, _file, _local_path: self.on_file_download_finished(
