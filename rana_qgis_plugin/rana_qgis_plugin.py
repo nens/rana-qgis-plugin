@@ -478,3 +478,12 @@ class RanaQgisPlugin:
             )
 
         self.rana_browser.refresh()
+        # TODO: remove
+        self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
+        self.rana_browser.projects_browser.project_selected.emit(
+            self.rana_browser.projects_browser.project
+        )
+        self.rana_browser.project_widget.setCurrentIndex(2)
+        self.rana_browser.publications_browser.publication_selected.emit("BToE3oPs")
+        # self.rana_browser.publications_browser.publication_selected.emit("rfau7fYB")
+        # self.rana_browser.publications_browser.publication_selected.emit("1RYqKuQ9")

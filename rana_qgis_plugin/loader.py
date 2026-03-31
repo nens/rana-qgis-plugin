@@ -73,6 +73,7 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
     upload_publication_version,
 )
+from rana_qgis_plugin.utils_data import DataType
 from rana_qgis_plugin.utils_qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -205,13 +206,13 @@ class Loader(QObject):
         items_to_download = []
         downloaders = []
         for layer_item in layer_items:
-            if layer_item.file["data_type"] in ["raster", "vector"]:
+            # TODO: remove when all supported types are implement
+            if layer_item.data_type in [
+                DataType.vector,
+                DataType.raster,
+                DataType.schematisation,
+            ]:
                 items_to_download.append(layer_item)
-                layer_in_file = (
-                    layer_item.layer_in_file
-                    if layer_item.file["data_type"] == "vector"
-                    else None
-                )
                 downloader = FileDownloadForPublicationTree(
                     project=project,
                     file=layer_item.file,
@@ -219,7 +220,7 @@ class Loader(QObject):
                     publication_tree=layer_item.file_tree,
                     publication_version=publication_version["version"],
                     style_id=layer_item.style_id,
-                    layer_in_file=layer_in_file,
+                    layer_in_file=layer_item.layer_in_file,
                 )
                 downloaders.append(downloader)
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)

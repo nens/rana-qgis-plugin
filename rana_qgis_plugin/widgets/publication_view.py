@@ -33,6 +33,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QTableView,
+    QTextEdit,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -236,6 +237,11 @@ class PublicationView(QWidget):
         self.maps_box.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
         )
+        # TODO: remove
+        self.debug_box = QgsCollapsibleGroupBox("Debug")
+        self.debug_box.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
         self.maps_model = QStandardItemModel()
         self.maps_tv = PublicationMapsTreeView()
         self.maps_tv.setEditTriggers(QTreeView.NoEditTriggers)
@@ -258,6 +264,7 @@ class PublicationView(QWidget):
         collapsible_layout.setSpacing(0)
         collapsible_layout.addWidget(self.general_box)
         collapsible_layout.addWidget(self.maps_box)
+        collapsible_layout.addWidget(self.debug_box)
         # make container scrollable
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -325,11 +332,46 @@ class PublicationView(QWidget):
         if self.publication:
             self.update_general_box()
             self.update_maps_box()
+            # TODO: remove
+            self.update_debug_box()
             self.show_success.emit(self.publication["name"])
         else:
             self.communication.show_warn("Cannot find selected publication")
             self.show_failed.emit()
         self.no_refresh = False
+
+    def update_debug_box(self):
+        import json
+
+        contents = self.current_version
+
+        # Create a QTextEdit to display the dictionary
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setLineWrapMode(QTextEdit.NoWrap)
+
+        # Format the dictionary as pretty-printed JSON
+        try:
+            formatted_text = json.dumps(contents, indent=2, sort_keys=True, default=str)
+        except Exception as e:
+            formatted_text = f"Error formatting contents: {str(e)}\n\n{str(contents)}"
+
+        text_edit.setPlainText(formatted_text)
+
+        # Set a monospace font for better readability
+        font = QFont("Courier")
+        font.setPointSize(9)
+        text_edit.setFont(font)
+
+        # Clear existing layout and add the text edit
+        if self.debug_box.layout():
+            QWidget().setLayout(self.debug_box.layout())
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(text_edit)
+        self.debug_box.setLayout(layout)
+        self.debug_box.setCollapsed(True)
 
     def update_general_box(self):
         # collect all contents as a list of layouts
@@ -502,10 +544,13 @@ class PublicationView(QWidget):
                 layer_in_file = None
                 type_in_file = None
                 data_type = file.get("data_type", "")
-                if data_type in ["scenario", "vector"]:
-                    layers_in_file = (file_descriptor.get("meta") or {}).get(
-                        "layers", []
-                    )
+                if data_type in ["raster", "vector", "threedi-schematisation"]:
+                    if data_type == "threedi-schematisation":
+                        layers_in_file = "connection_node"
+                    else:
+                        layers_in_file = (file_descriptor.get("meta") or {}).get(
+                            "layers", []
+                        )
                     layer_in_file = next(
                         (
                             layer_in_file["name"]
