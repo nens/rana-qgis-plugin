@@ -323,7 +323,6 @@ class Loader(QObject):
         self.communication.bar_info("Start downloading file...")
         download_context = FileDownloadContext(project, file)
         downloader = RanaFileDownloader(project, file, download_context)
-        # downloader = FileDownloadForFileTree(project, file)
         self.file_download_worker = SingleFileDownloadWorker(downloader)
         self.file_download_worker.signals.finished.connect(
             lambda _project, _file, _local_path: self.on_file_download_finished(
