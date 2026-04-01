@@ -54,6 +54,7 @@ from rana_qgis_plugin.utils import (
     get_threedi_schematisation_simulation_results_folder,
 )
 from rana_qgis_plugin.utils_api import (
+    ConflictError,
     add_threedi_schematisation,
     create_folder,
     delete_tenant_project_directory,
@@ -1029,13 +1030,26 @@ class Loader(QObject):
             latest_publication_version = get_publication_version_details(
                 publication_version["publication_id"], latest=True
             )
-            new_publication_version["version"] = (
-                latest_publication_version["version"] + 1
-            )
-            upload_publication_version(
-                publication_version["publication_id"], new_publication_version
-            )
-        self.communication.show_info(msg)
+            while True:
+                new_publication_version["version"] = (
+                    latest_publication_version["version"] + 1
+                )
+                try:
+                    upload_publication_version(
+                        publication_version["publication_id"], new_publication_version
+                    )
+                    self.communication.show_info(msg)
+                    break
+                except ConflictError as e:
+                    if not self.communication.ask(
+                        self.parent(),
+                        "Publication version already exists",
+                        "Saving these style(s) to Rana failed due to a version conflict. Do you want to retry and overwrite these conflicting changes?",
+                    ):
+                        break
+                except Exception as e:
+                    raise
+
         self.communication.clear_message_bar()
         self.publication_style_finished.emit()
 
