@@ -221,7 +221,7 @@ class Loader(QObject):
                 )
                 downloaders.append(downloader)
                 local_item = LocalPublicationFileData.from_file_data(
-                    local_path=downloader.local_file_path, file_data=layer_item
+                    local_path=context.local_file_path, file_data=layer_item
                 )
             elif layer_item.data_type == DataType.scenario:
                 # This is a bit dirty but not passing local_path requires some redesign
@@ -322,7 +322,7 @@ class Loader(QObject):
     def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
         download_context = FileDownloadContext(
-            project["slug"], file["id"], file["descriptor_id"]
+            project["slug"], file["id"], file["descriptor_id"], file["data_type"]
         )
         downloader = RanaFileDownloader(project, file, download_context)
         self.file_download_worker = SingleFileDownloadWorker(downloader)

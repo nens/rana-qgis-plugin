@@ -67,10 +67,17 @@ class AbstractDownloadContext:
 
 
 class FileDownloadContext(AbstractDownloadContext):
-    def __init__(self, project_slug: str, file_id: str, file_descriptor_id: str):
+    def __init__(
+        self,
+        project_slug: str,
+        file_id: str,
+        file_descriptor_id: str,
+        file_data_type: str,
+    ):
         self.project_slug = project_slug
         self.file_id = file_id
         self.file_descriptor_id = file_descriptor_id
+        self.file_data_type = file_data_type
 
     @property
     def local_dir(self) -> Path:
@@ -81,7 +88,7 @@ class FileDownloadContext(AbstractDownloadContext):
         return Path(get_local_file_path(self.project_slug, self.file_id))
 
     def get_style_zip(self):
-        if self.file["data_type"] == "raster":
+        if self.file_data_type == "raster":
             return get_raster_style_file(self.file_descriptor_id, "qml.zip")
         else:
             return get_vector_style_file(self.file_descriptor_id, "qml.zip")
@@ -136,6 +143,7 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
                     self.project_slug,
                     file_id=self.file_data.file["id"],
                     file_descriptor_id=self.file_data.file["descriptor_id"],
+                    file_data_type=self.file_data.data_type.value,
                 )
                 style_zip = file_context.get_style_zip()
             return style_zip
@@ -153,17 +161,9 @@ class RanaDownloader:
     def url(self) -> str:
         raise NotImplementedError
 
-    @property
-    def local_dir(self) -> Path:
-        return self.download_context.local_dir
-
-    @property
-    def local_file_path(self) -> Path:
-        return self.download_context.local_file_path
-
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
-        self.local_dir.mkdir(parents=True, exist_ok=True)
+        self.download_context.local_dir.mkdir(parents=True, exist_ok=True)
         try:
             if download_file:
                 with requests.get(self.url, stream=True) as response:
@@ -171,24 +171,29 @@ class RanaDownloader:
                     total_size = int(response.headers.get("content-length", 0))
                     downloaded_size = 0
                     previous_progress = -1
-                    with open(self.local_file_path, "wb") as local_file:
+                    with open(
+                        self.download_context.local_file_path, "wb"
+                    ) as local_file:
                         for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                             local_file.write(chunk)
                             downloaded_size += len(chunk)
                             progress = int((downloaded_size / total_size) * 100)
                             if progress > previous_progress:
                                 signals.progress.emit(
-                                    progress, str(self.local_file_path)
+                                    progress, str(self.download_context.local_file_path)
                                 )
                                 previous_progress = progress
             # Handle QML files for vector and raster data
-            self._handle_qml_extraction(self.local_dir)
+            self._handle_qml_extraction(self.download_context.local_dir)
             # Emit finished signal from the worker
-            signals.finished.emit(self.project, self.file, str(self.local_file_path))
+            signals.finished.emit(
+                self.project, self.file, str(self.download_context.local_file_path)
+            )
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
             # failure to retrieve url will raise a ValueError or FetchError and end up here
+            raise
             signals.failed.emit(f"An error occurred: {str(e)}")
 
     def _handle_qml_extraction(self, local_dir_structure: Path):
@@ -231,7 +236,7 @@ class BatchFileDownloadWorker(QThread):
         self.downloaded_files = {str: str}
 
     @cached_property
-    def unique_file_ids(self):
+    def unique_file_ids(self) -> set[str]:
         return set([downloader.file["id"] for downloader in self.downloaders])
 
     @property
