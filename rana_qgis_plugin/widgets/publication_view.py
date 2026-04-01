@@ -612,7 +612,7 @@ class PublicationView(QWidget):
         maps[0]["layers"].append(
             {
                 "file_path": "Run run run-name_43859_results.zip",
-                "layer_in_file": "max water depth (file)",
+                "layer_in_file": "scenarios:2906:depth-max-preview",
                 "name": "Max water depth",
                 "opacity": 1,
                 "style_id": None,

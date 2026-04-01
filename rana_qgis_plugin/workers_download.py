@@ -204,39 +204,6 @@ class RanaFileDownloader(RanaDownloader):
         return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
 
 
-class RanaScenarioFileDownloader(RanaDownloader):
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-        result_name: str,
-        download_context: AbstractDownloadContext,
-    ):
-        super().__init__(project, file, download_context)
-        self.result_name = result_name
-
-    @cached_property
-    def result(self):
-        results_view = get_tenant_file_descriptor_view(
-            self.file["descriptor_id"], "lizard-scenario-results"
-        )
-        return next(
-            (r for r in results_view if r["name"].lower() == self.result_name), None
-        )
-
-    @property
-    def url(self) -> Optional[str]:
-        if self.result:
-            return self.result.get("attachment_url")
-        else:
-            raise ValueError(f"No scenario results found for {self.result_name}")
-
-    @property
-    def local_file_path(self) -> str:
-        file_name = map_result_to_file_name(self.result)
-        return bypass_max_path_limit(self.local_dir.joinpath(file_name))
-
-
 class SingleFileDownloadWorker(QThread):
     """Worker thread for downloading a single file."""
 

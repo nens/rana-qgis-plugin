@@ -202,35 +202,40 @@ class LayerManager(QObject):
             self.add_layer(layer, parents)
             return layer
 
-    def add_from_wms(self, project_name, file: dict):
+    def _add_wms_for_layer(self, layer, link, parents):
+        quri = QgsDataSourceUri()
+        quri.setParam("layers", layer["code"])
+        quri.setParam("styles", "")
+        quri.setParam("format", "image/png")
+        quri.setParam("url", link["href"])
+        # the wms provider will take care to expand authcfg URI parameter with credential
+        # just before setting the HTTP connection.
+        quri.setAuthConfigId(get_authcfg_id())
+        self._create_and_add_layer(
+            QgsRasterLayer,
+            parents=parents,
+            layer_args=[
+                bytes(quri.encodedUri()).decode(),
+                f"{layer['name']} ({layer['label']})",
+                "wms",
+            ],
+        )
+
+    def _add_from_wms(self, file: dict, layers: list, parents: list[str]):
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        parents = [project_name] + file["id"].split("/")
-        file_name = Path(file["id"]).name
-        for link in descriptor["links"]:
-            if link["rel"] == "wms":
-                for layer in descriptor["meta"]["layers"]:
-                    quri = QgsDataSourceUri()
-                    quri.setParam("layers", layer["code"])
-                    quri.setParam("styles", "")
-                    quri.setParam("format", "image/png")
-                    quri.setParam("url", link["href"])
-                    # the wms provider will take care to expand authcfg URI parameter with credential
-                    # just before setting the HTTP connection.
-                    quri.setAuthConfigId(get_authcfg_id())
-                    self._create_and_add_layer(
-                        QgsRasterLayer,
-                        parents=parents,
-                        layer_args=[
-                            bytes(quri.encodedUri()).decode(),
-                            f"{layer['name']} ({layer['label']})",
-                            "wms",
-                        ],
-                    )
-                self.communication.bar_info(
-                    f"Added layers from {file_name} to group {'/'.join(parents)}."
-                )
-                return
-        self.communication.show_error(f"Cannot add wms layer(s) from {file_name}")
+        wms_link = next(
+            (link for link in descriptor["links"] if link["rel"] == "wms"), None
+        )
+        if wms_link:
+            for layer in layers:
+                self._add_wms_for_layer(layer, wms_link, parents=parents)
+            self.communication.bar_info(
+                f"Added layers from {Path(file['id']).name} to group {'/'.join(parents)}."
+            )
+        else:
+            self.communication.show_error(
+                f"Cannot add wms layer(s) from {Path(file['id']).name}"
+            )
 
     def add_from_schematisation(self, project_name, schematisation, revision):
         self.communication.clear_message_bar()
@@ -255,6 +260,11 @@ class LayerManager(QObject):
 
 
 class FileLayerManager(LayerManager):
+    def add_from_wms(self, project_name, file: dict):
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        parents = [project_name] + file["id"].split("/")
+        super()._add_from_wms(file, descriptor["meta"]["layers"], parents=parents)
+
     def add_from_file(self, project_name, local_file_path: str, file: dict):
         self.communication.clear_message_bar()
         parents = [project_name] + file["id"].split("/")[:-1]
@@ -282,29 +292,44 @@ class PublicationLayerManager(LayerManager):
         parent,
         publication_tree: list[str],
         display_name: str,
-        layer_name_in_file: Optional[str] = None,
+        layer_code_in_file: Optional[str] = None,
     ):
         super().__init__(communication, parent)
         self.publication_tree = publication_tree
         self.display_name = display_name
-        self.layer_name = layer_name_in_file
+        self.layer_code = layer_code_in_file
+
+    def add_from_wms(self, project_name, file: dict, layer_code: str):
+        parents = [project_name, "publications"] + self.publication_tree
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        layer = next(
+            (
+                layer
+                for layer in descriptor["meta"]["layers"]
+                if layer["code"] == layer_code
+            ),
+            None,
+        )
+        layer = None
+        if layer:
+            super()._add_from_wms(file, [layer], parents=parents)
+        else:
+            self.communication.show_error(f"Failed to add {self.display_name} from WMS")
 
     def add_from_file(self, project_name, local_file_path: str, file: dict):
         # Save the last modified date of the downloaded file in QSettings
         parents = [project_name, "publications"] + self.publication_tree
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
-        if file.get("data_type") == "scenario":
-            self._add_layer_from_raster_file(
-                local_file_path, file, parents=parents, display_name=self.display_name
-            )
+        if file.get("data_type") == "scenario" and self.layer_code:
+            self.add_from_wms(project_name, file, layer_code=self.layer_code)
         elif file.get("data_type") == "raster":
             self._add_layer_from_raster_file(
                 local_file_path, file, parents=parents, display_name=self.display_name
             )
-        elif file.get("data_type") == "vector" and self.layer_name:
+        elif file.get("data_type") == "vector" and self.layer_code:
             self._add_layers_from_vector_file(
-                self.layer_name, local_file_path, file, parents=parents
+                self.layer_code, local_file_path, file, parents=parents
             )
 
 

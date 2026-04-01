@@ -96,7 +96,6 @@ from rana_qgis_plugin.workers_download import (
     LizardResultDownloadWorker,
     PublicationFileDownloadContext,
     RanaFileDownloader,
-    RanaScenarioFileDownloader,
     SingleFileDownloadWorker,
 )
 from rana_qgis_plugin.workers_styling import (
@@ -220,20 +219,17 @@ class Loader(QObject):
                 downloader = RanaFileDownloader(
                     project, layer_item.file, download_context=context
                 )
+                downloaders.append(downloader)
+                local_item = LocalPublicationFileData.from_file_data(
+                    local_path=downloader.local_file_path, file_data=layer_item
+                )
             elif layer_item.data_type == DataType.scenario:
-                downloader = RanaScenarioFileDownloader(
-                    project,
-                    layer_item.file,
-                    result_name=layer_item.layer_in_file,
-                    download_context=context,
+                # This is a bit dirty but not passing local_path requires some redesign
+                local_item = LocalPublicationFileData.from_file_data(
+                    local_path="", file_data=layer_item
                 )
             else:
                 continue
-            downloaders.append(downloader)
-            local_item = LocalPublicationFileData.from_file_data(
-                local_path=downloader.local_file_path, file_data=layer_item
-            )
-            # somehow pass local_file_path
             items_to_download.append(local_item)
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         # Request confirmation when downloading more than 10 files (arbitrary number)
@@ -272,7 +268,7 @@ class Loader(QObject):
                 parent=self.parent(),
                 display_name=layer_item.display_name,
                 publication_tree=layer_item.file_tree,
-                layer_name_in_file=layer_item.layer_in_file,
+                layer_code_in_file=layer_item.layer_in_file,
             )
             open_file_via_layer_manager(
                 project, layer_item.file, str(layer_item.local_path), layer_manager
