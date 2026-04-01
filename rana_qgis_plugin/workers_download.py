@@ -55,11 +55,11 @@ class FileDownloadWorkerSignals(QObject):
 
 class AbstractDownloadContext:
     @property
-    def local_dir(self) -> str:
+    def local_dir(self) -> Path:
         raise NotImplementedError
 
     @property
-    def local_file_path(self) -> str:
+    def local_file_path(self) -> Path:
         raise NotImplementedError
 
     def get_style_zip(self):
@@ -72,12 +72,12 @@ class FileDownloadContext(AbstractDownloadContext):
         self.file = file
 
     @property
-    def local_dir(self) -> str:
-        return get_local_dir_structure(self.project["slug"], self.file["id"])
+    def local_dir(self) -> Path:
+        return Path(get_local_dir_structure(self.project["slug"], self.file["id"]))
 
     @property
-    def local_file_path(self) -> str:
-        return get_local_file_path(self.project["slug"], self.file["id"])
+    def local_file_path(self) -> Path:
+        return Path(get_local_file_path(self.project["slug"], self.file["id"]))
 
     def get_style_zip(self):
         if self.file["data_type"] == "raster":
@@ -98,15 +98,23 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
         self.file_data = file_data
 
     @property
-    def local_dir(self) -> str:
-        return get_local_publication_dir_structure(
-            self.project["slug"], self.file_data.file["id"], self.file_data.file_tree
+    def local_dir(self) -> Path:
+        return Path(
+            get_local_publication_dir_structure(
+                self.project["slug"],
+                self.file_data.file["id"],
+                self.file_data.file_tree,
+            )
         )
 
     @property
-    def local_file_path(self) -> str:
-        return get_local_publication_file_path(
-            self.project["slug"], self.file_data.file["id"], self.file_data.file_tree
+    def local_file_path(self) -> Path:
+        return Path(
+            get_local_publication_file_path(
+                self.project["slug"],
+                self.file_data.file["id"],
+                self.file_data.file_tree,
+            )
         )
 
     def get_style_zip(self) -> Optional["bytes"]:
@@ -141,18 +149,17 @@ class RanaDownloader:
         raise NotImplementedError
 
     @property
-    def local_dir(self) -> str:
+    def local_dir(self) -> Path:
         return self.download_context.local_dir
 
     @property
-    def local_file_path(self):
+    def local_file_path(self) -> Path:
         return self.download_context.local_file_path
 
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
         descriptor_id = self.file["descriptor_id"]
-        os.makedirs(self.local_dir, exist_ok=True)
-        # TODO: get rid of double return here
+        self.local_dir.mkdir(parents=True, exist_ok=True)
         try:
             if download_file:
                 with requests.get(self.url, stream=True) as response:
@@ -166,19 +173,21 @@ class RanaDownloader:
                             downloaded_size += len(chunk)
                             progress = int((downloaded_size / total_size) * 100)
                             if progress > previous_progress:
-                                signals.progress.emit(progress, self.local_file_path)
+                                signals.progress.emit(
+                                    progress, str(self.local_file_path)
+                                )
                                 previous_progress = progress
             # Handle QML files for vector and raster data
-            self._handle_qml_extraction(descriptor_id, self.local_dir)
+            self._handle_qml_extraction(self.local_dir)
             # Emit finished signal from the worker
-            signals.finished.emit(self.project, self.file, self.local_file_path)
+            signals.finished.emit(self.project, self.file, str(self.local_file_path))
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
-            raise
-            # signals.failed.emit(f"An error occurred: {str(e)}")
+            # failure to retrieve url will raise a ValueError or FetchError and end up here
+            signals.failed.emit(f"An error occurred: {str(e)}")
 
-    def _handle_qml_extraction(self, descriptor_id, local_dir_structure):
+    def _handle_qml_extraction(self, local_dir_structure: Path):
         """Handles the extraction of QML zip file if required."""
         if self.file["data_type"] in ["vector", "raster"]:
             qml_zip_content = self.download_context.get_style_zip()
@@ -186,12 +195,12 @@ class RanaDownloader:
                 stream = io.BytesIO(qml_zip_content)
                 if zipfile.is_zipfile(stream):
                     with zipfile.ZipFile(stream, "r") as zip_file:
-                        zip_file.extractall(local_dir_structure)
+                        zip_file.extractall(str(local_dir_structure))
 
 
 class RanaFileDownloader(RanaDownloader):
     @property
-    def url(self) -> str:
+    def url(self) -> Optional[str]:
         return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
 
 
@@ -205,9 +214,6 @@ class RanaScenarioFileDownloader(RanaDownloader):
     ):
         super().__init__(project, file, download_context)
         self.result_name = result_name
-        self.ScenarioInfo = ScenarioInfo(
-            get_tenant_file_descriptor(self.file["descriptor_id"])
-        )
 
     @cached_property
     def result(self):
@@ -219,16 +225,16 @@ class RanaScenarioFileDownloader(RanaDownloader):
         )
 
     @property
-    def url(self) -> str:
+    def url(self) -> Optional[str]:
         if self.result:
             return self.result.get("attachment_url")
-        raise
-        # TODO: handle problems
+        else:
+            raise ValueError(f"No scenario results found for {self.result_name}")
 
     @property
     def local_file_path(self) -> str:
         file_name = map_result_to_file_name(self.result)
-        return bypass_max_path_limit(os.path.join(self.local_dir, file_name))
+        return bypass_max_path_limit(self.local_dir.joinpath(file_name))
 
 
 class SingleFileDownloadWorker(QThread):
@@ -337,12 +343,11 @@ class LizardResultDownloadWorker(QThread):
         if self.download_raw:
             project_slug = self.project["slug"]
             path = self.file["id"]
-            descriptor_id = self.file["descriptor_id"]
-            url = get_tenant_file_url(self.project["id"], {"path": path})
             local_dir_structure = get_local_dir_structure(project_slug, path)
             local_file_path = get_local_file_path(project_slug, path)
             os.makedirs(local_dir_structure, exist_ok=True)
             try:
+                url = get_tenant_file_url(self.project["id"], {"path": path})
                 with requests.get(url, stream=True) as response:
                     response.raise_for_status()
                     total_size = int(response.headers.get("content-length", 0))

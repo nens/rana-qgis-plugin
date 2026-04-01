@@ -281,13 +281,13 @@ def get_tenant_file_url(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/download"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, msg = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
         return response.get("url")
     else:
-        return None
+        raise FetchError(msg, url, params)
 
 
 def get_tenant_file_descriptor(descriptor_id: str):

@@ -267,8 +267,6 @@ class Loader(QObject):
         self.communication.clear_message_bar()
         self.batch_file_download_worker.wait()
         for i, layer_item in enumerate(tasks):
-            # TODO: modify to work with scenario - local_file_path not correct!
-            local_file_path = layer_item.local_path
             layer_manager = PublicationLayerManager(
                 self.communication,
                 parent=self.parent(),
@@ -277,7 +275,7 @@ class Loader(QObject):
                 layer_name_in_file=layer_item.layer_in_file,
             )
             open_file_via_layer_manager(
-                project, layer_item.file, local_file_path, layer_manager
+                project, layer_item.file, str(layer_item.local_path), layer_manager
             )
         self.file_download_finished.emit(None)
 
