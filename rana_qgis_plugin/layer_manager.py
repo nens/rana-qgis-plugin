@@ -51,12 +51,12 @@ class LayerManager(QObject):
         parents: list,
         display_name: Optional[str] = None,
     ):
+        file_name = Path(file["id"]).name
         layer = self._create_and_add_layer(
             QgsRasterLayer,
             parents=parents,
-            layer_args=[local_file_path, display_name or Path(file["id"]).name],
+            layer_args=[local_file_path, display_name or file_name],
         )
-        file_name = Path(file["id"]).name
         if layer:
             self.communication.bar_info(
                 f"Added layer {file_name}"

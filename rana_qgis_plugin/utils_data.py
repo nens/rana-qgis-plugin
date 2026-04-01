@@ -31,7 +31,13 @@ class RanaPublicationFileData(RanaFileData):
 
 
 @dataclass
-class LocalPublicationFileData(RanaPublicationFileData):
+class LocalFileData:
+    local_path: str
+    rana_file_data: RanaFileData
+
+
+@dataclass
+class LocalPublicationFileData(LocalFileData):
     local_path: str
 
     @staticmethod

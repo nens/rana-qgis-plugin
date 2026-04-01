@@ -502,40 +502,28 @@ class PublicationView(QWidget):
                 layer_in_file = None
                 type_in_file = None
                 data_type = file.get("data_type", "")
-                if data_type == "vector":
-                    layers_in_file = (file_descriptor.get("meta") or {}).get(
-                        "layers", []
-                    )
-                    layer_in_file = next(
-                        (
-                            layer_in_file["name"]
-                            for layer_in_file in layers_in_file
-                            if layer_in_file["id"] == layer["layer_in_file"]
-                        ),
-                        None,
-                    )
-                    type_in_file = (file_descriptor.get("meta") or {}).get(
-                        "type", data_type
-                    )
-                    if not layer_in_file:
-                        # When the layer cannot be matched, something went really wrong in the backend
-                        continue
-                elif data_type == "scenario":
-                    layer_in_file = layer["layer_in_file"]
-                    from qgis.core import Qgis, QgsMessageLog
-
-                    QgsMessageLog.logMessage(
-                        f"Add scenario with {layer_in_file=}", "DEBUG", Qgis.Info
-                    )
-                else:
-                    from qgis.core import Qgis, QgsMessageLog
-
-                    QgsMessageLog.logMessage(
-                        f'Add item of type {data_type} with {layer["name"]=}',
-                        "DEBUG",
-                        Qgis.Info,
-                    )
-
+                if data_type in ["vector", "scenario"]:
+                    # TODO: unify this once BE supports scenarios
+                    if data_type == "scenario":
+                        layer_in_file = layer["layer_in_file"]
+                    else:
+                        layers_in_file = (file_descriptor.get("meta") or {}).get(
+                            "layers", []
+                        )
+                        layer_in_file = next(
+                            (
+                                layer_in_file["name"]
+                                for layer_in_file in layers_in_file
+                                if layer_in_file["id"] == layer["layer_in_file"]
+                            ),
+                            None,
+                        )
+                        type_in_file = (file_descriptor.get("meta") or {}).get(
+                            "type", data_type
+                        )
+                        if not layer_in_file:
+                            # When the layer cannot be matched, something went really wrong in the backend
+                            continue
                 # Collect data needed for UI and to open and edit the layer
                 map_data.append(
                     LayerItemData(

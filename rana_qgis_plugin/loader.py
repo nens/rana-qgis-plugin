@@ -269,7 +269,6 @@ class Loader(QObject):
         for i, layer_item in enumerate(tasks):
             # TODO: modify to work with scenario - local_file_path not correct!
             local_file_path = layer_item.local_path
-            local_dir_structure = Path(local_file_path).parent
             layer_manager = PublicationLayerManager(
                 self.communication,
                 parent=self.parent(),
