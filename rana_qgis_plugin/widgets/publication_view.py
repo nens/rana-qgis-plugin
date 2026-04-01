@@ -201,6 +201,98 @@ class PublicationMapsTreeView(QTreeView):
             self._restore_expanded_states(index.child(row, 0), expanded_states)
 
 
+class MapCollector:
+    def __init__(self, file_map):
+        self.missed_items: int = 0
+        self.messages: list[str] = []
+        self.file_map: dict[str, dict] = file_map
+
+    def collect_map_data(self, layers, parents: list[str]) -> list[MapItemData]:
+        """
+        Recursively collect data from API needed to populate the maps table
+        """
+        map_data = []
+        for layer in layers:
+            if layer.get("type") == "layer":
+                file = self.file_map.get(layer.get("file_path"))
+                if not file:
+                    self.missed_items += 1
+                    self.messages.append(f"File not found for layer: {layer}")
+                    continue
+                file_descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                if not file_descriptor:
+                    self.missed_items += 1
+                    self.messages.append(
+                        f"File descriptor not found for layer: {layer}"
+                    )
+                    continue
+                # For scenario and vector files the layer is extracted from the file
+                layer_in_file = None
+                type_in_file = None
+                data_type = file.get("data_type", "")
+                if data_type in ["vector", "scenario"]:
+                    # TODO: unify this once the BE makes up its mind about using code or id
+                    if data_type == "scenario":
+                        layers_in_file = (file_descriptor.get("meta") or {}).get(
+                            "layers", []
+                        )
+                        layer_in_file = next(
+                            (
+                                layer_in_file["name"]
+                                for layer_in_file in layers_in_file
+                                if layer_in_file["code"] == layer["layer_in_file"]
+                            ),
+                            None,
+                        )
+                    else:
+                        layers_in_file = (file_descriptor.get("meta") or {}).get(
+                            "layers", []
+                        )
+                        layer_in_file = next(
+                            (
+                                layer_in_file["name"]
+                                for layer_in_file in layers_in_file
+                                if layer_in_file["id"] == layer["layer_in_file"]
+                            ),
+                            None,
+                        )
+                        type_in_file = (file_descriptor.get("meta") or {}).get(
+                            "type", data_type
+                        )
+                    if not layer_in_file:
+                        # When the layer cannot be matched, something went really wrong in the backend
+                        self.missed_items += 1
+                        self.messages.append(
+                            f"layer in file not found for layer: {layer}"
+                        )
+                        continue
+                # Collect data needed for UI and to open and edit the layer
+                map_data.append(
+                    LayerItemData(
+                        name=layer["name"],
+                        data_type=data_type,
+                        type_in_file=type_in_file,
+                        layer_in_file=layer_in_file,
+                        style_id=layer.get("style_id"),
+                        file=file,
+                        file_descriptor=file_descriptor,
+                        parents=parents,
+                    )
+                )
+            elif layer.get("type") == "folder":
+                map_data.append(
+                    FolderItemData(
+                        name=layer["name"],
+                        sub_items=self.collect_map_data(
+                            layers=layer.get("layers", []),
+                            parents=parents + [layer["name"]],
+                        ),
+                        parents=parents,
+                    )
+                )
+        return map_data
+
+
 class PublicationView(QWidget):
     show_failed = pyqtSignal()
     show_success = pyqtSignal(str)
@@ -493,71 +585,6 @@ class PublicationView(QWidget):
             child_model_index = self.maps_model.index(self.maps_model.rowCount() - 1, 2)
         self.maps_tv.setIndexWidget(child_model_index, btn_container)
 
-    def collect_map_data(self, layers, parents: list[str]) -> list[MapItemData]:
-        """
-        Recursively collect data from API needed to populate the maps table
-        """
-        map_data = []
-        for layer in layers:
-            if layer.get("type") == "layer":
-                file = self.file_map.get(layer.get("file_path"))
-                if not file:
-                    continue
-                file_descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-                if not file_descriptor:
-                    continue
-                # For scenario and vector files the layer is extracted from the file
-                layer_in_file = None
-                type_in_file = None
-                data_type = file.get("data_type", "")
-                if data_type in ["vector", "scenario"]:
-                    # TODO: unify this once BE supports scenarios
-                    if data_type == "scenario":
-                        layer_in_file = layer["layer_in_file"]
-                    else:
-                        layers_in_file = (file_descriptor.get("meta") or {}).get(
-                            "layers", []
-                        )
-                        layer_in_file = next(
-                            (
-                                layer_in_file["name"]
-                                for layer_in_file in layers_in_file
-                                if layer_in_file["id"] == layer["layer_in_file"]
-                            ),
-                            None,
-                        )
-                        type_in_file = (file_descriptor.get("meta") or {}).get(
-                            "type", data_type
-                        )
-                        if not layer_in_file:
-                            # When the layer cannot be matched, something went really wrong in the backend
-                            continue
-                # Collect data needed for UI and to open and edit the layer
-                map_data.append(
-                    LayerItemData(
-                        name=layer["name"],
-                        data_type=data_type,
-                        type_in_file=type_in_file,
-                        layer_in_file=layer_in_file,
-                        style_id=layer.get("style_id"),
-                        file=file,
-                        file_descriptor=file_descriptor,
-                        parents=parents,
-                    )
-                )
-            elif layer.get("type") == "folder":
-                map_data.append(
-                    FolderItemData(
-                        name=layer["name"],
-                        sub_items=self.collect_map_data(
-                            layers=layer.get("layers", []),
-                            parents=parents + [layer["name"]],
-                        ),
-                        parents=parents,
-                    )
-                )
-        return map_data
-
     def update_style_ids(self, item, is_root=False):
         if item.rowCount() == 0:
             layer_item = item.data(Qt.UserRole)
@@ -614,10 +641,11 @@ class PublicationView(QWidget):
         self.communication.progress_bar("Loading maps...", clear_msg_bar=True)
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
+        map_collector = MapCollector(self.file_map)
         all_maps = [
             FolderItemData(
                 name=publication_map["name"],
-                sub_items=self.collect_map_data(
+                sub_items=map_collector.collect_map_data(
                     layers=publication_map.get("layers"),
                     parents=[self.publication["name"], publication_map["name"]],
                 ),
@@ -625,6 +653,13 @@ class PublicationView(QWidget):
             )
             for publication_map in self.current_version.get("maps", [])
         ]
+        if map_collector.missed_items > 0:
+            self.communication.show_warn(
+                f"Could not retrieve data for {map_collector.missed_items} layers; check the logs for more information"
+            )
+            for msg in map_collector.messages:
+                self.communication.log_warn(msg)
+
         self.root_item = FolderItemData(
             name="root", sub_items=all_maps, parents=[self.publication["name"]]
         )
