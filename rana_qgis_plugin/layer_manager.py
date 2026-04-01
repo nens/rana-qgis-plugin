@@ -292,21 +292,22 @@ class PublicationLayerManager(LayerManager):
         parent,
         publication_tree: list[str],
         display_name: str,
-        layer_code_in_file: Optional[str] = None,
+        layer_in_file: Optional[str] = None,
     ):
         super().__init__(communication, parent)
         self.publication_tree = publication_tree
         self.display_name = display_name
-        self.layer_code = layer_code_in_file
+        self.layer_in_file = layer_in_file
 
-    def add_from_wms(self, project_name, file: dict, layer_code: str):
+    def add_from_wms(self, project_name, file: dict):
         parents = [project_name, "publications"] + self.publication_tree
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        # match layer_in_file to code to retrieve the full layer data
         layer = next(
             (
                 layer
                 for layer in descriptor["meta"]["layers"]
-                if layer["code"] == layer_code
+                if layer["code"] == self.layer_in_file
             ),
             None,
         )
@@ -320,15 +321,15 @@ class PublicationLayerManager(LayerManager):
         parents = [project_name, "publications"] + self.publication_tree
         last_modified_key = f"{project_name}/{file['id']}/last_modified"
         QSettings().setValue(last_modified_key, file["last_modified"])
-        if file.get("data_type") == "scenario" and self.layer_code:
-            self.add_from_wms(project_name, file, layer_code=self.layer_code)
+        if file.get("data_type") == "scenario" and self.layer_in_file:
+            self.add_from_wms(project_name, file)
         elif file.get("data_type") == "raster":
             self._add_layer_from_raster_file(
                 local_file_path, file, parents=parents, display_name=self.display_name
             )
-        elif file.get("data_type") == "vector" and self.layer_code:
+        elif file.get("data_type") == "vector" and self.layer_in_file:
             self._add_layers_from_vector_file(
-                self.layer_code, local_file_path, file, parents=parents
+                self.layer_in_file, local_file_path, file, parents=parents
             )
 
 

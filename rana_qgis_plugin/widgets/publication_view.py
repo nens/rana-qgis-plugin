@@ -232,33 +232,18 @@ class MapCollector:
                 data_type = file.get("data_type", "")
                 if data_type in ["vector", "scenario"]:
                     # TODO: unify this once the BE makes up its mind about using code or id
-                    if data_type == "scenario":
-                        layers_in_file = (file_descriptor.get("meta") or {}).get(
-                            "layers", []
-                        )
-                        layer_in_file = next(
-                            (
-                                layer_in_file["name"]
-                                for layer_in_file in layers_in_file
-                                if layer_in_file["code"] == layer["layer_in_file"]
-                            ),
-                            None,
-                        )
-                    else:
-                        layers_in_file = (file_descriptor.get("meta") or {}).get(
-                            "layers", []
-                        )
-                        layer_in_file = next(
-                            (
-                                layer_in_file["name"]
-                                for layer_in_file in layers_in_file
-                                if layer_in_file["id"] == layer["layer_in_file"]
-                            ),
-                            None,
-                        )
-                        type_in_file = (file_descriptor.get("meta") or {}).get(
-                            "type", data_type
-                        )
+                    layers_in_file = file_descriptor.get("layers") or []
+                    layer_in_file = next(
+                        (
+                            layer_in_file["id"]
+                            for layer_in_file in layers_in_file
+                            if layer_in_file["id"] == layer["layer_in_file"]
+                        ),
+                        None,
+                    )
+                    type_in_file = (file_descriptor.get("meta") or {}).get(
+                        "type", data_type
+                    )
                     if not layer_in_file:
                         # When the layer cannot be matched, something went really wrong in the backend
                         self.missed_items += 1

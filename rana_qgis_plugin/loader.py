@@ -268,7 +268,7 @@ class Loader(QObject):
                 parent=self.parent(),
                 display_name=layer_item.display_name,
                 publication_tree=layer_item.file_tree,
-                layer_code_in_file=layer_item.layer_in_file,
+                layer_in_file=layer_item.layer_in_file,
             )
             open_file_via_layer_manager(
                 project, layer_item.file, str(layer_item.local_path), layer_manager
