@@ -10,6 +10,7 @@ History
 - Support opening layers in maps from vector and raster files (nens/rana-qgis-plugin#304)
 - Support saving style from map layers to Rana (nens/rana-qgis-plugin#305)
 - Support opening layers in maps from scenarios (WMS) (nens/rana-qgis-plugin#332)
+- Export revisions gpkg to Rana (nens/rana-qgis-plugin#351)
 
 
 1.2.9 (2026-03-30)
