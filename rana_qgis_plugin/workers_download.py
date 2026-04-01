@@ -114,12 +114,17 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
             DataType.raster,
             DataType.vector,
         ]:
-            style_zip = get_publication_style(
-                self.publication_version["id"],
-                self.file_data.style_id,
-                self.publication_version["version"],
-                "qml.zip",
-            )
+            if self.file_data.style_id:
+                style_zip = get_publication_style(
+                    self.publication_version["id"],
+                    self.file_data.style_id,
+                    self.publication_version["version"],
+                    "qml.zip",
+                )
+            else:
+                # fallback to file styling when there is no style set in the publication
+                file_context = FileDownloadContext(self.project, self.file_data.file)
+                style_zip = file_context.get_style_zip()
             return style_zip
 
 
