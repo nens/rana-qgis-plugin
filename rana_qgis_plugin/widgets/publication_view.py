@@ -305,6 +305,14 @@ class PublicationView(QWidget):
             self.communication.log_warn(str(e))
             self.current_version = None
         if self.current_version:
+            from qgis.core import Qgis, QgsMessageLog
+
+            QgsMessageLog.logMessage(
+                f"id = {self.current_version['publication_id']}", "DEBUG", Qgis.Info
+            )
+            QgsMessageLog.logMessage(
+                f"version = {self.current_version['version']}", "DEBUG", Qgis.Info
+            )
             self.file_map = {
                 item["file"]["id"]: item["file"]
                 for item in get_publication_version_files(
@@ -606,20 +614,6 @@ class PublicationView(QWidget):
         self.communication.progress_bar("Loading maps...", clear_msg_bar=True)
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
-        maps = self.current_version.get("maps", [])
-        # TODO: remove
-        # Mock scenario data because the BE doesn't allow adding scenarios atm
-        maps[0]["layers"].append(
-            {
-                "file_path": "Run run run-name_43859_results.zip",
-                "layer_in_file": "scenarios:2906:depth-max-preview",
-                "name": "Max water depth",
-                "opacity": 1,
-                "style_id": None,
-                "type": "layer",
-                "visible": True,
-            }
-        )
         all_maps = [
             FolderItemData(
                 name=publication_map["name"],
@@ -629,7 +623,7 @@ class PublicationView(QWidget):
                 ),
                 parents=[self.publication["name"]],
             )
-            for publication_map in maps
+            for publication_map in self.current_version.get("maps", [])
         ]
         self.root_item = FolderItemData(
             name="root", sub_items=all_maps, parents=[self.publication["name"]]

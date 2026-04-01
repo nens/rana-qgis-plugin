@@ -310,7 +310,6 @@ class PublicationLayerManager(LayerManager):
             ),
             None,
         )
-        layer = None
         if layer:
             super()._add_from_wms(file, [layer], parents=parents)
         else:
