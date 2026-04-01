@@ -213,7 +213,7 @@ class Loader(QObject):
         downloaders = []
         for layer_item in layer_items:
             context = PublicationFileDownloadContext(
-                project, publication_version, layer_item
+                project["slug"], publication_version, layer_item
             )
             if layer_item.data_type in [DataType.vector, DataType.raster]:
                 downloader = RanaFileDownloader(
@@ -321,7 +321,9 @@ class Loader(QObject):
 
     def initialize_file_download_worker(self, project, file, layer_manager):
         self.communication.bar_info("Start downloading file...")
-        download_context = FileDownloadContext(project, file)
+        download_context = FileDownloadContext(
+            project["slug"], file["id"], file["descriptor_id"]
+        )
         downloader = RanaFileDownloader(project, file, download_context)
         self.file_download_worker = SingleFileDownloadWorker(downloader)
         self.file_download_worker.signals.finished.connect(

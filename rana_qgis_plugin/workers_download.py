@@ -67,33 +67,34 @@ class AbstractDownloadContext:
 
 
 class FileDownloadContext(AbstractDownloadContext):
-    def __init__(self, project: dict, file: dict):
-        self.project = project
-        self.file = file
+    def __init__(self, project_slug: str, file_id: str, file_descriptor_id: str):
+        self.project_slug = project_slug
+        self.file_id = file_id
+        self.file_descriptor_id = file_descriptor_id
 
     @property
     def local_dir(self) -> Path:
-        return Path(get_local_dir_structure(self.project["slug"], self.file["id"]))
+        return Path(get_local_dir_structure(self.project_slug, self.file_id))
 
     @property
     def local_file_path(self) -> Path:
-        return Path(get_local_file_path(self.project["slug"], self.file["id"]))
+        return Path(get_local_file_path(self.project_slug, self.file_id))
 
     def get_style_zip(self):
         if self.file["data_type"] == "raster":
-            return get_raster_style_file(self.file["descriptor_id"], "qml.zip")
+            return get_raster_style_file(self.file_descriptor_id, "qml.zip")
         else:
-            return get_vector_style_file(self.file["descriptor_id"], "qml.zip")
+            return get_vector_style_file(self.file_descriptor_id, "qml.zip")
 
 
 class PublicationFileDownloadContext(AbstractDownloadContext):
     def __init__(
         self,
-        project: dict,
+        project_slug: str,
         publication_version: dict,
         file_data: RanaPublicationFileData,
     ):
-        self.project = project
+        self.project_slug = project_slug
         self.publication_version = publication_version
         self.file_data = file_data
 
@@ -101,7 +102,7 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
     def local_dir(self) -> Path:
         return Path(
             get_local_publication_dir_structure(
-                self.project["slug"],
+                self.project_slug,
                 self.file_data.file["id"],
                 self.file_data.file_tree,
             )
@@ -111,7 +112,7 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
     def local_file_path(self) -> Path:
         return Path(
             get_local_publication_file_path(
-                self.project["slug"],
+                self.project_slug,
                 self.file_data.file["id"],
                 self.file_data.file_tree,
             )
@@ -131,7 +132,11 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
                 )
             else:
                 # fallback to file styling when there is no style set in the publication
-                file_context = FileDownloadContext(self.project, self.file_data.file)
+                file_context = FileDownloadContext(
+                    self.project_slug,
+                    file_id=self.file_data.file["id"],
+                    file_descriptor_id=self.file_data.file["descriptor_id"],
+                )
                 style_zip = file_context.get_style_zip()
             return style_zip
 
@@ -158,7 +163,6 @@ class RanaDownloader:
 
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
-        descriptor_id = self.file["descriptor_id"]
         self.local_dir.mkdir(parents=True, exist_ok=True)
         try:
             if download_file:
