@@ -15,7 +15,7 @@ from bridgestyle.qgis import togeostyler
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
 
-from rana_qgis_plugin.utils import get_publication_layer_path, image_to_bytes
+from rana_qgis_plugin.utils import get_local_publication_file_path, image_to_bytes
 from rana_qgis_plugin.utils_api import (
     FetchError,
     get_vector_style_upload_urls,
@@ -427,7 +427,7 @@ class PublicationStyleUploadWorker(QThread):
     def _make_builder(self, task) -> StyleBuilder:
         if task.data_type not in [DataType.raster, DataType.vector]:
             raise ValueError(f"Unknown file type: {task.data_type.value}")
-        _, local_file_path = get_publication_layer_path(
+        local_file_path = get_local_publication_file_path(
             self.project["slug"], task.file["id"], task.file_tree
         )
         file_ref_str = f"layer {task.display_name} from {'/'.join(task.file_tree)}"

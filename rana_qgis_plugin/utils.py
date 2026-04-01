@@ -69,8 +69,7 @@ def sanitize_path_for_filesystem(path: str) -> str:
     return str(Path(*sanitized_parts))
 
 
-def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
-    file_name = Path(path).name
+def get_local_dir_structure(project_slug: str, path: str) -> str:
     file_name_without_extension = Path(path).stem
     if not rana_cache_dir():
         base_dir = Path.home() / "Rana"
@@ -79,16 +78,18 @@ def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
     local_dir_structure = base_dir.joinpath(
         project_slug, "files", Path(path).parent, file_name_without_extension
     )
-    local_file_path = local_dir_structure.joinpath(file_name)
-    return sanitize_path_for_filesystem(
-        str(local_dir_structure)
-    ), sanitize_path_for_filesystem(str(local_file_path))
+    return sanitize_path_for_filesystem(str(local_dir_structure))
 
 
-def get_publication_layer_path(
+def get_local_file_path(project_slug: str, path: str) -> str:
+    local_dir_structure = Path(get_local_dir_structure(project_slug, path))
+    file_name = sanitize_path_for_filesystem(Path(path).name)
+    return str(local_dir_structure.joinpath(file_name))
+
+
+def get_local_publication_dir_structure(
     project_slug: str, path: str, publication_tree: list[str]
-) -> tuple[str, str]:
-    file_name = Path(path).name
+) -> str:
     file_name_without_extension = Path(path).stem
     if not rana_cache_dir():
         base_dir = Path.home() / "Rana"
@@ -97,10 +98,17 @@ def get_publication_layer_path(
     local_dir_structure = base_dir.joinpath(
         project_slug, "publications", *publication_tree, file_name_without_extension
     )
-    local_file_path = local_dir_structure.joinpath(file_name)
-    return sanitize_path_for_filesystem(
-        str(local_dir_structure)
-    ), sanitize_path_for_filesystem(str(local_file_path))
+    return sanitize_path_for_filesystem(str(local_dir_structure))
+
+
+def get_local_publication_file_path(
+    project_slug: str, path: str, publication_tree: list[str]
+) -> str:
+    local_dir_structure = Path(
+        get_local_publication_dir_structure(project_slug, path, publication_tree)
+    )
+    local_file_path = local_dir_structure.joinpath(Path(path).name)
+    return sanitize_path_for_filesystem(str(local_file_path))
 
 
 def get_threedi_api():

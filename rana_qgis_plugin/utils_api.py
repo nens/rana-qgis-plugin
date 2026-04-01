@@ -24,6 +24,11 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
+class ConflictError(Exception):
+    def __init__(self, msg: str):
+        super().__init__(msg)
+
+
 def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
     """Run a simple fetch for any endpoint"""
     if params is None:
@@ -281,13 +286,13 @@ def get_tenant_file_url(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/download"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, msg = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
         return response.get("url")
     else:
-        return None
+        raise FetchError(msg, url, params)
 
 
 def get_tenant_file_descriptor(descriptor_id: str):
@@ -713,8 +718,11 @@ def upload_publication_version(publication_id: str, publication_version: dict):
     if status:
         return network_manager.content
     else:
-        # Raise when upload failed, error should be handled downstream
-        raise Exception(f"Failed to upload publication version: {error=}; {url=}")
+        if network_manager.last_http_status == 409:
+            raise ConflictError(error)
+        else:
+            # Raise when upload failed, error should be handled downstream
+            raise Exception(f"Failed to upload publication version: {error=}; {url=}")
 
 
 def get_publication_version_files(publication_id: str, version: int) -> list:

@@ -33,6 +33,7 @@ class NetworkManager(object):
         self._auth_cfg = auth_cfg
         self._content = None
         self._request = None
+        self.last_http_status = None
 
         if auth_cfg:
             is_auth_configured = self._auth_cfg in self._auth_manager.configIds()
@@ -153,7 +154,9 @@ class NetworkManager(object):
             QCoreApplication.processEvents()
 
         description = None
-
+        self.last_http_status = self._reply.attribute(
+            QNetworkRequest.Attribute.HttpStatusCodeAttribute
+        )
         # Check for redirect status codes FIRST (before checking for errors)
         if self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) in (
             301,
