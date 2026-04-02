@@ -100,10 +100,12 @@ from rana_qgis_plugin.workers.persistent import (
     PublicationMonitorWorker,
 )
 from rana_qgis_plugin.workers.styling import (
+    FileDescriptorStyleUploader,
     FileDescriptorStyleUploadWorker,
     PublicationStyleUploadWorker,
     RasterFileDescriptorStyleUploader,
     RasterStyleBuilder,
+    SchematisationStyleBuilder,
     VectorFileDescriptorStyleUploader,
     VectorStyleBuilderOld,
 )
@@ -520,7 +522,28 @@ class Loader(QObject):
         self.new_file_upload_worker.finished.connect(
             lambda: Path(local_path).unlink(missing_ok=True)
         )
+        self.new_file_upload_worker.finished.connect(
+            lambda: self.on_upload_schematisation_finished(
+                project, Path(online_dir).joinpath(local_path.name).as_posix()
+            )
+        )
         self.new_file_upload_worker.start()
+
+        self.new_file_upload_worker.start()
+
+    def on_upload_schematisation_finished(self, project, online_path: str):
+        builder = SchematisationStyleBuilder()
+        file = get_tenant_project_file(project["id"], {"path": online_path})
+        if not file:
+            self.communication.show_warn(f"Unable to find file {online_path}")
+        uploader = FileDescriptorStyleUploader(file["descriptor_id"])
+        self.vector_style_worker = FileDescriptorStyleUploadWorker(
+            uploader, builder, self.communication
+        )
+        self.vector_style_worker.finished.connect(self.on_vector_style_finished)
+        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
+        self.vector_style_worker.warning.connect(self.communication.show_warn)
+        self.vector_style_worker.start()
 
     @pyqtSlot(dict, int)
     def delete_schematisation_revision_3di_model(self, file, revision_id):

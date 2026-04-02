@@ -1,5 +1,6 @@
 import json
 import urllib.parse
+from typing import Optional
 
 from qgis.core import (
     QgsApplication,
@@ -94,18 +95,24 @@ class NetworkManager(object):
         return multipart
 
     def post_multipart(
-        self, params: dict = None, files: list = None, multipart_data: dict = None
+        self,
+        params: dict = None,
+        files: list = None,
+        multipart_data: Optional[dict] = None,
     ):
         self.prepare_request(params)
         multipart = self.get_multipart_for_files(files)
-        for field_name, field_value in multipart_data.items():
-            field_part = QHttpPart()
-            field_part.setHeader(
-                QNetworkRequest.KnownHeaders.ContentDispositionHeader,
-                f'form-data; name="{field_name}"',
-            )
-            field_part.setBody(field_value.encode("utf-8"))  # Ensure it's sent as bytes
-            multipart.append(field_part)
+        if multipart_data:
+            for field_name, field_value in multipart_data.items():
+                field_part = QHttpPart()
+                field_part.setHeader(
+                    QNetworkRequest.KnownHeaders.ContentDispositionHeader,
+                    f'form-data; name="{field_name}"',
+                )
+                field_part.setBody(
+                    field_value.encode("utf-8")
+                )  # Ensure it's sent as bytes
+                multipart.append(field_part)
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
         # Remove the content-type header from prepare_request
         self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)

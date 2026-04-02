@@ -484,6 +484,19 @@ def upload_raster_styling(descriptor_id: str, files):
         return None
 
 
+def upload_file_styling(descriptor_id: str, files):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, msg = network_manager.post_multipart(files=files)
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        raise FetchError(msg, url, {})
+
+
 def get_style_file(source_type: str, descriptor_id: str, file_name: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

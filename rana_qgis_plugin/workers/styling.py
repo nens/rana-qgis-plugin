@@ -18,6 +18,7 @@ from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSl
 from rana_qgis_plugin.utlis.api import (
     FetchError,
     get_vector_style_upload_urls,
+    upload_file_styling,
     upload_publication_style,
     upload_raster_styling,
 )
@@ -42,6 +43,13 @@ class StyleBuilder(QObject):
 
     def get_files(self) -> list:
         raise NotImplementedError
+
+    def clean(self):
+        # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
+        try:
+            shutil.rmtree(self.tempdir)
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            pass
 
     @cached_property
     def tempdir(self) -> Path:
@@ -80,6 +88,25 @@ class StyleBuilder(QObject):
         zip_path = str(self.tempdir.joinpath("qml.zip"))
         self._create_qml_zip(zip_path)
         return ("files", "qml.zip", zip_path, "application/zip")
+
+
+class SchematisationStyleBuilder(StyleBuilder):
+    """Export predefined style for a schematisation"""
+
+    def __init__(sel):
+        super().__init__("", "")
+
+    def clean(self):
+        # Do not clean up these files!
+        pass
+
+    def validate_layers(self) -> bool:
+        # qgis layers are not relevant
+        return True
+
+    def get_files(self) -> list:
+        # return ("files", "qml.zip", "qml.zip", "application/zip")
+        return ()
 
 
 class RasterStyleBuilder(StyleBuilder):
@@ -230,6 +257,23 @@ class StyleUploader(QObject):
         raise NotImplementedError
 
 
+class FileDescriptorStyleUploader(StyleUploader):
+    def __init__(
+        self,
+        file_descriptor_id: str,
+    ):
+        super().__init__()
+        self.descriptor_id = file_descriptor_id
+
+    def upload_to_rana(self, files):
+        try:
+            if not files:
+                raise ValueError("No files to upload")
+            upload_file_styling(self.descriptor_id, files)
+        except Exception as e:
+            self.failed.emit(f"Uploading styling files failed: {e}")
+
+
 class RasterFileDescriptorStyleUploader(StyleUploader):
     """Uploads style for a single raster file to the old raster specific endpoint"""
 
@@ -366,11 +410,7 @@ class FileDescriptorStyleUploadWorker(QThread):
         self.builder.tempdir.mkdir(parents=True, exist_ok=True)
         files = self.builder.get_files()
         self.uploader.upload_to_rana(files)
-        # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
-        try:
-            shutil.rmtree(self.builder.tempdir)
-        except (FileNotFoundError, PermissionError, OSError) as e:
-            pass
+        builder.clean()
         if self.success:
             self.finished.emit(
                 f"Styling files uploaded successfully for {self.builder.file_ref_str}."
