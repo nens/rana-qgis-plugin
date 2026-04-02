@@ -90,6 +90,7 @@ from rana_qgis_plugin.workers.download import (
     LizardResultDownloadWorker,
     PublicationFileDownloadContext,
     RanaFileDownloader,
+    SchematisationDownloader,
     SingleFileDownloadWorker,
     TempDownloadContext,
 )
@@ -466,13 +467,60 @@ class Loader(QObject):
         )
 
     @pyqtSlot(dict, dict)
-    def export_schematisation_revision_3di_model(self, project, file):
-        # todo extend with revision number
-        # download_context = TempDownloadContext(Path(file["id"]).name)
-        # downloader =
-        self.communication.show_info("Export not implemented yet!")
-        # TODO: check type for this signal
-        self.file_download_finished.emit(None)
+    def export_schematisation(self, project: dict, file: dict):
+        # TODO extend with revision number
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        download_context = TempDownloadContext(
+            schematisation["latest_revision"]["sqlite"]["file"]["filename"]
+        )
+        downloader = SchematisationDownloader(schematisation, download_context)
+        # Setup download
+        self.file_download_worker = SingleFileDownloadWorker(downloader)
+        self.file_download_worker.signals.failed.connect(self.file_download_failed.emit)
+        # Initiate upload when download is finished
+        online_dir = ""
+        if len(Path(file["id"]).parents) > 1:
+            online_dir = Path().joinpath(*Path(file["id"]).parents).as_posix()
+        self.file_download_worker.signals.finished.connect(
+            lambda: self.on_download_schematisation_finished(
+                project,
+                online_dir,
+                downloader.downloaded_file_path,
+                self.file_download_worker,
+            )
+        )
+        self.file_download_worker.start()
+
+    def on_download_schematisation_finished(
+        self, project, online_dir, local_path: Path, sender: QThread
+    ):
+        # clean up thread
+        sender.wait()
+        sender.deleteLater()
+        # setup upload worker
+        self.new_file_upload_worker = FileUploadWorker(
+            project, [local_path], online_dir
+        )
+        self.new_file_upload_worker.failed.connect(self.on_file_upload_failed)
+        self.new_file_upload_worker.failed.connect(
+            lambda error: self.file_upload_failed.emit(error)
+        )
+        self.new_file_upload_worker.progress.connect(self.on_file_upload_progress)
+        self.new_file_upload_worker.warning.connect(
+            lambda msg: self.communication.show_warn(msg)
+        )
+        self.new_file_upload_worker.finished.connect(self.on_file_upload_finished)
+        self.new_file_upload_worker.finished.connect(
+            lambda: self.communication.show_info(
+                f"Exported latest revision of schematisation to {online_dir}{local_path.name}"
+            )
+        )
+        self.new_file_upload_worker.finished.connect(
+            lambda: Path(local_path).unlink(missing_ok=True)
+        )
+        self.new_file_upload_worker.start()
 
     @pyqtSlot(dict, int)
     def delete_schematisation_revision_3di_model(self, file, revision_id):

@@ -18,6 +18,7 @@ from qgis.PyQt.QtCore import (
 )
 from threedi_mi_utils import bypass_max_path_limit
 
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utlis.api import (
     get_publication_style,
     get_raster_file_link,
@@ -36,6 +37,7 @@ from rana_qgis_plugin.utlis.generic import (
     get_local_file_path,
     get_local_publication_dir_structure,
     get_local_publication_file_path,
+    get_threedi_api,
     split_scenario_extent,
 )
 
@@ -68,8 +70,11 @@ class TempDownloadContext(AbstractDownloadContext):
 
     @cached_property
     def local_dir(self) -> Path:
-        return Path(tempfile.mkdtemp())
+        target_dir = Path(tempfile.gettempdir()).joinpath("rana_downloads")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir.joinpath(tempfile.mkdtemp(dir=target_dir))
 
+    @property
     def local_file_path(self) -> Path:
         return self.local_dir.joinpath(self.file_name)
 
@@ -158,35 +163,21 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
 
 
 class BaseDownloader:
-    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
-        raise NotImplementedError
-
-
-class SchematisationDownloader(BaseDownloader):
-    def __init__(
-        self,
-        schematisation: dict,
-        rev_nr: int,
-        download_context: AbstractDownloadContext,
-    ):
-        self.schematisation = schematisation
-        self.download_context = download_context
-        self.rev_nr = rev_nr
-
-    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
-        signals.finished.emit()
-
-
-class RanaDownloader(BaseDownloader):
-    def __init__(
-        self, project: dict, file: dict, download_context: AbstractDownloadContext
-    ):
-        self.project = project
-        self.file = file
+    def __init__(self, download_context: AbstractDownloadContext):
         self.download_context = download_context
 
     @property
     def url(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def downloaded_file_path(self) -> Path:
+        return self.download_context.local_file_path
+
+    def postprocess(self):
+        raise NotImplementedError
+
+    def _handle_qml_extraction(self, local_dir_structure: Path):
         raise NotImplementedError
 
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
@@ -211,18 +202,28 @@ class RanaDownloader(BaseDownloader):
                                     progress, str(self.download_context.local_file_path)
                                 )
                                 previous_progress = progress
+            self.postprocess()
             # Handle QML files for vector and raster data
-            self._handle_qml_extraction(self.download_context.local_dir)
+            # self._handle_qml_extraction(self.download_context.local_dir)
             # Emit finished signal from the worker
             signals.finished.emit()
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
             # failure to retrieve url will raise a ValueError or FetchError and end up here
+            # signals.failed.emit(f"An error occurred: {str(e)}")
             raise
-            signals.failed.emit(f"An error occurred: {str(e)}")
 
-    def _handle_qml_extraction(self, local_dir_structure: Path):
+
+class RanaDownloader(BaseDownloader):
+    def __init__(
+        self, project: dict, file: dict, download_context: AbstractDownloadContext
+    ):
+        super().__init__(download_context)
+        self.project = project
+        self.file = file
+
+    def postprocess(self):
         """Handles the extraction of QML zip file if required."""
         if self.file["data_type"] in ["vector", "raster"]:
             qml_zip_content = self.download_context.get_style_zip()
@@ -230,7 +231,63 @@ class RanaDownloader(BaseDownloader):
                 stream = io.BytesIO(qml_zip_content)
                 if zipfile.is_zipfile(stream):
                     with zipfile.ZipFile(stream, "r") as zip_file:
-                        zip_file.extractall(str(local_dir_structure))
+                        zip_file.extractall(str(self.download_context.local_dir))
+
+
+class SchematisationDownloader(BaseDownloader):
+    def __init__(
+        self,
+        schematisation: dict,
+        download_context: AbstractDownloadContext,
+    ):
+        super().__init__(download_context)
+        self.schematisation = schematisation
+        self._downloaded_file_path = None
+
+    @property
+    def downloaded_file_path(self) -> Path:
+        if not self._downloaded_file_path:
+            raise ValueError(
+                "Schematisation download path cannot be accessed before download is extracted"
+            )
+        return self._downloaded_file_path
+
+    @cached_property
+    def url(self) -> str:
+        # TODO: make cached property?
+        threedi_api = get_threedi_api()
+        tc = ThreediCalls(threedi_api)
+        schematisation_pk = self.schematisation["schematisation"]["id"]
+        revision_pk = self.schematisation["latest_revision"]["id"]
+        return tc.download_schematisation_revision_sqlite(
+            schematisation_pk, revision_pk
+        ).get_url
+
+    def postprocess(self):
+        zip_file = self.download_context.local_file_path
+        if zip_file.suffix == ".zip":
+            with zipfile.ZipFile(zip_file, "r") as zip_ref:
+                zip_ref.extractall(self.download_context.local_dir)
+        Path(zip_file).unlink()
+
+        # Assert that there is only one file in the directory
+        extracted_files = list(self.download_context.local_dir.iterdir())
+        assert len(extracted_files) == 1, (
+            f"Expected exactly one file in {self.download_context.local_dir}, found {len(extracted_files)}"
+        )
+        schematisation_file = extracted_files[0]
+
+        # Include revision number in file name
+        rev_nr = self.schematisation["latest_revision"]["number"]
+        file_name_with_rev = (
+            f"{schematisation_file.stem} ({rev_nr}){schematisation_file.suffix}"
+        )
+        path_with_rev = schematisation_file.parent.joinpath(file_name_with_rev)
+        schematisation_file.rename(path_with_rev)
+        self._downloaded_file_path = path_with_rev
+
+    def _handle_qml_extraction(self, local_dir_structure: Path):
+        pass
 
 
 class RanaFileDownloader(RanaDownloader):

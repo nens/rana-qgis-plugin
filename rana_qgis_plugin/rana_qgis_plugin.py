@@ -404,8 +404,9 @@ class RanaQgisPlugin:
             self.rana_browser.create_model_selected_with_revision.connect(
                 self.loader.create_schematisation_revision_3di_model
             )
+            self.rana_browser.export_gpkg_selected.connect(self.rana_browser.disable)
             self.rana_browser.export_gpkg_selected.connect(
-                self.loader.export_schematisation_revision_3di_model
+                self.loader.export_schematisation
             )
             self.rana_browser.delete_model_selected.connect(
                 self.loader.delete_schematisation_revision_3di_model
@@ -481,3 +482,17 @@ class RanaQgisPlugin:
             )
 
         self.rana_browser.refresh()
+        # TODO remove
+        from qgis.core import Qgis, QgsMessageLog
+
+        # Select project
+        QgsMessageLog.logMessage(f"select project", "DEBUG", Qgis.Info)
+        self.rana_browser.projects_browser.set_project_from_id("zBmCQhv3")
+        self.rana_browser.projects_browser.project_selected.emit(
+            self.rana_browser.projects_browser.project
+        )
+        # Go into folder
+        index = self.rana_browser.files_browser.files_model.index(5, 0)
+        QgsMessageLog.logMessage(f"traverse into folder", "DEBUG", Qgis.Info)
+        self.rana_browser.files_browser.select_file_or_directory(index)
+        # self.rana_browser.export_gpkg_selected.emit(self.rana_browser.project, self.rana_browser.selected_item)
