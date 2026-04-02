@@ -238,10 +238,13 @@ class SchematisationDownloader(BaseDownloader):
     def __init__(
         self,
         schematisation: dict,
+        revision: dict,
         download_context: AbstractDownloadContext,
     ):
         super().__init__(download_context)
+        # TODO: only pass ids
         self.schematisation = schematisation
+        self.revision = revision
         self._downloaded_file_path = None
 
     @property
@@ -254,11 +257,10 @@ class SchematisationDownloader(BaseDownloader):
 
     @cached_property
     def url(self) -> str:
-        # TODO: make cached property?
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
-        schematisation_pk = self.schematisation["schematisation"]["id"]
-        revision_pk = self.schematisation["latest_revision"]["id"]
+        schematisation_pk = self.schematisation["id"]
+        revision_pk = self.revision["id"]
         return tc.download_schematisation_revision_sqlite(
             schematisation_pk, revision_pk
         ).get_url
@@ -278,7 +280,7 @@ class SchematisationDownloader(BaseDownloader):
         schematisation_file = extracted_files[0]
 
         # Include revision number in file name
-        rev_nr = self.schematisation["latest_revision"]["number"]
+        rev_nr = self.revision["number"]
         file_name_with_rev = (
             f"{schematisation_file.stem} ({rev_nr}){schematisation_file.suffix}"
         )

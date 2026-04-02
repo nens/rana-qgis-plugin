@@ -30,6 +30,7 @@ class RevisionsView(QWidget):
     create_3di_model_clicked = pyqtSignal(int)
     delete_3di_model_clicked = pyqtSignal(int)
     open_schematisation_revision_in_qgis_requested = pyqtSignal(dict, dict)
+    export_schematisation_revision = pyqtSignal(dict, dict)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -84,6 +85,14 @@ class RevisionsView(QWidget):
                 )
             )
             menu.addAction(action)
+            action = QAction("Export as geopackage", self)
+            action.triggered.connect(
+                lambda _: self.export_schematisation_revision.emit(
+                    schematisation["schematisation"], threedi_revision.to_dict()
+                )
+            )
+            menu.addAction(action)
+
         menu.popup(self.revisions_table.viewport().mapToGlobal(pos))
 
     def refresh(self):

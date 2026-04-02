@@ -67,6 +67,7 @@ class RanaBrowser(QWidget):
     create_model_selected_with_revision = pyqtSignal(dict, dict, int)
     delete_model_selected = pyqtSignal(dict, int)
     export_gpkg_selected = pyqtSignal(dict, dict)
+    export_gpkg_revision_selected = pyqtSignal(dict, dict, dict, dict)
     open_schematisation_selected_with_revision = pyqtSignal(dict, dict, dict)
     delete_file_selected = pyqtSignal(dict, dict)
     rename_file_selected = pyqtSignal(dict, dict, str)
@@ -347,6 +348,11 @@ class RanaBrowser(QWidget):
         )
         self.file_view.btn_export_gpkg.clicked.connect(
             lambda _: self.export_gpkg_selected.emit(self.project, self.selected_item)
+        )
+        self.revisions_view.export_schematisation_revision.connect(
+            lambda schematisation, revision: self.export_gpkg_revision_selected.emit(
+                self.project, self.selected_item, schematisation, revision
+            )
         )
         self.revisions_view.create_3di_model_clicked.connect(
             lambda revision_id: self.create_model_selected_with_revision.emit(

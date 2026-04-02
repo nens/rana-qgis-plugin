@@ -197,8 +197,6 @@ class Loader(QObject):
         """Start the worker to download and open files in QGIS"""
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
-            # TODO: remove?
-            # local_file_path = get_local_file_path(project["slug"], file["id"])
             layer_manager = FileLayerManager(self.communication, parent=self.parent())
             self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
@@ -212,7 +210,6 @@ class Loader(QObject):
         publication_version: dict,
         layer_items: list[RanaPublicationFileData],
     ):
-        # TODO: extend for scenario and schematisation
         items_to_download = []
         downloaders = []
         for layer_item in layer_items:
@@ -469,15 +466,23 @@ class Loader(QObject):
         )
 
     @pyqtSlot(dict, dict)
-    def export_schematisation(self, project: dict, file: dict):
-        # TODO extend with revision number
+    def export_schematisation_from_file(self, project: dict, file: dict):
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
         )
-        download_context = TempDownloadContext(
-            schematisation["latest_revision"]["sqlite"]["file"]["filename"]
+        revision = schematisation["latest_revision"]
+        self.export_schematisation_revision(
+            project, file, schematisation["schematisation"], revision
         )
-        downloader = SchematisationDownloader(schematisation, download_context)
+
+    @pyqtSlot(dict, dict, dict, dict)
+    def export_schematisation_revision(
+        self, project: dict, file: dict, schematisation: dict, revision: dict
+    ):
+        download_context = TempDownloadContext(revision["sqlite"]["file"]["filename"])
+        downloader = SchematisationDownloader(
+            schematisation, revision, download_context
+        )
         # Setup download
         self.file_download_worker = SingleFileDownloadWorker(downloader)
         self.file_download_worker.signals.failed.connect(self.file_download_failed.emit)
