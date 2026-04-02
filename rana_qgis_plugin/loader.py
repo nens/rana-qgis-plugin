@@ -91,6 +91,7 @@ from rana_qgis_plugin.workers.download import (
     PublicationFileDownloadContext,
     RanaFileDownloader,
     SingleFileDownloadWorker,
+    TempDownloadContext,
 )
 from rana_qgis_plugin.workers.persistent import (
     PersistentTaskScheduler,
@@ -327,10 +328,10 @@ class Loader(QObject):
         downloader = RanaFileDownloader(project, file, download_context)
         self.file_download_worker = SingleFileDownloadWorker(downloader)
         self.file_download_worker.signals.finished.connect(
-            lambda _project, _file, _local_path: self.on_file_download_finished(
-                _project,
-                _file,
-                _local_path,
+            lambda: self.on_file_download_finished(
+                project,
+                file,
+                str(download_context.local_file_path),
                 layer_manager,
                 thread_worker=self.file_download_worker,
             )
@@ -463,6 +464,15 @@ class Loader(QObject):
         self.start_model_tracker_process(
             project, schematisation["schematisation"], revision_id
         )
+
+    @pyqtSlot(dict, dict)
+    def export_schematisation_revision_3di_model(self, project, file):
+        # todo extend with revision number
+        # download_context = TempDownloadContext(Path(file["id"]).name)
+        # downloader =
+        self.communication.show_info("Export not implemented yet!")
+        # TODO: check type for this signal
+        self.file_download_finished.emit(None)
 
     @pyqtSlot(dict, int)
     def delete_schematisation_revision_3di_model(self, file, revision_id):

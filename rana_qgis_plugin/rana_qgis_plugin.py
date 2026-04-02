@@ -404,6 +404,9 @@ class RanaQgisPlugin:
             self.rana_browser.create_model_selected_with_revision.connect(
                 self.loader.create_schematisation_revision_3di_model
             )
+            self.rana_browser.export_gpkg_selected.connect(
+                self.loader.export_schematisation_revision_3di_model
+            )
             self.rana_browser.delete_model_selected.connect(
                 self.loader.delete_schematisation_revision_3di_model
             )

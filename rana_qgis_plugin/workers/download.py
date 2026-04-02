@@ -1,6 +1,7 @@
 import io
 import os
 import shutil
+import tempfile
 import zipfile
 from functools import cached_property
 from pathlib import Path
@@ -42,12 +43,8 @@ CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
 class FileDownloadWorkerSignals(QObject):
-    progress = pyqtSignal(
-        int, str
-    )  # Progress signal: emits progress percentage and additional info
-    finished = pyqtSignal(
-        dict, dict, str
-    )  # Finished signal: emits project, file, and local file path
+    progress = pyqtSignal(int, str)
+    finished = pyqtSignal()
     failed = pyqtSignal(str)  # Failed signal: emits error messages
     all_finished = pyqtSignal()
 
@@ -63,6 +60,18 @@ class AbstractDownloadContext:
 
     def get_style_zip(self):
         raise NotImplementedError
+
+
+class TempDownloadContext(AbstractDownloadContext):
+    def __init__(self, file_name: str):
+        self.file_name = file_name
+
+    @cached_property
+    def local_dir(self) -> Path:
+        return Path(tempfile.mkdtemp())
+
+    def local_file_path(self) -> Path:
+        return self.local_dir.joinpath(self.file_name)
 
 
 class FileDownloadContext(AbstractDownloadContext):
@@ -148,7 +157,27 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
             return style_zip
 
 
-class RanaDownloader:
+class BaseDownloader:
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        raise NotImplementedError
+
+
+class SchematisationDownloader(BaseDownloader):
+    def __init__(
+        self,
+        schematisation: dict,
+        rev_nr: int,
+        download_context: AbstractDownloadContext,
+    ):
+        self.schematisation = schematisation
+        self.download_context = download_context
+        self.rev_nr = rev_nr
+
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        signals.finished.emit()
+
+
+class RanaDownloader(BaseDownloader):
     def __init__(
         self, project: dict, file: dict, download_context: AbstractDownloadContext
     ):
@@ -185,9 +214,7 @@ class RanaDownloader:
             # Handle QML files for vector and raster data
             self._handle_qml_extraction(self.download_context.local_dir)
             # Emit finished signal from the worker
-            signals.finished.emit(
-                self.project, self.file, str(self.download_context.local_file_path)
-            )
+            signals.finished.emit()
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
         except Exception as e:
@@ -215,7 +242,7 @@ class RanaFileDownloader(RanaDownloader):
 class SingleFileDownloadWorker(QThread):
     """Worker thread for downloading a single file."""
 
-    def __init__(self, downloader: RanaDownloader):
+    def __init__(self, downloader: BaseDownloader):
         super().__init__()
         self.signals = FileDownloadWorkerSignals()
         self.downloader = downloader
@@ -228,7 +255,7 @@ class SingleFileDownloadWorker(QThread):
 class BatchFileDownloadWorker(QThread):
     """Worker thread for downloading multiple files, one after the other."""
 
-    def __init__(self, downloaders: list[RanaDownloader]):
+    def __init__(self, downloaders: list[BaseDownloader]):
         super().__init__()
         self.signals = FileDownloadWorkerSignals()
         self.downloaders = downloaders
