@@ -14,12 +14,10 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
-from rana_qgis_plugin.utils import is_writable
-from rana_qgis_plugin.utils_api import get_frontend_settings
-from rana_qgis_plugin.utils_settings import (
+from rana_qgis_plugin.utlis.api import get_frontend_settings
+from rana_qgis_plugin.utlis.generic import is_writable
+from rana_qgis_plugin.utlis.settings import (
     base_url,
-    cognito_client_id,
-    cognito_client_id_native,
     hcc_working_dir,
     rana_cache_dir,
     set_base_url,

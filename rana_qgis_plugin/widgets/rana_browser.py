@@ -37,25 +37,22 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.icons import (
     ICONS_DIR,
-    dir_icon,
-    file_icon,
     refresh_icon,
 )
 from rana_qgis_plugin.simulation.threedi_calls import (
     ThreediCalls,
 )
-from rana_qgis_plugin.utils import (
-    NumericItem,
-    display_bytes,
-    get_threedi_api,
-)
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     get_tenant_project_file,
     get_tenant_project_file_history,
     get_threedi_schematisation,
 )
-from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.utils_time import get_timestamp_as_numeric_item
+from rana_qgis_plugin.utlis.generic import (
+    NumericItem,
+    get_threedi_api,
+)
+from rana_qgis_plugin.utlis.settings import base_url
+from rana_qgis_plugin.utlis.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.breadcrumbs import (
     BreadcrumbsManager,
     FilesBreadcrumbsWidget,

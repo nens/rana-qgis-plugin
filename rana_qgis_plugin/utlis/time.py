@@ -4,7 +4,7 @@ from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from qgis.PyQt.QtCore import Qt
 
-from rana_qgis_plugin.utils import NumericItem
+from rana_qgis_plugin.utlis.generic import NumericItem
 
 
 def convert_to_numeric_timestamp(timestamp: str) -> float:

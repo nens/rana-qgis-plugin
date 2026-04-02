@@ -6,7 +6,7 @@ from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
 from rana_qgis_plugin.network_manager import NetworkManager
-from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
+from rana_qgis_plugin.utlis.settings import api_url, get_tenant_id
 
 
 class UserInfo(TypedDict):

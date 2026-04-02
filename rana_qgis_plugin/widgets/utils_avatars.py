@@ -7,7 +7,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QPainter, QPainterPath, QPixmap
 from qgis.PyQt.QtWidgets import QApplication
 
-from rana_qgis_plugin.utils_api import get_user_image
+from rana_qgis_plugin.utlis.api import get_user_image
 
 
 def get_user_image_from_initials(initials: str) -> QPixmap:

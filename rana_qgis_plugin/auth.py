@@ -12,7 +12,7 @@ from rana_qgis_plugin.constant import (
     RANA_SETTINGS_ENTRY,
 )
 from rana_qgis_plugin.network_manager import NetworkManager
-from rana_qgis_plugin.utils_settings import (
+from rana_qgis_plugin.utlis.settings import (
     api_url,
     cognito_client_id,
     cognito_client_id_native,

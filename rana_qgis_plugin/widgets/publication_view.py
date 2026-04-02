@@ -39,11 +39,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.utils import (
-    find_publication_map_layer_from_tree,
-    get_file_icon_name,
-)
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     FetchError,
     get_publication_details,
     get_publication_version_details,
@@ -51,9 +47,13 @@ from rana_qgis_plugin.utils_api import (
     get_tenant_file_descriptor,
     get_tenant_id,
 )
-from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
-from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.utils_time import format_activity_timestamp_str
+from rana_qgis_plugin.utlis.data_models import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utlis.generic import (
+    find_publication_map_layer_from_tree,
+    get_file_icon_name,
+)
+from rana_qgis_plugin.utlis.settings import base_url
+from rana_qgis_plugin.utlis.time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     get_file_actions_by_data_type,

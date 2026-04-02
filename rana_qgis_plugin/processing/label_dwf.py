@@ -6,7 +6,7 @@ from pathlib import Path
 import urllib3
 from threedi_api_client.files import download_file, upload_file
 
-from rana_qgis_plugin.utils import get_threedi_api
+from rana_qgis_plugin.utlis.generic import get_threedi_api
 
 DOWNLOAD_TIMEOUT = urllib3.Timeout(connect=60, read=600)
 

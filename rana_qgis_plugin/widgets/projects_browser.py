@@ -28,12 +28,12 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.icons import refresh_icon
-from rana_qgis_plugin.utils import (
+from rana_qgis_plugin.utlis.api import get_tenant_projects, get_user_info
+from rana_qgis_plugin.utlis.generic import (
     NumericItem,
 )
-from rana_qgis_plugin.utils_api import get_tenant_projects, get_user_info
-from rana_qgis_plugin.utils_settings import base_url, get_tenant_id
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utlis.settings import base_url, get_tenant_id
+from rana_qgis_plugin.utlis.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )

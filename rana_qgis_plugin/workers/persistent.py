@@ -11,7 +11,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
 )
 
-from rana_qgis_plugin.utils_api import get_project_jobs, get_project_publications
+from rana_qgis_plugin.utlis.api import get_project_jobs, get_project_publications
 
 
 class SingleTask(QRunnable):

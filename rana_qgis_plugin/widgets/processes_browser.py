@@ -18,9 +18,9 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.utils_api import get_process_id_for_tag, get_tenant_id
-from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utlis.api import get_process_id_for_tag, get_tenant_id
+from rana_qgis_plugin.utlis.settings import base_url
+from rana_qgis_plugin.utlis.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )

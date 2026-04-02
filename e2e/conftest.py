@@ -13,11 +13,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-import rana_qgis_plugin.utils_api as utils_api
+import rana_qgis_plugin.utlis.api as utils_api
 from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.rana_qgis_plugin import RanaQgisPlugin
-from rana_qgis_plugin.utils_settings import set_base_url
+from rana_qgis_plugin.utlis.settings import set_base_url
 
 
 @pytest.fixture(autouse=True)

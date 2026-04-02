@@ -24,10 +24,10 @@ from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
-from rana_qgis_plugin.utils import parse_url
-from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
-from rana_qgis_plugin.utils_qgis import get_plugin_instance
-from rana_qgis_plugin.utils_settings import (
+from rana_qgis_plugin.utlis.api import get_user_info, get_user_tenants
+from rana_qgis_plugin.utlis.generic import parse_url
+from rana_qgis_plugin.utlis.qgis import get_plugin_instance
+from rana_qgis_plugin.utlis.settings import (
     get_tenant_id,
     get_use_plugin_excepthook,
     initialize_settings,

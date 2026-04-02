@@ -18,7 +18,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.icons import ellipsis_icon, separator_icon
-from rana_qgis_plugin.utils import elide_text
+from rana_qgis_plugin.utlis.generic import elide_text
 
 
 class BreadcrumbType(Enum):

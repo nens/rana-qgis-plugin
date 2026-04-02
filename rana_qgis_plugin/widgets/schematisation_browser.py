@@ -1,7 +1,5 @@
 from functools import partial
 
-from qgis.core import QgsCoordinateReferenceSystem
-from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QDoubleValidator, QIcon
 from qgis.PyQt.QtWidgets import (
@@ -18,10 +16,10 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     get_schematisations,
 )
-from rana_qgis_plugin.utils_time import format_activity_timestamp_str
+from rana_qgis_plugin.utlis.time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_search import DebouncedSearchBox
 
 

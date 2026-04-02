@@ -4,8 +4,8 @@ from functools import cached_property
 from threedi_api_client.openapi import ApiException
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utils import get_threedi_api
-from rana_qgis_plugin.utils_api import get_tenant_file_descriptor_view
+from rana_qgis_plugin.utlis.api import get_tenant_file_descriptor_view
+from rana_qgis_plugin.utlis.generic import get_threedi_api
 
 
 def get_ready_state_from_descriptor(descriptor: dict) -> bool:

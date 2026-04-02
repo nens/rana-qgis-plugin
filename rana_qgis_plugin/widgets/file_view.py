@@ -27,19 +27,19 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utils import (
+from rana_qgis_plugin.utlis.api import (
+    get_tenant_file_descriptor,
+    get_tenant_project_file,
+    get_threedi_schematisation,
+)
+from rana_qgis_plugin.utlis.generic import (
     NumericItem,
     display_bytes,
     get_file_icon_name,
     get_threedi_api,
 )
-from rana_qgis_plugin.utils_api import (
-    get_tenant_file_descriptor,
-    get_tenant_project_file,
-    get_threedi_schematisation,
-)
-from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utlis.spatial import get_bbox_area_in_m2
+from rana_qgis_plugin.utlis.time import (
     format_activity_timestamp,
     format_activity_timestamp_str,
     parse_timestamp_str,

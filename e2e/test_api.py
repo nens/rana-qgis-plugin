@@ -11,7 +11,7 @@ from e2e.test_utils import (
     images_equal,
     press_button_with_moderator,
 )
-from rana_qgis_plugin.utils_api import delete_tenant_project_file
+from rana_qgis_plugin.utlis.api import delete_tenant_project_file
 
 
 def test_smoke(plugin, request):

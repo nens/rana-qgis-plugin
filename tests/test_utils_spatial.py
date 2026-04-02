@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
+from rana_qgis_plugin.utlis.spatial import get_bbox_area_in_m2
 
 
 @pytest.mark.parametrize(

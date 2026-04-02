@@ -15,15 +15,18 @@ from bridgestyle.qgis import togeostyler
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
 
-from rana_qgis_plugin.utils import get_local_publication_file_path, image_to_bytes
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     FetchError,
     get_vector_style_upload_urls,
     upload_publication_style,
     upload_raster_styling,
 )
-from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
-from rana_qgis_plugin.utils_lizard import import_from_geostyler
+from rana_qgis_plugin.utlis.data_models import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utlis.generic import (
+    get_local_publication_file_path,
+    image_to_bytes,
+)
+from rana_qgis_plugin.utlis.lizard import import_from_geostyler
 
 
 class StyleBuilder(QObject):

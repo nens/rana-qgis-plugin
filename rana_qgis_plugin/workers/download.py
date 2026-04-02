@@ -17,15 +17,7 @@ from qgis.PyQt.QtCore import (
 )
 from threedi_mi_utils import bypass_max_path_limit
 
-from rana_qgis_plugin.utils import (
-    build_vrt,
-    get_local_dir_structure,
-    get_local_file_path,
-    get_local_publication_dir_structure,
-    get_local_publication_file_path,
-    split_scenario_extent,
-)
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     get_publication_style,
     get_raster_file_link,
     get_raster_style_file,
@@ -36,8 +28,15 @@ from rana_qgis_plugin.utils_api import (
     map_result_to_file_name,
     request_raster_generate,
 )
-from rana_qgis_plugin.utils_data import DataType, RanaPublicationFileData
-from rana_qgis_plugin.utils_scenario import ScenarioInfo
+from rana_qgis_plugin.utlis.data_models import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utlis.generic import (
+    build_vrt,
+    get_local_dir_structure,
+    get_local_file_path,
+    get_local_publication_dir_structure,
+    get_local_publication_file_path,
+    split_scenario_extent,
+)
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 

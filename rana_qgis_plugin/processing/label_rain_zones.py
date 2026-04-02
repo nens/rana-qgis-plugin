@@ -1,6 +1,6 @@
 from typing import List, Tuple
 
-from rana_qgis_plugin.utils import get_threedi_api
+from rana_qgis_plugin.utlis.generic import get_threedi_api
 
 
 class MockFeedback:

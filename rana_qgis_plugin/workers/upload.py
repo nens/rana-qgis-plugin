@@ -8,7 +8,7 @@ from qgis.PyQt.QtCore import (
     pyqtSlot,
 )
 
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     finish_file_upload,
     get_tenant_project_file,
     start_file_upload,

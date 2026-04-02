@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-import rana_qgis_plugin.utils_scenario as us
+import rana_qgis_plugin.utlis.scenario as us
 
 
 @pytest.mark.parametrize(

@@ -13,9 +13,9 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.utils_api import get_tenant_id
-from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utlis.api import get_tenant_id
+from rana_qgis_plugin.utlis.settings import base_url
+from rana_qgis_plugin.utlis.time import (
     get_timestamp_as_numeric_item,
 )
 from rana_qgis_plugin.widgets.utils_delegates import (

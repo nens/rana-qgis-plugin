@@ -4,7 +4,11 @@ from urllib.parse import quote
 
 from qgis.core import QgsSettings
 
-from .constant import COGNITO_LOGOUT_ENDPOINT, RANA_SETTINGS_ENTRY, RANA_TENANT_ENTRY
+from rana_qgis_plugin.constant import (
+    COGNITO_LOGOUT_ENDPOINT,
+    RANA_SETTINGS_ENTRY,
+    RANA_TENANT_ENTRY,
+)
 
 
 def initialize_settings():

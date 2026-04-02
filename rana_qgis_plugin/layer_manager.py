@@ -21,14 +21,14 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
-from rana_qgis_plugin.utils import get_threedi_api
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     get_tenant_file_descriptor,
     get_threedi_schematisation,
 )
-from rana_qgis_plugin.utils_qgis import get_threedi_results_analysis_tool_instance
-from rana_qgis_plugin.utils_scenario import get_is_3di_simulation
-from rana_qgis_plugin.utils_settings import hcc_working_dir
+from rana_qgis_plugin.utlis.generic import get_threedi_api
+from rana_qgis_plugin.utlis.qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.utlis.scenario import get_is_3di_simulation
+from rana_qgis_plugin.utlis.settings import hcc_working_dir
 
 STYLE_DIR = Path(__file__).parent / "styles"
 

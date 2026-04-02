@@ -41,14 +41,7 @@ from rana_qgis_plugin.simulation.utils import (
     load_local_schematisation,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
-from rana_qgis_plugin.utils import (
-    find_publication_map_layer_from_tree,
-    get_local_dir_structure,
-    get_threedi_api,
-    get_threedi_organisations,
-    get_threedi_schematisation_simulation_results_folder,
-)
-from rana_qgis_plugin.utils_api import (
+from rana_qgis_plugin.utlis.api import (
     ConflictError,
     add_threedi_schematisation,
     create_folder,
@@ -67,17 +60,24 @@ from rana_qgis_plugin.utils_api import (
     start_tenant_process,
     upload_publication_version,
 )
-from rana_qgis_plugin.utils_data import (
+from rana_qgis_plugin.utlis.data_models import (
     DataType,
     LocalPublicationFileData,
     RanaPublicationFileData,
 )
-from rana_qgis_plugin.utils_qgis import (
+from rana_qgis_plugin.utlis.generic import (
+    find_publication_map_layer_from_tree,
+    get_local_dir_structure,
+    get_threedi_api,
+    get_threedi_organisations,
+    get_threedi_schematisation_simulation_results_folder,
+)
+from rana_qgis_plugin.utlis.qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
 )
-from rana_qgis_plugin.utils_scenario import ScenarioInfo
-from rana_qgis_plugin.utils_settings import hcc_working_dir
+from rana_qgis_plugin.utlis.scenario import ScenarioInfo
+from rana_qgis_plugin.utlis.settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard

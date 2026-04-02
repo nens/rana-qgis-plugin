@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from freezegun import freeze_time
 
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utlis.time import (
     convert_timestamp_str_to_local_time,
     convert_timestamp_str_to_relative_time,
     convert_to_numeric_timestamp,
