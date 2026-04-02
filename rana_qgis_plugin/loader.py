@@ -23,11 +23,6 @@ from rana_qgis_plugin.layer_manager import (
     PublicationLayerManager,
     open_file_via_layer_manager,
 )
-from rana_qgis_plugin.persistent_workers import (
-    PersistentTaskScheduler,
-    ProjectJobMonitorWorker,
-    PublicationMonitorWorker,
-)
 from rana_qgis_plugin.simulation.load_schematisation.schematisation_load_local import (
     SchematisationLoad,
 )
@@ -86,12 +81,10 @@ from rana_qgis_plugin.utils_settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
-from rana_qgis_plugin.workers import (
+from rana_qgis_plugin.workers.avatars import (
     AvatarWorker,
-    ExistingFileUploadWorker,
-    FileUploadWorker,
 )
-from rana_qgis_plugin.workers_download import (
+from rana_qgis_plugin.workers.download import (
     BatchFileDownloadWorker,
     FileDownloadContext,
     LizardResultDownloadWorker,
@@ -99,7 +92,12 @@ from rana_qgis_plugin.workers_download import (
     RanaFileDownloader,
     SingleFileDownloadWorker,
 )
-from rana_qgis_plugin.workers_styling import (
+from rana_qgis_plugin.workers.persistent import (
+    PersistentTaskScheduler,
+    ProjectJobMonitorWorker,
+    PublicationMonitorWorker,
+)
+from rana_qgis_plugin.workers.styling import (
     FileDescriptorStyleUploadWorker,
     PublicationStyleUploadWorker,
     RasterFileDescriptorStyleUploader,
@@ -107,6 +105,7 @@ from rana_qgis_plugin.workers_styling import (
     VectorFileDescriptorStyleUploader,
     VectorStyleBuilderOld,
 )
+from rana_qgis_plugin.workers.upload import ExistingFileUploadWorker, FileUploadWorker
 
 STYLE_DIR = Path(__file__).parent / "styles"
 

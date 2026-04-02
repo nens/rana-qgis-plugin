@@ -2,18 +2,13 @@ from pathlib import Path
 
 import requests
 from qgis.PyQt.QtCore import (
-    QObject,
-    QRunnable,
     QSettings,
     QThread,
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QPixmap
 
-from rana_qgis_plugin.widgets.utils_avatars import get_avatar
-
-from .utils_api import (
+from rana_qgis_plugin.utils_api import (
     finish_file_upload,
     get_tenant_project_file,
     start_file_upload,
@@ -147,72 +142,3 @@ class ExistingFileUploadWorker(FileUploadWorker):
 
     def _finish(self):
         QSettings().setValue(self.last_modified_key, self.last_modified)
-
-
-class ProjectJobMonitorWorker(QThread):
-    failed = pyqtSignal(str)
-    jobs_added = pyqtSignal(list)
-    job_updated = pyqtSignal(dict)
-
-    def __init__(self, project_id, parent=None):
-        super().__init__(parent)
-        self.active_jobs = {}
-        self.project_id = project_id
-        self._stop_flag = False
-
-    def run(self):
-        # initialize active jobs
-        self.update_jobs()
-        while not self._stop_flag:
-            self.update_jobs()
-            # Process contains a single api call, so every second should be fine
-            QThread.sleep(10)
-
-    def stop(self):
-        """Gracefully stop the worker"""
-        self._stop_flag = True
-        self.wait()
-
-    def update_jobs(self):
-        response = get_project_jobs(self.project_id)
-        if not response:
-            return
-        current_jobs = response["items"]
-        new_jobs = {
-            job["id"]: job for job in current_jobs if job["id"] not in self.active_jobs
-        }
-        self.jobs_added.emit(list(new_jobs.values()))
-        self.active_jobs.update(new_jobs)
-        for job in current_jobs:
-            if job["id"] in new_jobs:
-                # new job cannot be updated
-                continue
-            if (
-                job["state"] != self.active_jobs[job["id"]]["state"]
-                or job["process"] != self.active_jobs[job["id"]]["process"]
-            ):
-                self.job_updated.emit(job)
-                self.active_jobs[job["id"]] = job
-
-
-# We need a separate signals class since QRunnable cannot have signals
-class AvatarWorkerSignals(QObject):
-    finished = pyqtSignal()
-    avatar_ready = pyqtSignal(str, "QPixmap")
-
-
-class AvatarWorker(QRunnable):
-    def __init__(self, communication, users: list[dict]):
-        super().__init__()
-        self.communication = communication
-        self.users = users
-        self.signals = AvatarWorkerSignals()
-
-    def run(self):
-        for user in self.users:
-            new_avatar = get_avatar(
-                user, self.communication, create_from_initials=False
-            )
-            if new_avatar:
-                self.signals.avatar_ready.emit(user["id"], new_avatar)
-        self.signals.finished.emit()
