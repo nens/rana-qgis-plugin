@@ -232,7 +232,7 @@ class BatchFileDownloadWorker(QThread):
         super().__init__()
         self.signals = FileDownloadWorkerSignals()
         self.downloaders = downloaders
-        self.downloaded_files = {str: str}
+        self.downloaded_files = {}
 
     @cached_property
     def unique_file_ids(self) -> set[str]:
@@ -246,14 +246,17 @@ class BatchFileDownloadWorker(QThread):
     def handle_existing(self, downloader) -> bool:
         """Check if a file was already downloaded by this worker. If so, just copy the file to the required destination"""
         if downloader.file["id"] in self.downloaded_files:
-            _, download_path = downloader.get_local_file_paths()
+            download_path = downloader.download_context.local_file_path
             file_location = self.downloaded_files[downloader.file["id"]]
             # make sure the file didn't disappear somehow
-            if file_location == download_path:
+            if file_location == str(download_path):
                 return True
             if Path(file_location).exists():
                 try:
                     Path(download_path).parent.mkdir(parents=True, exist_ok=True)
+                    QgsMessageLog.logMessage(
+                        f"Copying {str(file_location)} to {str(download_path)}"
+                    )
                     shutil.copy2(file_location, download_path)
                     return True
                 except (FileNotFoundError, PermissionError, OSError) as e:
