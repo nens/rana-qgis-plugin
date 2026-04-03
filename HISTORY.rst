@@ -6,6 +6,7 @@ History
 -------------------
 
 - Group vector layers under filename (nens/rana#3889)
+- Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
 
 
 1.2.9 (2026-03-30)
