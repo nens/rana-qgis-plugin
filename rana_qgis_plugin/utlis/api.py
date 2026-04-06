@@ -25,7 +25,9 @@ class FetchError(Exception):
 
 
 class ConflictError(Exception):
-    def __init__(self, msg: str):
+    def __init__(self, msg: str, created_by: str, created_at: str):
+        self.created_by = created_by
+        self.created_at = created_at
         super().__init__(msg)
 
 
@@ -719,7 +721,19 @@ def upload_publication_version(publication_id: str, publication_version: dict):
         return network_manager.content
     else:
         if network_manager.last_http_status == 409:
-            raise ConflictError(error)
+            detail = network_manager.content.get("detail", {})
+            created_by = detail.get("created_by_name", "unknown")
+            if "created_at" in detail:
+                from rana_qgis_plugin.utlis.time import (
+                    convert_timestamp_str_to_relative_time,
+                )
+
+                created_at = convert_timestamp_str_to_relative_time(
+                    detail["created_at"]
+                )
+            else:
+                created_at = "unknown"
+            raise ConflictError(msg=error, created_by=created_by, created_at=created_at)
         else:
             # Raise when upload failed, error should be handled downstream
             raise Exception(f"Failed to upload publication version: {error=}; {url=}")
