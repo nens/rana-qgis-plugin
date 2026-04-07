@@ -1048,7 +1048,8 @@ class Loader(QObject):
                         break
                 except Exception as e:
                     raise
-
+        else:
+            self.communication.show_info(msg)
         self.communication.clear_message_bar()
         self.publication_style_finished.emit()
 
