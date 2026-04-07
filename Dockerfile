@@ -23,8 +23,7 @@ COPY requirements-test.txt /root
 RUN pip3 install -r /root/requirements-dev.txt --break-system-packages
 
 # TODO: change back to main!
-ADD https://raw.githubusercontent.com/nens/nens-dependency-loader/refs/heads/add_slugify/dependencies.py /root/dependencies.py
-#ADD https://raw.githubusercontent.com/nens/nens-dependency-loader/refs/heads/main/dependencies.py /root/dependencies.py
+ADD https://raw.githubusercontent.com/nens/nens-dependency-loader/refs/heads/main/dependencies.py /root/dependencies.py
 RUN python3 /root/dependencies.py
 RUN pip3 install -r /root/requirements-test.txt -c /root/constraints.txt --no-deps --upgrade --target /usr/share/qgis/python/plugins
 

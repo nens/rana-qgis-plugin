@@ -9,7 +9,6 @@ from uuid import uuid4
 from osgeo import gdal
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
-from slugify import slugify
 from threedi_mi_utils import (
     LocalRevision,
     LocalSchematisation,
@@ -40,7 +39,7 @@ def is_writable(working_dir: str) -> bool:
 
 def sanitize_path_for_filesystem(path: str) -> str:
     """
-    Sanitize a path to be valid for Linux and Windows using python-slugify.
+    Sanitize a path to be valid for Linux and Windows
     """
 
     INVALID_CHARS = r'[<>:"/\\|?*]'
