@@ -523,7 +523,7 @@ class PublicationStyleUploadWorker(QThread):
                 f"\n{not_found_cnt} layers not found. Add layers to map and try again."
             )
         if self.fail_cnt > 0:
-            msg += "\nUpload failed for {self.fail_cnt} layers, see the logs for more information."
+            msg += f"\nUpload failed for {self.fail_cnt} layers, see the logs for more information."
         if self.warning_cnt > 0:
             msg += f"\n{self.warning_cnt} warnings were generated, see the logs for more information."
         self.finished.emit(msg, new_style_ids)

@@ -1129,7 +1129,7 @@ class Loader(QObject):
                     if not self.communication.ask(
                         self.parent(),
                         "Publication version already exists",
-                        "Saving these style(s) to Rana failed due to a version conflict. Do you want to retry and overwrite these conflicting changes?",
+                        f"Saving style(s) to Rana failed due to a conflicting publication version created by {e.created_by} ({e.created_at}). Do you want to retry and overwrite that version?",
                     ):
                         break
                 except Exception as e:

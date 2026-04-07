@@ -1,5 +1,6 @@
 import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
@@ -41,31 +42,38 @@ def sanitize_path_for_filesystem(path: str) -> str:
     """
     Sanitize a path to be valid for Linux and Windows using python-slugify.
     """
-    # Split into parts (directories and file)
-    slugify_kwargs = {"separator": "_", "lowercase": False, "allow_unicode": True}
+
+    INVALID_CHARS = r'[<>:"/\\|?*]'
+
+    def clean_part(part: str) -> str:
+        # Replace invalid characters with underscore
+        part = re.sub(INVALID_CHARS, "_", part)
+        # Strip trailing spaces and dots (Windows limitation)
+        part = part.rstrip(" .")
+        return part
+
     if not path:
         return path
     path_obj = Path(path)
-    # Slugify each component of the path (excluding file extension)
-    sanitized_parts = [
-        slugify(part, **slugify_kwargs)
-        for part in path_obj.parts[:-1]  # Slugify directories
-    ]
-    # Handle the file name separately to preserve extensions
-    file_name = path_obj.name
-    file_stem = Path(file_name).stem
-    file_extension = Path(file_name).suffix
 
-    # Slugify file stem and attach the extension back
-    sanitized_file_name = f"{slugify(file_stem, **slugify_kwargs)}{file_extension}"
-    sanitized_parts.append(sanitized_file_name)
+    parts = path_obj.parts
 
-    # prefix / for absolute paths
-    if path_obj.is_absolute():
-        sanitized_parts = ["/"] + sanitized_parts
+    # Remove anchor (drive + root) from parts
+    anchor = path_obj.anchor  # e.g. "C:\\"
+    if anchor:
+        parts = parts[1:]
 
-    # Rebuild sanitized path
-    return str(Path(*sanitized_parts))
+    # Clean each part
+    sanitized_parts = [clean_part(p) for p in parts]
+
+    # Rebuild relative path first
+    sanitized_path = Path(*sanitized_parts)
+
+    # Restore full anchor (drive + root)
+    if anchor:
+        sanitized_path = Path(anchor) / sanitized_path
+
+    return str(sanitized_path)
 
 
 def get_local_dir_structure(project_slug: str, path: str) -> str:

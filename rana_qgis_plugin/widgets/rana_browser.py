@@ -466,6 +466,7 @@ class RanaBrowser(QWidget):
         self.rana_browser.setCurrentIndex(0)
         self.rana_files.setCurrentIndex(0)
         self.rana_processes.setCurrentIndex(0)
+        self.rana_publications.setCurrentIndex(0)
 
     def show_project_data(self, parent, index):
         self.rana_browser.setCurrentIndex(1)

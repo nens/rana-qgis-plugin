@@ -184,6 +184,11 @@ class NetworkManager(object):
         if self._reply.error() != QNetworkReply.NetworkError.NoError:
             status = False
             description = self._reply.errorString()
+            raw_content = self._reply.readAll()
+            try:
+                self._content = json.loads(str(raw_content, "utf-8"))
+            except json.JSONDecodeError:
+                pass
         else:
             status = True
             if (
