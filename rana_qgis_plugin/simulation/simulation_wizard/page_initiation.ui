@@ -699,6 +699,19 @@
        </property>
       </widget>
      </item>
+     <item row="1" column="1">
+      <spacer name="horizontalSpacer_4">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
      <item row="1" column="2">
       <widget class="QWidget" name="template_widget" native="true">
        <property name="minimumSize">
@@ -776,18 +789,18 @@
        </layout>
       </widget>
      </item>
-     <item row="1" column="1">
-      <spacer name="horizontalSpacer_4">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+     <item row="2" column="0">
+      <widget class="QCheckBox" name="cb_debug_results">
+       <property name="font">
+        <font>
+         <family>Segoe UI</family>
+         <pointsize>10</pointsize>
+        </font>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
+       <property name="text">
+        <string>Generate debug file</string>
        </property>
-      </spacer>
+      </widget>
      </item>
     </layout>
    </item>
