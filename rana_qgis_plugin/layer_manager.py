@@ -58,6 +58,7 @@ class LayerManager(QObject):
             layer_args=[local_file_path, display_name or file_name],
         )
         if layer:
+            self._unlock_layer(layer)
             self.communication.bar_info(
                 f"Added layer {file_name}"
                 + (f" to group {'/'.join(parents)}." if parents else ".")
@@ -107,6 +108,7 @@ class LayerManager(QObject):
             if qml_path.exists():
                 layer.loadNamedStyle(str(qml_path))
                 layer.triggerRepaint()
+            self._unlock_layer(layer)
         else:
             self.communication.show_error(
                 f"Failed to add {layer_name} layer from: {Path(file['id']).name}"
@@ -171,6 +173,7 @@ class LayerManager(QObject):
                             layer.loadNamedStyle(str(STYLE_DIR / "water_depth.qml"))
                             if hasattr(layer.renderer(), "setBand"):
                                 layer.renderer().setBand(1)
+                            self._unlock_layer(layer)
                             self.communication.bar_info(
                                 f"Added water depth layer for {file_name}"
                                 + (
@@ -202,6 +205,12 @@ class LayerManager(QObject):
         if layer.isValid():
             self.add_layer(layer, parents)
             return layer
+
+    def _unlock_layer(self, layer):
+        # Add the 'Removable' flag explicitly to prevent settings in the source from locking the layer'
+        current_flags = layer.flags()
+        new_flags = current_flags | QgsMapLayer.LayerFlag.Removable
+        layer.setFlags(new_flags)
 
     def _add_wms_for_layer(self, layer, link, parents):
         quri = QgsDataSourceUri()
