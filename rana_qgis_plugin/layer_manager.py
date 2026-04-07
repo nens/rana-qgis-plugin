@@ -186,7 +186,6 @@ class LayerManager(QObject):
                 )
 
     def add_layer(self, layer, parents: Optional[list[str]] = None):
-        self.project_inst.addMapLayer(layer, False)
         root = self.root
         if parents:
             for parent in parents:
@@ -194,7 +193,29 @@ class LayerManager(QObject):
                     root = root.addGroup(parent)
                 else:
                     root = root.findGroup(parent)
-        root.addLayer(layer)
+        # Check if layer with same name and source already exists in root
+        child_layers = [
+            child.layer() for child in root.children() if hasattr(child, "layer")
+        ]
+        existing_layer = next(
+            (
+                child_layer
+                for child_layer in child_layers
+                if child_layer.name() == layer.name()
+                and child_layer.source() == layer.source()
+            ),
+            None,
+        )
+        insert_index = len(root.children())
+        # If the layer already exists, remove it first and then replace with the current layer
+        if existing_layer:
+            # Get the index of the existing layer before removing it
+            existing_node = root.findLayer(existing_layer.id())
+            if existing_node:
+                insert_index = existing_node.parent().children().index(existing_node)
+            self.project_inst.removeMapLayer(existing_layer.id())
+        self.project_inst.addMapLayer(layer, False)
+        root.insertLayer(insert_index, layer)
 
     def _create_and_add_layer(
         self, layer_class, parents: Optional[list[str]], layer_args: list
