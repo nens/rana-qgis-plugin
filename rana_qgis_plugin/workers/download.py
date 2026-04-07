@@ -131,7 +131,7 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
         ]:
             if self.file_data.style_id:
                 style_zip = get_publication_style(
-                    self.publication_version["id"],
+                    self.publication_version["publication_id"],
                     self.file_data.style_id,
                     self.publication_version["version"],
                     "qml.zip",
