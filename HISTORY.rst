@@ -8,6 +8,7 @@ History
 - Group vector layers under filename (nens/rana#3889)
 - Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
 - Prevent locking of layers based on gpkg metadata (nens/rana#3942)
+- Fix bug with renaming files in folders (nens/rana#3080)
 
 
 1.2.9 (2026-03-30)
