@@ -197,6 +197,10 @@ class LayerManager(QObject):
         self, layer_class, parents: Optional[list[str]], layer_args: list
     ) -> Optional[QgsMapLayer]:
         layer = layer_class(*layer_args)
+        # Add the 'Removable' flag explicitly
+        current_flags = layer.flags()
+        new_flags = current_flags | QgsMapLayer.LayerFlag.Removable
+        layer.setFlags(new_flags)
         if layer.isValid():
             self.add_layer(layer, parents)
             return layer
