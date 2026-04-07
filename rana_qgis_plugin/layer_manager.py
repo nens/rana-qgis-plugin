@@ -58,6 +58,7 @@ class LayerManager(QObject):
             layer_args=[local_file_path, display_name or file_name],
         )
         if layer:
+            self._unlock_layer(layer)
             self.communication.bar_info(
                 f"Added layer {file_name}"
                 + (f" to group {'/'.join(parents)}." if parents else ".")
@@ -70,6 +71,7 @@ class LayerManager(QObject):
     ):
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         file_name = Path(file["id"]).name
+        parents = parents + [file_name]
         if descriptor["meta"] is None:
             self.communication.show_warn(
                 f"No metadata found for {file_name}, processing probably has not finished yet."
@@ -106,6 +108,7 @@ class LayerManager(QObject):
             if qml_path.exists():
                 layer.loadNamedStyle(str(qml_path))
                 layer.triggerRepaint()
+            self._unlock_layer(layer)
         else:
             self.communication.show_error(
                 f"Failed to add {layer_name} layer from: {Path(file['id']).name}"
@@ -170,6 +173,7 @@ class LayerManager(QObject):
                             layer.loadNamedStyle(str(STYLE_DIR / "water_depth.qml"))
                             if hasattr(layer.renderer(), "setBand"):
                                 layer.renderer().setBand(1)
+                            self._unlock_layer(layer)
                             self.communication.bar_info(
                                 f"Added water depth layer for {file_name}"
                                 + (
@@ -184,7 +188,6 @@ class LayerManager(QObject):
                 )
 
     def add_layer(self, layer, parents: Optional[list[str]] = None):
-        self.project_inst.addMapLayer(layer, False)
         root = self.root
         if parents:
             for parent in parents:
@@ -192,7 +195,29 @@ class LayerManager(QObject):
                     root = root.addGroup(parent)
                 else:
                     root = root.findGroup(parent)
-        root.addLayer(layer)
+        # Check if layer with same name and source already exists in root
+        child_layers = [
+            child.layer() for child in root.children() if hasattr(child, "layer")
+        ]
+        existing_layer = next(
+            (
+                child_layer
+                for child_layer in child_layers
+                if child_layer.name() == layer.name()
+                and child_layer.source() == layer.source()
+            ),
+            None,
+        )
+        insert_index = len(root.children())
+        # If the layer already exists, remove it first and then replace with the current layer
+        if existing_layer:
+            # Get the index of the existing layer before removing it
+            existing_node = root.findLayer(existing_layer.id())
+            if existing_node:
+                insert_index = existing_node.parent().children().index(existing_node)
+            self.project_inst.removeMapLayer(existing_layer.id())
+        self.project_inst.addMapLayer(layer, False)
+        root.insertLayer(insert_index, layer)
 
     def _create_and_add_layer(
         self, layer_class, parents: Optional[list[str]], layer_args: list
@@ -201,6 +226,12 @@ class LayerManager(QObject):
         if layer.isValid():
             self.add_layer(layer, parents)
             return layer
+
+    def _unlock_layer(self, layer):
+        # Add the 'Removable' flag explicitly to prevent settings in the source from locking the layer'
+        current_flags = layer.flags()
+        new_flags = current_flags | QgsMapLayer.LayerFlag.Removable
+        layer.setFlags(new_flags)
 
     def _add_wms_for_layer(self, layer, link, parents):
         quri = QgsDataSourceUri()

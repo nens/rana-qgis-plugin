@@ -45,6 +45,7 @@ from threedi_api_client.openapi import (
     OneDWaterLevelFile,
     OneDWaterLevelPredefined,
     Organisation,
+    OutputSettings,
     PhysicalSettings,
     PostProcessingOverview,
     PotentialBreach,
@@ -1580,6 +1581,16 @@ class ThreediCalls:
             )
         )
         return simulations_settings_wq
+
+    def create_simulation_settings_output_settings(
+        self, simulation_pk: int, **data
+    ) -> OutputSettings:
+        simulations_output_settings = (
+            self.threedi_api.simulations_settings_output_settings_create(
+                str(simulation_pk), data
+            )
+        )
+        return simulations_output_settings
 
     def update_simulation_settings_physical(self, simulation_pk: int, **data) -> None:
         """Update a simulation physical settings."""

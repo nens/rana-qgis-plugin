@@ -513,17 +513,13 @@ class PublicationStyleUploadWorker(QThread):
             except (FileNotFoundError, PermissionError, OSError) as e:
                 pass
         if len(new_style_ids) > 0:
-            msg = (
-                f"Styling files uploaded successfully for {len(new_style_ids)} layers."
-            )
+            msg = f"Styling file(s) uploaded successfully for {len(new_style_ids)} layer(s)."
         else:
             msg = "No styling files uploaded."
         if not_found_cnt > 0:
-            msg += (
-                f"\n{not_found_cnt} layers not found. Add layers to map and try again."
-            )
+            msg += f"\n{not_found_cnt} layer(s) not found. Add layer(s) to map and try again."
         if self.fail_cnt > 0:
-            msg += f"\nUpload failed for {self.fail_cnt} layers, see the logs for more information."
+            msg += f"\nUpload failed for {self.fail_cnt} layer(s), see the logs for more information."
         if self.warning_cnt > 0:
             msg += f"\n{self.warning_cnt} warnings were generated, see the logs for more information."
         self.finished.emit(msg, new_style_ids)

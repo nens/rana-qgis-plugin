@@ -258,7 +258,7 @@ def get_tenant_project_file(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, _ = network_manager.fetch(params)
 
     if status:
         response = network_manager.content

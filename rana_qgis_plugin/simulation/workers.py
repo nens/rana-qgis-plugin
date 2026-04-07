@@ -1011,6 +1011,10 @@ class SimulationRunner(QRunnable):
             self.tc.create_simulation_settings_aggregation(
                 sim_id, **aggregation_settings
             )
+        data = {
+            "create_debug_hydro_results": self.current_simulation.generate_debug_file
+        }
+        self.tc.create_simulation_settings_output_settings(sim_id, **data)
 
     def include_lizard_post_processing(self):
         """Add post-processing in Lizard to the new simulation."""

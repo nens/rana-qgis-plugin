@@ -4210,6 +4210,11 @@ class SimulationWizard(QWizard):
         self.settings_page.main_widget.populate_aggregation_settings(
             aggregation_settings_list
         )
+        if settings_overview.output_settings is not None:
+            self.summary_page.main_widget.cb_debug_results.setChecked(
+                settings_overview.output_settings.create_debug_hydro_results
+            )
+
         # Simulation events
         simulation_duration = (
             self.duration_page.main_widget.calculate_simulation_duration()
@@ -5024,6 +5029,10 @@ class SimulationWizard(QWizard):
                     new_simulation.template_name = template_name + f"_{i}"
                 else:
                     new_simulation.template_name = template_name
+            new_simulation.generate_debug_file = (
+                self.summary_page.main_widget.cb_debug_results.isChecked()
+            )
+
             new_simulation.start_simulation = True
             # # (
             #     self.summary_page.main_widget.cb_start_simulation.isChecked()

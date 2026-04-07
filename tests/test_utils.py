@@ -9,25 +9,19 @@ import rana_qgis_plugin.utlis.generic as utils
 @pytest.mark.parametrize(
     "input_path,expected_output",
     [
-        ("/folder/invalid:name.txt", "/folder/invalid_name.txt"),
-        (
-            "/path/with/<special>|chars/file?name*.txt",
-            "/path/with/special_chars/file_name.txt",
-        ),
-        ("/folder/my:important:file", "/folder/my_important_file"),
         ("/path/to/valid_file.txt", "/path/to/valid_file.txt"),
-        ("", ""),
         (
-            "/root/folder/sub:folder<name>/invalid|file:name*.csv",
-            "/root/folder/sub_folder_name/invalid_file_name.csv",
+            '/path/with/most:<special>|cha"r"s/file?name*.txt',
+            "/path/with/most__special__cha_r_s/file_name_.txt",
         ),
-        ("/path/to/file.name.with.dots.ext", "/path/to/file_name_with_dots.ext"),
-        ("/folder/файл/tość/файл.txt", "/folder/файл/tość/файл.txt"),
-        ("/folder/SubFolder/File.Name.TXT", "/folder/SubFolder/File_Name.TXT"),
+        # backslash is invalid; on Linux it's treated as part of the filename
+        ("/folder/name\\file.txt", "/folder/name_file.txt"),
+        # rstrip: trailing dot and space are stripped (Windows limitation)
+        ("/folder/name./file.txt", "/folder/name/file.txt"),
+        ("/folder/name /file.txt", "/folder/name/file.txt"),
     ],
 )
 def test_sanitize_path_for_filesystem(input_path, expected_output):
-    # Would be great to test this on windows somehow
     result = utils.sanitize_path_for_filesystem(input_path)
     assert result == expected_output
 

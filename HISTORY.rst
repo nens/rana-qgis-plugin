@@ -11,6 +11,10 @@ History
 - Support saving style from map layers to Rana (nens/rana-qgis-plugin#305)
 - Support opening layers in maps from scenarios (WMS) (nens/rana-qgis-plugin#332)
 - Export revisions gpkg to Rana (nens/rana-qgis-plugin#351)
+- Group vector layers under filename (nens/rana#3889)
+- Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
+- Prevent locking of layers based on gpkg metadata (nens/rana#3942)
+- Replace layers that are already opened instead of opening duplicates (nens/#rana#3890)
 
 
 1.2.9 (2026-03-30)
