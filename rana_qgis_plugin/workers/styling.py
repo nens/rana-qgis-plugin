@@ -419,7 +419,7 @@ class SchematisationFileDescriptorStyleUploader(StyleUploader):
                     data = (
                         json.dumps(json_data)
                         .replace(r"\\n", r"\n")
-                        .replace(r"\\t", r"\t"),
+                        .replace(r"\\t", r"\t")
                     )
                 else:
                     with open(path, "rb") as f:
