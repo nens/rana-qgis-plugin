@@ -15,6 +15,7 @@ from bridgestyle.qgis import togeostyler
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
 
+from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.utlis.api import (
     FetchError,
     get_vector_style_upload_urls,
@@ -93,7 +94,7 @@ class StyleBuilder(QObject):
 class SchematisationStyleBuilder(StyleBuilder):
     """Export predefined style for a schematisation"""
 
-    def __init__(sel):
+    def __init__(self):
         super().__init__("", "")
 
     def clean(self):
@@ -105,8 +106,17 @@ class SchematisationStyleBuilder(StyleBuilder):
         return True
 
     def get_files(self) -> list:
-        # return ("files", "qml.zip", "qml.zip", "application/zip")
-        return ()
+        base_path = STYLE_DIR.joinpath("schematisation")
+        files = [
+            ("files", "qml.zip", str(base_path.joinpath("qml.zip")), "application/zip")
+        ]
+        for name in ["sprite.json", "sprite@2x.json", "style.json"]:
+            files.append(
+                ("files", name, str(base_path.joinpath(name)), "application/json")
+            )
+        for name in ["sprite.png", "sprite@2x.png"]:
+            files.append(("files", name, str(base_path.joinpath(name)), "image/png"))
+        return files
 
 
 class RasterStyleBuilder(StyleBuilder):
@@ -161,28 +171,11 @@ class RasterStyleBuilder(StyleBuilder):
 
 
 class VectorStyleBuilder(StyleBuilder):
-    def __init__(self, local_file_path: str, file_ref_str: str, layer_in_file: str):
-        super().__init__(local_file_path, file_ref_str)
-        self.layer_in_file = layer_in_file
-
     def get_files(self) -> list:
         zip_path = self.save_qml_style_to_file()
         qgis_styling_files = self.get_qgis_styling_files()
+
         return [zip_path] + qgis_styling_files
-
-    @property
-    def layers(self):
-        return [self.layer] if self.layer else []
-
-    @cached_property
-    def layer(self):
-        return next(
-            (layer for layer in super().layers if layer.name() == self.layer_in_file),
-            None,
-        )
-
-    def validate_layers(self) -> bool:
-        return self.layer is not None
 
     def _collect_json_files(self, json_data: list[tuple[str, dict]]) -> list:
         files = []
@@ -207,8 +200,8 @@ class VectorStyleBuilder(StyleBuilder):
         # Convert QGIS layers to styling files for the Rana Web Client
         try:
             _, warnings, mb_style, sprite_sheet = convertGroup(
-                {"layers": [self.layer.name()]},
-                {self.layer.name(): self.layer},
+                {"layers": [layer.name() for layer in self.layers]},
+                {layer.name(): layer for layer in self.layers},
                 "http://baseUrl",
                 workspace="workspace",
                 name="default",
@@ -235,6 +228,32 @@ class VectorStyleBuilder(StyleBuilder):
                 ],
             )
         return files
+
+
+class VectorStyleBuilderAllLayers(VectorStyleBuilder):
+    """Collects style files for all layers in a vector file."""
+
+    def validate_layers(self) -> bool:
+        return len(self.layers) > 0
+
+
+class VectorStyleBuilderSingleLayer(VectorStyleBuilder):
+    """Collects style files for a single layer in a vector file."""
+
+    def __init__(self, local_file_path: str, file_ref_str: str, layer_in_file: str):
+        super().__init__(local_file_path, file_ref_str)
+        self.layer_in_file = layer_in_file
+
+    @property
+    def layers(self):
+        layer = next(
+            (layer for layer in super().layers if layer.name() == self.layer_in_file),
+            None,
+        )
+        return [layer] if layer else []
+
+    def validate_layers(self) -> bool:
+        return len(self.layers) == 1
 
 
 class VectorStyleBuilderOld(StyleBuilder):
@@ -368,6 +387,57 @@ class VectorFileDescriptorStyleUploader(StyleUploader):
             self.failed.emit(f"Failed to upload file to S3: {str(e)}")
 
 
+class SchematisationFileDescriptorStyleUploader(StyleUploader):
+    """Uploads style for all layers in a vector file to the old vector specific"""
+
+    # TODO: once new endpoint can be used, just use SchematisationStyleBuilder and remove this
+    def __init__(
+        self,
+        file_descriptor_id: str,
+    ):
+        super().__init__()
+        # builder is added to class because this still uses the old s3 upload which prevents decoupling building and upload
+        self.builder = SchematisationStyleBuilder()
+        self.descriptor_id = file_descriptor_id
+
+    def upload_to_rana(self, files):
+        files = self.builder.get_files()
+        try:
+            # Get upload URLs to S3
+            upload_urls = get_vector_style_upload_urls(self.descriptor_id)
+            if not upload_urls:
+                self.failed.emit("Failed to get vector style upload URLs from the API.")
+                return
+
+            for _, name, path, content_type in files:
+                if name not in upload_urls:
+                    continue
+                upload_url = upload_urls[name]
+                if content_type == "application/json":
+                    with open(path, "r") as file:
+                        json_data = json.load(file)
+                    data = (
+                        json.dumps(json_data)
+                        .replace(r"\\n", r"\n")
+                        .replace(r"\\t", r"\t"),
+                    )
+                else:
+                    with open(path, "rb") as f:
+                        data = f.read()
+                self._upload_to_s3(upload_url, data, content_type)
+        except Exception as e:
+            self.failed.emit(f"Failed to upload styling files: {str(e)}")
+
+    def _upload_to_s3(self, url: str, data: dict, content_type: str):
+        """Method to upload to S3"""
+        try:
+            headers = {"Content-Type": content_type}
+            response = requests.put(url, data=data, headers=headers)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
+
+
 class FileDescriptorStyleUploadWorker(QThread):
     """Handle uploading style via file descriptor"""
 
@@ -477,7 +547,9 @@ class PublicationStyleUploadWorker(QThread):
         if task.data_type == DataType.raster:
             return RasterStyleBuilder(local_file_path, file_ref_str)
         elif task.data_type == DataType.vector:
-            return VectorStyleBuilder(local_file_path, file_ref_str, task.layer_in_file)
+            return VectorStyleBuilderSingleLayer(
+                local_file_path, file_ref_str, task.layer_in_file
+            )
 
     def run(self):
         not_found_cnt = 0

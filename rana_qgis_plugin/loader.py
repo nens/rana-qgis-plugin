@@ -106,13 +106,11 @@ from rana_qgis_plugin.workers.styling import (
     PublicationStyleUploadWorker,
     RasterFileDescriptorStyleUploader,
     RasterStyleBuilder,
-    SchematisationStyleBuilder,
+    SchematisationFileDescriptorStyleUploader,
     VectorFileDescriptorStyleUploader,
     VectorStyleBuilderOld,
 )
 from rana_qgis_plugin.workers.upload import ExistingFileUploadWorker, FileUploadWorker
-
-STYLE_DIR = Path(__file__).parent / "styles"
 
 
 class Loader(QObject):
@@ -541,13 +539,12 @@ class Loader(QObject):
         self.new_file_upload_worker.start()
 
     def on_upload_schematisation_finished(self, project, online_path: str):
-        builder = SchematisationStyleBuilder()
         file = get_tenant_project_file(project["id"], {"path": online_path})
         if not file:
             self.communication.show_warn(f"Unable to find file {online_path}")
-        uploader = FileDescriptorStyleUploader(file["descriptor_id"])
+        uploader = SchematisationFileDescriptorStyleUploader(file["descriptor_id"])
         self.vector_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, builder, self.communication
+            uploader, uploader.builder, self.communication
         )
         self.vector_style_worker.finished.connect(self.on_vector_style_finished)
         self.vector_style_worker.failed.connect(self.on_vector_style_failed)
