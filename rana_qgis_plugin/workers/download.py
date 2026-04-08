@@ -2,6 +2,7 @@ import io
 import os
 import shutil
 import tempfile
+import warnings
 import zipfile
 from functools import cached_property
 from pathlib import Path
@@ -44,11 +45,16 @@ from rana_qgis_plugin.utlis.generic import (
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
+class SchematisationUpgradeError(Exception):
+    pass
+
+
 class FileDownloadWorkerSignals(QObject):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal()
     failed = pyqtSignal(str)  # Failed signal: emits error messages
     all_finished = pyqtSignal()
+    warning = pyqtSignal(str)
 
 
 class AbstractDownloadContext:
@@ -204,15 +210,16 @@ class BaseDownloader:
                                 previous_progress = progress
             self.postprocess()
             # Handle QML files for vector and raster data
-            # self._handle_qml_extraction(self.download_context.local_dir)
+            self._handle_qml_extraction(self.download_context.local_dir)
             # Emit finished signal from the worker
             signals.finished.emit()
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
+        except SchematisationUpgradeError as e:
+            signals.failed.emit(e)
         except Exception as e:
             # failure to retrieve url will raise a ValueError or FetchError and end up here
-            # signals.failed.emit(f"An error occurred: {str(e)}")
-            raise
+            signals.failed.emit(f"An error occurred: {str(e)}")
 
 
 class RanaDownloader(BaseDownloader):
@@ -246,6 +253,8 @@ class SchematisationDownloader(BaseDownloader):
         self.schematisation = schematisation
         self.revision = revision
         self._downloaded_file_path = None
+        self.progress_signal: Optional[pyqtSignal] = None
+        self.warning_signal: Optional[pyqtSignal] = None
 
     @property
     def downloaded_file_path(self) -> Path:
@@ -265,12 +274,18 @@ class SchematisationDownloader(BaseDownloader):
             schematisation_pk, revision_pk
         ).get_url
 
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        self.progress_signal = signals.progress
+        self.warning_signal = signals.warning
+        super().download_file(signals, download_file)
+
     def postprocess(self):
+        # Extract schematisation from zip
         zip_file = self.download_context.local_file_path
         if zip_file.suffix == ".zip":
             with zipfile.ZipFile(zip_file, "r") as zip_ref:
                 zip_ref.extractall(self.download_context.local_dir)
-        Path(zip_file).unlink()
+        zip_file.unlink()
 
         # Assert that there is only one file in the directory
         extracted_files = list(self.download_context.local_dir.iterdir())
@@ -278,15 +293,61 @@ class SchematisationDownloader(BaseDownloader):
             f"Expected exactly one file in {self.download_context.local_dir}, found {len(extracted_files)}"
         )
         schematisation_file = extracted_files[0]
+        # TODO: handle existing as early as possible!! - check if .gpkg version exists here?
+        # Upgrade schematisation to latest
+        upgaded_schematisation_path = self._upgrade_schematisation(schematisation_file)
+        if upgaded_schematisation_path:
+            schematisation_file = upgaded_schematisation_path
+            # Include revision number in file name
+            rev_nr = self.revision["number"]
+            file_name_with_rev = (
+                f"{schematisation_file.stem} ({rev_nr}){schematisation_file.suffix}"
+            )
+            path_with_rev = schematisation_file.parent.joinpath(file_name_with_rev)
+            schematisation_file.rename(path_with_rev)
+            self._downloaded_file_path = path_with_rev
 
-        # Include revision number in file name
-        rev_nr = self.revision["number"]
-        file_name_with_rev = (
-            f"{schematisation_file.stem} ({rev_nr}){schematisation_file.suffix}"
+    def _upgrade_schematisation(self, schematisation_filepath: Path) -> Optional[Path]:
+        # Assert signals are set properly
+        assert self.progress_signal is not None, "progress signal not set"
+        progress_callback = lambda progress_value, message: self.progress_signal.emit(
+            int(progress_value), message
         )
-        path_with_rev = schematisation_file.parent.joinpath(file_name_with_rev)
-        schematisation_file.rename(path_with_rev)
-        self._downloaded_file_path = path_with_rev
+        assert self.warning_signal is not None, "warning signal not set"
+        try:
+            from threedi_schema import ThreediDatabase, errors
+        except ImportError:
+            raise SchematisationUpgradeError(
+                "Failed to upgrade schematisation: threedi-schema library could not be loaded"
+            )
+        threedi_db = ThreediDatabase(schematisation_filepath)
+        schema = threedi_db.schema
+        srid, _ = schema._get_epsg_data()
+        if srid is None:
+            try:
+                srid = schema._get_dem_epsg()
+            except errors.InvalidSRIDException:
+                srid = None
+        if srid is None:
+            raise SchematisationUpgradeError(
+                "Failed to upgrade schematisation: EPSG code could not be determined"
+            )
+        try:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", UserWarning)
+                schema.upgrade(
+                    backup=False,
+                    epsg_code_override=srid,
+                    progress_func=progress_callback,
+                )
+            if w:
+                for warning in w:
+                    self.warning_signal.emit(
+                        f"{warning._category_name}: {warning.message}"
+                    )
+            return threedi_db.path
+        except errors.UpgradeFailedError:
+            raise SchematisationUpgradeError(f"Failed to upgrade schematisation: {e}")
 
     def _handle_qml_extraction(self, local_dir_structure: Path):
         pass

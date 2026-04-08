@@ -1,4 +1,5 @@
 import os
+import shutil
 from functools import partial
 from pathlib import Path
 from typing import Optional
@@ -485,7 +486,9 @@ class Loader(QObject):
         )
         # Setup download
         self.file_download_worker = SingleFileDownloadWorker(downloader)
-        self.file_download_worker.signals.failed.connect(self.file_download_failed.emit)
+        self.file_download_worker.signals.failed.connect(self.on_file_download_failed)
+        self.file_download_worker.signals.progress.connect(self.on_progress_update)
+        self.file_download_worker.signals.warning.connect(self.communication.log_warn)
         # Initiate upload when download is finished
         online_dir = ""
         if len(Path(file["id"]).parents) > 1:
@@ -494,19 +497,20 @@ class Loader(QObject):
             lambda: self.on_download_schematisation_finished(
                 project,
                 online_dir,
-                downloader.downloaded_file_path,
                 self.file_download_worker,
             )
         )
         self.file_download_worker.start()
 
-    def on_download_schematisation_finished(
-        self, project, online_dir, local_path: Path, sender: QThread
-    ):
+    def on_progress_update(self, progress: int, message: str):
+        self.communication.progress_bar(message, 0, 100, progress, clear_msg_bar=True)
+
+    def on_download_schematisation_finished(self, project, online_dir, sender: QThread):
         # clean up thread
         sender.wait()
         sender.deleteLater()
         # setup upload worker
+        local_path = sender.downloader.downloaded_file_path
         self.new_file_upload_worker = FileUploadWorker(
             project, [local_path], online_dir
         )
@@ -525,7 +529,7 @@ class Loader(QObject):
             )
         )
         self.new_file_upload_worker.finished.connect(
-            lambda: Path(local_path).unlink(missing_ok=True)
+            lambda: shutil.rmtree(local_path.parent, ignore_errors=True)
         )
         self.new_file_upload_worker.finished.connect(
             lambda: self.on_upload_schematisation_finished(

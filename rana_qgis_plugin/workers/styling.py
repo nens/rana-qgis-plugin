@@ -410,7 +410,7 @@ class FileDescriptorStyleUploadWorker(QThread):
         self.builder.tempdir.mkdir(parents=True, exist_ok=True)
         files = self.builder.get_files()
         self.uploader.upload_to_rana(files)
-        builder.clean()
+        self.builder.clean()
         if self.success:
             self.finished.emit(
                 f"Styling files uploaded successfully for {self.builder.file_ref_str}."
