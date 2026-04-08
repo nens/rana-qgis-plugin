@@ -1,6 +1,6 @@
 import os
 import shutil
-from functools import partial
+from functools import partial, wraps
 from pathlib import Path
 from typing import Optional
 
@@ -111,6 +111,20 @@ from rana_qgis_plugin.workers.styling import (
     VectorStyleBuilderOld,
 )
 from rana_qgis_plugin.workers.upload import ExistingFileUploadWorker, FileUploadWorker
+
+
+def cleanup_sender(func):
+    """Decorator that retrieves sender as QThread, asserts type, waits, and deletes it."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.wait()
+        sender.deleteLater()
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class Loader(QObject):
@@ -512,7 +526,6 @@ class Loader(QObject):
         local_path = sender.downloader.downloaded_file_path
         online_path = Path(online_dir).joinpath(local_path.name).as_posix()
         file = get_tenant_project_file(project["id"], {"path": online_path})
-        self.file_upload_worker = ExistingFileUploadWorker(project, file, local_path)
         if file:
             self.communication.log_info(f"{file=}")
             user = file.get("user") or {}
@@ -526,39 +539,40 @@ class Loader(QObject):
                 "File already exists",
                 f"File {local_path.name} at {online_path} was already created at {created_at} by {created_by}. Do you want to replace is?",
             ):
+                self.file_upload_worker = ExistingFileUploadWorker(
+                    project, file, local_path
+                )
                 self.file_upload_worker.file_overwrite = True
+                worker = self.file_upload_worker
             else:
                 self.communication.clear_message_bar()
                 self.file_upload_failed.emit("")
                 return
+        else:
+            self.new_file_upload_worker = FileUploadWorker(
+                project, [local_path], online_dir
+            )
+            worker = self.new_file_upload_worker
 
-        self.file_upload_worker.failed.connect(self.on_file_upload_failed)
-        self.file_upload_worker.failed.connect(
-            lambda error: self.file_upload_failed.emit(error)
-        )
-        self.file_upload_worker.progress.connect(self.on_file_upload_progress)
-        self.file_upload_worker.warning.connect(
-            lambda msg: self.communication.show_warn(msg)
-        )
-        self.file_upload_worker.finished.connect(
+        worker.failed.connect(self.on_file_upload_failed)
+        worker.failed.connect(lambda error: self.file_upload_failed.emit(error))
+        worker.progress.connect(self.on_file_upload_progress)
+        worker.warning.connect(lambda msg: self.communication.show_warn(msg))
+        worker.finished.connect(
             lambda: shutil.rmtree(local_path.parent, ignore_errors=True)
         )
-        self.file_upload_worker.failed.connect(
+        worker.failed.connect(
             lambda: shutil.rmtree(local_path.parent, ignore_errors=True)
         )
-        self.file_upload_worker.finished.connect(
+        worker.finished.connect(
             lambda: self.on_upload_schematisation_finished(
                 project, Path(online_dir).joinpath(local_path.name).as_posix()
             )
         )
-        self.file_upload_worker.start()
+        worker.start()
 
+    @cleanup_sender
     def on_upload_schematisation_finished(self, project, online_path: str):
-        # TODO make decorator to handle sender
-        sender = self.sender()
-        assert isinstance(sender, QThread)
-        sender.wait()
-        sender.deleteLater()
         file = get_tenant_project_file(project["id"], {"path": online_path})
         if not file:
             self.communication.show_warn(f"Unable to find file {online_path}")
@@ -573,11 +587,8 @@ class Loader(QObject):
         self.vector_style_worker.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
 
+    @cleanup_sender
     def on_upload_schematiation_style_finished(self, online_path):
-        sender = self.sender()
-        assert isinstance(sender, QThread)
-        sender.wait()
-        sender.deleteLater()
         self.communication.clear_message_bar()
         self.communication.show_info(
             f"Exported schematisation to {online_path} successfully."
@@ -1074,13 +1085,10 @@ class Loader(QObject):
         assert isinstance(sender, QThread)
         sender.file_overwrite = file_overwrite
 
+    @cleanup_sender
     def on_file_upload_finished(self):
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        sender = self.sender()
-        assert isinstance(sender, QThread)
-        sender.wait()
-        sender.deleteLater()
         self.file_upload_finished.emit()
 
     def on_new_file_upload_finished(self, online_path: str, project):
