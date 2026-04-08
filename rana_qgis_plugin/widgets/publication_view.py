@@ -135,9 +135,12 @@ class LayerItemData(MapItemData):
 
     @property
     def support_open(self) -> bool:
-        return (
-            FileAction.OPEN_IN_QGIS in self.supported_actions
-        ) or self.data_type == "scenario"
+        if self.data_type == "threedi_schematisation":
+            return False
+        elif self.data_type == "scenario":
+            return True
+        else:
+            return FileAction.OPEN_IN_QGIS in self.supported_actions
 
     @property
     def support_save(self) -> bool:
