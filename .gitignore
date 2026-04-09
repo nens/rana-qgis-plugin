@@ -1,4 +1,5 @@
 *.zip
+!rana_qgis_plugin/styles/schematisation/qml.zip
 profiletool
 quick_map_services
 OSMDownloader

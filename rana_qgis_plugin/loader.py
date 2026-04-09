@@ -1,5 +1,6 @@
 import os
-from functools import partial
+import shutil
+from functools import partial, wraps
 from pathlib import Path
 from typing import Optional
 
@@ -78,6 +79,7 @@ from rana_qgis_plugin.utlis.qgis import (
 )
 from rana_qgis_plugin.utlis.scenario import ScenarioInfo
 from rana_qgis_plugin.utlis.settings import hcc_working_dir
+from rana_qgis_plugin.utlis.time import convert_timestamp_str_to_local_time
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
@@ -90,7 +92,9 @@ from rana_qgis_plugin.workers.download import (
     LizardResultDownloadWorker,
     PublicationFileDownloadContext,
     RanaFileDownloader,
+    SchematisationDownloader,
     SingleFileDownloadWorker,
+    TempDownloadContext,
 )
 from rana_qgis_plugin.workers.persistent import (
     PersistentTaskScheduler,
@@ -102,12 +106,25 @@ from rana_qgis_plugin.workers.styling import (
     PublicationStyleUploadWorker,
     RasterFileDescriptorStyleUploader,
     RasterStyleBuilder,
+    SchematisationFileDescriptorStyleUploader,
     VectorFileDescriptorStyleUploader,
     VectorStyleBuilderOld,
 )
 from rana_qgis_plugin.workers.upload import ExistingFileUploadWorker, FileUploadWorker
 
-STYLE_DIR = Path(__file__).parent / "styles"
+
+def cleanup_sender(func):
+    """Decorator that retrieves sender as QThread, asserts type, waits, and deletes it."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        sender = self.sender()
+        assert isinstance(sender, QThread)
+        sender.wait()
+        sender.deleteLater()
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class Loader(QObject):
@@ -149,6 +166,7 @@ class Loader(QObject):
     avatar_updated = pyqtSignal(str, "QPixmap")
     file_opened = pyqtSignal(dict)
     simulation_cancelled = pyqtSignal(int)
+    export_gpkg_finished = pyqtSignal()
 
     def __init__(self, communication, parent):
         super().__init__(parent)
@@ -193,8 +211,6 @@ class Loader(QObject):
         """Start the worker to download and open files in QGIS"""
         data_type = file["data_type"]
         if data_type in SUPPORTED_DATA_TYPES.keys():
-            # TODO: remove?
-            # local_file_path = get_local_file_path(project["slug"], file["id"])
             layer_manager = FileLayerManager(self.communication, parent=self.parent())
             self.initialize_file_download_worker(project, file, layer_manager)
             self.file_download_worker.start()
@@ -208,7 +224,6 @@ class Loader(QObject):
         publication_version: dict,
         layer_items: list[RanaPublicationFileData],
     ):
-        # TODO: extend for scenario and schematisation
         items_to_download = []
         downloaders = []
         for layer_item in layer_items:
@@ -327,10 +342,10 @@ class Loader(QObject):
         downloader = RanaFileDownloader(project, file, download_context)
         self.file_download_worker = SingleFileDownloadWorker(downloader)
         self.file_download_worker.signals.finished.connect(
-            lambda _project, _file, _local_path: self.on_file_download_finished(
-                _project,
-                _file,
-                _local_path,
+            lambda: self.on_file_download_finished(
+                project,
+                file,
+                str(download_context.local_file_path),
                 layer_manager,
                 thread_worker=self.file_download_worker,
             )
@@ -463,6 +478,124 @@ class Loader(QObject):
         self.start_model_tracker_process(
             project, schematisation["schematisation"], revision_id
         )
+
+    @pyqtSlot(dict, dict)
+    def export_schematisation_from_file(self, project: dict, file: dict):
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        revision = schematisation["latest_revision"]
+        self.export_schematisation_revision(
+            project, file, schematisation["schematisation"], revision
+        )
+
+    @pyqtSlot(dict, dict, dict, dict)
+    def export_schematisation_revision(
+        self, project: dict, file: dict, schematisation: dict, revision: dict
+    ):
+        download_context = TempDownloadContext(revision["sqlite"]["file"]["filename"])
+        downloader = SchematisationDownloader(
+            schematisation_id=schematisation["id"],
+            revision_id=revision["id"],
+            revision_number=revision["number"],
+            download_context=download_context,
+        )
+        # Setup download
+        self.file_download_worker = SingleFileDownloadWorker(downloader)
+        self.file_download_worker.signals.failed.connect(self.on_file_download_failed)
+        self.file_download_worker.signals.progress.connect(self.on_progress_update)
+        self.file_download_worker.signals.warning.connect(self.communication.log_warn)
+        # Initiate upload when download is finished
+        online_dir = ""
+        if len(Path(file["id"]).parents) > 1:
+            online_dir = Path().joinpath(*Path(file["id"]).parents).as_posix()
+        self.file_download_worker.signals.finished.connect(
+            lambda: self.on_download_schematisation_finished(
+                project,
+                online_dir,
+                self.file_download_worker,
+            )
+        )
+        self.file_download_worker.start()
+
+    def on_progress_update(self, progress: int, message: str):
+        self.communication.progress_bar(message, 0, 100, progress, clear_msg_bar=True)
+
+    def on_download_schematisation_finished(self, project, online_dir, sender: QThread):
+        # clean up thread
+        sender.wait()
+        sender.deleteLater()
+        # setup upload worker
+        local_path = sender.downloader.downloaded_file_path
+        online_path = Path(online_dir).joinpath(local_path.name).as_posix()
+        file = get_tenant_project_file(project["id"], {"path": online_path})
+        if file:
+            user = file.get("user") or {}
+            if not user or "given_name" not in user or "family_name" not in user:
+                created_by = "unknown"
+            else:
+                created_by = f"{user['given_name']} {user['family_name']}"
+            created_at = convert_timestamp_str_to_local_time(file["last_modified"])
+            if self.communication.ask(
+                self.parent(),
+                "File already exists",
+                f"File {local_path.name} at {online_path} was already created at {created_at} by {created_by}. Do you want to replace is?",
+            ):
+                self.file_upload_worker = ExistingFileUploadWorker(
+                    project, file, local_path
+                )
+                self.file_upload_worker.file_overwrite = True
+                worker = self.file_upload_worker
+            else:
+                self.communication.clear_message_bar()
+                self.file_upload_failed.emit("")
+                return
+        else:
+            self.new_file_upload_worker = FileUploadWorker(
+                project, [local_path], online_dir
+            )
+            worker = self.new_file_upload_worker
+
+        worker.failed.connect(self.on_file_upload_failed)
+        worker.failed.connect(lambda error: self.file_upload_failed.emit(error))
+        worker.progress.connect(self.on_file_upload_progress)
+        worker.warning.connect(lambda msg: self.communication.show_warn(msg))
+        worker.finished.connect(
+            lambda: shutil.rmtree(local_path.parent, ignore_errors=True)
+        )
+        worker.failed.connect(
+            lambda: shutil.rmtree(local_path.parent, ignore_errors=True)
+        )
+        worker.finished.connect(
+            lambda: self.on_upload_schematisation_finished(
+                project, Path(online_dir).joinpath(local_path.name).as_posix()
+            )
+        )
+        worker.start()
+
+    @cleanup_sender
+    def on_upload_schematisation_finished(self, project, online_path: str):
+        file = get_tenant_project_file(project["id"], {"path": online_path})
+        if not file:
+            self.communication.show_warn(f"Unable to find file {online_path}")
+        uploader = SchematisationFileDescriptorStyleUploader(file["descriptor_id"])
+        self.vector_style_worker = FileDescriptorStyleUploadWorker(
+            uploader, uploader.builder, self.communication
+        )
+        self.vector_style_worker.finished.connect(
+            lambda _: self.on_upload_schematiation_style_finished(online_path)
+        )
+        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
+        self.vector_style_worker.warning.connect(self.communication.show_warn)
+        self.vector_style_worker.start()
+
+    @cleanup_sender
+    def on_upload_schematiation_style_finished(self, online_path: str):
+        self.communication.clear_message_bar()
+        self.communication.show_info(
+            f"Exported schematisation to {online_path} successfully."
+        )
+        self.export_gpkg_finished.emit()
 
     @pyqtSlot(dict, int)
     def delete_schematisation_revision_3di_model(self, file, revision_id):
@@ -954,13 +1087,10 @@ class Loader(QObject):
         assert isinstance(sender, QThread)
         sender.file_overwrite = file_overwrite
 
+    @cleanup_sender
     def on_file_upload_finished(self):
         self.communication.clear_message_bar()
         self.communication.bar_info(f"File uploaded to Rana successfully!")
-        sender = self.sender()
-        assert isinstance(sender, QThread)
-        sender.wait()
-        sender.deleteLater()
         self.file_upload_finished.emit()
 
     def on_new_file_upload_finished(self, online_path: str, project):

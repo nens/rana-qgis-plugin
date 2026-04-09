@@ -226,9 +226,11 @@ class FileView(QWidget):
                 self.project, self.selected_file
             )
         )
+        self.btn_export_gpkg = QPushButton("Export to GeoPackage")
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
+        button_layout.addWidget(self.btn_export_gpkg)
         button_layout.addWidget(btn_show_revisions)
         self.file_action_btn_dict = self.get_file_action_buttons()
         file_action_btn_layout = QHBoxLayout()
@@ -614,10 +616,13 @@ class FileView(QWidget):
                     self.btn_stack.setCurrentIndex(0)
                 else:
                     self.btn_stack.setCurrentIndex(1)
+                self.btn_export_gpkg.show()
             else:
                 self.btn_stack.hide()
+                self.btn_export_gpkg.hide()
         else:
             self.btn_stack.hide()
+            self.btn_export_gpkg.hide()
         self.update_file_action_buttons(selected_file)
 
     def refresh(self):

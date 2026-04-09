@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import requests
 from qgis.PyQt.QtCore import (
@@ -105,8 +106,9 @@ class FileUploadWorker(QThread):
 class ExistingFileUploadWorker(FileUploadWorker):
     """Worker thread for uploading files."""
 
-    def __init__(self, project: dict, file: dict):
-        local_file = Path(get_local_file_path(project["slug"], file["id"]))
+    def __init__(self, project: dict, file: dict, local_file: Optional[Path] = None):
+        if not local_file:
+            local_file = Path(get_local_file_path(project["slug"], file["id"]))
         if "/" not in file["id"]:
             online_dir = ""
         else:
