@@ -254,14 +254,15 @@ class RanaDownloader(BaseDownloader):
 class SchematisationDownloader(BaseDownloader):
     def __init__(
         self,
-        schematisation: dict,
-        revision: dict,
+        schematisation_id: int,
+        revision_id: int,
+        revision_number: int,
         download_context: AbstractDownloadContext,
     ):
         super().__init__(download_context)
-        # TODO: only pass ids
-        self.schematisation = schematisation
-        self.revision = revision
+        self.schematisation_id = schematisation_id
+        self.revision_id = revision_id
+        self.revision_number = revision_number
         self._downloaded_file_path = None
         self.progress_signal: Optional[pyqtSignal] = None
         self.warning_signal: Optional[pyqtSignal] = None
@@ -278,8 +279,8 @@ class SchematisationDownloader(BaseDownloader):
     def url(self) -> str:
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
-        schematisation_pk = self.schematisation["id"]
-        revision_pk = self.revision["id"]
+        schematisation_pk = self.schematisation_id
+        revision_pk = self.revision_id
         return tc.download_schematisation_revision_sqlite(
             schematisation_pk, revision_pk
         ).get_url
@@ -309,7 +310,7 @@ class SchematisationDownloader(BaseDownloader):
         if upgaded_schematisation_path:
             schematisation_file = upgaded_schematisation_path
             # Include revision number in file name
-            rev_nr = self.revision["number"]
+            rev_nr = self.revision_number
             file_name_with_rev = (
                 f"{schematisation_file.stem} ({rev_nr}){schematisation_file.suffix}"
             )

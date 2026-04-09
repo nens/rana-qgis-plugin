@@ -495,7 +495,10 @@ class Loader(QObject):
     ):
         download_context = TempDownloadContext(revision["sqlite"]["file"]["filename"])
         downloader = SchematisationDownloader(
-            schematisation, revision, download_context
+            schematisation_id=schematisation["id"],
+            revision_id=revision["id"],
+            revision_number=revision["number"],
+            download_context=download_context,
         )
         # Setup download
         self.file_download_worker = SingleFileDownloadWorker(downloader)
