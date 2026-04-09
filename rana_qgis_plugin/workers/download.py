@@ -412,9 +412,6 @@ class BatchFileDownloadWorker(QThread):
             if Path(file_location).exists():
                 try:
                     Path(download_path).parent.mkdir(parents=True, exist_ok=True)
-                    QgsMessageLog.logMessage(
-                        f"Copying {str(file_location)} to {str(download_path)}"
-                    )
                     shutil.copy2(file_location, download_path)
                     return True
                 except (FileNotFoundError, PermissionError, OSError) as e:

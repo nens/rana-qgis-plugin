@@ -530,7 +530,6 @@ class Loader(QObject):
         online_path = Path(online_dir).joinpath(local_path.name).as_posix()
         file = get_tenant_project_file(project["id"], {"path": online_path})
         if file:
-            self.communication.log_info(f"{file=}")
             user = file.get("user") or {}
             if not user or "given_name" not in user or "family_name" not in user:
                 created_by = "unknown"

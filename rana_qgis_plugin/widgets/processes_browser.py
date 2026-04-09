@@ -55,8 +55,6 @@ class JobData:
 
     @classmethod
     def from_job_dict(cls, job: dict):
-        from qgis.core import Qgis, QgsMessageLog
-
         try:
             return cls(
                 id=job["id"],
@@ -70,7 +68,6 @@ class JobData:
                 inputs=job["inputs"],
             )
         except Exception as e:
-            QgsMessageLog.logMessage(f"create job {job=}", "DEBUG", Qgis.Info)
             raise e
 
 

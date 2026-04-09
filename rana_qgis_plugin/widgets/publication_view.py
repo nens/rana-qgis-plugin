@@ -385,14 +385,6 @@ class PublicationView(QWidget):
             self.communication.log_warn(str(e))
             self.current_version = None
         if self.current_version:
-            from qgis.core import Qgis, QgsMessageLog
-
-            QgsMessageLog.logMessage(
-                f"id = {self.current_version['publication_id']}", "DEBUG", Qgis.Info
-            )
-            QgsMessageLog.logMessage(
-                f"version = {self.current_version['version']}", "DEBUG", Qgis.Info
-            )
             self.file_map = {
                 item["file"]["id"]: item["file"]
                 for item in get_publication_version_files(
