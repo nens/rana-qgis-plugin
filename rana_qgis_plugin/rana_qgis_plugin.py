@@ -447,6 +447,9 @@ class RanaQgisPlugin:
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
             self.loader.export_gpkg_finished.connect(self.rana_browser.enable)
+            self.loader.export_gpkg_finished.connect(
+                self.rana_browser.return_to_file_browser
+            )
             self.loader.publication_style_finished.connect(
                 self.rana_browser.publication_view.update_after_save_styles
             )
@@ -460,9 +463,7 @@ class RanaQgisPlugin:
             self.loader.schematisation_upload_failed.connect(self.rana_browser.enable)
             self.loader.folder_created.connect(self.rana_browser.refresh)
             self.loader.model_deleted.connect(self.rana_browser.refresh)
-            self.loader.file_deleted.connect(
-                self.rana_browser.refresh_after_file_delete
-            )
+            self.loader.file_deleted.connect(self.rana_browser.return_to_file_browser)
             self.loader.rename_aborted.connect(self.rana_browser.refresh)
             self.loader.rename_finished.connect(
                 self.rana_browser.refresh_after_file_rename

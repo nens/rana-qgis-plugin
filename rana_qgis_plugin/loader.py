@@ -590,7 +590,7 @@ class Loader(QObject):
         self.vector_style_worker.start()
 
     @cleanup_sender
-    def on_upload_schematiation_style_finished(self, online_path):
+    def on_upload_schematiation_style_finished(self, online_path: str):
         self.communication.clear_message_bar()
         self.communication.show_info(
             f"Exported schematisation to {online_path} successfully."

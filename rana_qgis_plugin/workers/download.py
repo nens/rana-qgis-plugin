@@ -312,7 +312,7 @@ class SchematisationDownloader(BaseDownloader):
             # Include revision number in file name
             rev_nr = self.revision_number
             file_name_with_rev = (
-                f"{schematisation_file.stem} ({rev_nr}){schematisation_file.suffix}"
+                f"{schematisation_file.stem} (rev{rev_nr}){schematisation_file.suffix}"
             )
             path_with_rev = schematisation_file.parent.joinpath(file_name_with_rev)
             schematisation_file.rename(path_with_rev)

@@ -400,6 +400,7 @@ class RanaBrowser(QWidget):
             lambda _: self.show_project_data(self.rana_publications, 0)
         )
         self.publication_view.show_failed.connect(lambda _: self.enable())
+        # Open exported gpkg
 
         # Update breadcrumbs when file browser path changes
         for breadcrumb_widget in self.breadcrumbs_manager.widgets:
@@ -550,14 +551,14 @@ class RanaBrowser(QWidget):
         elif self.rana_browser.currentIndex() == 1:
             self.refresh_project_widget()
 
-    def refresh_after_file_delete(self):
-        if self.rana_files.currentIndex() == 2:
+    def return_to_file_browser(self):
+        if self.rana_files.currentWidget() == self.file_view:
             self.files_browser.select_path(
                 str(Path(self.file_view.selected_file["id"]).parent) + "/"
             )
             self.file_view.selected_file = None
             self.files_breadcrumbs.remove_file()
-            self.rana_files.setCurrentIndex(1)
+            self.rana_files.setCurrentIndex(0)
         self.refresh()
 
     def refresh_after_file_rename(self, new_name):
