@@ -446,10 +446,10 @@ class RanaQgisPlugin:
             self.loader.raster_style_finished.connect(self.rana_browser.enable)
             self.loader.raster_style_finished.connect(self.rana_browser.refresh)
             self.loader.raster_style_failed.connect(self.rana_browser.enable)
-            self.loader.export_gpkg_finished.connect(self.rana_browser.enable)
             self.loader.export_gpkg_finished.connect(
                 self.rana_browser.return_to_file_browser
             )
+            self.loader.export_gpkg_finished.connect(self.rana_browser.enable)
             self.loader.publication_style_finished.connect(
                 self.rana_browser.publication_view.update_after_save_styles
             )
