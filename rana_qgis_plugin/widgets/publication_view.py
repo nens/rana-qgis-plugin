@@ -306,16 +306,15 @@ class PublicationView(QWidget):
     def setup_ui(self):
         self.general_box = QgsCollapsibleGroupBox("General")
         self.general_box.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
         )
         self.general_box.setAlignment(Qt.AlignTop)
         self.general_box.setContentsMargins(0, 0, 0, 0)
-        self.general_box.setMaximumHeight(0)
-
         self.maps_box = QgsCollapsibleGroupBox("Maps")
         self.maps_box.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+
         self.maps_model = QStandardItemModel()
         self.maps_tv = PublicationMapsTreeView()
         self.maps_tv.setEditTriggers(QTreeView.NoEditTriggers)
@@ -331,17 +330,20 @@ class PublicationView(QWidget):
         maps_layout = QVBoxLayout()
         maps_layout.addWidget(self.maps_tv)
         self.maps_box.setLayout(maps_layout)
-        # put all collabpsibles in a container, this seems to help with correct spacing
+        # put all collapsibles in a container, this seems to help with correct spacing
         collapsible_container = QWidget()
+        collapsible_container.setMinimumHeight(0)
         collapsible_layout = QVBoxLayout(collapsible_container)
         collapsible_layout.setContentsMargins(0, 0, 0, 0)
         collapsible_layout.setSpacing(0)
-        collapsible_layout.addWidget(self.general_box)
-        collapsible_layout.addWidget(self.maps_box)
+        collapsible_layout.addWidget(self.general_box, 0)
+        collapsible_layout.addWidget(self.maps_box, 1)
+        collapsible_layout.addStretch()
         # make container scrollable
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(collapsible_container)
+        scroll_area.setAlignment(Qt.AlignTop)
 
         button_layout = QHBoxLayout()
         btn_open = QPushButton("Open all maps in QGIS")
@@ -659,6 +661,7 @@ class PublicationView(QWidget):
         self.maps_tv.resize_columns_aware_of_collapsed_items()
         self.communication.clear_message_bar()
         self.update_width()
+        self.maps_box.setCollapsed(False)
 
     def update_width(self):
         update_width_with_wrapping(self.maps_tv, self.maps_model, wrap_column=0)
