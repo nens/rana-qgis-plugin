@@ -1137,13 +1137,13 @@ class RanaBrowser(QWidget):
             self.refresh_project_widget()
 
     def refresh_after_file_delete(self):
-        if self.rana_files.currentIndex() == 2:
+        if self.rana_files.currentWidget() == self.file_view:
             self.files_browser.select_path(
                 str(Path(self.file_view.selected_file["id"]).parent) + "/"
             )
             self.file_view.selected_file = None
             self.files_breadcrumbs.remove_file()
-            self.rana_files.setCurrentIndex(1)
+            self.rana_files.setCurrentIndex(0)
         self.refresh()
 
     def refresh_after_file_rename(self, new_name):
