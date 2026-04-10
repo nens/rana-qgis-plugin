@@ -222,7 +222,7 @@ class MapCollector:
                     self.missed_items += 1
                     self.messages.append(f"File not found for layer: {layer}")
                     continue
-                file_descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                file_descriptor = file.get("descriptor")
                 if not file_descriptor:
                     self.missed_items += 1
                     self.messages.append(
@@ -232,9 +232,8 @@ class MapCollector:
                 # For scenario and vector files the layer is extracted from the file
                 layer_in_file = None
                 type_in_file = None
-                data_type = file.get("data_type", "")
+                data_type = file_descriptor.get("data_type", "")
                 if data_type in ["vector", "scenario"]:
-                    # TODO: unify this once the BE makes up its mind about using code or id
                     layers_in_file = file_descriptor.get("layers") or []
                     layer_in_file = next(
                         (
