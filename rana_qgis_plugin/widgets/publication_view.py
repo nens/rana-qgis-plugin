@@ -60,6 +60,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
 from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
+from rana_qgis_plugin.widgets.utils_view import ContentAwareTreeView
 
 
 class MapItemType(Enum):
@@ -148,60 +149,6 @@ class LayerItemData(MapItemData):
             FileAction.SAVE_RASTER_STYLING in self.supported_actions
             or FileAction.SAVE_VECTOR_STYLING in self.supported_actions
         )
-
-
-class PublicationMapsTreeView(QTreeView):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def resize_columns_aware_of_collapsed_items(self):
-        """
-        Resize columns to fit their contents, including collapsed items.
-        """
-        # Save current collapsed status
-        expanded_states = {}
-        for row in range(self.model().rowCount()):
-            self._save_expanded_states(self.model().index(row, 0), expanded_states)
-        # Temporarily expand all items
-        for row in range(self.model().rowCount()):
-            self._expand_all_items(self.model().index(row, 0))
-        # Resize columns to fit *all items*, including collapsed ones
-        for col in range(self.model().columnCount()):
-            self.resizeColumnToContents(col)
-        # Restore the original collapsed state
-        for row in range(self.model().rowCount()):
-            self._restore_expanded_states(self.model().index(row, 0), expanded_states)
-
-    def _save_expanded_states(self, index, expanded_states):
-        """
-        Recursively save the expanded/collapsed state of all items.
-        """
-        if not index.isValid():
-            return
-        expanded_states[index] = self.isExpanded(index)
-        for row in range(index.model().rowCount(index)):
-            self._save_expanded_states(index.child(row, 0), expanded_states)
-
-    def _expand_all_items(self, index):
-        """
-        Recursively expand all items in the tree view.
-        """
-        if not index.isValid():
-            return
-        self.setExpanded(index, True)
-        for row in range(index.model().rowCount(index)):
-            self._expand_all_items(index.child(row, 0))
-
-    def _restore_expanded_states(self, index, expanded_states):
-        """
-        Recursively restore the expanded/collapsed state of items.
-        """
-        if not index.isValid():
-            return
-        if index in expanded_states:
-            self.setExpanded(index, expanded_states[index])
-        for row in range(index.model().rowCount(index)):
-            self._restore_expanded_states(index.child(row, 0), expanded_states)
 
 
 class MapCollector:
@@ -315,7 +262,7 @@ class PublicationView(QWidget):
         )
 
         self.maps_model = QStandardItemModel()
-        self.maps_tv = PublicationMapsTreeView()
+        self.maps_tv = ContentAwareTreeView()
         self.maps_tv.setEditTriggers(QTreeView.NoEditTriggers)
         self.maps_tv.setModel(self.maps_model)
         self.maps_tv.setUniformRowHeights(True)

@@ -19,7 +19,6 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
-    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -39,6 +38,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
+from rana_qgis_plugin.widgets.utils_view import ContentAwareTreeView
 
 # allow for using specific data just for sorting
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -107,7 +107,7 @@ class FilesBrowser(QWidget):
         self.fetch_and_populate(project)
 
     def setup_ui(self):
-        self.files_tv = QTreeView()
+        self.files_tv = ContentAwareTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = FileBrowserModel()
@@ -279,9 +279,7 @@ class FilesBrowser(QWidget):
         self.files_tv.sortByColumn(sort_column, sort_order)
         self.files_tv.setSortingEnabled(True)
 
-        for i in range(len(header)):
-            self.files_tv.resizeColumnToContents(i)
-        self.files_tv.setColumnWidth(0, 300)
+        self.files_tv.resize_columns_aware_of_collapsed_items()
 
 
 class CreateFolderDialog(QDialog):
