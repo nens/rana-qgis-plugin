@@ -100,6 +100,7 @@ class FilesBrowser(QWidget):
         self.communication = communication
         self.selected_item = None
         self.file_signals = file_signals
+        self._pending_close_editor_handler = None
         self.setup_ui()
 
     def update_project(self, project: dict):
@@ -210,8 +211,14 @@ class FilesBrowser(QWidget):
         original_name = name_item.text()
         delegate = self.files_tv.itemDelegate()
 
+        # Disconnect any stale handler from a previous rename
+        if self._pending_close_editor_handler is not None:
+            delegate.closeEditor.disconnect(self._pending_close_editor_handler)
+            self._pending_close_editor_handler = None
+
         def on_close_editor(editor, hint):
             delegate.closeEditor.disconnect(on_close_editor)
+            self._pending_close_editor_handler = None
             if hint == QAbstractItemDelegate.EndEditHint.NoHint:
                 # editing was cancelled (Escape)
                 return
@@ -221,6 +228,7 @@ class FilesBrowser(QWidget):
                     selected_item, new_name
                 )
 
+        self._pending_close_editor_handler = on_close_editor
         delegate.closeEditor.connect(on_close_editor)
         self.files_tv.setCurrentIndex(name_index)
         self.files_tv.edit(name_index)
