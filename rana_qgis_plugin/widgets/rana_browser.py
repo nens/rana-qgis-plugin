@@ -43,6 +43,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.auth_3di import get_3di_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import (
@@ -394,6 +395,9 @@ class FilesBrowser(QWidget):
         layout.addWidget(self.files_tv)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
+
+        self.btn_new_schematisation.setVisible(get_3di_authcfg_id() is not None)
+        self.btn_import_schematisation.setVisible(get_3di_authcfg_id() is not None)
 
     def show_create_folder_dialog(self):
         # Make sure this button cannot do anything if the files browser is not in a folder
