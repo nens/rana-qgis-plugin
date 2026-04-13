@@ -10,7 +10,7 @@ History
 - Prevent locking of layers based on gpkg metadata (nens/rana#3942)
 - Replace layers that are already opened instead of opening duplicates (nens/rana#3890)
 - Fix returning to FilesBrowser after delete via FileView
-- Remove pagination buttons in template selecotr (nens/rana#3849)
+- Remove pagination buttons in template selector (nens/rana#3849)
 
 
 1.2.9 (2026-03-30)
