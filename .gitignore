@@ -18,3 +18,6 @@ rana_qgis_customisations
 docker-compose.override.yml
 output.mp4
 _cached_data
+# AI stuff
+.minispec
+.opencode

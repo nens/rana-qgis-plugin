@@ -121,7 +121,6 @@ class EditLabel(QLineEdit):
 
 
 class FileView(QWidget):
-    file_showed = pyqtSignal()
     show_revisions_clicked = pyqtSignal(dict, dict)
 
     def __init__(

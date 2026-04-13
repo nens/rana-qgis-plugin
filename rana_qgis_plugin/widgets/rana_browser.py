@@ -219,12 +219,12 @@ class RanaBrowser(QWidget):
         self.avatar_cache.avatar_changed.connect(self.projects_browser.update_avatar)
 
         # Disable/enable widgets
-        self.projects_browser.busy.connect(lambda: self.disable)
-        self.projects_browser.ready.connect(lambda: self.enable)
-        self.revisions_view.busy.connect(lambda: self.disable)
-        self.revisions_view.ready.connect(lambda: self.enable)
-        self.files_browser.busy.connect(lambda: self.disable)
-        self.files_browser.ready.connect(lambda: self.enable)
+        self.projects_browser.busy.connect(lambda: self.disable())
+        self.projects_browser.ready.connect(lambda: self.enable())
+        self.revisions_view.busy.connect(lambda: self.disable())
+        self.revisions_view.ready.connect(lambda: self.enable())
+        self.files_browser.busy.connect(lambda: self.disable())
+        self.files_browser.ready.connect(lambda: self.enable())
 
         # Connect widgets that use monitoring
         self.project_jobs_added.connect(self.processes_browser.add_items)
@@ -446,9 +446,6 @@ class RanaBrowser(QWidget):
         )
         self.files_browser.folder_selected.connect(
             lambda: self.show_project_data(self.rana_files, 0)
-        )
-        self.file_view.file_showed.connect(
-            lambda: self.show_project_data(self.rana_files, 1)
         )
         file_signals.view_all_revisions_requested.connect(
             lambda _: self.show_project_data(self.rana_files, 2)
