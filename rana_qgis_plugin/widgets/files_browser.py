@@ -211,6 +211,7 @@ class FilesBrowser(QWidget):
         delegate = self.files_tv.itemDelegate()
 
         def on_close_editor(editor, hint):
+            delegate.closeEditor.disconnect(on_close_editor)
             if hint == QAbstractItemDelegate.EndEditHint.NoHint:
                 # editing was cancelled (Escape)
                 return
@@ -220,9 +221,7 @@ class FilesBrowser(QWidget):
                     selected_item, new_name
                 )
 
-        delegate.closeEditor.connect(
-            on_close_editor, Qt.ConnectionType.SingleShotConnection
-        )
+        delegate.closeEditor.connect(on_close_editor)
         self.files_tv.setCurrentIndex(name_index)
         self.files_tv.edit(name_index)
 
