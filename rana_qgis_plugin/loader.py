@@ -1054,11 +1054,11 @@ class Loader(QObject):
         schematisation_filepath = local_schematisation.schematisation_db_filepath
 
         # Check for unsaved changes in layers
-        editable_layer_ids = []
+        editable_layers = {}  # {layer_id: layer_name}
         for layer in get_editable_layers_for_file(schematisation_filepath):
-            editable_layer_ids.append(layer.id())
+            editable_layers[layer.id()] = layer.name()
 
-        if editable_layer_ids:
+        if editable_layers:
             choice = self.communication.custom_ask(
                 self.parent(),
                 "Unsaved Changes Detected",
@@ -1074,12 +1074,12 @@ class Loader(QObject):
 
             if choice == "Save Changes":
                 # Look up layers again (by ID) to ensure we have current references
-                project = QgsProject.instance()
-                for layer_id in editable_layer_ids:
-                    layer = project.mapLayers().get(layer_id)
+                qgs_project = QgsProject.instance()
+                for layer_id, layer_name in editable_layers.items():
+                    layer = qgs_project.mapLayers().get(layer_id)
                     if layer is None:
                         self.communication.show_error(
-                            f"Layer with ID {layer_id} is no longer available"
+                            f"Layer '{layer_name}' is no longer available in the project"
                         )
                         self.schematisation_upload_cancelled.emit()
                         return
