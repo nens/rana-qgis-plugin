@@ -315,7 +315,7 @@ def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
     """
     editable_layers = []
     project = QgsProject.instance()
-    normalized_file_path = os.path.normpath(file_path)
+    normalized_file_path = str(Path(file_path).resolve())
 
     for layer in project.mapLayers().values():
         if not hasattr(layer, "isEditable"):
@@ -327,7 +327,7 @@ def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
 
         # Check if layer belongs to this file
         if hasattr(layer, "source"):
-            normalized_source = os.path.normpath(layer.source())
+            normalized_source = str(Path(layer.source()).resolve())
             if normalized_file_path in normalized_source:
                 editable_layers.append(layer)
 
