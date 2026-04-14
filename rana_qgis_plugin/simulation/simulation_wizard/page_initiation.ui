@@ -798,7 +798,7 @@
         </font>
        </property>
        <property name="text">
-        <string>Generate debug file</string>
+        <string>Generate convergence diagnostics file</string>
        </property>
       </widget>
      </item>

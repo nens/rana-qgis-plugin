@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.10 (unreleased)
+1.2.11 (unreleased)
 -------------------
 
 - Warn users about unsaved changes when uploading a revision (nens/rana#3651)
@@ -12,6 +12,12 @@ History
 - Replace layers that are already opened instead of opening duplicates (nens/rana#3890)
 - Fix returning to FilesBrowser after delete via FileView
 - Remove pagination buttons in template selector (nens/rana#3849)
+
+
+1.2.10 (2026-04-14)
+-------------------
+
+- Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
 
 
 1.2.9 (2026-03-30)
