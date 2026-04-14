@@ -3,7 +3,7 @@ from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
-from qgis.core import QgsSettings, QgsProject
+from qgis.core import QgsProject, QgsSettings
 from qgis.PyQt.QtCore import (
     QObject,
     QSettings,
