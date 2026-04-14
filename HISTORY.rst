@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.10 (unreleased)
+1.2.10 (2026-04-14)
 -------------------
 
 - Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
