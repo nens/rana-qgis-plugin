@@ -12,9 +12,15 @@ def get_3di_authcfg_id():
     return authcfg_id
 
 
+def has_3di_authcfg():
+    return get_3di_authcfg_id() is not None
+
+
 def get_3di_auth():
     """Getting 3Di credentials from the QGIS Authorization Manager."""
     authcfg_id = get_3di_authcfg_id()
+    if not authcfg_id:
+        return None, None
     auth_manager = QgsApplication.authManager()
     authcfg = QgsAuthMethodConfig()
     auth_manager.loadAuthenticationConfig(authcfg_id, authcfg, True)
@@ -50,8 +56,9 @@ def remove_3di_auth(communication: UICommunication):
     if authcf_id:
         auth_manager = QgsApplication.authManager()
         if not auth_manager.removeAuthenticationConfig(authcf_id):
-            communication.log_info("Authentication already configured")
-            return False
+            communication.log_info("Unable to remove authentication config")
+
+    QSettings().remove(THREEDI_AUTHCFG_ENTRY)
     return True
 
 
@@ -65,8 +72,9 @@ def setup_3di_auth(communication: UICommunication):
     user = get_user_info(communication)
     if not user:
         return
-    personal_api_key = get_threedi_personal_api_key(communication, user["sub"])
+    personal_api_key, error = get_threedi_personal_api_key(communication, user["sub"])
     if personal_api_key:
         set_3di_auth(personal_api_key)
     else:
-        communication.show_error("Failed to setup Rana authentication.")
+        # User has no 3Di authorization
+        remove_3di_auth(communication)
