@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Optional
 
@@ -145,11 +146,15 @@ class FileView(QWidget):
             return self.threedi_objects["schematisation"]
         return {}
 
+    @cached_property
+    def has_3di_authcfg(self) -> bool:
+        return get_3di_authcfg_id()[0] is not None
+
     @property
     def latest_revision_model(self) -> Optional[Any]:
-        if self.selected_file["data_type"] != "threedi_schematisation":
-            return None
-        if not get_3di_authcfg_id():
+        if (
+            self.selected_file["data_type"] != "threedi_schematisation"
+        ) or not self.has_3di_authcfg:
             return None
         if "model" not in self.threedi_objects:
             revision = self.schematisation.get("latest_revision")
@@ -293,7 +298,9 @@ class FileView(QWidget):
         self.filename_edit.selectAll()
 
     def update_file_action_buttons(self, selected_file: dict):
-        active_actions = get_file_actions_for_data_type(selected_file)
+        active_actions = get_file_actions_for_data_type(
+            selected_file, self.has_3di_authcfg
+        )
         for action in FileAction:
             btn = self.file_action_btn_dict.get(action)
             if not btn:

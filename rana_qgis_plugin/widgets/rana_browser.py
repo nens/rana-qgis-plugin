@@ -2,6 +2,7 @@ import os
 import time
 from collections import namedtuple
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import List
 
@@ -101,6 +102,10 @@ class RevisionsView(QWidget):
         self.project = None
         self.setup_ui()
 
+    @cached_property
+    def has_3di_authcfg(self) -> bool:
+        return get_3di_authcfg_id()[0] is not None
+
     def setup_ui(self):
         self.revisions_table = QTableView()
         self.revisions_table.setSortingEnabled(True)
@@ -155,7 +160,11 @@ class RevisionsView(QWidget):
         # collect rows to show in widget, format: [date_str, event, (button_label, signal_func), revision, schematisation]
         rows = []
         BTNData = namedtuple("BTNData", ["label", "func", "enabled", "tooltip"])
-        if selected_file.get("data_type") == "threedi_schematisation":
+        # Populate table
+        self.revisions_model.clear()
+        if (
+            selected_file.get("data_type") == "threedi_schematisation"
+        ) and self.has_3di_authcfg:
             # retrieve schematisation and revisions
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
@@ -218,21 +227,16 @@ class RevisionsView(QWidget):
                         latest,
                     ]
                 )
+            self.revisions_model.setColumnCount(5)
+            self.revisions_model.setHorizontalHeaderLabels(
+                ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
+            )
         else:
             history = get_tenant_project_file_history(
                 self.project["id"], {"path": self.selected_file["id"]}
             )
             for item in history["items"]:
                 rows.append([item["created_at"], item["message"]])
-
-        # Populate table
-        self.revisions_model.clear()
-        if selected_file.get("data_type") == "threedi_schematisation":
-            self.revisions_model.setColumnCount(5)
-            self.revisions_model.setHorizontalHeaderLabels(
-                ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
-            )
-        else:
             self.revisions_model.setColumnCount(2)
             self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
         latest = False
@@ -426,13 +430,19 @@ class FilesBrowser(QWidget):
             self.file_selected.emit(self.selected_item)
         self.communication.clear_message_bar()
 
+    @cached_property
+    def has_3di_authcfg(self) -> bool:
+        return get_3di_authcfg_id()[0] is not None
+
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
         file_item = self.files_model.itemFromIndex(index)
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        file_actions = get_file_actions_for_data_type(selected_item)
+        file_actions = get_file_actions_for_data_type(
+            selected_item, self.has_3di_authcfg
+        )
         menu = QMenu(self)
         actions = []
         # create and connect actions

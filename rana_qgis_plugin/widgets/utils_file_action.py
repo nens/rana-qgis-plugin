@@ -34,15 +34,19 @@ class FileAction(Enum):
         return NotImplemented
 
 
-def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
+def get_file_actions_for_data_type(
+    selected_item: dict, has_3di_authcfg: Optional[bool] = None
+) -> List[FileAction]:
     data_type = selected_item.get("data_type")
     actions = [FileAction.DELETE, FileAction.RENAME]
+    if has_3di_authcfg is None:
+        if data_type == "threedi-schematisation":
+            has_3di_authcfg = get_3di_authcfg_id()[0] is None
+        else:
+            has_3di_authcfg = False
     # Add open in QGIS is supported for all supported data types
     if data_type in SUPPORTED_DATA_TYPES:
-        if data_type == "threedi_schematisation":
-            if get_3di_authcfg_id():
-                actions.append(FileAction.OPEN_IN_QGIS)
-        else:
+        if (data_type != "threedi_schematisation") or has_3di_authcfg:
             actions.append(FileAction.OPEN_IN_QGIS)
     # Add save only for vector and raster files
     if data_type in ["vector", "raster"]:
@@ -56,7 +60,7 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     elif data_type == "threedi_schematisation":
         # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
-        if get_3di_authcfg_id():
+        if has_3di_authcfg:
             actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
     # Add options to open WMS and download file and results only for 3Di scenarios
     elif data_type == "scenario":
