@@ -25,7 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.auth_3di import get_3di_authcfg_id, has_3di_authcfg
+from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils import (
@@ -600,7 +600,7 @@ class FileView(QWidget):
         self.update_more_box(selected_file)
         self.update_files_box(selected_file)
         if selected_file.get("data_type") == "threedi_schematisation" and (
-            get_3di_authcfg_id() is not None
+            has_3di_authcfg()
         ):
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
