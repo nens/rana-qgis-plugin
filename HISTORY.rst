@@ -5,6 +5,7 @@ History
 1.2.10 (unreleased)
 -------------------
 
+- Warn users about unsaved changes when uploading a revision (nens/rana#3651)
 - Group vector layers under filename (nens/rana#3889)
 - Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
 - Prevent locking of layers based on gpkg metadata (nens/rana#3942)
