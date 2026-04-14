@@ -26,7 +26,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.auth_3di import get_3di_authcfg_id
+from rana_qgis_plugin.auth_3di import get_3di_authcfg_id, has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils import (
@@ -146,15 +146,11 @@ class FileView(QWidget):
             return self.threedi_objects["schematisation"]
         return {}
 
-    @cached_property
-    def has_3di_authcfg(self) -> bool:
-        return get_3di_authcfg_id()[0] is not None
-
     @property
     def latest_revision_model(self) -> Optional[Any]:
         if (
             self.selected_file["data_type"] != "threedi_schematisation"
-        ) or not self.has_3di_authcfg:
+        ) or not has_3di_authcfg():
             return None
         if "model" not in self.threedi_objects:
             revision = self.schematisation.get("latest_revision")
@@ -298,9 +294,7 @@ class FileView(QWidget):
         self.filename_edit.selectAll()
 
     def update_file_action_buttons(self, selected_file: dict):
-        active_actions = get_file_actions_for_data_type(
-            selected_file, self.has_3di_authcfg
-        )
+        active_actions = get_file_actions_for_data_type(selected_file)
         for action in FileAction:
             btn = self.file_action_btn_dict.get(action)
             if not btn:

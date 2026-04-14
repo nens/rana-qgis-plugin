@@ -12,6 +12,10 @@ def get_3di_authcfg_id():
     return authcfg_id
 
 
+def has_3di_authcfg():
+    return get_3di_authcfg_id() is not None
+
+
 def get_3di_auth():
     """Getting 3Di credentials from the QGIS Authorization Manager."""
     authcfg_id = get_3di_authcfg_id()

@@ -44,7 +44,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.auth_3di import get_3di_authcfg_id
+from rana_qgis_plugin.auth_3di import get_3di_authcfg_id, has_3di_authcfg
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import (
@@ -101,10 +101,6 @@ class RevisionsView(QWidget):
         self.selected_file = None
         self.project = None
         self.setup_ui()
-
-    @cached_property
-    def has_3di_authcfg(self) -> bool:
-        return get_3di_authcfg_id()[0] is not None
 
     def setup_ui(self):
         self.revisions_table = QTableView()
@@ -164,7 +160,7 @@ class RevisionsView(QWidget):
         self.revisions_model.clear()
         if (
             selected_file.get("data_type") == "threedi_schematisation"
-        ) and self.has_3di_authcfg:
+        ) and has_3di_authcfg():
             # retrieve schematisation and revisions
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
@@ -430,19 +426,13 @@ class FilesBrowser(QWidget):
             self.file_selected.emit(self.selected_item)
         self.communication.clear_message_bar()
 
-    @cached_property
-    def has_3di_authcfg(self) -> bool:
-        return get_3di_authcfg_id()[0] is not None
-
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
         file_item = self.files_model.itemFromIndex(index)
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        file_actions = get_file_actions_for_data_type(
-            selected_item, self.has_3di_authcfg
-        )
+        file_actions = get_file_actions_for_data_type(selected_item)
         menu = QMenu(self)
         actions = []
         # create and connect actions
