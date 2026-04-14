@@ -12,6 +12,7 @@ History
 - Replace layers that are already opened instead of opening duplicates (nens/rana#3890)
 - Fix returning to FilesBrowser after delete via FileView
 - Remove pagination buttons in template selector (nens/rana#3849)
+- Disable UI elements when no 3Di authorization (nens/rana#3758)
 
 
 1.2.10 (2026-04-14)
