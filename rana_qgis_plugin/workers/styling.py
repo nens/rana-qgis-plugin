@@ -439,22 +439,79 @@ class SchematisationFileDescriptorStyleUploader(StyleUploader):
 
 
 class FileDescriptorStyleUploadWorker(QThread):
-    """Handle uploading style via file descriptor"""
+    """Upload style for a single file descriptor.
 
-    # TODO:
-    # Once new endpoints are ready for use we no longer need different uploaders
-    # and move the uploader functionality to this class.
+    Supports two modes:
+    1. New mode: Takes data_type and selects builder internally
+    2. Legacy mode: Takes pre-built uploader and builder (for backwards compatibility)
+
+    Selects the appropriate StyleBuilder based on data_type and uploads
+    the resulting style files via the unified upload_file_styling endpoint.
+    """
 
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
 
-    def __init__(self, uploader: StyleUploader, builder: StyleBuilder, communication):
+    def __init__(
+        self,
+        descriptor_id_or_uploader,
+        data_type_or_builder=None,
+        local_file_path_or_communication=None,
+        file_ref_str=None,
+        communication=None,
+    ):
         super().__init__()
+        self.success = True
+
+        # Detect which mode we're in based on argument types
+        if isinstance(descriptor_id_or_uploader, str) and isinstance(
+            data_type_or_builder, DataType
+        ):
+            # New mode: (descriptor_id, data_type, local_file_path, file_ref_str, communication)
+            self._init_new_mode(
+                descriptor_id_or_uploader,
+                data_type_or_builder,
+                local_file_path_or_communication,
+                file_ref_str,
+                communication,
+            )
+        else:
+            # Legacy mode: (uploader, builder, communication)
+            self._init_legacy_mode(
+                descriptor_id_or_uploader,
+                data_type_or_builder,
+                local_file_path_or_communication,
+            )
+
+    def _init_new_mode(
+        self,
+        descriptor_id: str,
+        data_type: DataType,
+        local_file_path: str,
+        file_ref_str: str,
+        communication,
+    ):
+        """Initialize in new data-type-aware mode."""
+        self.mode = "new"
+        self.descriptor_id = descriptor_id
+        self.data_type = data_type
+        self.local_file_path = local_file_path
+        self.file_ref_str = file_ref_str
         self.communication = communication
+        self.uploader = None
+        self.builder = None
+
+    def _init_legacy_mode(self, uploader, builder, communication):
+        """Initialize in legacy uploader-based mode."""
+        self.mode = "legacy"
+        self.descriptor_id = None
+        self.data_type = None
+        self.local_file_path = None
+        self.file_ref_str = None
         self.uploader = uploader
         self.builder = builder
-        self.success = True
+        self.communication = communication
         # Connect signals from uploader and builder
         self.uploader.warning.connect(self.warning.emit)
         self.builder.warning.connect(self.warning.emit)
@@ -465,16 +522,34 @@ class FileDescriptorStyleUploadWorker(QThread):
             self.mark_as_failed, Qt.ConnectionType.DirectConnection
         )
 
-    def mark_as_failed(self, msg):
+    def _make_builder(self) -> StyleBuilder:
+        """Build the appropriate StyleBuilder based on data_type."""
+        if self.data_type == DataType.raster:
+            return RasterStyleBuilder(self.local_file_path, self.file_ref_str)
+        elif self.data_type == DataType.vector:
+            return VectorStyleBuilderAllLayers(self.local_file_path, self.file_ref_str)
+        elif self.data_type == DataType.schematisation:
+            return SchematisationStyleBuilder()
+        else:
+            raise ValueError(
+                f"Unsupported data type for style upload: {self.data_type.value}"
+            )
+
+    def mark_as_failed(self, msg: str):
         self.success = False
         self.failed.emit(msg)
 
-    # def _make_builder(self, task) -> StyleBuilder:
-
     def run(self):
+        if self.mode == "legacy":
+            self._run_legacy_mode()
+        else:
+            self._run_new_mode()
+
+    def _run_legacy_mode(self):
+        """Legacy execution path using uploader."""
         if not self.builder.validate_layers():
             self.failed.emit(
-                f"Layer not found for {self.file_ref_str}. Add file to map and try again"
+                f"Layer not found for {self.builder.file_ref_str}. Add file to map and try again"
             )
             return
         self.builder.tempdir.mkdir(parents=True, exist_ok=True)
@@ -484,6 +559,34 @@ class FileDescriptorStyleUploadWorker(QThread):
         if self.success:
             self.finished.emit(
                 f"Styling files uploaded successfully for {self.builder.file_ref_str}."
+            )
+
+    def _run_new_mode(self):
+        """New execution path: build internally and call upload_file_styling directly."""
+        builder = self._make_builder()
+        builder.failed.connect(self.mark_as_failed, Qt.ConnectionType.DirectConnection)
+        builder.warning.connect(self.warning.emit)
+
+        if not builder.validate_layers():
+            self.failed.emit(
+                f"Layer not found for {self.file_ref_str}. Add file to map and try again"
+            )
+            return
+
+        builder.tempdir.mkdir(parents=True, exist_ok=True)
+        files = builder.get_files()
+
+        if self.success and files:
+            try:
+                upload_file_styling(self.descriptor_id, files)
+            except FetchError as e:
+                self.mark_as_failed(f"Uploading styling files failed: {e}")
+
+        builder.clean()
+
+        if self.success:
+            self.finished.emit(
+                f"Styling files uploaded successfully for {self.file_ref_str}."
             )
 
 
