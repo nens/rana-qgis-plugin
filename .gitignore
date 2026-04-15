@@ -20,4 +20,9 @@ output.mp4
 _cached_data
 # AI stuff
 .minispec
+.minispec.minispec/
 .opencode
+AGENTS.md
+# IDE / local dev
+.envrc
+.idea/

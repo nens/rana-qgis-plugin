@@ -33,6 +33,17 @@ class RanaEndPointNotFoundError(FetchError):
     pass
 
 
+class RanaUploadError(Exception):
+    """Raised when a file upload fails.
+
+    Provides a clean error message without noisy URL/params debug info.
+    """
+
+    def __init__(self, msg: str):
+        self.msg = msg
+        super().__init__(self.msg)
+
+
 class ConflictError(Exception):
     def __init__(self, msg: str, created_by: str, created_at: str):
         self.created_by = created_by
@@ -485,7 +496,7 @@ def upload_file_styling(descriptor_id: str, files):
         if network_manager.last_http_status == 404:
             raise RanaEndPointNotFoundError(msg, url, {})
         else:
-            raise FetchError(msg, url, {})
+            raise RanaUploadError(msg)
 
 
 def get_file_descriptor_style(descriptor_id: str, file_name: str):
@@ -550,7 +561,7 @@ def upload_publication_style(
         response = network_manager.content
         return response
     else:
-        raise FetchError(msg, url, {})
+        raise RanaUploadError(msg)
 
 
 def get_schematisations(communication, icontains=""):

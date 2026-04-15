@@ -18,8 +18,8 @@ from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSl
 
 from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.utlis.api import (
-    FetchError,
     RanaEndPointNotFoundError,
+    RanaUploadError,
     upload_file_styling,
     upload_publication_style,
 )
@@ -266,6 +266,7 @@ class FileDescriptorStyleUploadWorker(QThread):
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
+    retry = pyqtSignal(str)  # Signal to show busy progress bar with message
 
     def __init__(
         self,
@@ -303,61 +304,30 @@ class FileDescriptorStyleUploadWorker(QThread):
         self.failed.emit(msg)
 
     def _upload_with_retry(self, files):
-        """Retry uploading style files with exponential backoff.
-
-        Shows user feedback during retry:
-        - Communication bar message: "Waiting for style upload..."
-        - Progress bar in busy mode (min=max=0)
-
-        Retries until success or timeout is reached.
-
-        Args:
-            files: The style files to upload
-        """
         start_time = time.time()
         retry_delay = 2  # seconds between retries
-
-        # Store the current progress bar state to restore later
-        # We'll create a new busy progress bar
-        progress_bar = self.communication.progress_bar(
-            "Waiting for style upload...",
-            minimum=0,
-            maximum=0,
-            init_value=0,
-            clear_msg_bar=False,
-        )
-
-        try:
-            while True:
-                elapsed_time = time.time() - start_time
-
-                # Check if we've exceeded the timeout
-                if elapsed_time >= self.retry_timeout_seconds:
-                    self.mark_as_failed(
-                        f"Uploading styling files failed: Endpoint not ready after {self.retry_timeout_seconds} seconds"
-                    )
-                    return
-
-                # Try to upload
-                try:
-                    upload_file_styling(self.descriptor_id, files)
-                    # Success! Exit the retry loop
-                    return
-                except RanaEndPointNotFoundError:
-                    # Endpoint still not ready, wait and retry
-                    time.sleep(retry_delay)
-                except FetchError as e:
-                    # Other error, don't retry
-                    self.mark_as_failed(f"Uploading styling files failed: {e}")
-                    return
-        finally:
-            # Always clear the progress bar
-            self.communication.clear_message_bar()
+        # Signal to show busy progress bar
+        self.retry.emit("Waiting for style upload...")
+        while True:
+            elapsed_time = time.time() - start_time
+            if elapsed_time >= self.retry_timeout_seconds:
+                self.mark_as_failed(
+                    f"Uploading styling files failed: Endpoint not ready after {self.retry_timeout_seconds} seconds"
+                )
+                return
+            try:
+                upload_file_styling(self.descriptor_id, files)
+                return
+            except RanaEndPointNotFoundError:
+                time.sleep(retry_delay)
+            except RanaUploadError as e:
+                self.mark_as_failed(f"Uploading styling files failed: {e}")
+                return
 
     def run(self):
         """Build style files and upload them via upload_file_styling endpoint."""
         builder = self._make_builder()
-        builder.failed.connect(self.mark_as_failed, Qt.ConnectionType.DirectConnection)
+        builder.failed.connect(self.mark_as_failed)
         builder.warning.connect(self.warning.emit)
 
         if not builder.validate_layers():
@@ -377,7 +347,7 @@ class FileDescriptorStyleUploadWorker(QThread):
                     self._upload_with_retry(files)
                 else:
                     self.mark_as_failed(f"Uploading styling files failed: {e}")
-            except FetchError as e:
+            except RanaUploadError as e:
                 self.mark_as_failed(f"Uploading styling files failed: {e}")
 
         builder.clean()
@@ -477,7 +447,7 @@ class PublicationStyleUploadWorker(QThread):
                         files=files,
                     )
                     new_style_ids.append((task, style_id))
-                except FetchError as e:
+                except RanaUploadError as e:
                     # mark as failed and continue with clean up
                     self.pass_fail_to_logging(f"Failed to upload styling files: {e}")
             # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway

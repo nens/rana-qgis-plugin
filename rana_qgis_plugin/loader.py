@@ -515,6 +515,9 @@ class Loader(QObject):
         )
         self.file_download_worker.start()
 
+    def on_progress_busy(self, message: str):
+        self.communication.progress_bar(message, 0, 0, 0, clear_msg_bar=True)
+
     def on_progress_update(self, progress: int, message: str):
         self.communication.progress_bar(message, 0, 100, progress, clear_msg_bar=True)
 
@@ -586,6 +589,7 @@ class Loader(QObject):
         self.vector_style_worker.finished.connect(
             lambda _: self.on_upload_schematiation_style_finished(online_path)
         )
+        self.vector_style_worker.retry.connect(self.on_progress_busy)
         self.vector_style_worker.failed.connect(self.on_vector_style_failed)
         self.vector_style_worker.warning.connect(self.communication.show_warn)
         self.vector_style_worker.start()
