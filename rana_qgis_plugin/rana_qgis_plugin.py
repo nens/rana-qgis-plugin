@@ -337,18 +337,18 @@ class RanaQgisPlugin:
             self.rana_browser.save_styles_from_publication_selected.connect(
                 self.loader.save_styles_from_publication
             )
-            self.rana_browser.upload_file_selected.connect(
-                self.loader.upload_file_to_rana
-            )
-            self.rana_browser.save_vector_styling_selected.connect(
-                self.loader.save_vector_style
-            )
-            self.rana_browser.save_raster_styling_selected.connect(
-                self.loader.save_raster_style
-            )
-            self.rana_browser.upload_new_file_selected.connect(
-                self.rana_browser.disable
-            )
+             self.rana_browser.upload_file_selected.connect(
+                 self.loader.upload_file_to_rana
+             )
+             self.rana_browser.save_vector_styling_selected.connect(
+                 self.loader.save_file_descriptor_style
+             )
+             self.rana_browser.save_raster_styling_selected.connect(
+                 self.loader.save_file_descriptor_style
+             )
+             self.rana_browser.upload_new_file_selected.connect(
+                 self.rana_browser.disable
+             )
             self.rana_browser.upload_new_file_selected.connect(
                 self.loader.upload_new_file_to_rana
             )
@@ -440,12 +440,11 @@ class RanaQgisPlugin:
             self.loader.file_upload_conflict.connect(self.rana_browser.enable)
             self.loader.new_file_upload_finished.connect(self.rana_browser.enable)
             self.loader.new_file_upload_finished.connect(self.rana_browser.refresh)
-            self.loader.vector_style_finished.connect(self.rana_browser.enable)
-            self.loader.vector_style_finished.connect(self.rana_browser.refresh)
-            self.loader.vector_style_failed.connect(self.rana_browser.enable)
-            self.loader.raster_style_finished.connect(self.rana_browser.enable)
-            self.loader.raster_style_finished.connect(self.rana_browser.refresh)
-            self.loader.raster_style_failed.connect(self.rana_browser.enable)
+            self.loader.file_descriptor_style_finished.connect(self.rana_browser.enable)
+            self.loader.file_descriptor_style_finished.connect(
+                self.rana_browser.refresh
+            )
+            self.loader.file_descriptor_style_failed.connect(self.rana_browser.enable)
             self.loader.export_gpkg_finished.connect(
                 self.rana_browser.return_to_file_browser
             )
