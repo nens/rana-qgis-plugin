@@ -129,12 +129,12 @@ class RanaQgisPlugin:
 
     def logout(self):
         self.communication.clear_message_bar()
+        self.rana_browser.reset()
         remove_authcfg(self.communication)
         remove_3di_auth(self.communication)
         set_tenant_id("")
         self.add_rana_menu(False)
         self.communication.bar_info("You have been logged out.")
-        self.rana_browser.reset()
         if self.dock_widget:
             self.dock_widget.close()
 
