@@ -23,11 +23,10 @@ from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utlis.api import (
     get_publication_style,
     get_raster_file_link,
-    get_raster_style_file,
+    get_style_file,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
-    get_vector_style_file,
     map_result_to_file_name,
     request_raster_generate,
 )
@@ -107,10 +106,7 @@ class FileDownloadContext(AbstractDownloadContext):
         return Path(get_local_file_path(self.project_slug, self.file_id))
 
     def get_style_zip(self):
-        if self.file_data_type == "raster":
-            return get_raster_style_file(self.file_descriptor_id, "qml.zip")
-        else:
-            return get_vector_style_file(self.file_descriptor_id, "qml.zip")
+        return get_style_file(self.file_descriptor_id, "qml.zip")
 
 
 class PublicationFileDownloadContext(AbstractDownloadContext):
