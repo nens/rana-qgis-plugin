@@ -471,7 +471,7 @@ def upload_file_styling(descriptor_id: str, files):
         raise FetchError(msg, url, {})
 
 
-def get_style_file(descriptor_id: str, file_name: str):
+def get_file_descriptor_style(descriptor_id: str, file_name: str):
     """Fetch style file for a file descriptor.
 
     Args:
