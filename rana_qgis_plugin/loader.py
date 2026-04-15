@@ -167,8 +167,7 @@ class Loader(QObject):
         super().__init__(parent)
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
-        self.vector_style_worker: QThread = None
-        self.raster_style_worker: QThread = None
+        self.file_descriptor_style_worker: QThread = None
         self.publication_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.communication = communication
@@ -576,7 +575,7 @@ class Loader(QObject):
         file = get_tenant_project_file(project["id"], {"path": online_path})
         if not file:
             self.communication.show_warn(f"Unable to find file {online_path}")
-        self.vector_style_worker = FileDescriptorStyleUploadWorker(
+        self.file_descriptor_style_worker = FileDescriptorStyleUploadWorker(
             file["descriptor_id"],
             DataType.schematisation,
             "",
@@ -584,13 +583,15 @@ class Loader(QObject):
             self.communication,
             retry_timeout_seconds=60,
         )
-        self.vector_style_worker.finished.connect(
+        self.file_descriptor_style_worker.finished.connect(
             lambda _: self.on_upload_schematiation_style_finished(online_path)
         )
-        self.vector_style_worker.retry.connect(self.on_progress_busy)
-        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
-        self.vector_style_worker.start()
+        self.file_descriptor_style_worker.retry.connect(self.on_progress_busy)
+        self.file_descriptor_style_worker.failed.connect(
+            self.on_file_descriptor_style_failed
+        )
+        self.file_descriptor_style_worker.warning.connect(self.communication.show_warn)
+        self.file_descriptor_style_worker.start()
 
     @cleanup_sender
     def on_upload_schematiation_style_finished(self, online_path: str):
@@ -1189,27 +1190,16 @@ class Loader(QObject):
     @pyqtSlot(dict, dict)
     @pyqtSlot(dict, dict)
     def save_file_descriptor_style(self, project, file):
-        """Start the worker for saving file descriptor styling files (vector or raster).
-
-        The file dict must contain 'data_type' to determine the file type.
-        """
         self.communication.progress_bar(
             "Generating and saving styling files...", clear_msg_bar=True
         )
-        data_type_str = file.get("data_type")
-        if not data_type_str:
-            self.on_file_descriptor_style_failed("File descriptor missing data_type")
-            return
-
-        # Map string to DataType enum
         try:
-            data_type = DataType[data_type_str.upper()]
+            data_type = DataType.from_value(file.get("data_type", ""))
         except KeyError:
             self.on_file_descriptor_style_failed(
                 f"Unknown file data_type: {data_type_str}"
             )
             return
-
         local_file_path = get_local_dir_structure(project["slug"], file["id"])
         file_ref_str = f"file {file['id']} from {project['name']}"
         self.file_descriptor_style_worker = FileDescriptorStyleUploadWorker(
