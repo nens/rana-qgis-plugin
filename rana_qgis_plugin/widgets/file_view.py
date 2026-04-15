@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils import (
@@ -146,7 +147,9 @@ class FileView(QWidget):
 
     @property
     def latest_revision_model(self) -> Optional[Any]:
-        if self.selected_file["data_type"] != "threedi_schematisation":
+        if (
+            self.selected_file["data_type"] != "threedi_schematisation"
+        ) or not has_3di_authcfg():
             return None
         if "model" not in self.threedi_objects:
             revision = self.schematisation.get("latest_revision")
@@ -596,7 +599,9 @@ class FileView(QWidget):
         self.update_general_box(selected_file)
         self.update_more_box(selected_file)
         self.update_files_box(selected_file)
-        if selected_file.get("data_type") == "threedi_schematisation":
+        if selected_file.get("data_type") == "threedi_schematisation" and (
+            has_3di_authcfg()
+        ):
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
             )

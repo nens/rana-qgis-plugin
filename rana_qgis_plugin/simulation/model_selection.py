@@ -23,7 +23,6 @@ uicls, basecls = uic.loadUiType(
 
 logger = logging.getLogger(__name__)
 
-TABLE_LIMIT = 10
 NAME_COLUMN_IDX = 1
 
 
@@ -69,8 +68,6 @@ class ModelSelectionDialog(uicls, basecls):
         tc = ThreediCalls(self.threedi_api)
         self.current_model = tc.fetch_3di_model(self.model_pk)
         self.templates_model.clear()
-        self.templates_page_sbox.setMaximum(1)
-        self.templates_page_sbox.setSuffix(" / 1")
         self.fetch_simulation_templates()
         if self.templates_model.rowCount() > 0:
             row_idx = self.templates_model.index(0, 0)
@@ -87,14 +84,6 @@ class ModelSelectionDialog(uicls, basecls):
             self.pb_load.setEnabled(True)
         else:
             self.pb_load.setDisabled(True)
-
-    def move_templates_backward(self):
-        """Moving to the templates previous results page."""
-        self.templates_page_sbox.setValue(self.page_sbox.value() - 1)
-
-    def move_templates_forward(self):
-        """Moving to the templates next results page."""
-        self.templates_page_sbox.setValue(self.page_sbox.value() + 1)
 
     def populate_organisations(self):
         """Populating organisations list inside combo box."""
@@ -133,15 +122,11 @@ class ModelSelectionDialog(uicls, basecls):
         """Fetching simulation templates list."""
         try:
             tc = ThreediCalls(self.threedi_api)
-            offset = (self.templates_page_sbox.value() - 1) * TABLE_LIMIT
             selected_model = self.current_model
             model_pk = selected_model.id
-            templates, templates_count = tc.fetch_simulation_templates_with_count(
-                model_pk, limit=TABLE_LIMIT, offset=offset
+            templates = tc.fetch_simulation_templates(
+                simulation__threedimodel__id=model_pk
             )
-            pages_nr = ceil(templates_count / TABLE_LIMIT) or 1
-            self.templates_page_sbox.setMaximum(pages_nr)
-            self.templates_page_sbox.setSuffix(f" / {pages_nr}")
             self.templates_model.clear()
             header = ["Template ID", "Template name", "Creation date"]
             self.templates_model.setHorizontalHeaderLabels(header)

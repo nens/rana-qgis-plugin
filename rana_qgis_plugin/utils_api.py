@@ -521,13 +521,11 @@ def get_threedi_personal_api_key(
     if status:
         response = network_manager.content
         if "key" in response:
-            return response["key"]
+            return response["key"], error
         else:
-            communication.show_error("Failed to retrieve Rana personal API key.")
-            return None
+            return None, error
     else:
-        communication.show_error(f"Failed to retrieve Rana personal api key: {error}")
-        return None
+        return None, error
 
 
 def get_filename_from_attachment_url(attachment_url: str) -> str:
