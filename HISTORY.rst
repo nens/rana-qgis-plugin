@@ -9,6 +9,7 @@ History
 - Group vector layers under filename (nens/rana#3889)
 - Add create_debug_results field to simulation wizard simulation output settings (nens/rana#3857)
 - Prevent locking of layers based on gpkg metadata (nens/rana#3942)
+- Fix bug with renaming files in folders (nens/rana#3080)
 - Replace layers that are already opened instead of opening duplicates (nens/rana#3890)
 - Fix returning to FilesBrowser after delete via FileView
 - Remove pagination buttons in template selector (nens/rana#3849)

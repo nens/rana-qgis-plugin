@@ -261,7 +261,7 @@ class Loader(QObject):
         # create names without trailing /
         source_path = file["id"].rstrip("/")
         try:
-            target_path = str(Path(source_path).with_name(new_name))
+            target_path = Path(source_path).with_name(new_name).as_posix()
         except ValueError:
             self.communication.show_warn(f"Cannot rename to invalid name '{new_name}'")
             self.rename_aborted.emit()
