@@ -24,6 +24,26 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
+class RanaResourceNotFound(FetchError):
+    """Raised when an endpoint returns 404 (Not Found).
+
+    This is typically a transient error that can be retried.
+    """
+
+    pass
+
+
+class RanaUploadError(Exception):
+    """Raised when a file upload fails.
+
+    Provides a clean error message without noisy URL/params debug info.
+    """
+
+    def __init__(self, msg: str):
+        self.msg = msg
+        super().__init__(self.msg)
+
+
 class ConflictError(Exception):
     def __init__(self, msg: str, created_by: str, created_at: str):
         self.created_by = created_by
@@ -458,34 +478,6 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
-def get_vector_style_upload_urls(descriptor_id: str):
-    authcfg_id = get_authcfg_id()
-    tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.put()
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        return None
-
-
-def upload_raster_styling(descriptor_id: str, files):
-    authcfg_id = get_authcfg_id()
-    tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"
-    network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.put_multipart(files=files)
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        return None
-
-
 def upload_file_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -496,13 +488,25 @@ def upload_file_styling(descriptor_id: str, files):
         response = network_manager.content
         return response
     else:
-        raise FetchError(msg, url, {})
+        if network_manager.last_http_status == 404:
+            raise RanaResourceNotFound(msg, url, {})
+        else:
+            raise RanaUploadError(msg)
 
 
-def get_style_file(source_type: str, descriptor_id: str, file_name: str):
+def get_file_descriptor_style(descriptor_id: str, file_name: str):
+    """Fetch style file for a file descriptor.
+
+    Args:
+        descriptor_id: The file descriptor ID
+        file_name: The name of the style file to fetch (e.g., 'qml.zip')
+
+    Returns:
+        The file content as bytes, or None if the request fails
+    """
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{source_type}-style/{file_name}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles/{file_name}"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch()
@@ -516,14 +520,6 @@ def get_style_file(source_type: str, descriptor_id: str, file_name: str):
             return None
     else:
         return None
-
-
-def get_raster_style_file(descriptor_id: str, file_name: str):
-    return get_style_file("raster", descriptor_id, file_name)
-
-
-def get_vector_style_file(descriptor_id: str, file_name: str):
-    return get_style_file("vector", descriptor_id, file_name)
 
 
 def get_publication_style(
@@ -560,7 +556,7 @@ def upload_publication_style(
         response = network_manager.content
         return response
     else:
-        raise FetchError(msg, url, {})
+        raise RanaUploadError(msg)
 
 
 def get_schematisations(communication, icontains=""):

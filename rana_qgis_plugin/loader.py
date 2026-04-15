@@ -106,11 +106,6 @@ from rana_qgis_plugin.workers.persistent import (
 from rana_qgis_plugin.workers.styling import (
     FileDescriptorStyleUploadWorker,
     PublicationStyleUploadWorker,
-    RasterFileDescriptorStyleUploader,
-    RasterStyleBuilder,
-    SchematisationFileDescriptorStyleUploader,
-    VectorFileDescriptorStyleUploader,
-    VectorStyleBuilderOld,
 )
 from rana_qgis_plugin.workers.upload import ExistingFileUploadWorker, FileUploadWorker
 
@@ -138,11 +133,9 @@ class Loader(QObject):
     file_upload_progress = pyqtSignal(int)
     file_upload_conflict = pyqtSignal()
     new_file_upload_finished = pyqtSignal(str)
-    vector_style_finished = pyqtSignal()
+    file_descriptor_style_finished = pyqtSignal()
+    file_descriptor_style_failed = pyqtSignal(str)
     publication_style_finished = pyqtSignal()
-    vector_style_failed = pyqtSignal(str)
-    raster_style_finished = pyqtSignal()
-    raster_style_failed = pyqtSignal(str)
     loading_cancelled = pyqtSignal()
     download_results_cancelled = pyqtSignal()
     schematisation_upload_cancelled = pyqtSignal()
@@ -174,8 +167,7 @@ class Loader(QObject):
         super().__init__(parent)
         self.file_download_worker: QThread = None
         self.file_upload_worker: QThread = None
-        self.vector_style_worker: QThread = None
-        self.raster_style_worker: QThread = None
+        self.file_descriptor_style_worker: QThread = None
         self.publication_style_worker: QThread = None
         self.new_file_upload_worker: QThread = None
         self.communication = communication
@@ -520,6 +512,9 @@ class Loader(QObject):
         )
         self.file_download_worker.start()
 
+    def on_progress_busy(self, message: str):
+        self.communication.progress_bar(message, 0, 0, 0, clear_msg_bar=True)
+
     def on_progress_update(self, progress: int, message: str):
         self.communication.progress_bar(message, 0, 100, progress, clear_msg_bar=True)
 
@@ -580,16 +575,23 @@ class Loader(QObject):
         file = get_tenant_project_file(project["id"], {"path": online_path})
         if not file:
             self.communication.show_warn(f"Unable to find file {online_path}")
-        uploader = SchematisationFileDescriptorStyleUploader(file["descriptor_id"])
-        self.vector_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, uploader.builder, self.communication
+        self.file_descriptor_style_worker = FileDescriptorStyleUploadWorker(
+            file["descriptor_id"],
+            DataType.schematisation,
+            "",
+            f"schematisation {online_path}",
+            self.communication,
+            retry_timeout_seconds=60,
         )
-        self.vector_style_worker.finished.connect(
+        self.file_descriptor_style_worker.finished.connect(
             lambda _: self.on_upload_schematiation_style_finished(online_path)
         )
-        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
-        self.vector_style_worker.start()
+        self.file_descriptor_style_worker.retry.connect(self.on_progress_busy)
+        self.file_descriptor_style_worker.failed.connect(
+            self.on_file_descriptor_style_failed
+        )
+        self.file_descriptor_style_worker.warning.connect(self.communication.show_warn)
+        self.file_descriptor_style_worker.start()
 
     @cleanup_sender
     def on_upload_schematiation_style_finished(self, online_path: str):
@@ -1186,57 +1188,45 @@ class Loader(QObject):
         self.publication_style_finished.emit()
 
     @pyqtSlot(dict, dict)
-    def save_vector_style(self, project, file):
-        """Start the uploader for saving vector styling files"""
-        self.communication.progress_bar(
-            "Generating and saving vector styling files...", clear_msg_bar=True
-        )
-        local_file_path = get_local_dir_structure(project["slug"], file["id"])
-        file_ref_str = f"file {file['id']} from {project['name']}"
-        builder = VectorStyleBuilderOld(local_file_path, file_ref_str)
-        uploader = VectorFileDescriptorStyleUploader(file["descriptor_id"], builder)
-        self.vector_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, builder, self.communication
-        )
-        self.vector_style_worker.finished.connect(self.on_vector_style_finished)
-        self.vector_style_worker.failed.connect(self.on_vector_style_failed)
-        self.vector_style_worker.warning.connect(self.communication.show_warn)
-        self.vector_style_worker.start()
-
     @pyqtSlot(dict, dict)
-    def save_raster_style(self, project, file):
-        """Start the worker for saving raster styling files"""
+    def save_file_descriptor_style(self, project, file):
+        self.communication.progress_bar(
+            "Generating and saving styling files...", clear_msg_bar=True
+        )
+        try:
+            data_type = DataType.from_value(file.get("data_type", ""))
+        except KeyError:
+            self.on_file_descriptor_style_failed(
+                f"Unknown file data_type: {data_type_str}"
+            )
+            return
         local_file_path = get_local_dir_structure(project["slug"], file["id"])
         file_ref_str = f"file {file['id']} from {project['name']}"
-        builder = RasterStyleBuilder(local_file_path, file_ref_str)
-        uploader = RasterFileDescriptorStyleUploader(file["descriptor_id"])
-        self.raster_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, builder, self.communication
+        self.file_descriptor_style_worker = FileDescriptorStyleUploadWorker(
+            file["descriptor_id"],
+            data_type,
+            local_file_path,
+            file_ref_str,
+            self.communication,
         )
-        self.raster_style_worker.finished.connect(self.on_raster_style_finished)
-        self.raster_style_worker.failed.connect(self.on_raster_style_failed)
-        self.raster_style_worker.warning.connect(self.communication.show_warn)
-        self.raster_style_worker.start()
+        self.file_descriptor_style_worker.finished.connect(
+            self.on_file_descriptor_style_finished
+        )
+        self.file_descriptor_style_worker.failed.connect(
+            self.on_file_descriptor_style_failed
+        )
+        self.file_descriptor_style_worker.warning.connect(self.communication.show_warn)
+        self.file_descriptor_style_worker.start()
 
-    def on_vector_style_finished(self, msg: str):
+    def on_file_descriptor_style_finished(self, msg: str):
         self.communication.clear_message_bar()
         self.communication.show_info(msg)
-        self.vector_style_finished.emit()
+        self.file_descriptor_style_finished.emit()
 
-    def on_vector_style_failed(self, msg: str):
+    def on_file_descriptor_style_failed(self, msg: str):
         self.communication.clear_message_bar()
         self.communication.show_error(msg)
-        self.vector_style_failed.emit(msg)
-
-    def on_raster_style_finished(self, msg: str):
-        self.communication.clear_message_bar()
-        self.communication.show_info(msg)
-        self.raster_style_finished.emit()
-
-    def on_raster_style_failed(self, msg: str):
-        self.communication.clear_message_bar()
-        self.communication.show_error(msg)
-        self.raster_style_failed.emit(msg)
+        self.file_descriptor_style_failed.emit(msg)
 
     @pyqtSlot(dict, dict)
     def import_schematisation_to_rana(self, project, selected_file):
