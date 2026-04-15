@@ -18,7 +18,6 @@ from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSl
 from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.utlis.api import (
     FetchError,
-    get_vector_style_upload_urls,
     upload_file_styling,
     upload_publication_style,
 )

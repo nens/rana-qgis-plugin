@@ -458,21 +458,6 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
-def get_vector_style_upload_urls(descriptor_id: str):
-    authcfg_id = get_authcfg_id()
-    tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.put()
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        return None
-
-
 def upload_file_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
