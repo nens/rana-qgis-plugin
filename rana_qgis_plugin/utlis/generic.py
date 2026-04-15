@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from osgeo import gdal
+from qgis.core import QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 from threedi_mi_utils import (
@@ -297,3 +298,78 @@ def find_publication_map_layer_from_tree(publication_version: dict, tree: list[s
         if map_["name"] == tree[0]:
             return traverse_layers(map_.get("layers", []), tree[1:])
     return None
+
+
+def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
+    """Get vector layers in edit mode with unsaved changes for a specific file.
+
+    Args:
+        file_path: Path to the geopackage file (e.g., schematisation_db_filepath)
+
+    Returns:
+        List of QgsVectorLayer objects that:
+        - Are in edit mode (isEditable() == True)
+        - Have unsaved modifications (isModified() == True)
+        - Belong to the specified file (file_path in layer.source())
+    """
+    editable_layers = []
+    project = QgsProject.instance()
+    normalized_file_path = str(Path(file_path).resolve())
+
+    for layer in project.mapLayers().values():
+        if not hasattr(layer, "isEditable"):
+            continue
+
+        # Double-check layer is editable and has modifications
+        if not layer.isEditable() or not layer.isModified():
+            continue
+
+        # Check if layer belongs to this file
+        if hasattr(layer, "source"):
+            normalized_source = str(Path(layer.source()).resolve())
+            if normalized_file_path in normalized_source:
+                editable_layers.append(layer)
+
+    return editable_layers
+
+
+def save_layer_changes(layer: QgsVectorLayer) -> tuple[bool, str | None]:
+    """Commit unsaved changes to a vector layer.
+
+    This function commits all pending changes. If the layer is in edit mode,
+    it will commit and exit. If not, it returns an error.
+
+    Args:
+        layer: QgsVectorLayer object to commit changes for
+
+    Returns:
+        Tuple of (success: bool, error_message: str | None)
+        - (True, None) if commit was successful
+        - (False, error_message) if commit failed or layer not editable
+    """
+    # If layer is not editable, it means changes were already committed
+    # or the layer state changed. In either case, we can't proceed.
+    if not layer.isEditable():
+        # Check if there are any pending modifications
+        if layer.isModified():
+            return False, (
+                f"Layer '{layer.name()}' has modifications but is not in edit mode. "
+                "Cannot save changes."
+            )
+        # No modifications, so nothing to save
+        return True, None
+
+    try:
+        # Commit changes (this also exits edit mode)
+        success = layer.commitChanges()
+
+        if success:
+            return True, None
+
+        # If commit failed, collect error messages
+        errors = layer.commitErrors()
+        error_message = "\n".join(errors) if errors else "Unknown commit error"
+        return False, error_message
+    except Exception as e:
+        # Catch any exceptions from commitChanges (e.g., database errors)
+        return False, f"Error committing changes: {str(e)}"

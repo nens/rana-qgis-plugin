@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
+from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utlis.api import get_tenant_file_descriptor
 
@@ -48,7 +49,8 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     actions = [FileAction.DELETE, FileAction.RENAME]
     # Add open in QGIS is supported for all supported data types
     if data_type in SUPPORTED_DATA_TYPES:
-        actions.append(FileAction.OPEN_IN_QGIS)
+        if (data_type != "threedi_schematisation") or has_3di_authcfg():
+            actions.append(FileAction.OPEN_IN_QGIS)
     # Add save only for vector and raster files
     if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
@@ -61,8 +63,17 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     elif data_type == "threedi_schematisation":
         # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
-        actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
-    return actions
+        if has_3di_authcfg():
+            actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
+    # Add options to open WMS and download file and results only for 3Di scenarios
+    elif data_type == "scenario":
+        descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        meta = descriptor["meta"] if descriptor else None
+        if meta and "id" in meta and get_ready_state_from_descriptor(descriptor):
+            actions.append(FileAction.DOWNLOAD_RESULTS)
+            if get_is_3di_simulation(descriptor):
+                actions.append(FileAction.OPEN_WMS)
+    return sorted(actions)
 
 
 def get_scenario_actions(

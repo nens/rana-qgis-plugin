@@ -4,7 +4,7 @@ from functools import partial, wraps
 from pathlib import Path
 from typing import Optional
 
-from qgis.core import QgsSettings
+from qgis.core import QgsProject, QgsSettings
 from qgis.PyQt.QtCore import (
     QObject,
     QSettings,
@@ -68,10 +68,12 @@ from rana_qgis_plugin.utlis.data_models import (
 )
 from rana_qgis_plugin.utlis.generic import (
     find_publication_map_layer_from_tree,
+    get_editable_layers_for_file,
     get_local_dir_structure,
     get_threedi_api,
     get_threedi_organisations,
     get_threedi_schematisation_simulation_results_folder,
+    save_layer_changes,
 )
 from rana_qgis_plugin.utlis.qgis import (
     convert_vectorfile_to_geopackage,
@@ -1376,6 +1378,51 @@ class Loader(QObject):
 
         schematisation_filepath = local_schematisation.schematisation_db_filepath
 
+        # Check for unsaved changes in layers
+        editable_layers = {}  # {layer_id: layer_name}
+        for layer in get_editable_layers_for_file(schematisation_filepath):
+            editable_layers[layer.id()] = layer.name()
+
+        if editable_layers:
+            choice = self.communication.custom_ask(
+                self.parent(),
+                "Unsaved Changes Detected",
+                "There are unsaved changes in the revision layers. What would you like to do?",
+                "Save Changes",
+                "Discard Changes",
+                "Cancel Upload",
+            )
+
+            if choice == "Cancel Upload":
+                self.schematisation_upload_cancelled.emit()
+                return
+
+            if choice == "Save Changes":
+                # Look up layers again (by ID) to ensure we have current references
+                qgs_project = QgsProject.instance()
+                for layer_id, layer_name in editable_layers.items():
+                    layer = qgs_project.mapLayers().get(layer_id)
+                    if layer is None:
+                        self.communication.show_error(
+                            f"Layer '{layer_name}' is no longer available in the project"
+                        )
+                        self.schematisation_upload_cancelled.emit()
+                        return
+
+                    success, error_msg = save_layer_changes(layer)
+                    if not success:
+                        self.communication.show_error(
+                            f"Failed to save changes in layer '{layer.name()}':\n{error_msg}"
+                        )
+                        self.schematisation_upload_cancelled.emit()
+                        return
+                self.communication.bar_info("Layer changes saved successfully")
+            else:  # choice == "Discard Changes"
+                # Keep edits in memory but continue with upload
+                self.communication.bar_info(
+                    "Unsaved changes will be kept in memory. Only file contents will be uploaded."
+                )
+
         schema_gpkg_loaded = is_loaded_in_schematisation_editor(schematisation_filepath)
         if schema_gpkg_loaded is False:
             question = "Warning: the revision you are about to upload is not loaded in the Rana Schematisation Editor. Do you want to continue?"
@@ -1429,12 +1476,13 @@ class Loader(QObject):
                 new_upload,
             )
             upload_worker.signals.create_model_requested.connect(
-                lambda revision_id,
-                inherit_from_previous_revision: self.start_model_tracker_process(
-                    project,
-                    schematisation.to_dict(),
-                    revision_id,
-                    inherit_from_previous_revision,
+                lambda revision_id, inherit_from_previous_revision: (
+                    self.start_model_tracker_process(
+                        project,
+                        schematisation.to_dict(),
+                        revision_id,
+                        inherit_from_previous_revision,
+                    )
                 )
             )
             upload_worker.signals.thread_finished.connect(

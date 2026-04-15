@@ -16,6 +16,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utlis.api import (
     get_tenant_project_file_history,
@@ -104,7 +105,11 @@ class RevisionsView(QWidget):
         # collect rows to show in widget, format: [date_str, event, (button_label, signal_func), revision, schematisation]
         rows = []
         BTNData = namedtuple("BTNData", ["label", "func", "enabled", "tooltip"])
-        if selected_file.get("data_type") == "threedi_schematisation":
+        # Populate table
+        self.revisions_model.clear()
+        if (
+            selected_file.get("data_type") == "threedi_schematisation"
+        ) and has_3di_authcfg():
             # retrieve schematisation and revisions
             schematisation = get_threedi_schematisation(
                 self.communication, selected_file["descriptor_id"]
@@ -167,21 +172,16 @@ class RevisionsView(QWidget):
                         latest,
                     ]
                 )
+            self.revisions_model.setColumnCount(5)
+            self.revisions_model.setHorizontalHeaderLabels(
+                ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
+            )
         else:
             history = get_tenant_project_file_history(
                 self.project["id"], {"path": self.selected_file["id"]}
             )
             for item in history["items"]:
                 rows.append([item["created_at"], item["message"]])
-
-        # Populate table
-        self.revisions_model.clear()
-        if selected_file.get("data_type") == "threedi_schematisation":
-            self.revisions_model.setColumnCount(5)
-            self.revisions_model.setHorizontalHeaderLabels(
-                ["#", "Timestamp", "Event", "Simulation", "Rana Model"]
-            )
-        else:
             self.revisions_model.setColumnCount(2)
             self.revisions_model.setHorizontalHeaderLabels(["Timestamp", "Event"])
         latest = False
