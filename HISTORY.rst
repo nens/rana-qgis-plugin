@@ -20,6 +20,7 @@ History
 - Improve FilesBrowser column resizing for long filenames (nens/rana#3874)
 - Remove pagination buttons in template selector (nens/rana#3849)
 - Disable UI elements when no 3Di authorization (nens/rana#3758)
+- Remove usage of deprecated raster/vector specific styling endpoints (nens/rana-qgis-plugin#320)
 
 
 1.2.10 (2026-04-14)
