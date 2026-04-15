@@ -276,174 +276,8 @@ class StyleUploader(QObject):
         raise NotImplementedError
 
 
-class FileDescriptorStyleUploader(StyleUploader):
-    def __init__(
-        self,
-        file_descriptor_id: str,
-    ):
-        super().__init__()
-        self.descriptor_id = file_descriptor_id
-
-    def upload_to_rana(self, files):
-        try:
-            if not files:
-                raise ValueError("No files to upload")
-            upload_file_styling(self.descriptor_id, files)
-        except Exception as e:
-            self.failed.emit(f"Uploading styling files failed: {e}")
-
-
-class RasterFileDescriptorStyleUploader(StyleUploader):
-    """Uploads style for a single raster file to the old raster specific endpoint"""
-
-    def __init__(
-        self,
-        file_descriptor_id: str,
-    ):
-        super().__init__()
-        self.descriptor_id = file_descriptor_id
-
-    def upload_to_rana(self, files):
-        try:
-            upload_raster_styling(self.descriptor_id, files)
-        except Exception as e:
-            self.failed.emit(f"Uploading styling files failed: {e}")
-
-
-class VectorFileDescriptorStyleUploader(StyleUploader):
-    """Uploads style for all layers in a vector file to the old vector specific"""
-
-    def __init__(
-        self,
-        file_descriptor_id: str,
-        builder: VectorStyleBuilder,
-    ):
-        super().__init__()
-        # builder is added to class because this still uses the old s3 upload which prevents decoupling building and upload
-        self.builder = builder
-        self.descriptor_id = file_descriptor_id
-
-    def upload_to_rana(self, files):
-        qgis_layers = {layer.name(): layer for layer in self.builder.layers}
-        group = {"layers": list(qgis_layers.keys())}
-        base_url = "http://baseUrl"
-
-        # Convert QGIS layers to styling files for the Rana Web Client
-        try:
-            _, warnings, mb_style, sprite_sheet = convertGroup(
-                group, qgis_layers, base_url, workspace="workspace", name="default"
-            )
-            if warnings:
-                self.warning.emit(", ".join(set(warnings)))
-
-            # Get upload URLs to S3
-            upload_urls = get_vector_style_upload_urls(self.descriptor_id)
-
-            if not upload_urls:
-                self.failed.emit("Failed to get vector style upload URLs from the API.")
-                return
-
-            # Upload style.json
-            self._upload_to_s3(
-                upload_urls["style.json"],
-                json.dumps(mb_style).replace(r"\\n", r"\n").replace(r"\\t", r"\t"),
-                "application/json",
-            )
-
-            # Upload sprite images if available
-            if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-                self._upload_to_s3(
-                    upload_urls["sprite.png"],
-                    image_to_bytes(sprite_sheet["img"]),
-                    "image/png",
-                )
-                self._upload_to_s3(
-                    upload_urls["sprite@2x.png"],
-                    image_to_bytes(sprite_sheet["img2x"]),
-                    "image/png",
-                )
-                self._upload_to_s3(
-                    upload_urls["sprite.json"], sprite_sheet["json"], "application/json"
-                )
-                self._upload_to_s3(
-                    upload_urls["sprite@2x.json"],
-                    sprite_sheet["json2x"],
-                    "application/json",
-                )
-            # Zip and upload QML zip
-            zip_path = files[0][2]
-            with open(zip_path, "rb") as file:
-                self._upload_to_s3(upload_urls["qml.zip"], file, "application/zip")
-        except Exception as e:
-            self.failed.emit(f"Failed to upload styling files: {str(e)}")
-
-    def _upload_to_s3(self, url: str, data: dict, content_type: str):
-        """Method to upload to S3"""
-        try:
-            headers = {"Content-Type": content_type}
-            response = requests.put(url, data=data, headers=headers)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
-
-
-class SchematisationFileDescriptorStyleUploader(StyleUploader):
-    """Uploads style for all layers in a vector file to the old vector specific"""
-
-    # TODO: once new endpoint can be used, just use SchematisationStyleBuilder and remove this
-    def __init__(
-        self,
-        file_descriptor_id: str,
-    ):
-        super().__init__()
-        # builder is added to class because this still uses the old s3 upload which prevents decoupling building and upload
-        self.builder = SchematisationStyleBuilder()
-        self.descriptor_id = file_descriptor_id
-
-    def upload_to_rana(self, files):
-        files = self.builder.get_files()
-        try:
-            # Get upload URLs to S3
-            upload_urls = get_vector_style_upload_urls(self.descriptor_id)
-            if not upload_urls:
-                self.failed.emit("Failed to get vector style upload URLs from the API.")
-                return
-
-            for _, name, path, content_type in files:
-                if name not in upload_urls:
-                    continue
-                upload_url = upload_urls[name]
-                if content_type == "application/json":
-                    with open(path, "r") as file:
-                        json_data = json.load(file)
-                    data = (
-                        json.dumps(json_data)
-                        .replace(r"\\n", r"\n")
-                        .replace(r"\\t", r"\t")
-                    )
-                else:
-                    with open(path, "rb") as f:
-                        data = f.read()
-                self._upload_to_s3(upload_url, data, content_type)
-        except Exception as e:
-            self.failed.emit(f"Failed to upload styling files: {str(e)}")
-
-    def _upload_to_s3(self, url: str, data: dict, content_type: str):
-        """Method to upload to S3"""
-        try:
-            headers = {"Content-Type": content_type}
-            response = requests.put(url, data=data, headers=headers)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            self.failed.emit(f"Failed to upload file to S3: {str(e)}")
-
-
 class FileDescriptorStyleUploadWorker(QThread):
     """Upload style for a single file descriptor.
-
-    Supports two modes:
-    1. New mode: Takes data_type and selects builder internally
-    2. Legacy mode: Takes pre-built uploader and builder (for backwards compatibility)
 
     Selects the appropriate StyleBuilder based on data_type and uploads
     the resulting style files via the unified upload_file_styling endpoint.
@@ -455,72 +289,19 @@ class FileDescriptorStyleUploadWorker(QThread):
 
     def __init__(
         self,
-        descriptor_id_or_uploader,
-        data_type_or_builder=None,
-        local_file_path_or_communication=None,
-        file_ref_str=None,
-        communication=None,
-    ):
-        super().__init__()
-        self.success = True
-
-        # Detect which mode we're in based on argument types
-        if isinstance(descriptor_id_or_uploader, str) and isinstance(
-            data_type_or_builder, DataType
-        ):
-            # New mode: (descriptor_id, data_type, local_file_path, file_ref_str, communication)
-            self._init_new_mode(
-                descriptor_id_or_uploader,
-                data_type_or_builder,
-                local_file_path_or_communication,
-                file_ref_str,
-                communication,
-            )
-        else:
-            # Legacy mode: (uploader, builder, communication)
-            self._init_legacy_mode(
-                descriptor_id_or_uploader,
-                data_type_or_builder,
-                local_file_path_or_communication,
-            )
-
-    def _init_new_mode(
-        self,
         descriptor_id: str,
         data_type: DataType,
         local_file_path: str,
         file_ref_str: str,
         communication,
     ):
-        """Initialize in new data-type-aware mode."""
-        self.mode = "new"
+        super().__init__()
+        self.success = True
         self.descriptor_id = descriptor_id
         self.data_type = data_type
         self.local_file_path = local_file_path
         self.file_ref_str = file_ref_str
         self.communication = communication
-        self.uploader = None
-        self.builder = None
-
-    def _init_legacy_mode(self, uploader, builder, communication):
-        """Initialize in legacy uploader-based mode."""
-        self.mode = "legacy"
-        self.descriptor_id = None
-        self.data_type = None
-        self.local_file_path = None
-        self.file_ref_str = None
-        self.uploader = uploader
-        self.builder = builder
-        self.communication = communication
-        # Connect signals from uploader and builder
-        self.uploader.warning.connect(self.warning.emit)
-        self.builder.warning.connect(self.warning.emit)
-        self.uploader.failed.connect(
-            self.mark_as_failed, Qt.ConnectionType.DirectConnection
-        )
-        self.builder.failed.connect(
-            self.mark_as_failed, Qt.ConnectionType.DirectConnection
-        )
 
     def _make_builder(self) -> StyleBuilder:
         """Build the appropriate StyleBuilder based on data_type."""
@@ -540,29 +321,7 @@ class FileDescriptorStyleUploadWorker(QThread):
         self.failed.emit(msg)
 
     def run(self):
-        if self.mode == "legacy":
-            self._run_legacy_mode()
-        else:
-            self._run_new_mode()
-
-    def _run_legacy_mode(self):
-        """Legacy execution path using uploader."""
-        if not self.builder.validate_layers():
-            self.failed.emit(
-                f"Layer not found for {self.builder.file_ref_str}. Add file to map and try again"
-            )
-            return
-        self.builder.tempdir.mkdir(parents=True, exist_ok=True)
-        files = self.builder.get_files()
-        self.uploader.upload_to_rana(files)
-        self.builder.clean()
-        if self.success:
-            self.finished.emit(
-                f"Styling files uploaded successfully for {self.builder.file_ref_str}."
-            )
-
-    def _run_new_mode(self):
-        """New execution path: build internally and call upload_file_styling directly."""
+        """Build style files and upload them via upload_file_styling endpoint."""
         builder = self._make_builder()
         builder.failed.connect(self.mark_as_failed, Qt.ConnectionType.DirectConnection)
         builder.warning.connect(self.warning.emit)

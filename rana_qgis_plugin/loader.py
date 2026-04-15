@@ -106,11 +106,6 @@ from rana_qgis_plugin.workers.persistent import (
 from rana_qgis_plugin.workers.styling import (
     FileDescriptorStyleUploadWorker,
     PublicationStyleUploadWorker,
-    RasterFileDescriptorStyleUploader,
-    RasterStyleBuilder,
-    SchematisationFileDescriptorStyleUploader,
-    VectorFileDescriptorStyleUploader,
-    VectorStyleBuilderOld,
 )
 from rana_qgis_plugin.workers.upload import ExistingFileUploadWorker, FileUploadWorker
 
@@ -580,9 +575,12 @@ class Loader(QObject):
         file = get_tenant_project_file(project["id"], {"path": online_path})
         if not file:
             self.communication.show_warn(f"Unable to find file {online_path}")
-        uploader = SchematisationFileDescriptorStyleUploader(file["descriptor_id"])
         self.vector_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, uploader.builder, self.communication
+            file["descriptor_id"],
+            DataType.schematisation,
+            "",
+            f"schematisation {online_path}",
+            self.communication,
         )
         self.vector_style_worker.finished.connect(
             lambda _: self.on_upload_schematiation_style_finished(online_path)
@@ -1187,16 +1185,18 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def save_vector_style(self, project, file):
-        """Start the uploader for saving vector styling files"""
+        """Start the worker for saving vector styling files"""
         self.communication.progress_bar(
             "Generating and saving vector styling files...", clear_msg_bar=True
         )
         local_file_path = get_local_dir_structure(project["slug"], file["id"])
         file_ref_str = f"file {file['id']} from {project['name']}"
-        builder = VectorStyleBuilderOld(local_file_path, file_ref_str)
-        uploader = VectorFileDescriptorStyleUploader(file["descriptor_id"], builder)
         self.vector_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, builder, self.communication
+            file["descriptor_id"],
+            DataType.vector,
+            local_file_path,
+            file_ref_str,
+            self.communication,
         )
         self.vector_style_worker.finished.connect(self.on_vector_style_finished)
         self.vector_style_worker.failed.connect(self.on_vector_style_failed)
@@ -1208,10 +1208,12 @@ class Loader(QObject):
         """Start the worker for saving raster styling files"""
         local_file_path = get_local_dir_structure(project["slug"], file["id"])
         file_ref_str = f"file {file['id']} from {project['name']}"
-        builder = RasterStyleBuilder(local_file_path, file_ref_str)
-        uploader = RasterFileDescriptorStyleUploader(file["descriptor_id"])
         self.raster_style_worker = FileDescriptorStyleUploadWorker(
-            uploader, builder, self.communication
+            file["descriptor_id"],
+            DataType.raster,
+            local_file_path,
+            file_ref_str,
+            self.communication,
         )
         self.raster_style_worker.finished.connect(self.on_raster_style_finished)
         self.raster_style_worker.failed.connect(self.on_raster_style_failed)
