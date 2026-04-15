@@ -21,7 +21,6 @@ from rana_qgis_plugin.utlis.api import (
     get_vector_style_upload_urls,
     upload_file_styling,
     upload_publication_style,
-    upload_raster_styling,
 )
 from rana_qgis_plugin.utlis.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utlis.generic import (
