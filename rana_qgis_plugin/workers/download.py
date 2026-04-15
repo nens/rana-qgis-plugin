@@ -353,7 +353,7 @@ class SchematisationDownloader(BaseDownloader):
                         f"{warning._category_name}: {warning.message}"
                     )
             return threedi_db.path
-        except errors.UpgradeFailedError:
+        except errors.UpgradeFailedError as e:
             raise SchematisationUpgradeError(f"Failed to upgrade schematisation: {e}")
 
     def _handle_qml_extraction(self, local_dir_structure: Path):

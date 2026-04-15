@@ -482,13 +482,8 @@ def upload_file_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles"
-    from qgis.core import Qgis, QgsMessageLog
-
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post_multipart(files=files)
-    QgsMessageLog.logMessage(
-        f"{network_manager.last_http_status=}; {msg=}", "DEBUG", Qgis.Info
-    )
     if status:
         response = network_manager.content
         return response
