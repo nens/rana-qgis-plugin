@@ -581,6 +581,7 @@ class Loader(QObject):
             "",
             f"schematisation {online_path}",
             self.communication,
+            retry_timeout_seconds=60,
         )
         self.vector_style_worker.finished.connect(
             lambda _: self.on_upload_schematiation_style_finished(online_path)

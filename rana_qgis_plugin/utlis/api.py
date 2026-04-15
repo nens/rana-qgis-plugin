@@ -24,6 +24,15 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
+class RanaEndPointNotFoundError(FetchError):
+    """Raised when an endpoint returns 404 (Not Found).
+
+    This is typically a transient error that can be retried.
+    """
+
+    pass
+
+
 class ConflictError(Exception):
     def __init__(self, msg: str, created_by: str, created_at: str):
         self.created_by = created_by
@@ -462,13 +471,21 @@ def upload_file_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles"
+    from qgis.core import Qgis, QgsMessageLog
+
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post_multipart(files=files)
+    QgsMessageLog.logMessage(
+        f"{network_manager.last_http_status=}; {msg=}", "DEBUG", Qgis.Info
+    )
     if status:
         response = network_manager.content
         return response
     else:
-        raise FetchError(msg, url, {})
+        if network_manager.last_http_status == 404:
+            raise RanaEndPointNotFoundError(msg, url, {})
+        else:
+            raise FetchError(msg, url, {})
 
 
 def get_file_descriptor_style(descriptor_id: str, file_name: str):
