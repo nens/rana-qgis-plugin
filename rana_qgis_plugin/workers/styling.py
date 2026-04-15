@@ -18,7 +18,7 @@ from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSl
 
 from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.utlis.api import (
-    RanaEndPointNotFoundError,
+    RanaResourceNotFound,
     RanaUploadError,
     upload_file_styling,
     upload_publication_style,
@@ -318,7 +318,7 @@ class FileDescriptorStyleUploadWorker(QThread):
             try:
                 upload_file_styling(self.descriptor_id, files)
                 break
-            except RanaEndPointNotFoundError:
+            except RanaResourceNotFound:
                 time.sleep(retry_delay)
             except RanaUploadError as e:
                 self.mark_as_failed(f"Uploading styling files failed: {e}")
@@ -342,7 +342,7 @@ class FileDescriptorStyleUploadWorker(QThread):
         if self.success and files:
             try:
                 upload_file_styling(self.descriptor_id, files)
-            except RanaEndPointNotFoundError as e:
+            except RanaResourceNotFound as e:
                 if self.retry_timeout_seconds > 0:
                     self._upload_with_retry(files)
                 else:

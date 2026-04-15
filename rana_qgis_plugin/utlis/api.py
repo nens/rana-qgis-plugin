@@ -24,7 +24,7 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
-class RanaEndPointNotFoundError(FetchError):
+class RanaResourceNotFound(FetchError):
     """Raised when an endpoint returns 404 (Not Found).
 
     This is typically a transient error that can be retried.
@@ -489,7 +489,7 @@ def upload_file_styling(descriptor_id: str, files):
         return response
     else:
         if network_manager.last_http_status == 404:
-            raise RanaEndPointNotFoundError(msg, url, {})
+            raise RanaResourceNotFound(msg, url, {})
         else:
             raise RanaUploadError(msg)
 
