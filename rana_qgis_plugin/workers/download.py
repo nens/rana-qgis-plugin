@@ -21,9 +21,9 @@ from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utlis.api import (
+    get_file_descriptor_style,
     get_publication_style,
     get_raster_file_link,
-    get_file_descriptor_style,
     get_tenant_file_descriptor,
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
