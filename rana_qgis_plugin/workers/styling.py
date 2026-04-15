@@ -314,15 +314,15 @@ class FileDescriptorStyleUploadWorker(QThread):
                 self.mark_as_failed(
                     f"Uploading styling files failed: Endpoint not ready after {self.retry_timeout_seconds} seconds"
                 )
-                return
+                break
             try:
                 upload_file_styling(self.descriptor_id, files)
-                return
+                break
             except RanaEndPointNotFoundError:
                 time.sleep(retry_delay)
             except RanaUploadError as e:
                 self.mark_as_failed(f"Uploading styling files failed: {e}")
-                return
+                break
 
     def run(self):
         """Build style files and upload them via upload_file_styling endpoint."""
