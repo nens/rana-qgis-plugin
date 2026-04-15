@@ -12,6 +12,7 @@ from qgis.PyQt.QtGui import (
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
+    QAbstractItemDelegate,
     QDialog,
     QDialogButtonBox,
     QGridLayout,
@@ -100,6 +101,7 @@ class FilesBrowser(QWidget):
         self.communication = communication
         self.selected_item = None
         self.file_signals = file_signals
+        self._pending_close_editor_handler = None
         self.setup_ui()
 
     def update_project(self, project: dict):
@@ -199,24 +201,41 @@ class FilesBrowser(QWidget):
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):
-        self.files_model.itemFromIndex(index).setFlags(
-            Qt.ItemFlag.ItemIsEditable
-            | Qt.ItemFlag.ItemIsEnabled
-            | Qt.ItemFlag.ItemIsSelectable
-        )
+        """Start in-place editing of the filename for the given item.
 
-        def handle_data_changed(topLeft, bottomRight, roles):
-            if topLeft == index:  # Only handle the specific item we're editing
-                new_name = self.files_model.itemFromIndex(topLeft).text()
-                signal = self.file_signals.get_signal(FileAction.RENAME)
-                signal.emit(selected_item, new_name)
-                self.files_model.dataChanged.disconnect(handle_data_changed)
+        Opens the inline editor on the filename column.  When the editor
+        closes with a commit, emits the rename signal with the new name.
+        If the name is unchanged the signal is not emitted.
+        """
+        name_index = index.sibling(index.row(), 0)
+        name_item = self.files_model.itemFromIndex(name_index)
+        if name_item is None:
+            return
 
-        # Connect to dataChanged signal
-        self.files_model.dataChanged.connect(handle_data_changed)
+        original_name = name_item.text()
+        delegate = self.files_tv.itemDelegate()
 
-        # Enter editing mode
-        self.files_tv.edit(index)
+        # Disconnect any stale handler from a previous rename
+        if self._pending_close_editor_handler is not None:
+            delegate.closeEditor.disconnect(self._pending_close_editor_handler)
+            self._pending_close_editor_handler = None
+
+        def on_close_editor(editor, hint):
+            delegate.closeEditor.disconnect(on_close_editor)
+            self._pending_close_editor_handler = None
+            if hint == QAbstractItemDelegate.EndEditHint.NoHint:
+                # editing was cancelled (Escape)
+                return
+            new_name = editor.text().strip()
+            if new_name and new_name != original_name:
+                self.file_signals.get_signal(FileAction.RENAME).emit(
+                    selected_item, new_name
+                )
+
+        self._pending_close_editor_handler = on_close_editor
+        delegate.closeEditor.connect(on_close_editor)
+        self.files_tv.setCurrentIndex(name_index)
+        self.files_tv.edit(name_index)
 
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
