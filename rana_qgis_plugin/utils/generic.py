@@ -20,8 +20,8 @@ from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
-from rana_qgis_plugin.utlis.api import get_frontend_settings, get_tenant_details
-from rana_qgis_plugin.utlis.settings import rana_cache_dir
+from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
+from rana_qgis_plugin.utils.settings import rana_cache_dir
 
 
 def is_writable(working_dir: str) -> bool:

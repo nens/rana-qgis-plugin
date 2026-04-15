@@ -17,18 +17,18 @@ from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
 
 from rana_qgis_plugin.constant import STYLE_DIR
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     RanaResourceNotFound,
     RanaUploadError,
     upload_file_styling,
     upload_publication_style,
 )
-from rana_qgis_plugin.utlis.data_models import DataType, RanaPublicationFileData
-from rana_qgis_plugin.utlis.generic import (
+from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utils.generic import (
     get_local_publication_file_path,
     image_to_bytes,
 )
-from rana_qgis_plugin.utlis.lizard import import_from_geostyler
+from rana_qgis_plugin.utils.lizard import import_from_geostyler
 
 
 class StyleBuilder(QObject):

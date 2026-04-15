@@ -27,13 +27,13 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import dir_icon
-from rana_qgis_plugin.utlis.api import get_tenant_project_files
-from rana_qgis_plugin.utlis.generic import (
+from rana_qgis_plugin.utils.api import get_tenant_project_files
+from rana_qgis_plugin.utils.generic import (
     NumericItem,
     display_bytes,
     get_file_icon_name,
 )
-from rana_qgis_plugin.utlis.time import get_timestamp_as_numeric_item
+from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,

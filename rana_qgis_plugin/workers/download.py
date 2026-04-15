@@ -20,7 +20,7 @@ from qgis.PyQt.QtCore import (
 from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     get_file_descriptor_style,
     get_publication_style,
     get_raster_file_link,
@@ -30,8 +30,8 @@ from rana_qgis_plugin.utlis.api import (
     map_result_to_file_name,
     request_raster_generate,
 )
-from rana_qgis_plugin.utlis.data_models import DataType, RanaPublicationFileData
-from rana_qgis_plugin.utlis.generic import (
+from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utils.generic import (
     build_vrt,
     get_local_dir_structure,
     get_local_file_path,

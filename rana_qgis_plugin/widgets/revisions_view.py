@@ -18,12 +18,12 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     get_tenant_project_file_history,
     get_threedi_schematisation,
 )
-from rana_qgis_plugin.utlis.generic import NumericItem, get_threedi_api
-from rana_qgis_plugin.utlis.time import get_timestamp_as_numeric_item
+from rana_qgis_plugin.utils.generic import NumericItem, get_threedi_api
+from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 
 
 class RevisionsView(QWidget):

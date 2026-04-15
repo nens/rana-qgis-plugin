@@ -27,10 +27,10 @@ from rana_qgis_plugin.icons import (
     ICONS_DIR,
     refresh_icon,
 )
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     get_tenant_project_file,
 )
-from rana_qgis_plugin.utlis.settings import base_url
+from rana_qgis_plugin.utils.settings import base_url
 from rana_qgis_plugin.widgets.breadcrumbs import (
     BreadcrumbsManager,
     FilesBreadcrumbsWidget,

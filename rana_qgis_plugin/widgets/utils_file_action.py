@@ -5,7 +5,7 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.utlis.api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils.api import get_tenant_file_descriptor
 
 
 class FileAction(Enum):

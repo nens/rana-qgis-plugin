@@ -22,14 +22,14 @@ from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.simulation.utils import load_remote_schematisation
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_threedi_schematisation,
 )
-from rana_qgis_plugin.utlis.generic import get_threedi_api
-from rana_qgis_plugin.utlis.qgis import get_threedi_results_analysis_tool_instance
-from rana_qgis_plugin.utlis.scenario import get_is_3di_simulation
-from rana_qgis_plugin.utlis.settings import hcc_working_dir
+from rana_qgis_plugin.utils.generic import get_threedi_api
+from rana_qgis_plugin.utils.qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.utils.scenario import get_is_3di_simulation
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 
 
 class LayerManager(QObject):

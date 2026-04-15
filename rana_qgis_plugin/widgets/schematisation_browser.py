@@ -16,10 +16,10 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     get_schematisations,
 )
-from rana_qgis_plugin.utlis.time import format_activity_timestamp_str
+from rana_qgis_plugin.utils.time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_search import DebouncedSearchBox
 
 

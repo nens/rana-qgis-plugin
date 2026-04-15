@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-import rana_qgis_plugin.utlis.generic as utils
+import rana_qgis_plugin.utils.generic as utils
 
 
 @pytest.mark.parametrize(

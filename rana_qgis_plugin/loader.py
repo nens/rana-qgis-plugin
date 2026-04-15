@@ -42,7 +42,7 @@ from rana_qgis_plugin.simulation.utils import (
     load_local_schematisation,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
-from rana_qgis_plugin.utlis.api import (
+from rana_qgis_plugin.utils.api import (
     ConflictError,
     add_threedi_schematisation,
     create_folder,
@@ -61,12 +61,12 @@ from rana_qgis_plugin.utlis.api import (
     start_tenant_process,
     upload_publication_version,
 )
-from rana_qgis_plugin.utlis.data_models import (
+from rana_qgis_plugin.utils.data_models import (
     DataType,
     LocalPublicationFileData,
     RanaPublicationFileData,
 )
-from rana_qgis_plugin.utlis.generic import (
+from rana_qgis_plugin.utils.generic import (
     find_publication_map_layer_from_tree,
     get_editable_layers_for_file,
     get_local_dir_structure,
@@ -75,13 +75,13 @@ from rana_qgis_plugin.utlis.generic import (
     get_threedi_schematisation_simulation_results_folder,
     save_layer_changes,
 )
-from rana_qgis_plugin.utlis.qgis import (
+from rana_qgis_plugin.utils.qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
 )
-from rana_qgis_plugin.utlis.scenario import ScenarioInfo
-from rana_qgis_plugin.utlis.settings import hcc_working_dir
-from rana_qgis_plugin.utlis.time import convert_timestamp_str_to_local_time
+from rana_qgis_plugin.utils.scenario import ScenarioInfo
+from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.utils.time import convert_timestamp_str_to_local_time
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard

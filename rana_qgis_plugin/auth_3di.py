@@ -1,7 +1,7 @@
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
-from rana_qgis_plugin.utlis.api import get_threedi_personal_api_key, get_user_info
+from rana_qgis_plugin.utils.api import get_threedi_personal_api_key, get_user_info
 
 from .communication import UICommunication
 from .constant import THREEDI_AUTHCFG_ENTRY
