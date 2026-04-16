@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
