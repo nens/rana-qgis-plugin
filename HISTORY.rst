@@ -23,6 +23,7 @@ History
 - Remove pagination buttons in template selector (nens/rana#3849)
 - Disable UI elements when no 3Di authorization (nens/rana#3758)
 - Remove usage of deprecated raster/vector specific styling endpoints (nens/rana-qgis-plugin#320)
+- Fix warnins upon logout (nens/rana#3813)
 
 
 1.2.10 (2026-04-14)
