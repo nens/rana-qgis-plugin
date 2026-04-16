@@ -211,8 +211,6 @@ class BaseDownloader:
             signals.finished.emit()
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
-        except SchematisationUpgradeError as e:
-            signals.failed.emit(e)
         except Exception as e:
             # failure to retrieve url will raise a ValueError or FetchError and end up here
             signals.failed.emit(f"An error occurred: {str(e)}")
@@ -300,19 +298,27 @@ class SchematisationDownloader(BaseDownloader):
             f"Expected exactly one file in {self.download_context.local_dir}, found {len(extracted_files)}"
         )
         schematisation_file = extracted_files[0]
-        # TODO: handle existing as early as possible!! - check if .gpkg version exists here?
-        # Upgrade schematisation to latest
-        upgaded_schematisation_path = self._upgrade_schematisation(schematisation_file)
-        if upgaded_schematisation_path:
-            schematisation_file = upgaded_schematisation_path
-            # Include revision number in file name
-            rev_nr = self.revision_number
-            file_name_with_rev = (
-                f"{schematisation_file.stem} (rev{rev_nr}){schematisation_file.suffix}"
+        # Upgrade schematisation to latest; on failure warn and continue with original gpkg
+        try:
+            upgraded_schematisation_path = self._upgrade_schematisation(
+                schematisation_file
             )
-            path_with_rev = schematisation_file.parent.joinpath(file_name_with_rev)
-            schematisation_file.rename(path_with_rev)
-            self._downloaded_file_path = path_with_rev
+            if upgraded_schematisation_path:
+                schematisation_file = upgraded_schematisation_path
+        except SchematisationUpgradeError as e:
+            if self.warning_signal is not None:
+                # not adding actual schema version here because import failure is one of the triggers of this error
+                self.warning_signal.emit(
+                    f"Schematisation upgrade failed, continuing with original schematisation version: {e}"
+                )
+        # Include revision number in file name
+        rev_nr = self.revision_number
+        file_name_with_rev = (
+            f"{schematisation_file.stem} (rev{rev_nr}){schematisation_file.suffix}"
+        )
+        path_with_rev = schematisation_file.parent.joinpath(file_name_with_rev)
+        schematisation_file.rename(path_with_rev)
+        self._downloaded_file_path = path_with_rev
 
     def _upgrade_schematisation(self, schematisation_filepath: Path) -> Optional[Path]:
         # Assert signals are set properly

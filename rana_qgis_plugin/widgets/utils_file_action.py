@@ -33,9 +33,7 @@ class FileAction(Enum):
         return NotImplemented
 
 
-def get_file_actions_for_data_type(
-    selected_item: dict, discriptor: Optional[dict] = None
-) -> List[FileAction]:
+def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     data_type = selected_item.get("data_type")
     actions = get_file_actions_by_data_type(data_type)
     # Add options to open WMS and download file and results only for 3Di scenarios
@@ -65,14 +63,6 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
         if has_3di_authcfg():
             actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
-    # Add options to open WMS and download file and results only for 3Di scenarios
-    elif data_type == "scenario":
-        descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
-        meta = descriptor["meta"] if descriptor else None
-        if meta and "id" in meta and get_ready_state_from_descriptor(descriptor):
-            actions.append(FileAction.DOWNLOAD_RESULTS)
-            if get_is_3di_simulation(descriptor):
-                actions.append(FileAction.OPEN_WMS)
     return sorted(actions)
 
 
