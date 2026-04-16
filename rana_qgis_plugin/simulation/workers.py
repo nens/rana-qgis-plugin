@@ -1233,9 +1233,10 @@ class SchematisationUploadProgressWorker(QRunnable):
             time.sleep(2)
             msg = f"Schematisation '{self.schematisation.name}' (revision: {self.revision.number}) files uploaded"
             self.signals.thread_finished.emit(msg)
+        except RevisionUploadError as e:
+            self.signals.upload_failed.emit(str(e))
         except Exception as e:
-            error_msg = f"Error: {e}"
-            self.signals.upload_failed.emit(error_msg)
+            self.signals.upload_failed.emit(str(e))
 
     def build_tasks_list(self):
         """Build upload tasks list."""
@@ -1437,14 +1438,16 @@ class SchematisationUploadProgressWorker(QRunnable):
                 if status == ThreediModelTaskStatus.SUCCESS.value:
                     break
                 elif status == ThreediModelTaskStatus.FAILURE.value:
-                    err = RevisionUploadError(model_checker_task.detail["message"])
+                    err = RevisionUploadError(
+                        f"Model checker failed:\n {model_checker_task.detail['message']}"
+                    )
                     raise err
                 else:
                     time.sleep(self.TASK_CHECK_INTERVAL)
             checker_errors = model_checker_task.detail["result"]["errors"]
             if checker_errors:
                 error_msg = "\n".join(error["description"] for error in checker_errors)
-                err = RevisionUploadError(error_msg)
+                err = RevisionUploadError(f"Model checker failed:\n {error_msg}")
                 raise err
         # Create 3Di model
         self.signals.create_model_requested.emit(self.revision.id, inherit_templates)

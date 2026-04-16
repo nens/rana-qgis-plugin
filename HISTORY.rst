@@ -14,7 +14,8 @@ History
 - Fix returning to FilesBrowser after delete via FileView
 - Remove pagination buttons in template selector (nens/rana#3849)
 - Disable UI elements when no 3Di authorization (nens/rana#3758)
-- Fix warnins upon logout (nens/rana#3813)
+- Fix warnings upon logout (nens/rana#3813)
+- Properly handle errers during revision upload and inform user about model creation (nens/rana#3741)
 
 
 1.2.10 (2026-04-14)
