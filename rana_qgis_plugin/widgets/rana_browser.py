@@ -340,14 +340,18 @@ class RanaBrowser(QWidget):
         )
         self.file_view.btn_start_simulation.clicked.connect(
             lambda _: self.start_simulation_selected.emit(
-                self.project, self.selected_item
+                self.project, self.file_view.selected_file
             )
         )
         self.file_view.btn_create_model.clicked.connect(
-            lambda _: self.create_model_selected.emit(self.project, self.selected_item)
+            lambda _: self.create_model_selected.emit(
+                self.project, self.file_view.selected_file
+            )
         )
         self.file_view.btn_export_gpkg.clicked.connect(
-            lambda _: self.export_gpkg_selected.emit(self.project, self.selected_item)
+            lambda _: self.export_gpkg_selected.emit(
+                self.project, self.file_view.selected_file
+            )
         )
         self.revisions_view.export_schematisation_revision.connect(
             lambda schematisation, revision: self.export_gpkg_revision_selected.emit(
