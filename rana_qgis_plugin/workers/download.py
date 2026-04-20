@@ -48,6 +48,10 @@ class SchematisationUpgradeError(Exception):
     pass
 
 
+class SchematisationWithout1DError(Exception):
+    pass
+
+
 class FileDownloadWorkerSignals(QObject):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal()
@@ -211,6 +215,10 @@ class BaseDownloader:
             signals.finished.emit()
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
+        except SchematisationWithout1DError:
+            signals.failed.emit(
+                "Cancelled export because exporting a pure 2D schematisation will create a geopackage without vector layers"
+            )
         except Exception as e:
             # failure to retrieve url will raise a ValueError or FetchError and end up here
             signals.failed.emit(f"An error occurred: {str(e)}")
@@ -257,7 +265,7 @@ class SchematisationDownloader(BaseDownloader):
         self.schematisation_id = schematisation_id
         self.revision_id = revision_id
         self.revision_number = revision_number
-        self._downloaded_file_path = None
+        self._downloaded_file_path: Optional[Path] = None
         self.progress_signal: Optional[pyqtSignal] = None
         self.warning_signal: Optional[pyqtSignal] = None
 
@@ -329,6 +337,7 @@ class SchematisationDownloader(BaseDownloader):
         assert self.warning_signal is not None, "warning signal not set"
         try:
             from threedi_schema import ThreediDatabase, errors
+            from threedi_schema.domain.models import ConnectionNode
         except ImportError:
             raise SchematisationUpgradeError(
                 "Failed to upgrade schematisation: threedi-schema library could not be loaded"
@@ -358,7 +367,14 @@ class SchematisationDownloader(BaseDownloader):
                     self.warning_signal.emit(
                         f"{warning._category_name}: {warning.message}"
                     )
-            return threedi_db.path
+            # Validate that ConnectionNode table has data after upgrade
+            session = threedi_db.get_session()
+            connection_node_count = session.query(ConnectionNode).count()
+            session.close()
+            if connection_node_count > 0:
+                return threedi_db.path
+            else:
+                raise SchematisationWithout1DError
         except errors.UpgradeFailedError as e:
             raise SchematisationUpgradeError(f"Failed to upgrade schematisation: {e}")
 
