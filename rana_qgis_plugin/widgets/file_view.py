@@ -29,6 +29,7 @@ from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
+    FileDescriptorStatus,
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_threedi_schematisation,
@@ -449,6 +450,7 @@ class FileView(QWidget):
         status_msg = message_i18n.get("msg") if message_i18n else None
         revision = self.schematisation.get("latest_revision", {})
         crs_str = self._get_crs_str(data_type, meta, revision)
+        status_enum = FileDescriptorStatus.from_fd_response(descriptor)
         details = [
             # InfoRow("Area", self._get_area_str(data_type, meta, revision)),
             InfoRow("Projection", crs_str),
@@ -456,7 +458,9 @@ class FileView(QWidget):
             InfoRow(
                 "Status",
                 status.get("id", "") + ("" if not status_msg else f": {status_msg}"),
-                color=QColor(255, 0, 0) if status.get("id") == "failed" else None,
+                color=QColor(255, 0, 0)
+                if status_enum == FileDescriptorStatus.failed
+                else None,
             ),
         ]
         if data_type != "threedi_schematisation":

@@ -5,7 +5,7 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.utils.api import get_tenant_file_descriptor
+from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
 
 
 class FileAction(Enum):
@@ -75,7 +75,10 @@ def get_scenario_actions(
         if meta["simulation"]["software"]["id"] == "3Di":
             actions.append(FileAction.OPEN_WMS)
     # remove any interactions for objects that are being processed
-    elif descriptor.get("status", {}).get("id") == "processing":
+    elif (
+        FileDescriptorStatus.from_fd_response(descriptor)
+        == FileDescriptorStatus.processing
+    ):
         return []
     return actions
 
