@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Optional, TypedDict
 
 import requests
@@ -24,13 +25,42 @@ class FetchError(Exception):
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
-class RanaResourceNotFound(FetchError):
-    """Raised when an endpoint returns 404 (Not Found).
+class FileDescriptorStatus(Enum):
+    # See https://github.com/nens/rana/blob/main/design/015_file_descriptors.md#state-diagram
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    retry = "retry"
+    deleting = "deleting"
+    deleted = "deleted"
+    restarting = "restarting"
+    unknown = "unknown"
 
-    This is typically a transient error that can be retried.
-    """
+    @classmethod
+    def from_fd_response(cls, response: dict) -> Optional["FileDescriptorStatus"]:
+        status_dict = response.get("status") or {}
+        if "id" in status_dict:
+            if status_dict["id"] in cls._value2member_map_:
+                return cls._value2member_map_[status_dict["id"]]
+        return cls.unknown
 
-    pass
+    @property
+    def is_ready(self) -> bool:
+        return self is FileDescriptorStatus.completed
+
+    @property
+    def is_valid(self) -> bool:
+        return self not in (
+            FileDescriptorStatus.deleting,
+            FileDescriptorStatus.deleted,
+            FileDescriptorStatus.failed,
+            FileDescriptorStatus.unknown,
+        )
+
+    @property
+    def is_in_progress(self) -> bool:
+        return not self.is_ready and not self.is_valid
 
 
 class RanaUploadError(Exception):
@@ -488,10 +518,7 @@ def upload_file_styling(descriptor_id: str, files):
         response = network_manager.content
         return response
     else:
-        if network_manager.last_http_status == 404:
-            raise RanaResourceNotFound(msg, url, {})
-        else:
-            raise RanaUploadError(msg)
+        raise RanaUploadError(msg)
 
 
 def get_file_descriptor_style(descriptor_id: str, file_name: str):

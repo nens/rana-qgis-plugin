@@ -4,12 +4,16 @@ from functools import cached_property
 from threedi_api_client.openapi import ApiException
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utils.api import get_tenant_file_descriptor_view
+from rana_qgis_plugin.utils.api import (
+    FileDescriptorStatus,
+    get_tenant_file_descriptor_view,
+)
 from rana_qgis_plugin.utils.generic import get_threedi_api
 
 
 def get_ready_state_from_descriptor(descriptor: dict) -> bool:
-    return (descriptor.get("status") or {}).get("id") in ["completed", "processing"]
+    status = FileDescriptorStatus.from_fd_response(descriptor)
+    return status in [FileDescriptorStatus.completed, FileDescriptorStatus.processing]
 
 
 def get_is_3di_simulation(descriptor: dict) -> bool:
