@@ -236,7 +236,6 @@ class PublicationView(QWidget):
         self.project: Optional[dict] = None
         self.publication: Optional[dict] = None
         self.current_version: Optional[dict] = None
-        self.project: Optional[dict] = None
         self.file_map: Optional[dict[str:dict]] = None
         self.root_item: FolderItemData = FolderItemData(
             name="root", sub_items=[], parents=[]
