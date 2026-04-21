@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from typing import Optional
-
+import mistune
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QAbstractItemModel,
@@ -378,7 +378,16 @@ class PublicationView(QWidget):
         # description
         layout = QVBoxLayout()
         if self.publication.get("description"):
-            description_label = QLabel(self.publication["description"])
+            description = self.publication["description"]
+            html = mistune.html(description)
+            description_label = QLabel(html)
+            description_label.setTextFormat(Qt.TextFormat.RichText)
+            description_label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextBrowserInteraction
+            )
+            description_label.linkActivated.connect(
+                lambda url: QDesktopServices.openUrl(QUrl(url))
+            )
         else:
             description_label = QLabel("No description available")
             description_label.setStyleSheet("font-style: italic;")
