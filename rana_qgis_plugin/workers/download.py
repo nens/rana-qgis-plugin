@@ -257,14 +257,12 @@ class SchematisationDownloader(BaseDownloader):
     def __init__(
         self,
         schematisation_id: int,
-        revision_id: int,
-        revision_number: int,
+        revision: dict,
         download_context: AbstractDownloadContext,
     ):
         super().__init__(download_context)
         self.schematisation_id = schematisation_id
-        self.revision_id = revision_id
-        self.revision_number = revision_number
+        self.revision = revision
         self._downloaded_file_path: Optional[Path] = None
         self.progress_signal: Optional[pyqtSignal] = None
         self.warning_signal: Optional[pyqtSignal] = None
@@ -282,7 +280,7 @@ class SchematisationDownloader(BaseDownloader):
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
         schematisation_pk = self.schematisation_id
-        revision_pk = self.revision_id
+        revision_pk = self.revision["id"]
         return tc.download_schematisation_revision_sqlite(
             schematisation_pk, revision_pk
         ).get_url
@@ -320,7 +318,7 @@ class SchematisationDownloader(BaseDownloader):
                     f"Schematisation upgrade failed, continuing with original schematisation version: {e}"
                 )
         # Include revision number in file name
-        rev_nr = self.revision_number
+        rev_nr = self.revision["number"]
         file_name_with_rev = (
             f"{schematisation_file.stem} (rev{rev_nr}){schematisation_file.suffix}"
         )
@@ -346,10 +344,10 @@ class SchematisationDownloader(BaseDownloader):
         schema = threedi_db.schema
         srid, _ = schema._get_epsg_data()
         if srid is None:
-            try:
-                srid = schema._get_dem_epsg()
-            except errors.InvalidSRIDException:
-                srid = None
+            rasters = self.revision.get("rasters", [])
+            dem_raster = next((r for r in rasters if r.get("type") == "dem_file"), None)
+            if dem_raster:
+                srid = dem_raster.get("epsg_code")
         if srid is None:
             raise SchematisationUpgradeError(
                 "Failed to upgrade schematisation: EPSG code could not be determined"

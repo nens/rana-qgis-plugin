@@ -69,8 +69,7 @@ classDiagram
 
     class SchematisationDownloader {
         -schematisation_id: int
-        -revision_id: int
-        -revision_number: int
+        -revision: dict
         -_downloaded_file_path: Path
         -progress_signal: Optional[pyqtSignal]
         -warning_signal: Optional[pyqtSignal]
