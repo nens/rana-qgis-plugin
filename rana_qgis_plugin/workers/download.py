@@ -145,7 +145,7 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
         )
 
     def get_style_zip(self) -> Optional["bytes"]:
-        if self.file_data.style_id and self.file_data.data_type in [
+        if self.file_data.data_type in [
             DataType.raster,
             DataType.vector,
         ]:
