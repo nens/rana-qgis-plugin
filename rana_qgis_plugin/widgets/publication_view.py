@@ -1,38 +1,31 @@
+import re
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from typing import Optional
+
 import mistune
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
-    QAbstractItemModel,
-    QSettings,
     Qt,
     QUrl,
     pyqtSignal,
     pyqtSlot,
 )
 from qgis.PyQt.QtGui import (
-    QColor,
     QDesktopServices,
     QFont,
-    QIcon,
-    QPalette,
     QStandardItem,
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QStackedWidget,
-    QTableView,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -379,7 +372,12 @@ class PublicationView(QWidget):
         layout = QVBoxLayout()
         if self.publication.get("description"):
             description = self.publication["description"]
-            html = mistune.html(description)
+            description_with_links = re.sub(
+                r'(?<!\()(?P<url>https?://[^\s<>()"]+)',
+                lambda match: f"[{match.group('url')}]({match.group('url')})",
+                description,
+            )
+            html = mistune.html(description_with_links)
             description_label = QLabel(html)
             description_label.setTextFormat(Qt.TextFormat.RichText)
             description_label.setTextInteractionFlags(
