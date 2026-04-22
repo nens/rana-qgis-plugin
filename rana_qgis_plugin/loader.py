@@ -583,7 +583,7 @@ class Loader(QObject):
             retry_timeout_seconds=60,
         )
         self.file_descriptor_style_worker.finished.connect(
-            lambda _: self.on_upload_schematiation_style_finished(online_path)
+            lambda _: self.on_upload_schematiation_style_finished(file, online_path)
         )
         self.file_descriptor_style_worker.retry.connect(self.on_progress_busy)
         self.file_descriptor_style_worker.failed.connect(
@@ -593,11 +593,12 @@ class Loader(QObject):
         self.file_descriptor_style_worker.start()
 
     @cleanup_sender
-    def on_upload_schematiation_style_finished(self, online_path: str):
+    def on_upload_schematiation_style_finished(self, file: dict, online_path: str):
         self.communication.clear_message_bar()
         self.communication.show_info(
             f"Exported schematisation to {online_path} successfully."
         )
+        self.file_opened.emit(file)
         self.export_gpkg_finished.emit()
 
     @pyqtSlot(dict, int)
