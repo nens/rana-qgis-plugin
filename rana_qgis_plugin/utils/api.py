@@ -206,19 +206,21 @@ def get_tenant_projects(communication: UICommunication):
 def get_tenant_project_files(
     communication: UICommunication, project_id: str, params: dict = None
 ):
-    authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/ls"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get files: {error}")
+    if params is None:
+        params = {"limit": 1000}
+    try:
+        files = []
+        while True:
+            response = simple_fetch(url, params)
+            files += response["items"]
+            if not response["next"]:
+                break
+            params["cursor"] = response["next"]
+        return files
+    except FetchError as e:
+        communication.show_error(f"Failed to get files: {e}")
         return []
 
 

@@ -25,6 +25,8 @@ History
 - Remove usage of deprecated raster/vector specific styling endpoints (nens/rana-qgis-plugin#320)
 - Fix warnings upon logout (nens/rana#3813)
 - Fix broken buttons after open in qgis via context menu (nens/rana#4050)
+- Set default sorting of files browser to newest to latest (nens/rana#4063)
+- Fix sorting by data type in files browser
 - Fix crash on retrieving results while lizard is still processing (nens/rana#4091)
 
 

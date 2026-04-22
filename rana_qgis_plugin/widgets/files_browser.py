@@ -63,10 +63,11 @@ class FileBrowserModel(QStandardItemModel):
                 sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
                 directories.append((row_items, sort_text))
             else:
-                # try to use SORT_ROLE data before using UserRole data for sorting
+                # try to use SORT_ROLE data before using UserRole data, then fall back to display text
                 sort_text = (
                     row_items[column].data(SORT_ROLE)
                     or row_items[column].data(Qt.ItemDataRole.UserRole)
+                    or row_items[column].data(Qt.ItemDataRole.DisplayRole)
                     or ""
                 )
                 files.append((row_items, sort_text))
@@ -118,6 +119,8 @@ class FilesBrowser(QWidget):
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.header().setSectionsMovable(False)
+        # Set default sort: column 3 (Last modified), descending (newest first)
+        self.files_tv.sortByColumn(3, Qt.SortOrder.DescendingOrder)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
@@ -294,6 +297,9 @@ class FilesBrowser(QWidget):
                 role=Qt.ItemDataRole.UserRole,
             )
             last_modified_item = get_timestamp_as_numeric_item(file["last_modified"])
+            last_modified_item.setData(
+                last_modified_item.data(Qt.ItemDataRole.UserRole), role=SORT_ROLE
+            )
             # Add items to the model
             self.files_model.appendRow(
                 [name_item, data_type_item, size_item, last_modified_item]
