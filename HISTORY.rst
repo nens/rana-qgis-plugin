@@ -25,6 +25,7 @@ History
 - Remove usage of deprecated raster/vector specific styling endpoints (nens/rana-qgis-plugin#320)
 - Fix warnings upon logout (nens/rana#3813)
 - Fix broken buttons after open in qgis via context menu (nens/rana#4050)
+- Fix crash on retrieving results while lizard is still processing (nens/rana#4091)
 
 
 1.2.10 (2026-04-14)
