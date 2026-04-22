@@ -128,7 +128,7 @@ def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict
 def get_frontend_settings():
     url = f"{api_url()}/frontend-settings"
     network_manager = NetworkManager(url, get_authcfg_id())
-    status = network_manager.fetch()
+    status, _ = network_manager.fetch()
 
     if status:
         response = network_manager.content
@@ -325,7 +325,7 @@ def get_tenant_project_file_history(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/history"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, _ = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
@@ -368,13 +368,13 @@ def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{view_type}"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch()
+    status, _ = network_manager.fetch()
 
     if status:
         response = network_manager.content
         return response
     else:
-        return None
+        return []
 
 
 def create_raster_tasks(
