@@ -16,6 +16,11 @@ def get_ready_state_from_descriptor(descriptor: dict) -> bool:
     return status in [FileDescriptorStatus.completed, FileDescriptorStatus.processing]
 
 
+def get_lizard_ready_state_from_descriptor(descriptor: dict) -> bool:
+    status = FileDescriptorStatus.from_fd_response(descriptor)
+    return status == FileDescriptorStatus.completed
+
+
 def get_is_3di_simulation(descriptor: dict) -> bool:
     if descriptor.get("data_type") != "scenario":
         return False
@@ -102,17 +107,20 @@ class ScenarioInfo:
 
     @cached_property
     def has_lizard_results(self) -> bool:
-        return self.meta.get("id") is not None
+        return self.meta.get(
+            "id"
+        ) is not None and get_lizard_ready_state_from_descriptor(self.descriptor)
 
     def get_grid(self):
         return deepcopy(self.grid) or {}
 
     @cached_property
-    def lizard_results(self):
+    def lizard_results(self) -> list:
         if self.has_lizard_results:
             return get_tenant_file_descriptor_view(
                 self.descriptor.get("id"), "lizard-scenario-results"
             )
+        return []
 
     @cached_property
     def grid(self):
