@@ -63,10 +63,11 @@ class FileBrowserModel(QStandardItemModel):
                 sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
                 directories.append((row_items, sort_text))
             else:
-                # try to use SORT_ROLE data before using UserRole data for sorting
+                # try to use SORT_ROLE data before using UserRole data, then fall back to display text
                 sort_text = (
                     row_items[column].data(SORT_ROLE)
                     or row_items[column].data(Qt.ItemDataRole.UserRole)
+                    or row_items[column].data(Qt.ItemDataRole.DisplayRole)
                     or ""
                 )
                 files.append((row_items, sort_text))
