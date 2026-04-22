@@ -28,6 +28,7 @@ History
 - Set default sorting of files browser to newest to latest (nens/rana#4063)
 - Fix sorting by data type in files browser
 - Fix crash on retrieving results while lizard is still processing (nens/rana#4091)
+- Fix sorting of processes (nens/rana#4099)
 
 
 1.2.10 (2026-04-14)
