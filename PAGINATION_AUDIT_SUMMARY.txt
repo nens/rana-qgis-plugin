@@ -1,0 +1,174 @@
+================================================================================
+PAGINATION AUDIT: utils/api.py - CRITICAL FINDINGS SUMMARY
+================================================================================
+
+AUDIT SCOPE: 6 functions that make API calls to list/paginated endpoints
+STATUS: ALL 6 FUNCTIONS HAVE CRITICAL PAGINATION ISSUES
+
+================================================================================
+FUNCTION-BY-FUNCTION SUMMARY
+================================================================================
+
+1. get_user_tenants (Line 155)
+   ├─ Status: CRITICAL - Uses simple_fetch(), no pagination
+   ├─ Limit: Default API limit (unspecified)
+   ├─ Call Sites: rana_qgis_plugin.py:223
+   ├─ Impact: User cannot select organizations beyond first page
+   └─ Real Impact: Breaking multi-tenant functionality for large orgs
+
+2. get_tenant_projects (Line 188)
+   ├─ Status: CRITICAL - Uses simple_fetch() with hardcoded limit=1000
+   ├─ Call Sites: 
+   │  ├─ projects_browser.py:171 (UI display)
+   │  ├─ projects_browser.py:177-180 (contributor list building)
+   │  └─ projects_browser.py:229 (search/filter operations)
+   ├─ Impact: 
+   │  ├─ Projects beyond 1000 completely hidden
+   │  ├─ Contributor list incomplete
+   │  └─ Search returns false "not found" results
+   └─ Real Impact: Users cannot access 1000+ projects at all
+
+3. get_tenant_project_files (Line 206)
+   ├─ Status: CRITICAL - Uses simple_fetch(), no pagination
+   ├─ Limit: Caller-specified (typically limit=1000)
+   ├─ Call Sites:
+   │  ├─ files_browser.py:255 (file browser UI)
+   │  ├─ loader.py:398-404 (duplicate detection on move)
+   │  └─ loader.py:444-450 (duplicate detection on create)
+   ├─ Critical Bug: Validation depends on complete file list
+   │  - If folder "X" exists at position 1250 but limit=1000
+   │  - User can create duplicate folder "X" (validation passes)
+   │  - Silent data corruption
+   └─ Real Impact: Hides files, allows duplicate file/folder creation
+
+4. get_tenant_processes (Line 451)
+   ├─ Status: CRITICAL - Uses simple_fetch() with hardcoded limit=100
+   ├─ Call Sites: api.py:721 (get_process_id_for_tag)
+   ├─ Impact: 
+   │  ├─ Only first 100 processes available for discovery
+   │  ├─ Processes 101+ cannot be launched
+   │  └─ Incorrect process may be selected
+   └─ Real Impact: Job execution fails for users with many processes
+
+5. get_project_jobs (Line 700)
+   ├─ Status: CRITICAL - Uses simple_fetch() with hardcoded limit=100
+   ├─ Call Sites: workers/persistent.py:106-125 (job monitoring loop)
+   ├─ Impact:
+   │  ├─ Jobs beyond position 100 never added to active tracking
+   │  ├─ Job state changes never detected for jobs 101+
+   │  └─ No UI updates, silent failure
+   └─ Real Impact: Job monitoring stops for >100 jobs, users unaware
+
+6. get_schematisations (Line 589)
+   ├─ Status: CRITICAL - Uses simple_fetch() with hardcoded limit=100
+   ├─ Special Note: Uses response["results"] instead of response["items"]
+   ├─ Call Sites: schematisation_browser.py:93 (schematisation search dialog)
+   ├─ Impact:
+   │  ├─ Search results limited to first 100 matches
+   │  ├─ User cannot find desired schematisation
+   │  └─ Blocks 3Di model selection workflow
+   └─ Real Impact: Users cannot select required schematisation
+
+================================================================================
+ALL CALL SITES SUMMARY
+================================================================================
+
+FILE: rana_qgis_plugin/rana_qgis_plugin.py
+  Line 223: get_user_tenants() - Multi-tenant menu population
+
+FILE: rana_qgis_plugin/widgets/projects_browser.py
+  Line 171: get_tenant_projects() - Initial fetch
+  Line 177-180: Used in update_users() - Builds contributor list from ALL projects
+  Line 229: Used in filtering - Searches ALL projects
+
+FILE: rana_qgis_plugin/widgets/files_browser.py
+  Line 255: get_tenant_project_files() - File browser UI display
+
+FILE: rana_qgis_plugin/widgets/schematisation_browser.py
+  Line 93: get_schematisations() - Schematisation search dialog
+
+FILE: rana_qgis_plugin/workers/persistent.py
+  Line 106: get_project_jobs() - Job monitoring worker
+
+FILE: rana_qgis_plugin/loader.py
+  Line 398-404: get_tenant_project_files() - Duplicate directory detection
+  Line 444-450: get_tenant_project_files() - Duplicate folder detection
+
+================================================================================
+VALIDATION ISSUES (Most Severe)
+================================================================================
+
+loader.py Lines 396-408 (rename_item_on_rana):
+  Pattern: Check if new_name exists in directory listing
+  BUG: get_tenant_project_files() truncates at limit=1000
+  Consequence: Validation passes for truncated data
+  Result: ALLOWS DUPLICATE FOLDER CREATION
+
+Example Scenario:
+  - Directory has 1500 items
+  - User tries to rename file #999 to "duplicate"
+  - "duplicate" exists at position #1250 (beyond 1000-item limit)
+  - get_tenant_project_files() returns only items 0-999
+  - "duplicate" not found in returned list
+  - Rename proceeds, creates duplicate file on server
+  - DATA CORRUPTION
+
+================================================================================
+COMPARISON: CORRECT IMPLEMENTATIONS
+================================================================================
+
+For contrast, these functions CORRECTLY handle pagination:
+
+get_project_publications (Line 713):
+  return paginated_fetch(url, 100, params)  ✓ CORRECT
+
+get_publication_version_files (Line 776):
+  return paginated_fetch(url, 100)  ✓ CORRECT
+
+These use paginated_fetch() which properly iterates through ALL pages.
+
+================================================================================
+WHY HARDCODED LIMITS DON'T SAVE US
+================================================================================
+
+Common misconception: "limit=100 or limit=1000 is safe, users won't hit it"
+
+Reality:
+  1. get_tenant_projects uses limit=1000 and still truncates at 1000
+  2. Validation logic depends on COMPLETE data (loader.py examples)
+  3. UI filtering assumes it has ALL data (projects_browser.py:229)
+  4. Search results are presented as "all results" (schematisation_browser.py:93)
+  5. No warning when data is truncated (response["total"] never checked)
+
+The limits create FALSE SECURITY while data silently disappears.
+
+================================================================================
+GIT HISTORY CONTEXT
+================================================================================
+
+Commit 11acbfc (Feb 23, 2026): "Implement paginated fetch and use it with publications"
+  - Added paginated_fetch() function
+  - Updated get_project_publications() to use it
+  - Did NOT update the 6 audit targets
+  - INCOMPLETE MIGRATION
+
+Commit 40781a1: "Reduce limit for get_tenant_processes to 100"
+  - get_tenant_processes limit was INCREASED then REDUCED
+  - Indicates awareness of overflow potential
+  - But WRONG FIX: reduced limit instead of adding pagination
+
+================================================================================
+SEVERITY RATING: ALL CRITICAL
+================================================================================
+
+┌─────────────────────────┬──────────┬──────────────────────────────────────┐
+│ Function                │ Limit    │ Severity                             │
+├─────────────────────────┼──────────┼──────────────────────────────────────┤
+│ get_user_tenants        │ Unknown  │ CRITICAL - Breaks multi-tenant       │
+│ get_tenant_projects     │ 1000     │ CRITICAL - Hides 1000+ projects     │
+│ get_tenant_project_files│ 1000     │ CRITICAL - Breaks validation         │
+│ get_tenant_processes    │ 100      │ CRITICAL - Process discovery fails   │
+│ get_project_jobs        │ 100      │ CRITICAL - Job monitoring breaks     │
+│ get_schematisations     │ 100      │ CRITICAL - Search results truncated  │
+└─────────────────────────┴──────────┴──────────────────────────────────────┘
+
