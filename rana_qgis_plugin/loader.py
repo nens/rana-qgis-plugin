@@ -1068,7 +1068,9 @@ class Loader(QObject):
             project,
             file,
         )
-        self.file_upload_worker.finished.connect(self.on_file_upload_finished)
+        self.file_upload_worker.finished.connect(
+            lambda _: self.on_file_upload_finished()
+        )
         self.file_upload_worker.failed.connect(self.on_file_upload_failed)
         self.file_upload_worker.failed.connect(
             lambda error: self.file_upload_failed.emit(error)

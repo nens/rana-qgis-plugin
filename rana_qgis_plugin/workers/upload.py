@@ -14,6 +14,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_project_file,
     start_file_upload,
 )
+from rana_qgis_plugin.utils.generic import get_local_file_path
 
 
 class FileUploadWorker(QThread):
@@ -67,7 +68,6 @@ class FileUploadWorker(QThread):
         if not local_path.exists():
             self.failed.emit(f"File not found: {local_path}")
             return False
-
         # Handle file conflict
         continue_upload = self.handle_file_conflict(online_path)
         if not continue_upload:
