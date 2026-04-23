@@ -92,7 +92,20 @@ Fuerhermore, note that the e2e tests can be visually inspected using `vncviewer`
     $ vncviewer localhost:5900
 
 
-## Handling unhandled errors
+## Development and test settings
+
+Some settings are not available via the UI but can be modified via the `QGIS/QGIS3.ini` file in your profile folder. If these are used, they will show up in the Rana settings dialog under "From QGIS.ini".
+
+### HCC url
+
+The HCC url can be set via the `QGIS/QGIS3.ini` file in your profile folder. To do so, add:
+```
+hcc_url_override=https://your-hcc-url.com
+```
+to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
+
+
+### Handling unhandled errors
 
 The plugin has its own excepthook that handles any error that is not caught. Such errors result in a warning for the user, with an error message that can be copied, and after closing the dialog the rana browser will be enabled. 
 
