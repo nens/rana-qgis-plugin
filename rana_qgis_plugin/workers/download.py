@@ -183,9 +183,6 @@ class BaseDownloader:
     def postprocess(self):
         raise NotImplementedError
 
-    def _handle_qml_extraction(self, local_dir_structure: Path):
-        raise NotImplementedError
-
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
         self.download_context.local_dir.mkdir(parents=True, exist_ok=True)
@@ -209,8 +206,6 @@ class BaseDownloader:
                                 )
                                 previous_progress = progress
             self.postprocess()
-            # Handle QML files for vector and raster data
-            self._handle_qml_extraction(self.download_context.local_dir)
             # Emit finished signal from the worker
             signals.finished.emit()
         except requests.exceptions.RequestException as e:
@@ -241,16 +236,6 @@ class RanaDownloader(BaseDownloader):
                 if zipfile.is_zipfile(stream):
                     with zipfile.ZipFile(stream, "r") as zip_file:
                         zip_file.extractall(str(self.download_context.local_dir))
-
-    def _handle_qml_extraction(self, local_dir_structure: Path):
-        """Handles the extraction of QML zip file if required."""
-        if self.file["data_type"] in ["vector", "raster"]:
-            qml_zip_content = self.download_context.get_style_zip()
-            if qml_zip_content:
-                stream = io.BytesIO(qml_zip_content)
-                if zipfile.is_zipfile(stream):
-                    with zipfile.ZipFile(stream, "r") as zip_file:
-                        zip_file.extractall(str(local_dir_structure))
 
 
 class SchematisationDownloader(BaseDownloader):
@@ -375,9 +360,6 @@ class SchematisationDownloader(BaseDownloader):
                 raise SchematisationWithout1DError
         except errors.UpgradeFailedError as e:
             raise SchematisationUpgradeError(f"Failed to upgrade schematisation: {e}")
-
-    def _handle_qml_extraction(self, local_dir_structure: Path):
-        pass
 
 
 class RanaFileDownloader(RanaDownloader):
