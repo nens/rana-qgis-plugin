@@ -18,6 +18,7 @@ from rana_qgis_plugin.utils.api import get_frontend_settings
 from rana_qgis_plugin.utils.generic import is_writable
 from rana_qgis_plugin.utils.settings import (
     base_url,
+    get_advanced_settings,
     hcc_working_dir,
     rana_cache_dir,
     set_base_url,
@@ -74,6 +75,19 @@ class SettingsDialog(QDialog):
             self.cache_dir_le.setText(base_dir)
 
         layout.addWidget(files_group)
+
+        advanced_settings = get_advanced_settings()
+        if advanced_settings:
+            advanced_group = QGroupBox("From QGIS.ini", self)
+            advanced_group.setLayout(QGridLayout())
+            row = 0
+            for setting_name, value in advanced_settings.items():
+                # Convert setting name from snake_case to Title Case for display
+                display_name = setting_name.replace("_", " ").title()
+                advanced_group.layout().addWidget(QLabel(display_name), row, 0)
+                advanced_group.layout().addWidget(QLabel(str(value)), row, 1)
+                row += 1
+            layout.addWidget(advanced_group)
 
         buttonBox = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel

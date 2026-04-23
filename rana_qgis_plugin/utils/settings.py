@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 from urllib.parse import quote
 
 from qgis.core import QgsSettings
@@ -114,3 +115,18 @@ def get_use_plugin_excepthook() -> bool:
     return QgsSettings().value(
         f"{RANA_SETTINGS_ENTRY}/use_plugin_excepthook", True, type=bool
     )
+
+
+def get_hcc_url_override() -> Optional[str]:
+    value = QgsSettings().value("Rana/hcc_url")
+    return value if value else None
+
+
+def get_advanced_settings() -> dict:
+    advanced_settings = {}
+    settings_names = ["use_plugin_excepthook", "hcc_url"]
+    for setting_name in settings_names:
+        value = QgsSettings().value(f"Rana/{setting_name}")
+        if value is not None:
+            advanced_settings[setting_name] = value
+    return advanced_settings

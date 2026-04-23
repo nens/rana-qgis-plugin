@@ -22,7 +22,9 @@ _cached_data
 .minispec
 .minispec.minispec/
 .opencode
+specs/
 AGENTS.md
 # IDE / local dev
 .envrc
 .idea/
+

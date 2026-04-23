@@ -21,7 +21,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
-from rana_qgis_plugin.utils.settings import rana_cache_dir
+from rana_qgis_plugin.utils.settings import get_hcc_url_override, rana_cache_dir
 
 
 def is_writable(working_dir: str) -> bool:
@@ -120,9 +120,9 @@ def get_local_publication_file_path(
 
 def get_threedi_api():
     _, personal_api_token = get_3di_auth()
-    frontend_settings = get_frontend_settings()
-    api_url = frontend_settings["hcc_url"].rstrip("/")
-    threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
+    hcc_url = get_hcc_url_override() or get_frontend_settings()["hcc_url"]
+    hcc_url = hcc_url.rstrip("/")
+    threedi_api = get_api_client_with_personal_api_token(personal_api_token, hcc_url)
     return threedi_api
 
 
