@@ -118,11 +118,18 @@ def get_use_plugin_excepthook() -> bool:
 
 
 def get_hcc_url_override() -> Optional[str]:
-    """
-    Get the 3Di API URL override from QgsSettings.
-
-    Returns:
-        The hcc_url value if set and non-empty in QgsSettings, None otherwise.
-    """
     value = QgsSettings().value("Rana/hcc_url")
     return value if value else None
+
+
+def get_advanced_settings() -> dict:
+    advanced_settings = {}
+    settings_map = {
+        "use_plugin_excepthook": get_use_plugin_excepthook,
+        "hcc_url": get_hcc_url_override,
+    }
+    for setting_name, getter in settings_map.items():
+        value = getter()
+        if value is not None:
+            advanced_settings[setting_name] = value
+    return advanced_settings
