@@ -228,7 +228,7 @@ class RanaDownloader(BaseDownloader):
         self.file = file
 
     def postprocess(self):
-        """Handles the extraction of QML zip file if required."""
+        """Handles the extraction of QML zip file and matching/renaming for rasters."""
         if self.file["data_type"] in ["vector", "raster"]:
             qml_zip_content = self.download_context.get_style_zip()
             if qml_zip_content:
@@ -236,6 +236,17 @@ class RanaDownloader(BaseDownloader):
                 if zipfile.is_zipfile(stream):
                     with zipfile.ZipFile(stream, "r") as zip_file:
                         zip_file.extractall(str(self.download_context.local_dir))
+
+        # For rasters, handle QML file matching and physical_quantity.qml renaming
+        if self.file["data_type"] == "raster":
+            self._handle_raster_qml_files()
+
+    def _handle_raster_qml_files(self):
+        # Check if physical_quantity.qml exists, if so rename to match downloaded filename
+        pq_path = self.download_context.local_dir / "physical_quantity.qml"
+        if pq_path.exists():
+            new_name = self.download_context.local_file_path.with_suffix(".qml").name
+            pq_path.rename(self.download_context.local_dir / new_name)
 
 
 class SchematisationDownloader(BaseDownloader):
