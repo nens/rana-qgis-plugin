@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 from urllib.parse import quote
 
 from qgis.core import QgsSettings
@@ -114,3 +115,14 @@ def get_use_plugin_excepthook() -> bool:
     return QgsSettings().value(
         f"{RANA_SETTINGS_ENTRY}/use_plugin_excepthook", True, type=bool
     )
+
+
+def get_hcc_url_override() -> Optional[str]:
+    """
+    Get the 3Di API URL override from QgsSettings.
+
+    Returns:
+        The hcc_url value if set and non-empty in QgsSettings, None otherwise.
+    """
+    value = QgsSettings().value("Rana/hcc_url")
+    return value if value else None
