@@ -124,12 +124,9 @@ def get_hcc_url_override() -> Optional[str]:
 
 def get_advanced_settings() -> dict:
     advanced_settings = {}
-    settings_map = {
-        "use_plugin_excepthook": get_use_plugin_excepthook,
-        "hcc_url": get_hcc_url_override,
-    }
-    for setting_name, getter in settings_map.items():
-        value = getter()
+    settings_names = ["use_plugin_excepthook", "hcc_url"]
+    for setting_name in settings_names:
+        value = QgsSettings().value(f"Rana/{setting_name}")
         if value is not None:
             advanced_settings[setting_name] = value
     return advanced_settings
