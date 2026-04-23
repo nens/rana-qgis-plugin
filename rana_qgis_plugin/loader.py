@@ -149,8 +149,6 @@ class Loader(QObject):
     rename_finished = pyqtSignal(str)
     rename_aborted = pyqtSignal()
     folder_created = pyqtSignal()
-    schematisation_uploaded = pyqtSignal()
-    schematisation_upload_failed = pyqtSignal()
     model_created = pyqtSignal()
     revision_saved = pyqtSignal()
     model_deleted = pyqtSignal()
@@ -1469,7 +1467,7 @@ class Loader(QObject):
             )
             upload_worker.signals.create_model_requested.connect(
                 lambda revision_id, inherit_from_previous_revision: (
-                    self.start_model_tracker_process(
+                    self.on_schematisation_upload_requests_model(
                         project,
                         schematisation.to_dict(),
                         revision_id,
@@ -1481,7 +1479,7 @@ class Loader(QObject):
                 self.on_schematisation_upload_finished
             )
             upload_worker.signals.upload_failed.connect(
-                self.schematisation_upload_failed
+                self.on_schematisation_upload_failed
             )
             upload_worker.signals.upload_progress.connect(
                 self.on_schematisation_upload_progress
@@ -1493,9 +1491,32 @@ class Loader(QObject):
             # User presses cancel
             self.schematisation_upload_cancelled.emit()
 
+    def on_schematisation_upload_requests_model(
+        self,
+        project: dict,
+        schematisation: dict,
+        revision_id: int,
+        inherit_from_previous_revision: bool,
+    ):
+        self.start_model_tracker_process(
+            project,
+            schematisation,
+            revision_id,
+            inherit_from_previous_revision,
+        )
+        self.communication.show_info(
+            "Revision uploaded to Rana and model creation process started. Check the Processes tab for the process status.",
+            parent=self.parent(),
+        )
+
     def on_schematisation_upload_finished(self):
         self.communication.clear_message_bar()
         self.schematisation_upload_finished.emit()
+
+    def on_schematisation_upload_failed(self, error_msg: str):
+        self.communication.clear_message_bar()
+        self.communication.show_warn(error_msg)
+        self.schematisation_upload_failed.emit()
 
     def on_schematisation_upload_progress(
         self, task_name, task_progress, total_progress, progress_per_task
@@ -1578,7 +1599,9 @@ class Loader(QObject):
         upload_worker.signals.thread_finished.connect(
             self.schematisation_upload_finished
         )
-        upload_worker.signals.upload_failed.connect(self.schematisation_upload_failed)
+        upload_worker.signals.upload_failed.connect(
+            self.on_schematisation_upload_failed
+        )
         upload_worker.signals.upload_progress.connect(
             self.on_schematisation_upload_progress
         )
