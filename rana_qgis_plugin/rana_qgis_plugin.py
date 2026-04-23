@@ -24,10 +24,10 @@ from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
-from rana_qgis_plugin.utils import parse_url
-from rana_qgis_plugin.utils_api import get_user_info, get_user_tenants
-from rana_qgis_plugin.utils_qgis import get_plugin_instance
-from rana_qgis_plugin.utils_settings import (
+from rana_qgis_plugin.utils.api import get_user_info, get_user_tenants
+from rana_qgis_plugin.utils.generic import parse_url
+from rana_qgis_plugin.utils.qgis import get_plugin_instance
+from rana_qgis_plugin.utils.settings import (
     get_tenant_id,
     get_use_plugin_excepthook,
     initialize_settings,
@@ -258,8 +258,7 @@ class RanaQgisPlugin:
             self.iface.removeDockWidget(self.dock_widget)
             self.dock_widget.deleteLater()
         if self.loader:
-            # ensure loader is deconstructed
-            del self.loader
+            self.loader.cleanup()
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
@@ -297,19 +296,28 @@ class RanaQgisPlugin:
             self.loader = Loader(self.communication, self.rana_browser)
 
             # Connect signals
-            self.rana_browser.request_monitoring_project_jobs.connect(
-                self.loader.start_project_job_monitoring
+            self.rana_browser.run_persistent_tasks.connect(
+                self.loader.run_all_persistent_tasks
             )
+            self.rana_browser.project_changed.connect(self.loader.update_project)
             self.rana_browser.update_avatar_cache.connect(self.loader.update_avatars)
             self.loader.avatar_updated.connect(
                 self.rana_browser.avatar_cache.update_avatar
             )
-
             self.loader.project_jobs_added.connect(
                 self.rana_browser.project_jobs_added.emit
             )
             self.loader.project_job_updated.connect(
                 self.rana_browser.project_job_updated.emit
+            )
+            self.loader.project_publications_added.connect(
+                self.rana_browser.project_publication_added.emit
+            )
+            self.loader.project_publication_updated.connect(
+                self.rana_browser.project_publication_updated.emit
+            )
+            self.rana_browser.update_project_publications.connect(
+                self.loader.update_project_publications
             )
             self.rana_browser.processes_browser.cancel_simulation.connect(
                 self.loader.cancel_simulation
@@ -320,14 +328,23 @@ class RanaQgisPlugin:
             self.rana_browser.open_wms_selected.connect(self.loader.open_wms)
             self.rana_browser.open_in_qgis_selected.connect(self.rana_browser.disable)
             self.rana_browser.open_in_qgis_selected.connect(self.loader.open_in_qgis)
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.open_in_qgis_from_publication_selected.connect(
+                self.loader.open_many_in_qgis_from_publication
+            )
+            self.rana_browser.save_styles_from_publication_selected.connect(
+                self.loader.save_styles_from_publication
+            )
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
             )
             self.rana_browser.save_vector_styling_selected.connect(
-                self.loader.save_vector_style
+                self.loader.save_file_descriptor_style
             )
             self.rana_browser.save_raster_styling_selected.connect(
-                self.loader.save_raster_style
+                self.loader.save_file_descriptor_style
             )
             self.rana_browser.upload_new_file_selected.connect(
                 self.rana_browser.disable
@@ -387,6 +404,13 @@ class RanaQgisPlugin:
             self.rana_browser.create_model_selected_with_revision.connect(
                 self.loader.create_schematisation_revision_3di_model
             )
+            self.rana_browser.export_gpkg_selected.connect(self.rana_browser.disable)
+            self.rana_browser.export_gpkg_selected.connect(
+                self.loader.export_schematisation_from_file
+            )
+            self.rana_browser.export_gpkg_revision_selected.connect(
+                self.loader.export_schematisation_revision
+            )
             self.rana_browser.delete_model_selected.connect(
                 self.loader.delete_schematisation_revision_3di_model
             )
@@ -409,7 +433,6 @@ class RanaQgisPlugin:
             )
             self.loader.file_download_finished.connect(self.rana_browser.enable)
             self.loader.file_opened.connect(self.rana_browser.view_file_after_open)
-            self.loader.file_download_finished.connect(self.rana_browser.refresh)
             self.loader.file_download_failed.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.enable)
             self.loader.file_upload_finished.connect(self.rana_browser.refresh)
@@ -417,12 +440,15 @@ class RanaQgisPlugin:
             self.loader.file_upload_conflict.connect(self.rana_browser.enable)
             self.loader.new_file_upload_finished.connect(self.rana_browser.enable)
             self.loader.new_file_upload_finished.connect(self.rana_browser.refresh)
-            self.loader.vector_style_finished.connect(self.rana_browser.enable)
-            self.loader.vector_style_finished.connect(self.rana_browser.refresh)
-            self.loader.vector_style_failed.connect(self.rana_browser.enable)
-            self.loader.raster_style_finished.connect(self.rana_browser.enable)
-            self.loader.raster_style_finished.connect(self.rana_browser.refresh)
-            self.loader.raster_style_failed.connect(self.rana_browser.enable)
+            self.loader.file_descriptor_style_finished.connect(self.rana_browser.enable)
+            self.loader.file_descriptor_style_finished.connect(
+                self.rana_browser.refresh
+            )
+            self.loader.file_descriptor_style_failed.connect(self.rana_browser.enable)
+            self.loader.export_gpkg_finished.connect(self.rana_browser.enable)
+            self.loader.publication_style_finished.connect(
+                self.rana_browser.publication_view.update_after_save_styles
+            )
             self.loader.simulation_started.connect(self.rana_browser.enable)
             self.loader.simulation_wizard_cancelled.connect(self.rana_browser.enable)
             self.loader.simulation_started_failed.connect(self.rana_browser.enable)
@@ -433,9 +459,7 @@ class RanaQgisPlugin:
             self.loader.schematisation_upload_failed.connect(self.rana_browser.enable)
             self.loader.folder_created.connect(self.rana_browser.refresh)
             self.loader.model_deleted.connect(self.rana_browser.refresh)
-            self.loader.file_deleted.connect(
-                self.rana_browser.refresh_after_file_delete
-            )
+            self.loader.file_deleted.connect(self.rana_browser.return_to_file_browser)
             self.loader.rename_aborted.connect(self.rana_browser.refresh)
             self.loader.rename_finished.connect(
                 self.rana_browser.refresh_after_file_rename

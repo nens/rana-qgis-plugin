@@ -1,4 +1,4 @@
-import math
+from enum import Enum
 from typing import Optional, TypedDict
 
 import requests
@@ -7,7 +7,7 @@ from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
 from rana_qgis_plugin.network_manager import NetworkManager
-from rana_qgis_plugin.utils_settings import api_url, get_tenant_id
+from rana_qgis_plugin.utils.settings import api_url, get_tenant_id
 
 
 class UserInfo(TypedDict):
@@ -17,10 +17,118 @@ class UserInfo(TypedDict):
     email: str
 
 
+class FetchError(Exception):
+    def __init__(self, msg: str, url: str, params: dict):
+        self.msg = msg
+        self.url = url
+        self.params = params
+        super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
+
+
+class FileDescriptorStatus(Enum):
+    # See https://github.com/nens/rana/blob/main/design/015_file_descriptors.md#state-diagram
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    retry = "retry"
+    deleting = "deleting"
+    deleted = "deleted"
+    restarting = "restarting"
+    unknown = "unknown"
+
+    @classmethod
+    def from_fd_response(cls, response: dict) -> Optional["FileDescriptorStatus"]:
+        status_dict = response.get("status") or {}
+        if "id" in status_dict:
+            if status_dict["id"] in cls._value2member_map_:
+                return cls._value2member_map_[status_dict["id"]]
+        return cls.unknown
+
+    @property
+    def is_ready(self) -> bool:
+        return self is FileDescriptorStatus.completed
+
+    @property
+    def is_valid(self) -> bool:
+        return self not in (
+            FileDescriptorStatus.deleting,
+            FileDescriptorStatus.deleted,
+            FileDescriptorStatus.failed,
+            FileDescriptorStatus.unknown,
+        )
+
+    @property
+    def is_in_progress(self) -> bool:
+        return not self.is_ready and not self.is_valid
+
+
+class RanaUploadError(Exception):
+    """Raised when a file upload fails.
+
+    Provides a clean error message without noisy URL/params debug info.
+    """
+
+    def __init__(self, msg: str):
+        self.msg = msg
+        super().__init__(self.msg)
+
+
+class ConflictError(Exception):
+    def __init__(self, msg: str, created_by: str, created_at: str):
+        self.created_by = created_by
+        self.created_at = created_at
+        super().__init__(msg)
+
+
+def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
+    """Run a simple fetch for any endpoint"""
+    if params is None:
+        params = {}
+    authcfg_id = get_authcfg_id()
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch(params)
+    if status:
+        return network_manager.content
+    else:
+        # Raise when fetch failed, error should be handled downstream
+        raise FetchError(error, url, params)
+
+
+def single_fetch(
+    url: str, limit: int, offset: int, params: Optional[dict] = None
+) -> Optional[dict]:
+    """Perform a single fetch from a list endpoint."""
+    if params is None:
+        params = {}
+    params.update({"limit": limit, "offset": offset})
+    return simple_fetch(url, params)
+
+
+def fetch_first(url: str, params: Optional[dict] = None) -> Optional[dict]:
+    """Fetch the first item from a list endpoint."""
+    content = single_fetch(url, 1, 0, params)
+    if len(content["items"]) == 1:
+        return content["items"][0]
+
+
+def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict:
+    """Fetch all items from a list endpoint."""
+    offset = 0
+    full_response = {"total": 0, "items": []}
+    response = single_fetch(url, limit, offset, params)
+    full_response["total"] = response["total"]
+    full_response["items"] += response["items"]
+    for offset in range(limit, response["total"], limit):
+        response = single_fetch(url, limit, offset, params)
+        full_response["items"] += response.get("items")
+    return full_response
+
+
 def get_frontend_settings():
     url = f"{api_url()}/frontend-settings"
     network_manager = NetworkManager(url, get_authcfg_id())
-    status = network_manager.fetch()
+    status, _ = network_manager.fetch()
 
     if status:
         response = network_manager.content
@@ -98,19 +206,21 @@ def get_tenant_projects(communication: UICommunication):
 def get_tenant_project_files(
     communication: UICommunication, project_id: str, params: dict = None
 ):
-    authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/ls"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get files: {error}")
+    if params is None:
+        params = {"limit": 1000}
+    try:
+        files = []
+        while True:
+            response = simple_fetch(url, params)
+            files += response["items"]
+            if not response["next"]:
+                break
+            params["cursor"] = response["next"]
+        return files
+    except FetchError as e:
+        communication.show_error(f"Failed to get files: {e}")
         return []
 
 
@@ -200,7 +310,7 @@ def get_tenant_project_file(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, _ = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
@@ -215,7 +325,7 @@ def get_tenant_project_file_history(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/history"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, _ = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
@@ -230,13 +340,13 @@ def get_tenant_file_url(project_id: str, params: dict):
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/download"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch(params)
+    status, msg = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
         return response.get("url")
     else:
-        return None
+        raise FetchError(msg, url, params)
 
 
 def get_tenant_file_descriptor(descriptor_id: str):
@@ -258,13 +368,13 @@ def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{view_type}"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch()
+    status, _ = network_manager.fetch()
 
     if status:
         response = network_manager.content
         return response
     else:
-        return None
+        return []
 
 
 def create_raster_tasks(
@@ -344,7 +454,7 @@ def get_tenant_processes(communication: UICommunication):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes"
-    params = {"limit": 1000}
+    params = {"limit": 100}
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
@@ -400,40 +510,32 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
-def get_vector_style_upload_urls(descriptor_id: str):
+def upload_file_styling(descriptor_id: str, files):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/vector-style"
-
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.put()
-
+    status, msg = network_manager.post_multipart(files=files)
     if status:
         response = network_manager.content
         return response
     else:
-        return None
+        raise RanaUploadError(msg)
 
 
-def get_raster_style_upload_urls(descriptor_id: str, files):
+def get_file_descriptor_style(descriptor_id: str, file_name: str):
+    """Fetch style file for a file descriptor.
+
+    Args:
+        descriptor_id: The file descriptor ID
+        file_name: The name of the style file to fetch (e.g., 'qml.zip')
+
+    Returns:
+        The file content as bytes, or None if the request fails
+    """
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster-style"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.put_multipart(files=files)
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        return None
-
-
-def get_style_file(source_type: str, descriptor_id: str, file_name: str):
-    authcfg_id = get_authcfg_id()
-    tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{source_type}-style/{file_name}"
+    url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles/{file_name}"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch()
@@ -449,12 +551,41 @@ def get_style_file(source_type: str, descriptor_id: str, file_name: str):
         return None
 
 
-def get_raster_style_file(descriptor_id: str, file_name: str):
-    return get_style_file("raster", descriptor_id, file_name)
+def get_publication_style(
+    publication_id: str, style_id: str, publication_version: int, file_name: str
+):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/styles/{style_id}/{file_name}"
+    params = {"version": publication_version}
+    network_manager = NetworkManager(url, authcfg_id)
+    status, redirect_url = network_manager.fetch(params)
+    if status and redirect_url:
+        try:
+            headers = {"Content-Type": "application/zip"}
+            response = requests.get(redirect_url, headers=headers, timeout=10)
+            return response.content
+        except requests.RequestException as e:
+            return None
+    else:
+        return None
 
 
-def get_vector_style_file(descriptor_id: str, file_name: str):
-    return get_style_file("vector", descriptor_id, file_name)
+def upload_publication_style(
+    publication_id: str, publication_version: str, file_path: str, files: list
+) -> Optional[str]:
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/version/{publication_version}/styles"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, msg = network_manager.post_multipart(
+        files=files, multipart_data={"file_path": file_path}
+    )
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        raise RanaUploadError(msg)
 
 
 def get_schematisations(communication, icontains=""):
@@ -581,8 +712,76 @@ def get_project_jobs(project_id: str):
         return None
 
 
+def get_project_publications(project_id: str):
+    tenant = get_tenant_id()
+    params = {"project_id": project_id}
+    url = f"{api_url()}/tenants/{tenant}/publications"
+    return paginated_fetch(url, 100, params)
+
+
 def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional[str]:
     processes = get_tenant_processes(communication)
     for process in processes:
         if tag in process["tags"]:
             return process["id"]
+
+
+def get_publication_details(publication_id: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}"
+    return simple_fetch(url)
+
+
+def get_publication_version_details(
+    publication_id: str, version: Optional[int] = None, latest: Optional[bool] = True
+) -> dict:
+    tenant = get_tenant_id()
+    requested_version = "latest" if latest else str(version)
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{requested_version}"
+    return simple_fetch(url)
+
+
+def upload_publication_version(publication_id: str, publication_version: dict):
+    tenant = get_tenant_id()
+    authcfg_id = get_authcfg_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
+    network_manager = NetworkManager(url, authcfg_id)
+    payload = {
+        "version": publication_version["version"],
+        "files": publication_version.get("files", []),
+        "maps": publication_version.get("maps", []),
+        "studies": publication_version.get("studies", []),
+    }
+    status, error = network_manager.post(payload=payload)
+    if status:
+        return network_manager.content
+    else:
+        if network_manager.last_http_status == 409:
+            detail = network_manager.content.get("detail", {})
+            created_by = detail.get("created_by_name", "unknown")
+            if "created_at" in detail:
+                from rana_qgis_plugin.utils.time import (
+                    convert_timestamp_str_to_relative_time,
+                )
+
+                created_at = convert_timestamp_str_to_relative_time(
+                    detail["created_at"]
+                )
+            else:
+                created_at = "unknown"
+            raise ConflictError(msg=error, created_by=created_by, created_at=created_at)
+        else:
+            # Raise when upload failed, error should be handled downstream
+            raise Exception(f"Failed to upload publication version: {error=}; {url=}")
+
+
+def get_publication_version_files(publication_id: str, version: int) -> list:
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}/files"
+    return paginated_fetch(url, 100)
+
+
+def get_project_file_details(project_id: str, file_path: str, file_ref: str):
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
+    return simple_fetch(url, {"path": file_path, "ref": file_ref})

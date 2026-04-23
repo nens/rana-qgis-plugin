@@ -3,17 +3,82 @@ from pathlib import Path
 
 import pytest
 
-import rana_qgis_plugin.utils as utils
+import rana_qgis_plugin.utils.generic as utils
+
+
+@pytest.mark.parametrize(
+    "input_path,expected_output",
+    [
+        ("/path/to/valid_file.txt", "/path/to/valid_file.txt"),
+        (
+            '/path/with/most:<special>|cha"r"s/file?name*.txt',
+            "/path/with/most__special__cha_r_s/file_name_.txt",
+        ),
+        # backslash is invalid; on Linux it's treated as part of the filename
+        ("/folder/name\\file.txt", "/folder/name_file.txt"),
+        # rstrip: trailing dot and space are stripped (Windows limitation)
+        ("/folder/name./file.txt", "/folder/name/file.txt"),
+        ("/folder/name /file.txt", "/folder/name/file.txt"),
+    ],
+)
+def test_sanitize_path_for_filesystem(input_path, expected_output):
+    result = utils.sanitize_path_for_filesystem(input_path)
+    assert result == expected_output
+
+
+def test_get_local_dir_structure():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "baz/bar.txt"
+    file_stem = Path(file_id).stem
+    local_dir = utils.get_local_dir_structure(project, file_id)
+    expected_local_dir = rana_root + project + "/files/baz/" + file_stem
+    assert local_dir == expected_local_dir
 
 
 def test_get_local_file_path():
     rana_root = "/root/Rana/"
     project = "foo"
+    file_id = "baz/bar.txt"
+    file_name = Path(file_id).name
+    file_stem = Path(file_id).stem
+    local_path = utils.get_local_file_path(project, file_id)
+    expected_local_path = (
+        rana_root + project + "/files/baz/" + file_stem + "/" + file_name
+    )
+    assert local_path == expected_local_path
+
+
+def test_get_local_publication_dir_structure():
+    rana_root = "/root/Rana/"
+    project = "foo"
     file_id = "bar.txt"
     file_stem = Path(file_id).stem
-    local_dir, local_path = utils.get_local_file_path(project, file_id)
-    assert local_dir == rana_root + project + "/" + file_stem
-    assert local_path == rana_root + project + "/" + file_stem + "/" + file_id
+    publication_tree = ["publication", "map", "folder"]
+    local_dir = utils.get_local_publication_dir_structure(
+        project, file_id, publication_tree
+    )
+    publication_tree_path = "/".join(publication_tree)
+    expected_local_dir = (
+        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
+    )
+    assert local_dir == expected_local_dir
+
+
+def test_get_local_publication_file_path():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "bar.txt"
+    file_stem = Path(file_id).stem
+    publication_tree = ["publication", "map", "folder"]
+    local_path = utils.get_local_publication_file_path(
+        project, file_id, publication_tree
+    )
+    publication_tree_path = "/".join(publication_tree)
+    expected_local_dir = (
+        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
+    )
+    assert local_path == expected_local_dir + "/" + file_id
 
 
 @pytest.mark.parametrize(
@@ -139,3 +204,35 @@ def test_get_threedi_schematisation_simulation_results_folder_with_colon(
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
     assert results_folder == expected_folder
+
+
+def test_find_publication_map_layer_from_tree():
+    publication_version = {
+        "maps": [
+            {
+                "name": "map_1",
+                "layers": [
+                    {"type": "layer", "name": "foo", "some_id": 1},
+                    {
+                        "type": "folder",
+                        "name": "bar",
+                        "layers": [{"type": "layer", "name": "foo", "some_id": 2}],
+                    },
+                ],
+            }
+        ]
+    }
+    tree_1 = ["map_1", "foo"]
+    tree_2 = ["map_1", "bar", "foo"]
+    assert (
+        utils.find_publication_map_layer_from_tree(publication_version, tree_1)[
+            "some_id"
+        ]
+        == 1
+    )
+    assert (
+        utils.find_publication_map_layer_from_tree(publication_version, tree_2)[
+            "some_id"
+        ]
+        == 2
+    )

@@ -18,9 +18,9 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from rana_qgis_plugin.utils_api import get_process_id_for_tag, get_tenant_id
-from rana_qgis_plugin.utils_settings import base_url
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utils.api import get_process_id_for_tag, get_tenant_id
+from rana_qgis_plugin.utils.settings import base_url
+from rana_qgis_plugin.utils.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
@@ -55,8 +55,6 @@ class JobData:
 
     @classmethod
     def from_job_dict(cls, job: dict):
-        from qgis.core import Qgis, QgsMessageLog
-
         try:
             return cls(
                 id=job["id"],
@@ -70,12 +68,10 @@ class JobData:
                 inputs=job["inputs"],
             )
         except Exception as e:
-            QgsMessageLog.logMessage(f"create job {job=}", "DEBUG", Qgis.Info)
             raise e
 
 
 class ProcessesBrowser(QWidget):
-    start_monitoring_project_jobs = pyqtSignal(str)
     cancel_simulation = pyqtSignal(int)
 
     def __init__(self, communication, avatar_cache, parent=None):
@@ -92,12 +88,9 @@ class ProcessesBrowser(QWidget):
         self.project = {}
 
     def update_project(self, project: dict):
-        # Remove cached data
         self.processes_model.removeRows(0, self.processes_model.rowCount())
         self.row_map.clear()
         self.project = project
-        # Start monitor jobs for the selected project
-        self.start_monitoring_project_jobs.emit(project["id"])
 
     def setup_ui(self):
         self.processes_model = QStandardItemModel()
@@ -118,7 +111,6 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setWordWrap(True)
         self.processes_tv.setUniformRowHeights(False)
         self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.setContentsMargins(0, 0, 0, 0)
         self.processes_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.processes_tv.header().setSectionResizeMode(1, QHeaderView.Fixed)
         self.processes_tv.header().setSectionResizeMode(2, QHeaderView.Fixed)
@@ -221,7 +213,7 @@ class ProcessesBrowser(QWidget):
             )
 
     def add_items(self, job_list: list[dict]):
-        for job in job_list:
+        for job in reversed(job_list):
             self.add_item(JobData.from_job_dict(job))
 
     def update_job_state(self, job_dict: dict):

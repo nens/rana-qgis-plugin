@@ -1,3 +1,5 @@
+from pathlib import Path
+
 PLUGIN_NAME = "Rana"
 
 RANA_SETTINGS_ENTRY = "Rana"
@@ -16,3 +18,5 @@ SUPPORTED_DATA_TYPES = {
     "threedi_schematisation": "Rana schematisation",
     "sqlite": "Schematisation database",
 }
+
+STYLE_DIR = Path(__file__).parent / "styles"

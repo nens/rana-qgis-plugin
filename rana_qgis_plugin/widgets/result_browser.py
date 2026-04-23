@@ -20,11 +20,11 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
-from rana_qgis_plugin.utils_api import get_filename_from_attachment_url
+from rana_qgis_plugin.utils.api import get_filename_from_attachment_url
 
 
 class ResultBrowser(QDialog):
-    def __init__(self, parent, results: dict, scenario_crs: str, pixel_size: float):
+    def __init__(self, parent, results: list, scenario_crs: str, pixel_size: float):
         super().__init__(parent)
         self.setWindowTitle(PLUGIN_NAME)
         self.setMinimumWidth(400)

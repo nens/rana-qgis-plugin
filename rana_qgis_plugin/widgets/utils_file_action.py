@@ -5,19 +5,18 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.utils_api import get_tenant_file_descriptor
-from rana_qgis_plugin.utils_scenario import (
-    get_is_3di_simulation,
-    get_ready_state_from_descriptor,
-)
+from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
 
 
 class FileAction(Enum):
     OPEN_IN_QGIS = "Open in QGIS"
     OPEN_WMS = "Open WMS in QGIS"
     SAVE_REVISION = "Upload to Rana"
+    # Saving vector and raster styling follows a different path and thus there are different actions
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
     SAVE_RASTER_STYLING = "Save raster style to Rana"
+    # SAVE_STYLING action is not used atm, only defined for naming
+    SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
     VIEW_REVISIONS = "View all Revisions"
     DOWNLOAD_RESULTS = "Download Results"
@@ -36,6 +35,15 @@ class FileAction(Enum):
 
 def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     data_type = selected_item.get("data_type")
+    actions = get_file_actions_by_data_type(data_type)
+    # Add options to open WMS and download file and results only for 3Di scenarios
+    if data_type == "scenario":
+        descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        actions = get_scenario_actions(actions, descriptor)
+    return sorted(actions)
+
+
+def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     actions = [FileAction.DELETE, FileAction.RENAME]
     # Add open in QGIS is supported for all supported data types
     if data_type in SUPPORTED_DATA_TYPES:
@@ -55,15 +63,24 @@ def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
         if has_3di_authcfg():
             actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
-    # Add options to open WMS and download file and results only for 3Di scenarios
-    elif data_type == "scenario":
-        descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
-        meta = descriptor["meta"] if descriptor else None
-        if meta and "id" in meta and get_ready_state_from_descriptor(descriptor):
-            actions.append(FileAction.DOWNLOAD_RESULTS)
-            if get_is_3di_simulation(descriptor):
-                actions.append(FileAction.OPEN_WMS)
     return sorted(actions)
+
+
+def get_scenario_actions(
+    actions: list[FileAction], descriptor: dict
+) -> List[FileAction]:
+    meta = descriptor["meta"] if descriptor else None
+    if meta and "id" in meta:
+        actions.append(FileAction.DOWNLOAD_RESULTS)
+        if meta["simulation"]["software"]["id"] == "3Di":
+            actions.append(FileAction.OPEN_WMS)
+    # remove any interactions for objects that are being processed
+    elif (
+        FileDescriptorStatus.from_fd_response(descriptor)
+        == FileDescriptorStatus.processing
+    ):
+        return []
+    return actions
 
 
 class FileActionSignals(QObject):

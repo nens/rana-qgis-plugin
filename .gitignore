@@ -1,4 +1,5 @@
 *.zip
+!rana_qgis_plugin/styles/schematisation/qml.zip
 profiletool
 quick_map_services
 OSMDownloader
@@ -17,3 +18,13 @@ rana_qgis_customisations
 docker-compose.override.yml
 output.mp4
 _cached_data
+# AI stuff
+.minispec
+.minispec.minispec/
+.opencode
+specs/
+AGENTS.md
+# IDE / local dev
+.envrc
+.idea/
+

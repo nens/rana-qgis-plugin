@@ -28,19 +28,20 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utils import (
+from rana_qgis_plugin.utils.api import (
+    FileDescriptorStatus,
+    get_tenant_file_descriptor,
+    get_tenant_project_file,
+    get_threedi_schematisation,
+)
+from rana_qgis_plugin.utils.generic import (
     NumericItem,
     display_bytes,
     get_file_icon_name,
     get_threedi_api,
 )
-from rana_qgis_plugin.utils_api import (
-    get_tenant_file_descriptor,
-    get_tenant_project_file,
-    get_threedi_schematisation,
-)
-from rana_qgis_plugin.utils_spatial import get_bbox_area_in_m2
-from rana_qgis_plugin.utils_time import (
+from rana_qgis_plugin.utils.spatial import get_bbox_area_in_m2
+from rana_qgis_plugin.utils.time import (
     format_activity_timestamp,
     format_activity_timestamp_str,
     parse_timestamp_str,
@@ -50,7 +51,10 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     FileActionSignals,
     get_file_actions_for_data_type,
 )
-from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme, get_icon_label
+from rana_qgis_plugin.widgets.utils_icons import (
+    get_icon_from_theme_as_pixmap,
+    get_icon_label,
+)
 
 
 @dataclass
@@ -119,7 +123,6 @@ class EditLabel(QLineEdit):
 
 
 class FileView(QWidget):
-    file_showed = pyqtSignal()
     show_revisions_clicked = pyqtSignal(dict, dict)
 
     def __init__(
@@ -226,9 +229,11 @@ class FileView(QWidget):
                 self.project, self.selected_file
             )
         )
+        self.btn_export_gpkg = QPushButton("Export to GeoPackage")
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
+        button_layout.addWidget(self.btn_export_gpkg)
         button_layout.addWidget(btn_show_revisions)
         self.file_action_btn_dict = self.get_file_action_buttons()
         file_action_btn_layout = QHBoxLayout()
@@ -367,7 +372,9 @@ class FileView(QWidget):
     def update_general_box(self, selected_file: dict):
         rows = []
         # line 1: icon - filename - size
-        file_icon = get_icon_from_theme(get_file_icon_name(selected_file["data_type"]))
+        file_icon = get_icon_from_theme_as_pixmap(
+            get_file_icon_name(selected_file["data_type"])
+        )
         file_icon_label = get_icon_label(file_icon)
         filename = Path(selected_file["id"]).name
         size_str = (
@@ -443,6 +450,7 @@ class FileView(QWidget):
         status_msg = message_i18n.get("msg") if message_i18n else None
         revision = self.schematisation.get("latest_revision", {})
         crs_str = self._get_crs_str(data_type, meta, revision)
+        status_enum = FileDescriptorStatus.from_fd_response(descriptor)
         details = [
             # InfoRow("Area", self._get_area_str(data_type, meta, revision)),
             InfoRow("Projection", crs_str),
@@ -450,7 +458,9 @@ class FileView(QWidget):
             InfoRow(
                 "Status",
                 status.get("id", "") + ("" if not status_msg else f": {status_msg}"),
-                color=QColor(255, 0, 0) if status.get("id") == "failed" else None,
+                color=QColor(255, 0, 0)
+                if status_enum == FileDescriptorStatus.failed
+                else None,
             ),
         ]
         if data_type != "threedi_schematisation":
@@ -579,7 +589,9 @@ class FileView(QWidget):
         self.files_model.clear()
         self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
         for file_name, data_type, file_size in rows:
-            file_type_icon = get_icon_from_theme(get_file_icon_name(data_type))
+            file_type_icon = get_icon_from_theme_as_pixmap(
+                get_file_icon_name(data_type)
+            )
             name_item = QStandardItem(file_name)
             name_item.setIcon(QIcon(file_type_icon))
             data_type_item = QStandardItem(
@@ -612,10 +624,13 @@ class FileView(QWidget):
                     self.btn_stack.setCurrentIndex(0)
                 else:
                     self.btn_stack.setCurrentIndex(1)
+                self.btn_export_gpkg.show()
             else:
                 self.btn_stack.hide()
+                self.btn_export_gpkg.hide()
         else:
             self.btn_stack.hide()
+            self.btn_export_gpkg.hide()
         self.update_file_action_buttons(selected_file)
 
     def refresh(self):

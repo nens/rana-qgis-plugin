@@ -20,3 +20,4 @@ typing_inspection
 annotated_types
 bridgestyle
 freezegun
+mistune

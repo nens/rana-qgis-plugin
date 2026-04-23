@@ -1,12 +1,13 @@
 import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from osgeo import gdal
-from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.core import QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 from threedi_mi_utils import (
@@ -19,11 +20,8 @@ from rana_qgis_plugin.auth_3di import get_3di_auth
 from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
-from rana_qgis_plugin.simulation.utils import load_remote_schematisation
-from rana_qgis_plugin.utils_api import get_frontend_settings, get_tenant_details
-from rana_qgis_plugin.utils_settings import hcc_working_dir, rana_cache_dir
-
-from .communication import UICommunication
+from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
+from rana_qgis_plugin.utils.settings import get_hcc_url_override, rana_cache_dir
 
 
 def is_writable(working_dir: str) -> bool:
@@ -40,25 +38,91 @@ def is_writable(working_dir: str) -> bool:
         return True
 
 
-def get_local_file_path(project_slug: str, path: str) -> tuple[str, str]:
-    file_name = os.path.basename(path.rstrip("/"))
-    file_name_without_extension = os.path.splitext(file_name)[0]
+def sanitize_path_for_filesystem(path: str) -> str:
+    """
+    Sanitize a path to be valid for Linux and Windows
+    """
+
+    INVALID_CHARS = r'[<>:"/\\|?*]'
+
+    def clean_part(part: str) -> str:
+        # Replace invalid characters with underscore
+        part = re.sub(INVALID_CHARS, "_", part)
+        # Strip trailing spaces and dots (Windows limitation)
+        part = part.rstrip(" .")
+        return part
+
+    if not path:
+        return path
+    path_obj = Path(path)
+
+    parts = path_obj.parts
+
+    # Remove anchor (drive + root) from parts
+    anchor = path_obj.anchor  # e.g. "C:\\"
+    if anchor:
+        parts = parts[1:]
+
+    # Clean each part
+    sanitized_parts = [clean_part(p) for p in parts]
+
+    # Rebuild relative path first
+    sanitized_path = Path(*sanitized_parts)
+
+    # Restore full anchor (drive + root)
+    if anchor:
+        sanitized_path = Path(anchor) / sanitized_path
+
+    return str(sanitized_path)
+
+
+def get_local_dir_structure(project_slug: str, path: str) -> str:
+    file_name_without_extension = Path(path).stem
     if not rana_cache_dir():
-        base_dir = os.path.join(os.path.expanduser("~"), "Rana")
+        base_dir = Path.home() / "Rana"
     else:
-        base_dir = rana_cache_dir()
-    local_dir_structure = os.path.join(
-        base_dir, project_slug, os.path.dirname(path), file_name_without_extension
+        base_dir = Path(rana_cache_dir())
+    local_dir_structure = base_dir.joinpath(
+        project_slug, "files", Path(path).parent, file_name_without_extension
     )
-    local_file_path = os.path.join(local_dir_structure, file_name)
-    return local_dir_structure, local_file_path
+    return sanitize_path_for_filesystem(str(local_dir_structure))
+
+
+def get_local_file_path(project_slug: str, path: str) -> str:
+    local_dir_structure = Path(get_local_dir_structure(project_slug, path))
+    file_name = sanitize_path_for_filesystem(Path(path).name)
+    return str(local_dir_structure.joinpath(file_name))
+
+
+def get_local_publication_dir_structure(
+    project_slug: str, path: str, publication_tree: list[str]
+) -> str:
+    file_name_without_extension = Path(path).stem
+    if not rana_cache_dir():
+        base_dir = Path.home() / "Rana"
+    else:
+        base_dir = Path(rana_cache_dir())
+    local_dir_structure = base_dir.joinpath(
+        project_slug, "publications", *publication_tree, file_name_without_extension
+    )
+    return sanitize_path_for_filesystem(str(local_dir_structure))
+
+
+def get_local_publication_file_path(
+    project_slug: str, path: str, publication_tree: list[str]
+) -> str:
+    local_dir_structure = Path(
+        get_local_publication_dir_structure(project_slug, path, publication_tree)
+    )
+    local_file_path = local_dir_structure.joinpath(Path(path).name)
+    return sanitize_path_for_filesystem(str(local_file_path))
 
 
 def get_threedi_api():
     _, personal_api_token = get_3di_auth()
-    frontend_settings = get_frontend_settings()
-    api_url = frontend_settings["hcc_url"].rstrip("/")
-    threedi_api = get_api_client_with_personal_api_token(personal_api_token, api_url)
+    hcc_url = get_hcc_url_override() or get_frontend_settings()["hcc_url"]
+    hcc_url = hcc_url.rstrip("/")
+    threedi_api = get_api_client_with_personal_api_token(personal_api_token, hcc_url)
     return threedi_api
 
 
@@ -68,97 +132,6 @@ def get_threedi_organisations(communication) -> list[str]:
         org_id.replace("-", "")
         for org_id in get_tenant_details(communication).get("threedi_organisations", [])
     ]
-
-
-def add_layer_to_qgis(
-    communication: UICommunication,
-    local_file_path: str,
-    project_name: str,
-    file: dict,
-    descriptor: dict,
-    schematisation_instance: dict,
-    revision_instance: dict = None,
-):
-    # TODO: remove this
-    path = file["id"]
-    file_name = os.path.basename(path.rstrip("/"))
-    data_type = descriptor["data_type"]
-
-    # Save the last modified date of the downloaded file in QSettings
-    last_modified_key = f"{project_name}/{path}/last_modified"
-    QSettings().setValue(last_modified_key, file["last_modified"])
-
-    # Add the layer to QGIS
-    if data_type == "raster":
-        layer = QgsRasterLayer(local_file_path, file_name)
-        if layer.isValid():
-            QgsProject.instance().addMapLayer(layer)
-            communication.bar_info(f"Added {data_type} layer: {local_file_path}")
-        else:
-            communication.show_error(
-                f"Failed to add {data_type} layer: {local_file_path}"
-            )
-    elif data_type == "vector":
-        if descriptor["meta"] is None:
-            communication.show_warn(
-                f"No metadata found for {file_name}, processing probably has not finished yet."
-            )
-            return
-        layers = descriptor["meta"].get("layers", [])
-        if not layers:
-            communication.show_warn(f"No layers found for {file_name}.")
-            return
-        for layer in layers:
-            layer_name = layer["name"]
-            layer_uri = f"{local_file_path}|layername={layer_name}"
-            layer = QgsVectorLayer(layer_uri, layer_name, "ogr")
-            if layer.isValid():
-                QgsProject.instance().addMapLayer(layer)
-                # Apply the QML style file to the layer
-                qml_path = os.path.join(
-                    os.path.dirname(local_file_path), f"{layer_name}.qml"
-                )
-                if os.path.exists(qml_path):
-                    layer.loadNamedStyle(qml_path)
-                    layer.triggerRepaint()
-            else:
-                communication.show_error(
-                    f"Failed to add {layer_name} layer from: {local_file_path}"
-                )
-        communication.bar_info(f"Added {data_type} file: {local_file_path}")
-    elif data_type == "threedi_schematisation" and schematisation_instance:
-        communication.clear_message_bar()
-
-        schematisation = schematisation_instance["schematisation"]
-        if revision_instance:
-            revision = revision_instance
-        else:
-            revision = schematisation_instance["latest_revision"]
-
-        if not revision:
-            communication.show_warn("Cannot open a schematisation without a revision.")
-            return
-        pb = communication.progress_bar(
-            msg="Downloading remote schematisation...", clear_msg_bar=True
-        )
-
-        if not hcc_working_dir():
-            communication.show_warn(
-                "Working directory not yet set, please configure this in the plugin settings."
-            )
-            return
-
-        load_remote_schematisation(
-            communication,
-            schematisation,
-            revision,
-            pb,
-            hcc_working_dir(),
-            get_threedi_api(),
-        )
-        communication.clear_message_bar()
-    else:
-        communication.show_warn(f"Unsupported data type: {data_type}")
 
 
 def display_bytes(bytes: int) -> str:
@@ -291,14 +264,40 @@ def build_vrt(output_filepath, raster_filepaths, **vrt_options):
 
 
 def get_file_icon_name(data_type: str) -> str:
+    # Ensure that data_type is a string so we can safely use string operations
+    if not data_type:
+        data_type = ""
     icon_map = {
         "scenario": "mIconTemporalRaster.svg",
         "threedi_schematisation": "mIconDbSchema.svg",
         "raster": "mIconRaster.svg",
         "vector": "mIconVector.svg",
         "sqlite": "mIconDbSchema.svg",
+        "polygon": "mIconPolygonLayer.svg",
+        "point": "mIconPointLayer.svg",
+        "linestring": "mIconLineLayer.svg",
+        "multipoint": "mIconPointLayer.svg",
+        "multilinestring": "mIconLineLayer.svg",
+        "multipolygon": "mIconPolygonLayer.svg",
+        "geometrycollection": "mIconGeometryCollection.svg",
     }
-    return icon_map.get(data_type, "mIconFile.svg")
+    return icon_map.get(data_type.lower(), "mIconFile.svg")
+
+
+def find_publication_map_layer_from_tree(publication_version: dict, tree: list[str]):
+    def traverse_layers(layers, path):
+        for layer in layers:
+            if layer["name"] == path[0]:
+                if layer["type"] == "layer" and len(path) == 1:
+                    return layer
+                # Continue recursion in nested layers
+                return traverse_layers(layer.get("layers", []), path[1:])
+        return None  # No match found
+
+    for map_ in publication_version.get("maps", []):
+        if map_["name"] == tree[0]:
+            return traverse_layers(map_.get("layers", []), tree[1:])
+    return None
 
 
 def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
