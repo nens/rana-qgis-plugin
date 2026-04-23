@@ -213,7 +213,7 @@ class ProcessesBrowser(QWidget):
             )
 
     def add_items(self, job_list: list[dict]):
-        for job in job_list:
+        for job in reversed(job_list):
             self.add_item(JobData.from_job_dict(job))
 
     def update_job_state(self, job_dict: dict):

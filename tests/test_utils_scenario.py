@@ -24,6 +24,21 @@ def test_get_ready_state_from_descriptor(descriptor, expected):
     "descriptor, expected",
     [
         ({}, False),
+        ({"status": None}, False),
+        ({"status": {}}, False),
+        ({"status": {"id": "completed"}}, True),
+        ({"status": {"id": "processing"}}, False),
+        ({"status": {"id": "foo"}}, False),
+    ],
+)
+def test_get_lizard_ready_state_from_descriptor(descriptor, expected):
+    assert us.get_lizard_ready_state_from_descriptor(descriptor) == expected
+
+
+@pytest.mark.parametrize(
+    "descriptor, expected",
+    [
+        ({}, False),
         ({"meta": None}, False),
         ({"meta": {}}, False),
         ({"meta": {"simulation": None}}, False),
@@ -40,6 +55,7 @@ def test_get_is_3di_simulation(descriptor, expected):
 class TestScenarioInfo:
     basic_descriptor = {
         "data_type": "scenario",
+        "status": {"id": "completed"},
         "meta": {
             "id": 1,
             "simulation": {"software": {"id": "3Di"}},
