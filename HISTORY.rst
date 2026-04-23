@@ -26,6 +26,10 @@ History
 - Fix warnings upon logout (nens/rana#3813)
 - Fix broken buttons after open in qgis via context menu (nens/rana#4050)
 - Convert publication description markdown to html using mistune (nens/#4076)
+- Set default sorting of files browser to newest to latest (nens/rana#4063)
+- Fix sorting by data type in files browser
+- Fix crash on retrieving results while lizard is still processing (nens/rana#4091)
+- Fix sorting of processes (nens/rana#4099)
 
 
 1.2.10 (2026-04-14)
