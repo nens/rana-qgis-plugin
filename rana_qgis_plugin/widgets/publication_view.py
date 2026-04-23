@@ -1,38 +1,31 @@
+import re
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from typing import Optional
 
+import mistune
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
-    QAbstractItemModel,
-    QSettings,
     Qt,
     QUrl,
     pyqtSignal,
     pyqtSlot,
 )
 from qgis.PyQt.QtGui import (
-    QColor,
     QDesktopServices,
     QFont,
-    QIcon,
-    QPalette,
     QStandardItem,
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QStackedWidget,
-    QTableView,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -243,7 +236,6 @@ class PublicationView(QWidget):
         self.project: Optional[dict] = None
         self.publication: Optional[dict] = None
         self.current_version: Optional[dict] = None
-        self.project: Optional[dict] = None
         self.file_map: Optional[dict[str:dict]] = None
         self.root_item: FolderItemData = FolderItemData(
             name="root", sub_items=[], parents=[]
@@ -378,7 +370,21 @@ class PublicationView(QWidget):
         # description
         layout = QVBoxLayout()
         if self.publication.get("description"):
-            description_label = QLabel(self.publication["description"])
+            description = self.publication["description"]
+            description_with_links = re.sub(
+                r'(?<!\()(?P<url>https?://[^\s<>()"]+)',
+                lambda match: f"[{match.group('url')}]({match.group('url')})",
+                description,
+            )
+            html = mistune.html(description_with_links)
+            description_label = QLabel(html)
+            description_label.setTextFormat(Qt.TextFormat.RichText)
+            description_label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextBrowserInteraction
+            )
+            description_label.linkActivated.connect(
+                lambda url: QDesktopServices.openUrl(QUrl(url))
+            )
         else:
             description_label = QLabel("No description available")
             description_label.setStyleSheet("font-style: italic;")
