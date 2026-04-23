@@ -29,6 +29,8 @@ class FileUploadWorker(QThread):
         super().__init__()
         self.project = project
         self.local_paths = local_paths
+        if online_dir and not online_dir.endswith("/"):
+            online_dir += "/"
         self.online_dir = online_dir
 
     def handle_file_conflict(self, online_path):
