@@ -15,6 +15,7 @@ rana_icon = QIcon(os.path.join(ICONS_DIR, "rana.svg"))
 separator_icon = QIcon(os.path.join(ICONS_DIR, "separator.svg"))
 ellipsis_icon = QIcon(os.path.join(ICONS_DIR, "ellipsis.svg"))
 settings_icon = QgsApplication.getThemeIcon("/processingAlgorithm.svg")
+open_folder_icon = QgsApplication.getThemeIcon("/mActionFileOpen.svg")
 
 
 def get_safe_icon(standard_pixmap):
