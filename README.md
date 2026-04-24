@@ -100,7 +100,7 @@ Some settings are not available via the UI but can be modified via the `QGIS/QGI
 
 The HCC url can be set via the `QGIS/QGIS3.ini` file in your profile folder. To do so, add:
 ```
-hcc_url_override=https://your-hcc-url.com
+hcc_url=https://your-hcc-url.com
 ```
 to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
 
