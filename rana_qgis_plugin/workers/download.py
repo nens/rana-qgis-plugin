@@ -40,6 +40,7 @@ from rana_qgis_plugin.utils.generic import (
     get_threedi_api,
     split_scenario_extent,
 )
+from rana_qgis_plugin.utils.qgis import rescale_qml_file
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -246,7 +247,32 @@ class RanaDownloader(BaseDownloader):
         pq_path = self.download_context.local_dir / "physical_quantity.qml"
         if pq_path.exists():
             new_name = self.download_context.local_file_path.with_suffix(".qml").name
-            pq_path.rename(self.download_context.local_dir / new_name)
+            final_qml_path = self.download_context.local_dir / new_name
+            pq_path.replace(final_qml_path)
+
+            # Attempt to rescale the QML to match the actual raster data range
+            self._rescale_qml_to_raster_range(final_qml_path)
+
+    def _rescale_qml_to_raster_range(self, qml_path: Path) -> None:
+        """Rescale QML file to match actual raster data range from descriptor.
+
+        Gracefully skips rescaling if descriptor or range data is unavailable.
+        """
+        # Fetch the file descriptor to get the actual data range
+        descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
+        if descriptor is None:
+            return
+
+        # Extract min/max from descriptor metadata
+        meta = descriptor.get("meta") or {}
+        range_data = meta.get("range_type") or {}
+        new_min = range_data.get("min")
+        new_max = range_data.get("max")
+        if new_min is None or new_max is None:
+            return
+
+        # Attempt to rescale the QML file
+        rescale_qml_file(qml_path, float(new_min), float(new_max))
 
 
 class SchematisationDownloader(BaseDownloader):
