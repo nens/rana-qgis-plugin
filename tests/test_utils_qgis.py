@@ -1,4 +1,10 @@
-from rana_qgis_plugin.utils.qgis import rescale_qml_ranges
+import tempfile
+from pathlib import Path
+
+import pytest
+from qgis.core import QgsVectorLayer
+
+from rana_qgis_plugin.utils.qgis import get_qml_name_for_layer, rescale_qml_ranges
 
 
 def make_test_qml(min_val: float, max_val: float, num_stops: int) -> str:
@@ -60,3 +66,26 @@ class TestRescaleQmlRanges:
         rescaled = rescale_qml_ranges(qml, 0.0, 1.0)
 
         assert rescaled is None
+
+
+@pytest.mark.parametrize(
+    "layer_name",
+    [
+        "simple",
+        "layer_with_underscore",
+        "layer-with-dash",
+        "layer with spaces",
+        "layer/with/slashes",
+        "layer.with.dots",
+        "special!@#$%^&*()",
+        "layer:with:colons",
+        "",
+    ],
+)
+def test_get_qml_name_for_layer(layer_name):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        layer = QgsVectorLayer("Point?crs=EPSG:4326", layer_name, "memory")
+        qml_path = tmpdir_path / get_qml_name_for_layer(layer_name)
+        layer.saveNamedStyle(str(qml_path))
+        assert qml_path.exists(), f"QML file should be created at {qml_path}"

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 from qgis.core import (
@@ -142,3 +143,8 @@ def rescale_qml_file(file_path: Path, new_min: float, new_max: float) -> None:
             file_path.write_text(rescaled)
         except (IOError, OSError):
             pass
+
+
+def get_qml_name_for_layer(layer_name: str) -> str:
+    """Returns uri escaped layer name for QML file name."""
+    return f"{quote(layer_name, safe='')}.qml"
