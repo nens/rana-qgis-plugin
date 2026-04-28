@@ -189,7 +189,6 @@ class FilesBrowser(QWidget):
         # Remember current select mode state
         was_in_select_mode = self.select_btn.isChecked()
         previously_checked = self._get_checked_files() if was_in_select_mode else []
-        self.communication.log_info(f"{was_in_select_mode=}, {previously_checked=}")
         # Refresh file list
         self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
