@@ -183,6 +183,9 @@ class FilesBrowser(QWidget):
             self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
+        # Reset select mode when refreshing
+        if self.select_btn.isChecked():
+            self.select_btn.setChecked(False)
         self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
 
