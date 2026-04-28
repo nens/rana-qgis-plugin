@@ -522,11 +522,6 @@ class RanaBrowser(QWidget):
             self.project_widget.cornerWidget().hide()
         else:
             self.project_widget.cornerWidget().show()
-        # Hide/uncheck Select button when not on Files tab (index 0)
-        is_files_tab = index == 0
-        self.files_browser.select_btn.setVisible(is_files_tab)
-        if not is_files_tab and self.files_browser.select_btn.isChecked():
-            self.files_browser.select_btn.setChecked(False)
 
     def auto_refresh(self):
         if not self.rana_browser.isEnabled():
