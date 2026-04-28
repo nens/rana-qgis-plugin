@@ -16,10 +16,12 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -137,14 +139,33 @@ class FilesBrowser(QWidget):
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
         self.btn_import_schematisation = QPushButton("Import schematisation")
-        btn_layout = QGridLayout()
+        # Page 0: Normal mode buttons
+        normal_page = QWidget()
+        btn_layout = QGridLayout(normal_page)
         btn_layout.addWidget(self.btn_upload, 0, 0)
         btn_layout.addWidget(btn_create_folder, 0, 1)
         btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
         btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
+        # Page 1: Select mode buttons
+        select_page = QWidget()
+        select_layout = QHBoxLayout(select_page)
+        self.btn_download_selected = QPushButton("Download selected")
+        self.btn_delete_selected = QPushButton("Delete selected")
+        self.btn_download_selected.setEnabled(False)
+        self.btn_delete_selected.setEnabled(False)
+        self.btn_download_selected.clicked.connect(
+            lambda: self.batch_download_requested.emit(self._get_checked_files())
+        )
+        self.btn_delete_selected.clicked.connect(self._on_delete_selected_clicked)
+        select_layout.addWidget(self.btn_download_selected)
+        select_layout.addWidget(self.btn_delete_selected)
+        # Stacked widget holding both pages
+        self.btn_stack = QStackedWidget()
+        self.btn_stack.addWidget(normal_page)
+        self.btn_stack.addWidget(select_page)
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
-        layout.addLayout(btn_layout)
+        layout.addWidget(self.btn_stack)
         self.setLayout(layout)
 
         self.btn_new_schematisation.setVisible(has_3di_authcfg())
@@ -165,6 +186,7 @@ class FilesBrowser(QWidget):
     def toggle_select_mode(self, checked: bool):
         """Toggle Select mode: show/hide checkbox column, swap button sets."""
         self.files_tv.setColumnHidden(0, not checked)
+        self.btn_stack.setCurrentIndex(1 if checked else 0)
         if not checked:
             self._clear_all_checkboxes()
 
@@ -194,8 +216,19 @@ class FilesBrowser(QWidget):
         if item.column() != 0:
             # Only react to checkbox column changes
             return
-        # Batch buttons will be created in Task 3; for now this is a no-op
-        # It's connected to the signal but won't do anything until buttons exist
+        has_checked = len(self._get_checked_files()) > 0
+        self.btn_download_selected.setEnabled(has_checked)
+        self.btn_delete_selected.setEnabled(has_checked)
+
+    def _on_delete_selected_clicked(self):
+        """Show confirmation dialog before deleting selected files."""
+        checked_files = self._get_checked_files()
+        if not checked_files:
+            return
+        file_count = len(checked_files)
+        msg = f"Delete {file_count} file{'s' if file_count > 1 else ''}?"
+        if self.communication.ask(self, "Confirm Delete", msg):
+            self.batch_delete_requested.emit(checked_files)
 
     def select_path(self, selected_path: str):
         # Root level path is expected to be ""
