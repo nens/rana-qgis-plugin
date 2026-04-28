@@ -21,6 +21,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -153,9 +154,7 @@ class FilesBrowser(QWidget):
         self.btn_delete_selected = QPushButton("Delete selected")
         self.btn_download_selected.setEnabled(False)
         self.btn_delete_selected.setEnabled(False)
-        self.btn_download_selected.clicked.connect(
-            lambda: self.batch_download_requested.emit(self._get_checked_files())
-        )
+        self.btn_download_selected.clicked.connect(self._on_download_selected_clicked)
         self.btn_delete_selected.clicked.connect(self._on_delete_selected_clicked)
         select_layout.addWidget(self.btn_download_selected)
         select_layout.addWidget(self.btn_delete_selected)
@@ -163,6 +162,10 @@ class FilesBrowser(QWidget):
         self.btn_stack = QStackedWidget()
         self.btn_stack.addWidget(normal_page)
         self.btn_stack.addWidget(select_page)
+        self.btn_stack.setSizePolicy(
+            self.btn_stack.sizePolicy().horizontalPolicy(),
+            QSizePolicy.Fixed,
+        )
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
         layout.addWidget(self.btn_stack)
@@ -219,6 +222,12 @@ class FilesBrowser(QWidget):
         has_checked = len(self._get_checked_files()) > 0
         self.btn_download_selected.setEnabled(has_checked)
         self.btn_delete_selected.setEnabled(has_checked)
+
+    def _on_download_selected_clicked(self):
+        """Emit batch download signal for checked files."""
+        checked_files = self._get_checked_files()
+        if checked_files:
+            self.batch_download_requested.emit(checked_files)
 
     def _on_delete_selected_clicked(self):
         """Show confirmation dialog before deleting selected files."""
