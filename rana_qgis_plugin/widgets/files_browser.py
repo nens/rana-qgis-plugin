@@ -183,11 +183,16 @@ class FilesBrowser(QWidget):
             self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
-        # Reset select mode when refreshing
-        if self.select_btn.isChecked():
-            self.select_btn.setChecked(False)
+        # Remember current select mode state
+        was_in_select_mode = self.select_btn.isChecked()
+        previously_checked = self._get_checked_files() if was_in_select_mode else []
+        # Refresh file list
         self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
+        # Restore select mode and re-check previously selected files
+        if was_in_select_mode:
+            self.select_btn.setChecked(True)
+            self._restore_checked_files(previously_checked)
 
     def toggle_select_mode(self, checked: bool):
         """Toggle Select mode: show/hide checkbox column, swap button sets."""
@@ -216,6 +221,22 @@ class FilesBrowser(QWidget):
                     if file_data:
                         checked_files.append(file_data)
         return checked_files
+
+    def _restore_checked_files(self, previously_checked: list):
+        """Re-check files that were checked before refresh, matched by file ID."""
+        if not previously_checked:
+            return
+        # Build a set of IDs for fast lookup
+        previous_ids = {f["id"] for f in previously_checked}
+        # Check rows that match previously checked files
+        for row in range(self.files_model.rowCount()):
+            name_item = self.files_model.item(row, 1)
+            if name_item:
+                file_data = name_item.data(Qt.ItemDataRole.UserRole)
+                if file_data and file_data.get("id") in previous_ids:
+                    checkbox_item = self.files_model.item(row, 0)
+                    if checkbox_item and checkbox_item.isCheckable():
+                        checkbox_item.setCheckState(Qt.CheckState.Checked)
 
     def _update_batch_buttons(self, item: QStandardItem):
         """Enable/disable batch buttons based on checked count. Called on itemChanged."""
