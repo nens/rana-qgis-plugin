@@ -260,12 +260,9 @@ class FilesBrowser(QWidget):
     def _on_delete_selected_clicked(self):
         """Show confirmation dialog before deleting selected files."""
         checked_files = self._get_checked_files()
-        if not checked_files:
-            return
-        file_count = len(checked_files)
-        msg = f"Delete {file_count} file{'s' if file_count > 1 else ''}?"
-        if self.communication.ask(self, "Confirm Delete", msg):
+        if checked_files:
             self.batch_delete_requested.emit(checked_files)
+            return
 
     def select_path(self, selected_path: str):
         # Root level path is expected to be ""

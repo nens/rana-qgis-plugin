@@ -355,25 +355,40 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def delete_file(self, project, file):
-        confirm = QMessageBox.question(
-            self.parent(),
-            "Confirm Delete",
-            f"Are you sure you want to remove {file['id']}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if confirm == QMessageBox.StandardButton.No:
+        if self.communication.ask(
+            parent=self.parent(),
+            title="Confirm Delete",
+            question=f"Are you sure you want to delete {file['id']}?",
+        ):
+            if self._delete_file(project["id"], file):
+                self.file_deleted.emit()
+
+    @pyqtSlot(dict, list)
+    def delete_files(self, project: dict, files: list[dict]):
+        if not self.communication.ask(
+            parent=self.parent(),
+            title="Confirm Delete",
+            question=f"Are you sure you want do delete {len(files)} file{'s' if len(files) > 1 else ''}?",
+        ):
             return
+        for file in files:
+            self._delete_file(project["id"], file)
+        self.file_deleted.emit()
+
+    def _delete_file(self, project_id: str, file: dict) -> bool:
+        file_path = file["id"]
+        params = {"path": file_path}
         if file["type"] == "directory":
-            if delete_tenant_project_directory(project["id"], {"path": file["id"]}):
-                self.file_deleted.emit()
+            if delete_tenant_project_directory(project_id, params):
+                return True
             else:
-                self.communication.show_warn(f"Unable to delete directory {file['id']}")
+                self.communication.show_warn(f"Unable to delete directory {file_path}")
         else:
-            if delete_tenant_project_file(project["id"], {"path": file["id"]}):
-                self.file_deleted.emit()
+            if delete_tenant_project_file(project_id, params):
+                return True
             else:
-                self.communication.show_warn(f"Unable to delete file {file['id']}")
+                self.communication.show_warn(f"Unable to delete file {file_path}")
+        return False
 
     @pyqtSlot(dict, dict, str)
     def rename_file(self, project, file, new_name):

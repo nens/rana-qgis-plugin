@@ -83,6 +83,7 @@ class RanaBrowser(QWidget):
     project_changed = pyqtSignal(str)
     run_persistent_tasks = pyqtSignal()
     update_project_publications = pyqtSignal()
+    batch_delete = pyqtSignal(dict, list)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -241,9 +242,6 @@ class RanaBrowser(QWidget):
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
-        # Connect batch operation signals
-        self.files_browser.batch_download_requested.connect(self.batch_download_files)
-        self.files_browser.batch_delete_requested.connect(self.batch_delete_files)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
@@ -337,6 +335,10 @@ class RanaBrowser(QWidget):
             lambda _,: self.import_schematisation_selected.emit(
                 self.project, self.selected_item
             )
+        )
+        # Connect batch delete
+        self.files_browser.batch_delete_requested.connect(
+            lambda files: self.batch_delete.emit(self.project, files)
         )
         # Connect updating folder from breadcrumb
         self.files_breadcrumbs.folder_selected.connect(
@@ -607,13 +609,3 @@ class RanaBrowser(QWidget):
             self.communication.log_info(f"Opening file {str(self.selected_item)}")
         else:
             self.project = None
-
-    def batch_download_files(self, files: list):
-        """Handle batch download of selected files. Stub for Task 4."""
-        # Implementation to follow in subsequent task
-        pass
-
-    def batch_delete_files(self, files: list):
-        """Handle batch delete of selected files. Stub for Task 4."""
-        # Implementation to follow in subsequent task
-        pass
