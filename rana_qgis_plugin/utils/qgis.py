@@ -146,4 +146,5 @@ def rescale_qml_file(file_path: Path, new_min: float, new_max: float) -> None:
 
 
 def get_qml_name_for_layer(layer_name: str) -> str:
+    """Returns uri escaped layer name for QML file name."""
     return f"{quote(layer_name, safe='')}.qml"
