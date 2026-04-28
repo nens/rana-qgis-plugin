@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from qgis.core import (
     QgsDataSourceUri,
@@ -103,7 +104,9 @@ class LayerManager(QObject):
             parents=parents,
         )
         if layer:
-            qml_path = Path(local_file_path).parent.joinpath(f"{layer_name}.qml")
+            qml_path = Path(local_file_path).parent.joinpath(
+                f"{quote(layer_name, safe='')}.qml"
+            )
             if qml_path.exists():
                 layer.loadNamedStyle(str(qml_path))
                 layer.triggerRepaint()
