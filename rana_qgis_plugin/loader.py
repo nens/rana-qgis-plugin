@@ -368,7 +368,7 @@ class Loader(QObject):
         if not self.communication.ask(
             parent=self.parent(),
             title="Confirm Delete",
-            question=f"Are you sure you want do delete {len(files)} file{'s' if len(files) > 1 else ''}?",
+            question=f"Are you sure you want to delete {len(files)} file{'s' if len(files) > 1 else ''}?",
         ):
             return
         for file in files:

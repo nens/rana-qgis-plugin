@@ -261,7 +261,6 @@ class FilesBrowser(QWidget):
         checked_files = self._get_checked_files()
         if checked_files:
             self.batch_delete_requested.emit(checked_files)
-            return
 
     def select_path(self, selected_path: str):
         # Root level path is expected to be ""
