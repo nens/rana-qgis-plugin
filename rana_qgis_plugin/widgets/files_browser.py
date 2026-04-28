@@ -95,6 +95,8 @@ class FilesBrowser(QWidget):
     file_selected = pyqtSignal(dict)
     path_changed = pyqtSignal(str)
     create_folder_requested = pyqtSignal(str)
+    batch_download_requested = pyqtSignal(list)  # list of file dicts
+    batch_delete_requested = pyqtSignal(list)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -126,6 +128,10 @@ class FilesBrowser(QWidget):
         self.files_tv.sortByColumn(4, Qt.SortOrder.DescendingOrder)
         self.files_tv.setColumnHidden(0, True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
+        # Select button for batch operations
+        self.select_btn = QPushButton("Select")
+        self.select_btn.setCheckable(True)
+        self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
@@ -143,6 +149,8 @@ class FilesBrowser(QWidget):
 
         self.btn_new_schematisation.setVisible(has_3di_authcfg())
         self.btn_import_schematisation.setVisible(has_3di_authcfg())
+        # Connect checkbox state changes to update batch button states
+        self.files_model.itemChanged.connect(self._update_batch_buttons)
 
     def show_create_folder_dialog(self):
         # Make sure this button cannot do anything if the files browser is not in a folder
@@ -153,6 +161,41 @@ class FilesBrowser(QWidget):
     def refresh(self):
         self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
+
+    def toggle_select_mode(self, checked: bool):
+        """Toggle Select mode: show/hide checkbox column, swap button sets."""
+        self.files_tv.setColumnHidden(0, not checked)
+        if not checked:
+            self._clear_all_checkboxes()
+
+    def _clear_all_checkboxes(self):
+        """Uncheck all file rows."""
+        for row in range(self.files_model.rowCount()):
+            checkbox_item = self.files_model.item(row, 0)
+            if checkbox_item and checkbox_item.isCheckable():
+                checkbox_item.setCheckState(Qt.CheckState.Unchecked)
+
+    def _get_checked_files(self) -> list:
+        """Return list of file dicts for all checked rows."""
+        checked_files = []
+        for row in range(self.files_model.rowCount()):
+            checkbox_item = self.files_model.item(row, 0)
+            if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
+                # Col 1 is the name item with UserRole data
+                name_item = self.files_model.item(row, 1)
+                if name_item:
+                    file_data = name_item.data(Qt.ItemDataRole.UserRole)
+                    if file_data:
+                        checked_files.append(file_data)
+        return checked_files
+
+    def _update_batch_buttons(self, item: QStandardItem):
+        """Enable/disable batch buttons based on checked count. Called on itemChanged."""
+        if item.column() != 0:
+            # Only react to checkbox column changes
+            return
+        # Batch buttons will be created in Task 3; for now this is a no-op
+        # It's connected to the signal but won't do anything until buttons exist
 
     def select_path(self, selected_path: str):
         # Root level path is expected to be ""
@@ -245,11 +288,35 @@ class FilesBrowser(QWidget):
         self.files_tv.edit(name_index)
 
     def select_file_or_directory(self, index: QModelIndex):
-        self.busy.emit()
-        self.communication.progress_bar("Loading files...", clear_msg_bar=True)
+        """Handle double-click on tree view. Dispatch to select or navigate."""
         # Only allow selection of the first visible column (filename = col 1)
         if index.column() != 1:
             return
+        # In select mode, toggle checkbox instead of navigating
+        if self.select_btn.isChecked():
+            self._toggle_file_checkbox(index)
+        else:
+            self._navigate_to_file_or_directory(index)
+
+    def _toggle_file_checkbox(self, index: QModelIndex):
+        """Toggle checkbox for a file in select mode. Directories are not toggleable."""
+        file_item = self.files_model.itemFromIndex(index)
+        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+        # Only toggle checkbox for files, not directories
+        if selected_item.get("type") == "file":
+            checkbox_item = self.files_model.item(index.row(), 0)
+            if checkbox_item and checkbox_item.isCheckable():
+                new_state = (
+                    Qt.CheckState.Unchecked
+                    if checkbox_item.checkState() == Qt.CheckState.Checked
+                    else Qt.CheckState.Checked
+                )
+                checkbox_item.setCheckState(new_state)
+
+    def _navigate_to_file_or_directory(self, index: QModelIndex):
+        """Navigate to directory or view file details in normal mode."""
+        self.busy.emit()
+        self.communication.progress_bar("Loading files...", clear_msg_bar=True)
         file_item = self.files_model.itemFromIndex(index)
         self.selected_item = file_item.data(Qt.ItemDataRole.UserRole)
         self.update()
