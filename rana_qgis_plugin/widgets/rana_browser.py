@@ -168,7 +168,14 @@ class RanaBrowser(QWidget):
         refresh_btn = QToolButton()
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
-        self.project_widget.setCornerWidget(refresh_btn)
+        # Corner widget: [Select button, Refresh button]
+        corner = QWidget()
+        corner_layout = QHBoxLayout(corner)
+        corner_layout.setContentsMargins(0, 0, 0, 0)
+        corner_layout.setSpacing(2)
+        corner_layout.addWidget(self.files_browser.select_btn)
+        corner_layout.addWidget(refresh_btn)
+        self.project_widget.setCornerWidget(corner)
         self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Create stacked widget for file browsing
         self.rana_files = QStackedWidget()
@@ -234,6 +241,9 @@ class RanaBrowser(QWidget):
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)
+        # Connect batch operation signals
+        self.files_browser.batch_download_requested.connect(self.batch_download_files)
+        self.files_browser.batch_delete_requested.connect(self.batch_delete_files)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
         # - set breadcrumbs path
@@ -507,10 +517,16 @@ class RanaBrowser(QWidget):
 
     def on_project_tab_changed(self, index):
         self.breadcrumbs_manager.set_index(index)
+        # Hide refresh button (corner widget) on Processes tab (index 1)
         if index == 1:
             self.project_widget.cornerWidget().hide()
         else:
             self.project_widget.cornerWidget().show()
+        # Hide/uncheck Select button when not on Files tab (index 0)
+        is_files_tab = index == 0
+        self.files_browser.select_btn.setVisible(is_files_tab)
+        if not is_files_tab and self.files_browser.select_btn.isChecked():
+            self.files_browser.select_btn.setChecked(False)
 
     def auto_refresh(self):
         if not self.rana_browser.isEnabled():
@@ -596,3 +612,13 @@ class RanaBrowser(QWidget):
             self.communication.log_info(f"Opening file {str(self.selected_item)}")
         else:
             self.project = None
+
+    def batch_download_files(self, files: list):
+        """Handle batch download of selected files. Stub for Task 4."""
+        # Implementation to follow in subsequent task
+        pass
+
+    def batch_delete_files(self, files: list):
+        """Handle batch delete of selected files. Stub for Task 4."""
+        # Implementation to follow in subsequent task
+        pass
