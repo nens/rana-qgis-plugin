@@ -48,19 +48,23 @@ SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 class FileBrowserModel(QStandardItemModel):
     def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        # Do not sort checkbox column
+        if column == 0:
+            return
         self.layoutAboutToBeChanged.emit()
 
         directories = []
         files = []
 
         # First separate directories and files
+        # Col 1 holds the name item with UserRole data
         while self.rowCount() > 0:
             row_items = self.takeRow(0)
             if not row_items:
                 continue
-            item_type = row_items[0].data(Qt.ItemDataRole.UserRole).get("type")
+            item_type = row_items[1].data(Qt.ItemDataRole.UserRole).get("type")
             if item_type == "directory":
-                sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
+                sort_text = row_items[1].data(Qt.ItemDataRole.DisplayRole) or ""
                 directories.append((row_items, sort_text))
             else:
                 # try to use SORT_ROLE data before using UserRole data, then fall back to display text
@@ -72,13 +76,11 @@ class FileBrowserModel(QStandardItemModel):
                 )
                 files.append((row_items, sort_text))
 
-        # Sort directories and files separately
-        # only changing on directory name should affect directory sorting
-        if column == 0:
-            directories.sort(
-                key=lambda x: x[1],
-                reverse=(order == Qt.SortOrder.DescendingOrder),
-            )
+        # Sort directories always by name (col 1), files by the requested column
+        directories.sort(
+            key=lambda x: x[1],
+            reverse=(order == Qt.SortOrder.DescendingOrder),
+        )
         files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
         # Always add directories first, then files
         for row_items, _ in directories:
@@ -119,8 +121,10 @@ class FilesBrowser(QWidget):
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.header().setSectionsMovable(False)
-        # Set default sort: column 3 (Last modified), descending (newest first)
-        self.files_tv.sortByColumn(3, Qt.SortOrder.DescendingOrder)
+        # Set default sort: column 4 (Last modified), descending (newest first)
+        # Column 0 is the hidden checkbox column; visible columns start at 1.
+        self.files_tv.sortByColumn(4, Qt.SortOrder.DescendingOrder)
+        self.files_tv.setColumnHidden(0, True)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
@@ -210,7 +214,7 @@ class FilesBrowser(QWidget):
         closes with a commit, emits the rename signal with the new name.
         If the name is unchanged the signal is not emitted.
         """
-        name_index = index.sibling(index.row(), 0)
+        name_index = index.sibling(index.row(), 1)
         name_item = self.files_model.itemFromIndex(name_index)
         if name_item is None:
             return
@@ -243,8 +247,8 @@ class FilesBrowser(QWidget):
     def select_file_or_directory(self, index: QModelIndex):
         self.busy.emit()
         self.communication.progress_bar("Loading files...", clear_msg_bar=True)
-        # Only allow selection of the first column (filename)
-        if index.column() != 0:
+        # Only allow selection of the first visible column (filename = col 1)
+        if index.column() != 1:
             return
         file_item = self.files_model.itemFromIndex(index)
         self.selected_item = file_item.data(Qt.ItemDataRole.UserRole)
@@ -260,7 +264,7 @@ class FilesBrowser(QWidget):
         sort_order = self.files_tv.header().sortIndicatorOrder()
 
         self.files_model.clear()
-        header = ["Filename", "Data type", "Size", "Last modified"]
+        header = ["", "Filename", "Data type", "Size", "Last modified"]
         self.files_model.setHorizontalHeaderLabels(header)
         directories = [file for file in self.files if file["type"] == "directory"]
         files = [file for file in self.files if file["type"] == "file"]
@@ -272,7 +276,10 @@ class FilesBrowser(QWidget):
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
             name_item.setData(dir_name.lower(), role=SORT_ROLE)
-            self.files_model.appendRow([name_item])
+            # Col 0: empty non-checkable placeholder (directories cannot be batch-selected)
+            placeholder = QStandardItem()
+            placeholder.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self.files_model.appendRow([placeholder, name_item])
 
         # Add files second
         for file in files:
@@ -300,13 +307,27 @@ class FilesBrowser(QWidget):
             last_modified_item.setData(
                 last_modified_item.data(Qt.ItemDataRole.UserRole), role=SORT_ROLE
             )
+            # Col 0: checkable item for Select mode (hidden by default)
+            checkbox_item = QStandardItem()
+            checkbox_item.setCheckState(Qt.CheckState.Unchecked)
+            checkbox_item.setFlags(
+                Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
+            )
             # Add items to the model
             self.files_model.appendRow(
-                [name_item, data_type_item, size_item, last_modified_item]
+                [
+                    checkbox_item,
+                    name_item,
+                    data_type_item,
+                    size_item,
+                    last_modified_item,
+                ]
             )
 
         self.files_tv.sortByColumn(sort_column, sort_order)
         self.files_tv.setSortingEnabled(True)
+        # model.clear() resets hidden columns; restore after each populate
+        self.files_tv.setColumnHidden(0, True)
 
         self.files_tv.resize_columns_aware_of_collapsed_items()
 
