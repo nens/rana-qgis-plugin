@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote
 
 from qgis.core import (
     QgsDataSourceUri,
@@ -10,15 +9,9 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import (
-    QBuffer,
-    QByteArray,
-    QIODevice,
     QObject,
     QSettings,
-    Qt,
-    pyqtSignal,
 )
-from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.constant import STYLE_DIR
@@ -28,7 +21,10 @@ from rana_qgis_plugin.utils.api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils.generic import get_threedi_api
-from rana_qgis_plugin.utils.qgis import get_threedi_results_analysis_tool_instance
+from rana_qgis_plugin.utils.qgis import (
+    get_qml_name_for_layer,
+    get_threedi_results_analysis_tool_instance,
+)
 from rana_qgis_plugin.utils.scenario import get_is_3di_simulation
 from rana_qgis_plugin.utils.settings import hcc_working_dir
 
@@ -105,7 +101,7 @@ class LayerManager(QObject):
         )
         if layer:
             qml_path = Path(local_file_path).parent.joinpath(
-                f"{quote(layer_name, safe='')}.qml"
+                get_qml_name_for_layer(layer_name)
             )
             if qml_path.exists():
                 layer.loadNamedStyle(str(qml_path))
