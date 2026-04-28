@@ -29,7 +29,7 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import dir_icon
+from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
 from rana_qgis_plugin.utils.api import get_tenant_project_files
 from rana_qgis_plugin.utils.generic import (
     NumericItem,
@@ -134,6 +134,7 @@ class FilesBrowser(QWidget):
         # Select button for batch operations
         self.select_btn = QPushButton("Select")
         self.select_btn.setCheckable(True)
+        self.select_btn.setToolTip("Toggle file selection mode")
         self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
@@ -150,8 +151,10 @@ class FilesBrowser(QWidget):
         # Page 1: Select mode buttons
         select_page = QWidget()
         select_layout = QHBoxLayout(select_page)
-        self.btn_download_selected = QPushButton("Download selected")
-        self.btn_delete_selected = QPushButton("Delete selected")
+        self.btn_download_selected = QPushButton(download_icon, "Download selected")
+        self.btn_download_selected.setToolTip("Download selected file(s)")
+        self.btn_delete_selected = QPushButton(trash_icon, "Delete selected")
+        self.btn_delete_selected.setToolTip("Delete selected file(s)")
         self.btn_download_selected.setEnabled(False)
         self.btn_delete_selected.setEnabled(False)
         self.btn_download_selected.clicked.connect(self._on_download_selected_clicked)
