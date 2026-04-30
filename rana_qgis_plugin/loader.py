@@ -41,6 +41,7 @@ from rana_qgis_plugin.simulation.utils import (
     extract_error_message,
     load_local_schematisation,
     resolve_schematisation_download_dir,
+    resolve_schematisation_download_dir_auto,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils.api import (
@@ -49,6 +50,7 @@ from rana_qgis_plugin.utils.api import (
     create_folder,
     delete_tenant_project_directory,
     delete_tenant_project_file,
+    get_default_result,
     get_process_id_for_tag,
     get_publication_version_details,
     get_tenant_details,
@@ -95,6 +97,8 @@ from rana_qgis_plugin.workers.download import (
     LizardResultDownloadWorker,
     PublicationFileDownloadContext,
     RanaFileDownloader,
+    ResultsDownloadContext,
+    ResultsDownloader,
     SchematisationGeopackageDownloader,
     SchematisationRevisionDownloadContext,
     SchematisationRevisionDownloader,
@@ -338,7 +342,9 @@ class Loader(QObject):
         )
         self.schematisation_download_worker.start()
 
-    def on_download_schematisation_revision_finished(self, project, revision, download_context):
+    def on_download_schematisation_revision_finished(
+        self, project, revision, download_context
+    ):
         self.communication.clear_message_bar()
         if isinstance(revision, dict):
             revision_number = revision["number"]
@@ -463,6 +469,138 @@ class Loader(QObject):
         for file in files:
             self._delete_file(project["id"], file)
         self.file_deleted.emit()
+
+    @pyqtSlot(dict, list)
+    def download_files(self, project: dict, files: list[dict]):
+        """Batch download files from the file browser."""
+        working_dir = hcc_working_dir()
+        downloaders = []
+        skipped_cnt = 0
+        local_schematisations = None
+
+        for file in files:
+            data_type = file.get("data_type")
+            if data_type == "threedi_schematisation":
+                if not working_dir:
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: working directory not set."
+                    )
+                    skipped_cnt += 1
+                    continue
+                descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                schematisation_info = descriptor.get("meta", {}).get(
+                    "schematisation", {}
+                )
+                revision_info = descriptor.get("meta", {}).get("revision", {})
+                if not schematisation_info or not revision_info:
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: missing metadata."
+                    )
+                    skipped_cnt += 1
+                    continue
+                if local_schematisations is None:
+                    local_schematisations = list_local_schematisations(working_dir)
+                result = resolve_schematisation_download_dir_auto(
+                    schematisation_info,
+                    revision_info,
+                    local_schematisations,
+                    working_dir,
+                )
+                context = SchematisationRevisionDownloadContext(Path(result[0]))
+                downloaders.append(
+                    SchematisationRevisionDownloader(
+                        context,
+                        schematisation_info,
+                        revision_info,
+                        result[1],
+                        result[2],
+                    )
+                )
+            elif data_type == "scenario":
+                descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                if not descriptor.get("meta"):
+                    self.communication.log_warn(
+                        f"Skipping scenario {file['id']}: missing metadata."
+                    )
+                    skipped_cnt += 1
+                    continue
+                scenario_info = ScenarioInfo(descriptor)
+                if not scenario_info.has_lizard_results:
+                    self.communication.log_warn(
+                        f"Skipping scenario {file['id']}: no results available."
+                    )
+                    skipped_cnt += 1
+                    continue
+                result = get_default_result(scenario_info.lizard_results)
+                if not result:
+                    self.communication.log_warn(
+                        f"Skipping scenario {file['id']}: no default result found."
+                    )
+                    skipped_cnt += 1
+                    continue
+                context = ResultsDownloadContext(
+                    scenario_info, project["slug"], file["id"], result
+                )
+                downloaders.append(
+                    ResultsDownloader(context, project, file, result=result)
+                )
+            else:
+                context = FileDownloadContext(
+                    project["slug"], file["id"], file["descriptor_id"], data_type
+                )
+                downloaders.append(RanaFileDownloader(project, file, context))
+
+        if not downloaders:
+            self.communication.bar_warn("No downloadable files selected.")
+            return
+
+        self._batch_download_skipped_cnt = skipped_cnt
+        self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
+        if self.batch_file_download_worker.nof_files > 10:
+            if not self.communication.ask(
+                parent=self.parent(),
+                title="Confirm download",
+                question=f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
+            ):
+                return
+
+        self.batch_file_download_worker.signals.all_finished.connect(
+            self._on_batch_download_finished
+        )
+        self.batch_file_download_worker.signals.failed.connect(
+            self.communication.log_err
+        )
+        self.batch_file_download_worker.signals.warning.connect(
+            self.communication.log_warn
+        )
+        self.batch_file_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
+        self.communication.bar_info(
+            f"Start downloading {self.batch_file_download_worker.nof_files} files..."
+        )
+        self.batch_file_download_worker.start()
+
+    def _on_batch_download_finished(self):
+        """Handle completion of batch file download."""
+        self.communication.clear_message_bar()
+        self.batch_file_download_worker.wait()
+        nof_files = self.batch_file_download_worker.nof_files
+        fail_cnt = self.batch_file_download_worker.fail_cnt
+        warning_cnt = self.batch_file_download_worker.warning_cnt
+        skipped_cnt = self._batch_download_skipped_cnt
+        msg = f"Downloaded {nof_files - fail_cnt} of {nof_files} file(s)."
+        if skipped_cnt > 0:
+            msg += f" {skipped_cnt} skipped, see logs for details."
+        if fail_cnt > 0:
+            msg += f" {fail_cnt} failed, see logs for details."
+        if warning_cnt > 0:
+            msg += f" {warning_cnt} warning(s), see logs for details."
+        if fail_cnt > 0 or skipped_cnt > 0:
+            self.communication.show_warn(msg)
+        else:
+            self.communication.show_info(msg)
+        self.file_download_finished.emit(None)
 
     def _delete_file(self, project_id: str, file: dict) -> bool:
         file_path = file["id"]

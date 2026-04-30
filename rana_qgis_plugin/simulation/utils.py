@@ -764,6 +764,40 @@ def resolve_schematisation_download_dir(
     return None
 
 
+def resolve_schematisation_download_dir_auto(
+    schematisation: dict,
+    revision: dict,
+    local_schematisations: dict,
+    working_dir: str,
+) -> tuple:
+    """Resolve the local directory for a schematisation revision download (non-interactive).
+
+    Unlike resolve_schematisation_download_dir, this always replaces the WIP without
+    showing any dialogs. Intended for batch downloads.
+
+    Args:
+        schematisation: dict with at least 'id' and 'name' keys.
+        revision: dict with at least 'number' key.
+        local_schematisations: Pre-fetched dict from list_local_schematisations.
+        working_dir: The threedi working directory.
+
+    Returns:
+        Tuple of (schematisation_db_dir, local_schematisation, wip_replace_requested).
+    """
+    schematisation_pk = schematisation["id"]
+    schematisation_name = schematisation["name"]
+    revision_number = revision["number"]
+    local_schematisation = local_schematisations.get(schematisation_pk)
+    if not local_schematisation:
+        local_schematisation = LocalSchematisation(
+            working_dir, schematisation_pk, schematisation_name, create=True
+        )
+    local_schematisation.set_wip_revision(revision_number)
+    schematisation_db_dir = local_schematisation.wip_revision.schematisation_dir
+    wip_replace_requested = True
+    return (schematisation_db_dir, local_schematisation, wip_replace_requested)
+
+
 def download_required_files(
     schematisation,
     revision,
@@ -799,6 +833,7 @@ def download_required_files(
 
         if threedi_api is None:
             from rana_qgis_plugin.utils.generic import get_threedi_api
+
             threedi_api = get_threedi_api()
 
         tc = ThreediCalls(threedi_api)

@@ -21,6 +21,7 @@ from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
+    FetchError,
     get_file_descriptor_style,
     get_publication_style,
     get_raster_file_link,
@@ -28,8 +29,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
     map_result_to_file_name,
-    request_raster_generate, FetchError,
-    FetchError
+    request_raster_generate,
 )
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils.generic import (
@@ -230,13 +230,17 @@ class BaseDownloader:
         raise NotImplementedError
 
     @staticmethod
-    def download_url(url, target_file: Path, progress_signal, progress_min=0, progress_max=100):
+    def download_url(
+        url, target_file: Path, progress_signal, progress_min=0, progress_max=100
+    ):
         """Download a URL to a file, emitting progress signals."""
         with requests.get(url, stream=True) as response:
             response.raise_for_status()
             target_file.parent.mkdir(parents=True, exist_ok=True)
             total_size = int(response.headers.get("content-length", 0))
-            progress_frac = (progress_max - progress_min) / total_size if total_size > 0 else 0
+            progress_frac = (
+                (progress_max - progress_min) / total_size if total_size > 0 else 0
+            )
             downloaded_size = 0
             previous_progress = -1
             with open(target_file, "wb") as f:
@@ -573,7 +577,9 @@ class ResultsDownloader(BaseDownloader):
 
         try:
             url = get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
-            self.download_url(url, cache_file, signals.progress, progress_min=0, progress_max=50)
+            self.download_url(
+                url, cache_file, signals.progress, progress_min=0, progress_max=50
+            )
             if self.result and self.result.get("attachment_url"):
                 self.download_url(
                     self.result["attachment_url"],
@@ -583,9 +589,11 @@ class ResultsDownloader(BaseDownloader):
                     progress_max=100,
                 )
         except FetchError as e:
-            signals.warning.emit(f"Failed to fetch url for {self.project['id']}: {str(e)}")
+            signals.failed.emit(
+                f"Failed to fetch url for {self.project['id']}: {str(e)}"
+            )
         except requests.exceptions.RequestException as e:
-            signals.warning.emit(f"Failed to download file: {str(e)}")
+            signals.failed.emit(f"Failed to download file: {str(e)}")
         # Extract nested log zip if present
         if cache_file.exists():
             with zipfile.ZipFile(cache_file, "r") as zip_ref:
@@ -613,7 +621,7 @@ class ResultsDownloader(BaseDownloader):
                     progress_max=100,
                 )
             except requests.exceptions.RequestException as e:
-                signals.warning.emit(f"Failed to download file: {str(e)}")
+                signals.failed.emit(f"Failed to download file: {str(e)}")
         signals.finished.emit()
 
 
@@ -638,6 +646,16 @@ class BatchFileDownloadWorker(QThread):
         self.signals = FileDownloadWorkerSignals()
         self.downloaders = downloaders
         self.downloaded_files = {}
+        self.warning_cnt = 0
+        self.fail_cnt = 0
+        self.signals.warning.connect(self._on_warning)
+        self.signals.failed.connect(self._on_failed)
+
+    def _on_warning(self, msg: str):
+        self.warning_cnt += 1
+
+    def _on_failed(self, msg: str):
+        self.fail_cnt += 1
 
     @cached_property
     def unique_file_ids(self) -> set[str]:

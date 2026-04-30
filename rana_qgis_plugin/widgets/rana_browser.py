@@ -84,6 +84,7 @@ class RanaBrowser(QWidget):
     run_persistent_tasks = pyqtSignal()
     update_project_publications = pyqtSignal()
     batch_delete = pyqtSignal(dict, list)
+    batch_download = pyqtSignal(dict, list)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -339,6 +340,10 @@ class RanaBrowser(QWidget):
         # Connect batch delete
         self.files_browser.batch_delete_requested.connect(
             lambda files: self.batch_delete.emit(self.project, files)
+        )
+        # Connect batch download
+        self.files_browser.batch_download_requested.connect(
+            lambda files: self.batch_download.emit(self.project, files)
         )
         # Connect updating folder from breadcrumb
         self.files_breadcrumbs.folder_selected.connect(
