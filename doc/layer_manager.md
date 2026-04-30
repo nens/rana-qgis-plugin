@@ -21,7 +21,7 @@ The layer manager handles four main file types:
 | **Raster** | `_add_layer_from_raster_file()` | Creates single QgsRasterLayer from `.tif` or similar. Applies custom style if `.qml` exists in same directory. |
 | **Vector** | `_add_layers_from_vector_file()` | Extracts individual layers from multi-layer file (GeoPackage, Shapefile). Creates separate QgsVectorLayer for each. Applies custom style per layer. |
 | **Scenario** | `_add_layer_from_scenario()` | For 3Di simulation results. Loads into Results Analysis tool if available. Adds water depth raster with predefined styling. |
-| **Schematisation** | `add_from_schematisation()` | Downloads remote 3Di schematisation. Requires working directory. Integrates with 3Di simulation environment. |
+| **Schematisation** | `add_from_schematisation()` | Opens a previously downloaded 3Di schematisation in the schematisation editor. Requires a pre-resolved `local_schematisation` object (download happens in the Loader before this is called). |
 
 ### Layer Organization
 

@@ -25,8 +25,10 @@ classDiagram
     class BaseDownloader {
         <<abstract>>
         -download_context: AbstractDownloadContext
+        +file_id: str*
         +url: str*
         +downloaded_file_path: Path
+        +download_url(url, target_file, progress_signal)$
         +download_file(signals, download_file=True)
         +postprocess()*
         +_handle_qml_extraction(local_dir_structure)*
@@ -67,7 +69,7 @@ classDiagram
         +_handle_qml_extraction(local_dir_structure)
     }
 
-    class SchematisationDownloader {
+    class SchematisationGeopackageDownloader {
         -schematisation_id: int
         -revision: dict
         -_downloaded_file_path: Path
@@ -79,6 +81,46 @@ classDiagram
         +postprocess()
         -_upgrade_schematisation(schematisation_filepath) Optional[Path]
         +_handle_qml_extraction(local_dir_structure)
+    }
+
+    class SchematisationRevisionDownloadContext {
+        -schematisation_db_dir: Path
+        +local_schematisation: object
+        +geopackage_filepath: Path
+        +wip_replace_requested: bool
+        +local_dir: Path
+        +local_file_path: Path
+        +get_style_zip()
+    }
+
+    class SchematisationRevisionDownloader {
+        -schematisation: dict
+        -revision: dict
+        -local_schematisation: object
+        -wip_replace_requested: bool
+        +url: str
+        +file_id: str
+        +download_file(signals, download_file=True)
+        +postprocess()
+    }
+
+    class ResultsDownloadContext {
+        -scenario_info: ScenarioInfo
+        -project_slug: str
+        -file_id: str
+        -result: dict
+        +local_dir: Path
+        +local_file_path: Path
+    }
+
+    class ResultsDownloader {
+        -project: dict
+        -file: dict
+        -result: dict
+        +url: str
+        +file_id: str
+        +download_file(signals, download_file=True)
+        +postprocess()
     }
 
     class RanaFileDownloader {
@@ -108,9 +150,13 @@ classDiagram
     AbstractDownloadContext <|-- TempDownloadContext
     AbstractDownloadContext <|-- FileDownloadContext
     AbstractDownloadContext <|-- PublicationFileDownloadContext
+    AbstractDownloadContext <|-- ResultsDownloadContext
+    AbstractDownloadContext <|-- SchematisationRevisionDownloadContext
 
     BaseDownloader <|-- RanaDownloader
-    BaseDownloader <|-- SchematisationDownloader
+    BaseDownloader <|-- SchematisationGeopackageDownloader
+    BaseDownloader <|-- SchematisationRevisionDownloader
+    BaseDownloader <|-- ResultsDownloader
     RanaDownloader <|-- RanaFileDownloader
 
     BaseDownloader *-- AbstractDownloadContext : contains
@@ -138,6 +184,16 @@ Download contexts implement the **where** and **styling** aspects of downloading
   - Retrieves QML styling from publications (with fallback to file descriptor)
   - Preserves publication folder hierarchy during download
 
+- **ResultsDownloadContext**: Manages downloads for lizard scenario results (batch downloads)
+  - Resolves target folder based on whether a 3Di simulation is linked
+  - If linked: saves to the simulation results folder in the 3Di working directory
+  - If not: falls back to the standard project file directory structure
+
+- **SchematisationRevisionDownloadContext**: Manages downloads of full schematisation revisions
+  - Target directory is resolved before construction (dialog on main thread)
+  - Stores metadata populated during download: `local_schematisation`, `geopackage_filepath`, `wip_replace_requested`
+  - Downloads the revision zip to the schematisation database directory
+
 All contexts provide:
 - `local_dir`: The directory where the file will be saved
 - `local_file_path`: The complete path including filename
@@ -156,7 +212,7 @@ Downloaders implement the **what** and **how** aspects of downloading:
   - Generates download URLs using `get_tenant_file_url()`
   - Inherits QML extraction from `RanaDownloader`
 
-- **SchematisationDownloader**: Specialized downloader for 3Di schematisations
+- **SchematisationGeopackageDownloader**: Specialized downloader for 3Di schematisation geopackages (used in schematisation export)
   - Downloads from 3Di API using schematisation and revision IDs
   - Post-processes by:
     1. Extracting the zip archive
@@ -165,7 +221,19 @@ Downloaders implement the **what** and **how** aspects of downloading:
   - Uses cached URL property to avoid repeated API calls
   - Emits warnings if upgrade fails (continues with original version)
 
+- **SchematisationRevisionDownloader**: Downloads a full schematisation revision via `download_required_files`
+  - Used for opening/batch-downloading schematisations from the file browser
+  - Directory resolution must happen before construction (main thread dialog or automatic resolution)
+  - Downloads revision files to the resolved schematisation database directory
+  - Populates `download_context.local_schematisation` and `geopackage_filepath` on success
+
+- **ResultsDownloader**: Downloads lizard scenario results
+  - Downloads the default result raster for a scenario
+  - Resolves target directory based on 3Di simulation linkage (via `ResultsDownloadContext`)
+  - Emits warnings/failures without stopping the batch
+
 All downloaders provide:
+- `file_id`: Unique identifier for deduplication in batch downloads
 - `download_file()`: Core download logic with progress tracking and error handling
 - `postprocess()`: File processing after download (extraction, transformation)
 - `_handle_qml_extraction()`: QML styling extraction for supported file types
@@ -226,7 +294,30 @@ The Loader class demonstrates three main usage patterns for the download workers
 
 **Key points:**
 - Uses `TempDownloadContext` for transient files
-- `SchematisationDownloader` fetches from 3Di API and automatically extracts zip, upgrades schema, adds revision number to filename
+- `SchematisationGeopackageDownloader` fetches from 3Di API and automatically extracts zip, upgrades schema, adds revision number to filename
 - `SingleFileDownloadWorker` handles everything for a single file
+
+
+### 4. Schematisation Download (File Browser)
+
+**Key points:**
+- Uses `SchematisationRevisionDownloadContext` with a pre-resolved directory
+- `SchematisationRevisionDownloader` downloads the revision via `download_required_files`
+- `SingleFileDownloadWorker` runs the download in a background thread
+- On completion, opens the schematisation in the editor via `LayerManager.add_from_schematisation()`
+
+
+### 5. Batch Download (File Browser)
+
+**Key points:**
+- Loader's `download_files()` creates a list of downloaders based on file types:
+  - `threedi_schematisation` → `SchematisationRevisionDownloader` (auto-resolves directory)
+  - `scenario` → `ResultsDownloader` (downloads default result raster)
+  - Other types → `RanaFileDownloader` (standard tenant file download)
+- Skipped files (missing metadata, no revision, etc.) are reported to the user
+- `BatchFileDownloadWorker` handles downloading all files sequentially
+  - Deduplicates by `file_id`
+  - Asks confirmation for large downloads (>10 files)
+  - Reports success/failure/warning counts on completion
 
 
