@@ -290,7 +290,9 @@ class Loader(QObject):
         self.file_download_finished.emit(None)
 
     @pyqtSlot(dict, dict, dict)
-    def open_schematisation_with_revision(self, project, revision, schematisation):
+    def open_schematisation_with_revision(
+        self, project, revision, schematisation, source_file=None
+    ):
         from rana_qgis_plugin.utils.settings import hcc_working_dir
 
         working_dir = hcc_working_dir()
@@ -310,6 +312,7 @@ class Loader(QObject):
             get_threedi_api(),
         )
         if result is None:
+            self.communication.clear_message_bar()
             return
 
         schematisation_db_dir, local_schematisation, wip_replace_requested = result
@@ -334,7 +337,7 @@ class Loader(QObject):
         )
         self.schematisation_download_worker.signals.finished.connect(
             lambda: self.on_download_schematisation_revision_finished(
-                project, revision, download_context
+                project, revision, download_context, source_file=source_file
             )
         )
         self.communication.progress_bar(
@@ -343,7 +346,7 @@ class Loader(QObject):
         self.schematisation_download_worker.start()
 
     def on_download_schematisation_revision_finished(
-        self, project, revision, download_context
+        self, project, revision, download_context, source_file=None
     ):
         self.communication.clear_message_bar()
         if isinstance(revision, dict):
@@ -360,6 +363,8 @@ class Loader(QObject):
             geopackage_filepath=download_context.geopackage_filepath,
         )
         self.communication.bar_info("Schematisation downloaded!", dur=10)
+        if source_file is not None:
+            self.file_opened.emit(source_file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -393,12 +398,13 @@ class Loader(QObject):
                     self.file_download_finished.emit(None)
                     return
                 self.open_schematisation_with_revision(
-                    project, revision, schematisation["schematisation"]
+                    project,
+                    revision,
+                    schematisation["schematisation"],
+                    source_file=file,
                 )
             else:
                 self.file_download_finished.emit(None)
-            if isinstance(layer_manager, FileLayerManager):
-                self.file_opened.emit(file)
             return
         open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
@@ -475,7 +481,7 @@ class Loader(QObject):
         """Batch download files from the file browser."""
         working_dir = hcc_working_dir()
         downloaders = []
-        skipped_cnt = 0
+        skipped_files = []
         local_schematisations = None
 
         for file in files:
@@ -485,18 +491,26 @@ class Loader(QObject):
                     self.communication.log_warn(
                         f"Skipping schematisation {file['id']}: working directory not set."
                     )
-                    skipped_cnt += 1
+                    skipped_files.append((file["id"], "working directory not set"))
                     continue
-                descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-                schematisation_info = descriptor.get("meta", {}).get(
-                    "schematisation", {}
+                threedi_schema = get_threedi_schematisation(
+                    self.communication, file["descriptor_id"]
                 )
-                revision_info = descriptor.get("meta", {}).get("revision", {})
-                if not schematisation_info or not revision_info:
+                if not threedi_schema:
                     self.communication.log_warn(
-                        f"Skipping schematisation {file['id']}: missing metadata."
+                        f"Skipping schematisation {file['id']}: failed to retrieve schematisation info."
                     )
-                    skipped_cnt += 1
+                    skipped_files.append(
+                        (file["id"], "failed to retrieve schematisation info")
+                    )
+                    continue
+                schematisation_info = threedi_schema["schematisation"]
+                revision_info = threedi_schema.get("latest_revision")
+                if not revision_info:
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: no revision available."
+                    )
+                    skipped_files.append((file["id"], "no revision available"))
                     continue
                 if local_schematisations is None:
                     local_schematisations = list_local_schematisations(working_dir)
@@ -522,21 +536,21 @@ class Loader(QObject):
                     self.communication.log_warn(
                         f"Skipping scenario {file['id']}: missing metadata."
                     )
-                    skipped_cnt += 1
+                    skipped_files.append((file["id"], "missing metadata"))
                     continue
                 scenario_info = ScenarioInfo(descriptor)
                 if not scenario_info.has_lizard_results:
                     self.communication.log_warn(
                         f"Skipping scenario {file['id']}: no results available."
                     )
-                    skipped_cnt += 1
+                    skipped_files.append((file["id"], "no results available"))
                     continue
                 result = get_default_result(scenario_info.lizard_results)
                 if not result:
                     self.communication.log_warn(
                         f"Skipping scenario {file['id']}: no default result found."
                     )
-                    skipped_cnt += 1
+                    skipped_files.append((file["id"], "no default result found"))
                     continue
                 context = ResultsDownloadContext(
                     scenario_info, project["slug"], file["id"], result
@@ -554,7 +568,22 @@ class Loader(QObject):
             self.communication.bar_warn("No downloadable files selected.")
             return
 
-        self._batch_download_skipped_cnt = skipped_cnt
+        if skipped_files:
+            skipped_lines = "".join(
+                f"&bull; {fid} ({reason})<br>" for fid, reason in skipped_files
+            )
+            question = (
+                f"The following {len(skipped_files)} file(s) will be skipped "
+                f"(see logs for details):<br><br>{skipped_lines}<br>"
+                f"Do you want to continue downloading the remaining {len(downloaders)} file(s)?"
+            )
+            if not self.communication.ask(
+                parent=self.parent(),
+                title="Some files will be skipped",
+                question=question,
+            ):
+                return
+
         self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
         if self.batch_file_download_worker.nof_files > 10:
             if not self.communication.ask(
@@ -588,15 +617,12 @@ class Loader(QObject):
         nof_files = self.batch_file_download_worker.nof_files
         fail_cnt = self.batch_file_download_worker.fail_cnt
         warning_cnt = self.batch_file_download_worker.warning_cnt
-        skipped_cnt = self._batch_download_skipped_cnt
         msg = f"Downloaded {nof_files - fail_cnt} of {nof_files} file(s)."
-        if skipped_cnt > 0:
-            msg += f" {skipped_cnt} skipped, see logs for details."
         if fail_cnt > 0:
             msg += f" {fail_cnt} failed, see logs for details."
         if warning_cnt > 0:
             msg += f" {warning_cnt} warning(s), see logs for details."
-        if fail_cnt > 0 or skipped_cnt > 0:
+        if fail_cnt > 0:
             self.communication.show_warn(msg)
         else:
             self.communication.show_info(msg)

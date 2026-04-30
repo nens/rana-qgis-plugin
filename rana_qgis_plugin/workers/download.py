@@ -219,6 +219,10 @@ class BaseDownloader:
         self.download_context = download_context
 
     @property
+    def file_id(self) -> str:
+        raise NotImplementedError
+
+    @property
     def url(self) -> str:
         raise NotImplementedError
 
@@ -283,6 +287,10 @@ class RanaDownloader(BaseDownloader):
         super().__init__(download_context)
         self.project = project
         self.file = file
+
+    @property
+    def file_id(self) -> str:
+        return self.file["id"]
 
     def postprocess(self):
         """Handles the extraction of QML zip file and matching/renaming for rasters."""
@@ -533,6 +541,20 @@ class SchematisationRevisionDownloader(BaseDownloader):
     def postprocess(self):
         pass
 
+    @property
+    def file_id(self) -> str:
+        schematisation_id = (
+            self.schematisation["id"]
+            if isinstance(self.schematisation, dict)
+            else self.schematisation.id
+        )
+        revision_number = (
+            self.revision["number"]
+            if isinstance(self.revision, dict)
+            else self.revision.number
+        )
+        return f"schematisation-{schematisation_id}-rev{revision_number}"
+
 
 class ResultsDownloader(BaseDownloader):
     """Downloads already-available lizard scenario results (raw zip + processed raster).
@@ -559,6 +581,10 @@ class ResultsDownloader(BaseDownloader):
     def url(self) -> str:
         raise NotImplementedError("ResultsDownloader overrides download_file")
 
+    @property
+    def file_id(self) -> str:
+        return self.file["id"]
+
     def postprocess(self):
         pass
 
@@ -580,20 +606,14 @@ class ResultsDownloader(BaseDownloader):
             self.download_url(
                 url, cache_file, signals.progress, progress_min=0, progress_max=50
             )
-            if self.result and self.result.get("attachment_url"):
-                self.download_url(
-                    self.result["attachment_url"],
-                    bypass_max_path_limit(str(target_file)),
-                    signals.progress,
-                    progress_min=50,
-                    progress_max=100,
-                )
         except FetchError as e:
             signals.failed.emit(
                 f"Failed to fetch url for {self.project['id']}: {str(e)}"
             )
+            return
         except requests.exceptions.RequestException as e:
             signals.failed.emit(f"Failed to download file: {str(e)}")
+            return
         # Extract nested log zip if present
         if cache_file.exists():
             with zipfile.ZipFile(cache_file, "r") as zip_ref:
@@ -613,15 +633,17 @@ class ResultsDownloader(BaseDownloader):
                 signals.warning.emit("Subarchive info missing, ignoring.")
         if self.result and self.result.get("attachment_url"):
             try:
+                bypass_max_path_limit(str(target_file))
                 self.download_url(
                     self.result["attachment_url"],
-                    bypass_max_path_limit(str(target_file)),
+                    target_file,
                     signals.progress,
                     progress_min=50,
                     progress_max=100,
                 )
             except requests.exceptions.RequestException as e:
                 signals.failed.emit(f"Failed to download file: {str(e)}")
+                return
         signals.finished.emit()
 
 
@@ -659,7 +681,7 @@ class BatchFileDownloadWorker(QThread):
 
     @cached_property
     def unique_file_ids(self) -> set[str]:
-        return set([downloader.file["id"] for downloader in self.downloaders])
+        return set([downloader.file_id for downloader in self.downloaders])
 
     @property
     def nof_files(self) -> int:
@@ -668,7 +690,7 @@ class BatchFileDownloadWorker(QThread):
 
     def handle_existing(self, downloader) -> bool:
         """Check if a file was already downloaded by this worker. If so, just copy the file to the required destination"""
-        if downloader.file["id"] in self.downloaded_files:
+        if downloader.file_id in self.downloaded_files:
             download_path = downloader.download_context.local_file_path
             file_location = self.downloaded_files[downloader.file["id"]]
             # make sure the file didn't disappear somehow
@@ -692,17 +714,23 @@ class BatchFileDownloadWorker(QThread):
             downloader = next(
                 downloader
                 for downloader in self.downloaders
-                if downloader.file["id"] == file_id
+                if downloader.file_id == file_id
             )
-            downloader.download_file(self.signals)
-            download_path = downloader.download_context.local_file_path
-            self.downloaded_files[downloader.file["id"]] = download_path
+            try:
+                downloader.download_file(self.signals)
+                download_path = downloader.download_context.local_file_path
+                self.downloaded_files[downloader.file_id] = download_path
+            except Exception as e:
+                self.signals.failed.emit(f"An error occurred: {str(e)}")
             self.downloaders.remove(downloader)
         # Iterate over the remaining downloaders and copy the existing file
         for downloader in self.downloaders:
             # copy existing, and if redownload if that was unsuccessful
             download_file = not self.handle_existing(downloader)
-            downloader.download_file(self.signals, download_file)
+            try:
+                downloader.download_file(self.signals, download_file)
+            except Exception as e:
+                self.signals.failed.emit(f"An error occurred: {str(e)}")
         self.signals.all_finished.emit()
 
 
