@@ -10,7 +10,7 @@ from time import sleep
 from typing import List, Optional
 
 import requests
-from qgis.core import Qgis, QgsMessageLog
+from qgis.core import Qgis, QgsMessageLog, QgsSettings
 from qgis.PyQt.QtCore import (
     QObject,
     QThread,
@@ -28,7 +28,8 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor_view,
     get_tenant_file_url,
     map_result_to_file_name,
-    request_raster_generate,
+    request_raster_generate, FetchError,
+    FetchError
 )
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils.generic import (
@@ -38,9 +39,11 @@ from rana_qgis_plugin.utils.generic import (
     get_local_publication_dir_structure,
     get_local_publication_file_path,
     get_threedi_api,
+    get_threedi_schematisation_simulation_results_folder,
     split_scenario_extent,
 )
 from rana_qgis_plugin.utils.qgis import rescale_qml_file
+from rana_qgis_plugin.utils.scenario import ScenarioInfo
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -169,6 +172,48 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
             return style_zip
 
 
+class ResultsDownloadContext(AbstractDownloadContext):
+    """Download context for lizard scenario results (batch downloads).
+
+    Resolves the target folder based on whether a 3Di simulation is linked.
+    """
+
+    def __init__(
+        self,
+        scenario_info: ScenarioInfo,
+        project_slug: str,
+        file_id: str,
+        result: dict,
+    ):
+        self.scenario_info = scenario_info
+        self.project_slug = project_slug
+        self.file_id = file_id
+        self.result = result
+
+    @cached_property
+    def local_dir(self) -> Path:
+        if self.scenario_info.has_3di_simulation:
+            return Path(
+                get_threedi_schematisation_simulation_results_folder(
+                    QgsSettings().value("threedi/working_dir"),
+                    self.scenario_info.schematisation_id,
+                    self.scenario_info.schematisation_name.replace("/", "-").replace(
+                        "\\", "-"
+                    ),
+                    self.scenario_info.revision_number,
+                    self.scenario_info.simulation_name.replace("/", "-").replace(
+                        "\\", "-"
+                    ),
+                    self.scenario_info.simulation_id,
+                )
+            )
+        return Path(get_local_dir_structure(self.project_slug, self.file_id))
+
+    @property
+    def local_file_path(self) -> Path:
+        return self.local_dir / map_result_to_file_name(self.result)
+
+
 class BaseDownloader:
     def __init__(self, download_context: AbstractDownloadContext):
         self.download_context = download_context
@@ -184,28 +229,35 @@ class BaseDownloader:
     def postprocess(self):
         raise NotImplementedError
 
+    @staticmethod
+    def download_url(url, target_file: Path, progress_signal, progress_min=0, progress_max=100):
+        """Download a URL to a file, emitting progress signals."""
+        with requests.get(url, stream=True) as response:
+            response.raise_for_status()
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            total_size = int(response.headers.get("content-length", 0))
+            progress_frac = (progress_max - progress_min) / total_size if total_size > 0 else 0
+            downloaded_size = 0
+            previous_progress = -1
+            with open(target_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    f.write(chunk)
+                    downloaded_size += len(chunk)
+                    progress = progress_min + int(downloaded_size * progress_frac)
+                    if progress > previous_progress:
+                        progress_signal.emit(progress, str(target_file))
+                        previous_progress = progress
+
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
         self.download_context.local_dir.mkdir(parents=True, exist_ok=True)
         try:
             if download_file:
-                with requests.get(self.url, stream=True) as response:
-                    response.raise_for_status()
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded_size = 0
-                    previous_progress = -1
-                    with open(
-                        self.download_context.local_file_path, "wb"
-                    ) as local_file:
-                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                            local_file.write(chunk)
-                            downloaded_size += len(chunk)
-                            progress = int((downloaded_size / total_size) * 100)
-                            if progress > previous_progress:
-                                signals.progress.emit(
-                                    progress, str(self.download_context.local_file_path)
-                                )
-                                previous_progress = progress
+                self.download_url(
+                    self.url,
+                    self.download_context.local_file_path,
+                    signals.progress,
+                )
             self.postprocess()
             # Emit finished signal from the worker
             signals.finished.emit()
@@ -476,6 +528,93 @@ class SchematisationRevisionDownloader(BaseDownloader):
 
     def postprocess(self):
         pass
+
+
+class ResultsDownloader(BaseDownloader):
+    """Downloads already-available lizard scenario results (raw zip + processed raster).
+
+    For use in batch downloads where results are pre-generated. Overrides
+    download_file() to handle both the raw zip and the processed result raster.
+    """
+
+    def __init__(
+        self,
+        download_context: ResultsDownloadContext,
+        project: dict,
+        file: dict,
+        result: Optional[dict] = None,
+        overwrite: bool = False,
+    ):
+        super().__init__(download_context)
+        self.project = project
+        self.file = file
+        self.result = result
+        self.overwrite = overwrite
+
+    @property
+    def url(self) -> str:
+        raise NotImplementedError("ResultsDownloader overrides download_file")
+
+    def postprocess(self):
+        pass
+
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        """Download raw zip + processed result raster for one result file."""
+        target_dir = self.download_context.local_dir
+        target_file = self.download_context.local_file_path
+
+        # Skip if the processed result already exists
+        if target_file.exists() and not self.overwrite:
+            signals.finished.emit()
+            return
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = Path(get_local_file_path(self.project["slug"], self.file["id"]))
+
+        try:
+            url = get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+            self.download_url(url, cache_file, signals.progress, progress_min=0, progress_max=50)
+            if self.result and self.result.get("attachment_url"):
+                self.download_url(
+                    self.result["attachment_url"],
+                    bypass_max_path_limit(str(target_file)),
+                    signals.progress,
+                    progress_min=50,
+                    progress_max=100,
+                )
+        except FetchError as e:
+            signals.warning.emit(f"Failed to fetch url for {self.project['id']}: {str(e)}")
+        except requests.exceptions.RequestException as e:
+            signals.warning.emit(f"Failed to download file: {str(e)}")
+        # Extract nested log zip if present
+        if cache_file.exists():
+            with zipfile.ZipFile(cache_file, "r") as zip_ref:
+                zip_ref.extractall(str(target_dir))
+            descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
+            try:
+                sim_id = descriptor["meta"]["simulation"]["id"]
+                log_zip_path = target_dir / f"log_files_sim_{sim_id}.zip"
+                if log_zip_path.is_file():
+                    with zipfile.ZipFile(log_zip_path, "r") as log_zip_ref:
+                        log_zip_ref.extractall(str(target_dir))
+                else:
+                    signals.warning.emit(
+                        "Subarchive containing log files not present, ignoring."
+                    )
+            except KeyError:
+                signals.warning.emit("Subarchive info missing, ignoring.")
+        if self.result and self.result.get("attachment_url"):
+            try:
+                self.download_url(
+                    self.result["attachment_url"],
+                    bypass_max_path_limit(str(target_file)),
+                    signals.progress,
+                    progress_min=50,
+                    progress_max=100,
+                )
+            except requests.exceptions.RequestException as e:
+                signals.warning.emit(f"Failed to download file: {str(e)}")
+        signals.finished.emit()
 
 
 class SingleFileDownloadWorker(QThread):
