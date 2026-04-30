@@ -178,7 +178,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(
     config_path = Path(schemadir) / "admin" / "schematisation.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config = {
-        "id": 1,
+        "id": result_folder_info["schematisation_id"],
         "name": result_folder_info["schematisation_name"],
         "revisions": [result_folder_info["revision_number"]],
         "wip_parent_revision": 1,

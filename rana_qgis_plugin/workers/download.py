@@ -275,7 +275,7 @@ class RanaDownloader(BaseDownloader):
         rescale_qml_file(qml_path, float(new_min), float(new_max))
 
 
-class SchematisationDownloader(BaseDownloader):
+class SchematisationGeopackageDownloader(BaseDownloader):
     def __init__(
         self,
         schematisation_id: int,
@@ -403,6 +403,79 @@ class RanaFileDownloader(RanaDownloader):
     @property
     def url(self) -> Optional[str]:
         return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+
+
+class SchematisationRevisionDownloadContext(AbstractDownloadContext):
+    """Download context for schematisation revision files."""
+
+    def __init__(self, schematisation_db_dir: Path):
+        self.schematisation_db_dir = schematisation_db_dir
+        # Populated after download completes
+        self.local_schematisation = None
+        self.geopackage_filepath = None
+        self.wip_replace_requested = False
+
+    @property
+    def local_dir(self) -> Path:
+        return self.schematisation_db_dir
+
+    @property
+    def local_file_path(self) -> Path:
+        return self.schematisation_db_dir / "schematisation.zip"
+
+    def get_style_zip(self):
+        return None
+
+
+class SchematisationRevisionDownloader(BaseDownloader):
+    """Downloads schematisation revision files via download_required_files.
+
+    The dialog to resolve the target directory must happen before constructing
+    this downloader (use resolve_schematisation_download_dir on the main thread).
+    """
+
+    def __init__(
+        self,
+        download_context: SchematisationRevisionDownloadContext,
+        schematisation,
+        revision,
+        local_schematisation,
+        wip_replace_requested: bool,
+    ):
+        super().__init__(download_context)
+        self.schematisation = schematisation
+        self.revision = revision
+        self.local_schematisation = local_schematisation
+        self.wip_replace_requested = wip_replace_requested
+
+    @property
+    def url(self) -> str:
+        raise NotImplementedError(
+            "SchematisationRevisionDownloader overrides download_file"
+        )
+
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        """Download schematisation revision files."""
+        from rana_qgis_plugin.simulation.utils import download_required_files
+
+        try:
+            result = download_required_files(
+                self.schematisation,
+                self.revision,
+                self.download_context.schematisation_db_dir,
+                self.local_schematisation,
+                self.wip_replace_requested,
+                progress_fn=signals.progress.emit,
+            )
+            self.download_context.local_schematisation = result[0]
+            self.download_context.geopackage_filepath = result[1]
+            self.download_context.wip_replace_requested = result[2]
+            signals.finished.emit()
+        except Exception as e:
+            signals.failed.emit(f"Failed to download schematisation: {str(e)}")
+
+    def postprocess(self):
+        pass
 
 
 class SingleFileDownloadWorker(QThread):

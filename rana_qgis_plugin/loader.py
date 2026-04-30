@@ -40,6 +40,7 @@ from rana_qgis_plugin.simulation.utils import (
     UploadFileType,
     extract_error_message,
     load_local_schematisation,
+    resolve_schematisation_download_dir,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils.api import (
@@ -94,7 +95,9 @@ from rana_qgis_plugin.workers.download import (
     LizardResultDownloadWorker,
     PublicationFileDownloadContext,
     RanaFileDownloader,
-    SchematisationDownloader,
+    SchematisationGeopackageDownloader,
+    SchematisationRevisionDownloadContext,
+    SchematisationRevisionDownloader,
     SingleFileDownloadWorker,
     TempDownloadContext,
 )
@@ -284,8 +287,73 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict, dict)
     def open_schematisation_with_revision(self, project, revision, schematisation):
+        from rana_qgis_plugin.utils.settings import hcc_working_dir
+
+        working_dir = hcc_working_dir()
+        if not working_dir:
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        # Resolve directory (dialog on main thread)
+        result = resolve_schematisation_download_dir(
+            self.communication,
+            schematisation,
+            revision,
+            False,
+            working_dir,
+            get_threedi_api(),
+        )
+        if result is None:
+            return
+
+        schematisation_db_dir, local_schematisation, wip_replace_requested = result
+
+        # Set up downloader and worker
+        download_context = SchematisationRevisionDownloadContext(
+            Path(schematisation_db_dir)
+        )
+        downloader = SchematisationRevisionDownloader(
+            download_context,
+            schematisation,
+            revision,
+            local_schematisation,
+            wip_replace_requested,
+        )
+        self.schematisation_download_worker = SingleFileDownloadWorker(downloader)
+        self.schematisation_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
+        self.schematisation_download_worker.signals.failed.connect(
+            self.on_file_download_failed
+        )
+        self.schematisation_download_worker.signals.finished.connect(
+            lambda: self.on_download_schematisation_revision_finished(
+                project, revision, download_context
+            )
+        )
+        self.communication.progress_bar(
+            msg="Downloading remote schematisation...", clear_msg_bar=True
+        )
+        self.schematisation_download_worker.start()
+
+    def on_download_schematisation_revision_finished(self, project, revision, download_context):
+        self.communication.clear_message_bar()
+        if isinstance(revision, dict):
+            revision_number = revision["number"]
+        else:
+            revision_number = revision.number
+
         layer_manager = FileLayerManager(self.communication, parent=self.parent())
-        layer_manager.add_from_schematisation(project["name"], schematisation, revision)
+        layer_manager.add_from_schematisation(
+            project["name"],
+            download_context.local_schematisation,
+            revision_number,
+            download_context.wip_replace_requested,
+            geopackage_filepath=download_context.geopackage_filepath,
+        )
+        self.communication.bar_info("Schematisation downloaded!", dur=10)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -305,6 +373,27 @@ class Loader(QObject):
                 self.communication.show_warn(f"sender type: {type(thread_worker)}")
             assert isinstance(thread_worker, QThread)
             thread_worker.wait()
+        # Schematisation link files need async download; redirect to dedicated handler
+        if file["data_type"] == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, file["descriptor_id"]
+            )
+            if schematisation:
+                revision = schematisation["latest_revision"]
+                if not revision:
+                    self.communication.show_warn(
+                        "Cannot open a schematisation without a revision."
+                    )
+                    self.file_download_finished.emit(None)
+                    return
+                self.open_schematisation_with_revision(
+                    project, revision, schematisation["schematisation"]
+                )
+            else:
+                self.file_download_finished.emit(None)
+            if isinstance(layer_manager, FileLayerManager):
+                self.file_opened.emit(file)
+            return
         open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
         if isinstance(layer_manager, FileLayerManager):
@@ -501,7 +590,7 @@ class Loader(QObject):
         self, project: dict, file: dict, schematisation: dict, revision: dict
     ):
         download_context = TempDownloadContext(revision["sqlite"]["file"]["filename"])
-        downloader = SchematisationDownloader(
+        downloader = SchematisationGeopackageDownloader(
             schematisation_id=schematisation["id"],
             revision=revision,
             download_context=download_context,
