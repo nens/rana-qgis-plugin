@@ -141,15 +141,17 @@ def results_folder_subpath(result_folder_info):
 
 
 def test_get_threedi_schematisation_simulation_results_folder_no_local_data(
-    result_folder_info, results_folder_subpath
+    tmp_path, result_folder_info, results_folder_subpath
 ):
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
-        "./", **result_folder_info
+        str(tmp_path), **result_folder_info
     )
     expected_folder = str(
-        Path(result_folder_info["schematisation_name"]).joinpath(
-            *results_folder_subpath
-        )
+        tmp_path
+        / result_folder_info["schematisation_name"]
+        / "revision 1"
+        / "results"
+        / f"{result_folder_info['simulation_name']} ({result_folder_info['simulation_id']})"
     )
     assert results_folder == expected_folder
 
