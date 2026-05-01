@@ -208,9 +208,11 @@ class FilesBrowser(QWidget):
     def _checkbox_column_width(self) -> int:
         """Return a column width snug around the checkbox indicator for the current style."""
         opt = QStyleOptionButton()
-        cb_width = self.files_tv.style().subElementRect(
-            QStyle.SubElement.SE_CheckBoxIndicator, opt, self.files_tv
-        ).width()
+        cb_width = (
+            self.files_tv.style()
+            .subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, opt, self.files_tv)
+            .width()
+        )
         return cb_width + 8  # 4px padding on each side
 
     def toggle_select_mode(self, checked: bool):
@@ -260,7 +262,6 @@ class FilesBrowser(QWidget):
                     checkbox_item = self.files_model.item(row, 0)
                     if checkbox_item and checkbox_item.isCheckable():
                         checkbox_item.setCheckState(Qt.CheckState.Checked)
-
 
     def _update_batch_buttons(self, item: QStandardItem):
         """Enable/disable batch buttons based on checked count. Called on itemChanged."""
