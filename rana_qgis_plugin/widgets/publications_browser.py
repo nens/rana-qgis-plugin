@@ -46,6 +46,7 @@ class PublicationsBrowser(QWidget):
         self.publications_model = QStandardItemModel()
         self.publications_model.setSortRole(Qt.ItemDataRole.UserRole)
         self.publications_tv = QTreeView()
+        self.publications_tv.setRootIsDecorated(False)
         self.publications_tv.setModel(self.publications_model)
         self.publications_tv.setEditTriggers(QTreeView.NoEditTriggers)
         self.publications_model.setHorizontalHeaderLabels(

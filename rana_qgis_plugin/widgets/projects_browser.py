@@ -96,6 +96,7 @@ class ProjectsBrowser(QWidget):
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
         self.projects_tv = QTreeView()
+        self.projects_tv.setRootIsDecorated(False)
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.header().setSortIndicatorShown(True)

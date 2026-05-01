@@ -17,12 +17,15 @@ from qgis.PyQt.QtWidgets import (
     QDialogButtonBox,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
+    QStyle,
+    QStyleOptionButton,
     QVBoxLayout,
     QWidget,
 )
@@ -126,6 +129,8 @@ class FilesBrowser(QWidget):
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.header().setSectionsMovable(False)
+        # Remove the branch indicator area so column 0 has no leading indent
+        self.files_tv.setRootIsDecorated(False)
         # Set default sort: column 4 (Last modified), descending (newest first)
         # Column 0 is the hidden checkbox column; visible columns start at 1.
         self.files_tv.sortByColumn(4, Qt.SortOrder.DescendingOrder)
@@ -195,11 +200,26 @@ class FilesBrowser(QWidget):
         # Restore select mode and re-check previously selected files
         if was_in_select_mode:
             self.select_btn.setChecked(True)
+            # setChecked only emits toggled when state changes; since the button
+            # was already checked before refresh, call toggle_select_mode explicitly.
+            self.toggle_select_mode(True)
             self._restore_checked_files(previously_checked)
+
+    def _checkbox_column_width(self) -> int:
+        """Return a column width snug around the checkbox indicator for the current style."""
+        opt = QStyleOptionButton()
+        cb_width = self.files_tv.style().subElementRect(
+            QStyle.SubElement.SE_CheckBoxIndicator, opt, self.files_tv
+        ).width()
+        return cb_width + 8  # 4px padding on each side
 
     def toggle_select_mode(self, checked: bool):
         """Toggle Select mode: show/hide checkbox column, swap button sets."""
+        self.communication.log_info(f"Toggle select mode: {checked}")
         self.files_tv.setColumnHidden(0, not checked)
+        if checked:
+            self.files_tv.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            self.files_tv.header().resizeSection(0, self._checkbox_column_width())
         self.btn_stack.setCurrentIndex(1 if checked else 0)
         if not checked:
             self._clear_all_checkboxes()
@@ -240,6 +260,7 @@ class FilesBrowser(QWidget):
                     checkbox_item = self.files_model.item(row, 0)
                     if checkbox_item and checkbox_item.isCheckable():
                         checkbox_item.setCheckState(Qt.CheckState.Checked)
+
 
     def _update_batch_buttons(self, item: QStandardItem):
         """Enable/disable batch buttons based on checked count. Called on itemChanged."""
