@@ -13,6 +13,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import (
     QAbstractItemDelegate,
+    QAbstractItemView,
     QDialog,
     QDialogButtonBox,
     QGridLayout,
@@ -143,6 +144,8 @@ class FilesBrowser(QWidget):
         # Column 0 is the hidden checkbox column; visible columns start at 1.
         self.files_tv.sortByColumn(4, Qt.SortOrder.DescendingOrder)
         self.files_tv.setColumnHidden(0, True)
+        # Disable all user-gesture-triggered editing; rename is started programmatically
+        self.files_tv.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
         # Select button for batch operations
         self.select_btn = QPushButton("Select")
