@@ -29,11 +29,11 @@ def _add_file_row(browser, file_id="f1", name="file.txt"):
     checkbox_item = QStandardItem()
     checkbox_item.setCheckable(True)
     checkbox_item.setCheckState(Qt.CheckState.Unchecked)
-    checkbox_item.setFlags(
-        Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
-    )
+    checkbox_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
     name_item = QStandardItem(name)
-    name_item.setData({"id": file_id, "name": name, "type": "file"}, Qt.ItemDataRole.UserRole)
+    name_item.setData(
+        {"id": file_id, "name": name, "type": "file"}, Qt.ItemDataRole.UserRole
+    )
     browser.files_model.appendRow([checkbox_item, name_item])
     return checkbox_item
 
