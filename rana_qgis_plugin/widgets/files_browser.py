@@ -25,7 +25,6 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QStyle,
-    QStyleOptionButton,
     QVBoxLayout,
     QWidget,
 )
@@ -46,7 +45,10 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
-from rana_qgis_plugin.widgets.utils_view import ContentAwareTreeView
+from rana_qgis_plugin.widgets.utils_view import (
+    CheckableHeaderView,
+    ContentAwareTreeView,
+)
 
 # allow for using specific data just for sorting
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -122,6 +124,12 @@ class FilesBrowser(QWidget):
 
     def setup_ui(self):
         self.files_tv = ContentAwareTreeView()
+        self.files_tv.setHeader(
+            CheckableHeaderView(Qt.Orientation.Horizontal, self.files_tv)
+        )
+        self.files_tv.header().check_state_changed.connect(
+            self._on_header_check_state_changed
+        )
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = FileBrowserModel()
@@ -206,12 +214,10 @@ class FilesBrowser(QWidget):
             self._restore_checked_files(previously_checked)
 
     def _checkbox_column_width(self) -> int:
-        """Return a column width snug around the checkbox indicator for the current style."""
-        opt = QStyleOptionButton()
-        cb_width = (
-            self.files_tv.style()
-            .subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, opt, self.files_tv)
-            .width()
+        """Return a column width snug around the checkbox indicator for the current style.
+        Uses PM_IndicatorWidth to match the size used by CheckableHeaderView."""
+        cb_width = self.files_tv.style().pixelMetric(
+            QStyle.PixelMetric.PM_IndicatorWidth
         )
         return cb_width + 8  # 4px padding on each side
 
@@ -225,6 +231,7 @@ class FilesBrowser(QWidget):
         self.btn_stack.setCurrentIndex(1 if checked else 0)
         if not checked:
             self._clear_all_checkboxes()
+            self.files_tv.header().set_check_state(Qt.CheckState.Unchecked)
 
     def _clear_all_checkboxes(self):
         """Uncheck all file rows."""
@@ -263,14 +270,57 @@ class FilesBrowser(QWidget):
                     if checkbox_item and checkbox_item.isCheckable():
                         checkbox_item.setCheckState(Qt.CheckState.Checked)
 
-    def _update_batch_buttons(self, item: QStandardItem):
-        """Enable/disable batch buttons based on checked count. Called on itemChanged."""
-        if item.column() != 0:
-            # Only react to checkbox column changes
-            return
-        has_checked = len(self._get_checked_files()) > 0
+    def _set_batch_buttons_enabled(self, has_checked: bool):
+        """Enable or disable the batch action buttons."""
         self.btn_download_selected.setEnabled(has_checked)
         self.btn_delete_selected.setEnabled(has_checked)
+
+    def _update_batch_buttons(self, item: QStandardItem):
+        """Enable/disable batch buttons based on checked count. Called on itemChanged."""
+        # Only react to checkbox column changes
+        if item.column() != 0:
+            return
+        has_checked = len(self._get_checked_files()) > 0
+        self._set_batch_buttons_enabled(has_checked)
+        self._sync_header_checkbox()
+
+    def _on_header_check_state_changed(self, state: int):
+        """Called when the user clicks the header checkbox. Check or uncheck all file rows."""
+        state = Qt.CheckState(state)
+        self.files_model.blockSignals(True)
+        try:
+            for row in range(self.files_model.rowCount()):
+                checkbox_item = self.files_model.item(row, 0)
+                if checkbox_item and checkbox_item.isCheckable():
+                    checkbox_item.setCheckState(state)
+        finally:
+            self.files_model.blockSignals(False)
+        # blockSignals prevented itemChanged from firing, so the view never got
+        # a repaint signal. Emit dataChanged for all of column 0 to trigger it.
+        if self.files_model.rowCount() > 0:
+            self.files_model.dataChanged.emit(
+                self.files_model.index(0, 0),
+                self.files_model.index(self.files_model.rowCount() - 1, 0),
+            )
+        self._set_batch_buttons_enabled(state == Qt.CheckState.Checked)
+
+    def _sync_header_checkbox(self):
+        """Update header checkbox to reflect current row check states."""
+        total = 0
+        checked = 0
+        for row in range(self.files_model.rowCount()):
+            checkbox_item = self.files_model.item(row, 0)
+            if checkbox_item and checkbox_item.isCheckable():
+                total += 1
+                if checkbox_item.checkState() == Qt.CheckState.Checked:
+                    checked += 1
+        if total == 0 or checked == 0:
+            state = Qt.CheckState.Unchecked
+        elif checked == total:
+            state = Qt.CheckState.Checked
+        else:
+            state = Qt.CheckState.PartiallyChecked
+        self.files_tv.header().set_check_state(state)
 
     def _on_download_selected_clicked(self):
         """Emit batch download signal for checked files."""
