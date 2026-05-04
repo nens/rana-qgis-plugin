@@ -16,11 +16,13 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QMenu,
     QPushButton,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
 
+from rana_qgis_plugin.icons import refresh_icon
 from rana_qgis_plugin.utils.api import get_tenant_projects, get_user_info
 from rana_qgis_plugin.utils.generic import (
     NumericItem,
@@ -30,7 +32,11 @@ from rana_qgis_plugin.utils.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
-from rana_qgis_plugin.widgets.filter_bar import FilterBar, TextFilterConfig, ComboFilterConfig
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
 from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
 
@@ -69,10 +75,13 @@ class ProjectsBrowser(QWidget):
         # Create filter bar
         self.filter_bar = FilterBar(
             filters=[
-                TextFilterConfig(key="name", placeholder="🔍 Search for project by name"),
-                ComboFilterConfig(key="who", placeholder="All contributors", dynamic=True),
+                TextFilterConfig(
+                    key="name", placeholder="🔍 Search for project by name"
+                ),
+                ComboFilterConfig(
+                    key="who", placeholder="All contributors", dynamic=True
+                ),
             ],
-            refresh_callback=self.refresh,
             parent=self,
         )
         self.filter_bar.filters_changed.connect(self._apply_filters)
@@ -103,7 +112,13 @@ class ProjectsBrowser(QWidget):
         self.btn_next = QPushButton(">")
         self.btn_previous.clicked.connect(self.to_previous_page)
         self.btn_next.clicked.connect(self.to_next_page)
+        self.refresh_btn = QToolButton()
+        self.refresh_btn.setToolTip("Refresh")
+        self.refresh_btn.setIcon(refresh_icon)
         # Organize widgets in layouts
+        top_layout = QHBoxLayout()
+        top_layout.addWidget(self.filter_bar)
+        top_layout.addWidget(self.refresh_btn)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
         pagination_layout.addWidget(
@@ -111,7 +126,7 @@ class ProjectsBrowser(QWidget):
         )
         pagination_layout.addWidget(self.btn_next)
         layout = QVBoxLayout(self)
-        layout.addWidget(self.filter_bar)
+        layout.addLayout(top_layout)
         layout.addWidget(self.projects_tv)
         layout.addLayout(pagination_layout)
         self.setLayout(layout)
@@ -308,24 +323,7 @@ class ProjectsBrowser(QWidget):
                 (c for c in contributors_data if c["id"] == user_id),
                 None,
             )
-            if match and match["avatar"]:
-                match["avatar"] = avatar
-                contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
-        # Update projects model
-        root = self.projects_model.invisibleRootItem()
-        for row in range(root.rowCount()):
-            contributors_item = root.child(row, 1)
-            contributors_data = contributors_item.data(Qt.ItemDataRole.UserRole)
-            # Check if any contributors in the data match the updated one
-            match = next(
-                (
-                    contributor
-                    for contributor in contributors_data
-                    if contributor["id"] == user_id
-                ),
-                None,
-            )
-            if match and match["avatar"]:
+            if match:
                 match["avatar"] = avatar
                 contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
 

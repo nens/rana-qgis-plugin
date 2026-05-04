@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Optional
 
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
@@ -8,11 +8,8 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QSizePolicy,
-    QToolButton,
     QWidget,
 )
-
-from rana_qgis_plugin.icons import refresh_icon
 
 
 @dataclass
@@ -47,7 +44,6 @@ class FilterBar(QWidget):
     def __init__(
         self,
         filters: list,
-        refresh_callback: Callable,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
@@ -84,12 +80,6 @@ class FilterBar(QWidget):
                 self._combos[config.key] = widget
                 layout.addWidget(widget)
 
-        self._refresh_btn = QToolButton()
-        self._refresh_btn.setIcon(refresh_icon)
-        self._refresh_btn.setToolTip("Refresh")
-        self._refresh_btn.clicked.connect(refresh_callback)
-        layout.addWidget(self._refresh_btn)
-
         self.setLayout(layout)
 
     def _on_combo_text_changed(self, combo: QComboBox, text: str):
@@ -109,19 +99,21 @@ class FilterBar(QWidget):
             result[key] = widget.currentData()
         return result
 
-    def set_combo_items(
-        self, key: str, items: list[tuple[str, str, Optional[object]]]
-    ):
+    def set_combo_items(self, key: str, items: list[tuple[str, str, Optional[object]]]):
         """Populate a combo filter. items: list of (label, user_data, icon_or_None)."""
         combo = self._combos[key]
         combo.blockSignals(True)
+        prev_data = combo.currentData()
         combo.clear()
-        for label, data, icon in items:
+        new_index = -1
+        for i, (label, data, icon) in enumerate(items):
             if icon:
                 combo.addItem(QIcon(icon), label, userData=data)
             else:
                 combo.addItem(label, userData=data)
-        combo.setCurrentIndex(-1)
+            if data == prev_data and prev_data is not None:
+                new_index = i
+        combo.setCurrentIndex(new_index)
         combo.blockSignals(False)
 
     def update_combo_avatar(self, key: str, user_id: str, avatar):
@@ -131,3 +123,15 @@ class FilterBar(QWidget):
             if combo.itemData(i) == user_id:
                 combo.setItemIcon(i, QIcon(avatar))
                 break
+
+    def reset(self):
+        """Reset all filters to their default (empty) state."""
+        for widget in self._line_edits.values():
+            widget.blockSignals(True)
+            widget.clear()
+            widget.blockSignals(False)
+        for widget in self._combos.values():
+            widget.blockSignals(True)
+            widget.setCurrentIndex(-1)
+            widget.blockSignals(False)
+        self._emit_changed()

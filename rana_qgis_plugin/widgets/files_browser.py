@@ -34,7 +34,11 @@ from rana_qgis_plugin.utils.generic import (
     get_file_icon_name,
 )
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
-from rana_qgis_plugin.widgets.filter_bar import ComboFilterConfig, FilterBar, TextFilterConfig
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
@@ -109,6 +113,7 @@ class FilesBrowser(QWidget):
     def update_project(self, project: dict):
         self.project = project
         self.selected_item = {"id": "", "type": "directory"}
+        self.filter_bar.reset()
         self.fetch_and_populate(project)
 
     def setup_ui(self):
@@ -117,7 +122,6 @@ class FilesBrowser(QWidget):
                 TextFilterConfig(key="name", placeholder="🔍 Search by filename"),
                 ComboFilterConfig(key="type", placeholder="All types", dynamic=True),
             ],
-            refresh_callback=self.refresh,
             parent=self,
         )
         self.filter_bar.filters_changed.connect(self._apply_filters)
@@ -172,6 +176,7 @@ class FilesBrowser(QWidget):
         selected_path = self.selected_item["id"]
         selected_name = Path(selected_path.rstrip("/")).name
         if self.selected_item["type"] == "directory":
+            self.filter_bar.reset()
             self.fetch_and_populate(self.project, selected_path)
             self.folder_selected.emit(selected_name)
         else:
@@ -353,7 +358,9 @@ class FilesBrowser(QWidget):
                 (
                     SUPPORTED_DATA_TYPES.get(dt, dt) if dt != "unknown" else "Unknown",
                     dt,
-                    get_icon_from_theme(get_file_icon_name(dt)) if dt != "unknown" else None,
+                    get_icon_from_theme(get_file_icon_name(dt))
+                    if dt != "unknown"
+                    else None,
                 )
                 for dt in seen
             ],

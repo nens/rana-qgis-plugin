@@ -18,7 +18,11 @@ from rana_qgis_plugin.utils.settings import base_url
 from rana_qgis_plugin.utils.time import (
     get_timestamp_as_numeric_item,
 )
-from rana_qgis_plugin.widgets.filter_bar import ComboFilterConfig, FilterBar, TextFilterConfig
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
 from rana_qgis_plugin.widgets.utils_delegates import (
     ContributorAvatarsDelegate,
     WordWrapDelegate,
@@ -42,15 +46,17 @@ class PublicationsBrowser(QWidget):
         self.publications_model.removeRows(0, self.publications_model.rowCount())
         self.project = project
         self.row_map.clear()
+        self.filter_bar.reset()
         self.filter_bar.set_combo_items("who", [])
 
     def setup_ui(self):
         self.filter_bar = FilterBar(
             filters=[
                 TextFilterConfig(key="name", placeholder="🔍 Search by name"),
-                ComboFilterConfig(key="who", placeholder="All contributors", dynamic=True),
+                ComboFilterConfig(
+                    key="who", placeholder="All contributors", dynamic=True
+                ),
             ],
-            refresh_callback=lambda: None,
             parent=self,
         )
         self.filter_bar.filters_changed.connect(self._apply_filters)
