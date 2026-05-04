@@ -167,7 +167,7 @@ class ProjectsBrowser(QWidget):
 
     def _apply_filters(self, filters: dict):
         name = filters.get("name", "").lower()
-        who = filters.get("who", [])
+        who = filters.get("who")
         if not self.filter_active:
             self.filtered_projects = self.tenant_projects
         else:
@@ -175,7 +175,7 @@ class ProjectsBrowser(QWidget):
                 p
                 for p in self.tenant_projects
                 if (not name or name in p["name"].lower())
-                and (not who or any(c["id"] in who for c in p.get("contributors", [])))
+                and (not who or any(c["id"] == who for c in p.get("contributors", [])))
             ]
         self.current_page = 1
         self.populate_projects()

@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from qgis.gui import QgsCheckableComboBox
-from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLineEdit,
     QSizePolicy,
@@ -25,7 +25,7 @@ class TextFilterConfig:
 
 @dataclass
 class ComboFilterConfig:
-    """Configuration for a multi-select combo filter."""
+    """Configuration for a single-select combo filter with optional icons."""
 
     key: str
     placeholder: str
@@ -35,11 +35,11 @@ class ComboFilterConfig:
 
 
 class FilterBar(QWidget):
-    """Horizontal filter bar with text search and multi-select combo filters.
+    """Horizontal filter bar with text search and combo filters.
 
     Emits filters_changed(dict) whenever any filter value changes.
     The dict keys match the filter config keys; text filters return str,
-    combo filters return list of checked userData values.
+    combo filters return the selected userData value (or None if unselected).
     """
 
     filters_changed = pyqtSignal(dict)
@@ -52,7 +52,7 @@ class FilterBar(QWidget):
     ):
         super().__init__(parent)
         self._line_edits: dict[str, QLineEdit] = {}
-        self._combos: dict[str, QgsCheckableComboBox] = {}
+        self._combos: dict[str, QComboBox] = {}
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -66,13 +66,21 @@ class FilterBar(QWidget):
                 self._line_edits[config.key] = widget
                 layout.addWidget(widget)
             elif isinstance(config, ComboFilterConfig):
-                widget = QgsCheckableComboBox()
-                widget.setDefaultText(config.placeholder)
+                widget = QComboBox()
                 widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+                widget.setEditable(True)
+                widget.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+                widget.completer().setCaseSensitivity(Qt.CaseInsensitive)
+                if widget.lineEdit():
+                    widget.lineEdit().setPlaceholderText(config.placeholder)
+                    widget.lineEdit().textChanged.connect(
+                        lambda text, w=widget: self._on_combo_text_changed(w, text)
+                    )
                 if not config.dynamic:
                     for label, data in config.items:
-                        widget.addItemWithCheckState(label, 0, userData=data)
-                widget.checkedItemsChanged.connect(self._emit_changed)
+                        widget.addItem(label, userData=data)
+                    widget.setCurrentIndex(-1)
+                widget.currentIndexChanged.connect(self._emit_changed)
                 self._combos[config.key] = widget
                 layout.addWidget(widget)
 
@@ -84,6 +92,11 @@ class FilterBar(QWidget):
 
         self.setLayout(layout)
 
+    def _on_combo_text_changed(self, combo: QComboBox, text: str):
+        """Reset combo selection when the text field is cleared."""
+        if not text:
+            combo.setCurrentIndex(-1)
+
     def _emit_changed(self):
         self.filters_changed.emit(self.get_filters())
 
@@ -93,22 +106,22 @@ class FilterBar(QWidget):
         for key, widget in self._line_edits.items():
             result[key] = widget.text()
         for key, widget in self._combos.items():
-            result[key] = widget.checkedItemsData()
+            result[key] = widget.currentData()
         return result
 
     def set_combo_items(
-        self, key: str, items: list[tuple[str, str, Optional[QIcon]]]
+        self, key: str, items: list[tuple[str, str, Optional[object]]]
     ):
         """Populate a combo filter. items: list of (label, user_data, icon_or_None)."""
         combo = self._combos[key]
         combo.blockSignals(True)
-        combo.deselectAllOptions()
-        while combo.count():
-            combo.removeItem(0)
+        combo.clear()
         for label, data, icon in items:
-            combo.addItemWithCheckState(label, 0, userData=data)
             if icon:
-                combo.setItemIcon(combo.count() - 1, QIcon(icon))
+                combo.addItem(QIcon(icon), label, userData=data)
+            else:
+                combo.addItem(label, userData=data)
+        combo.setCurrentIndex(-1)
         combo.blockSignals(False)
 
     def update_combo_avatar(self, key: str, user_id: str, avatar):
