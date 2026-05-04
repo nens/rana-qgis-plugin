@@ -1,8 +1,53 @@
+import time
+
 from qgis.core import QgsMapRendererParallelJob
-from qgis.PyQt.QtCore import QSize, Qt
+from qgis.PyQt.QtCore import QSize, Qt, QTimer
 from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QTreeView
+from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QTreeView
+
+
+def make_modal_handler(qtbot, modal_type, action, timeout=30000, poll_interval=500):
+    """Create a handler that polls for an active modal and dismisses it.
+
+    Schedules itself repeatedly via QTimer until the expected modal appears or
+    the timeout expires. This avoids the one-shot timing problem where the modal
+    has not appeared yet when the timer fires (common on slow CI runners).
+
+    Args:
+        qtbot: The pytest-qt bot instance.
+        modal_type: The expected widget class (e.g. QMessageBox, QFileDialog).
+        action: A callable(qtbot, modal) that performs the dismissal.
+        timeout: Maximum time in ms to keep polling (default 30000).
+        poll_interval: How often to check for the modal in ms (default 500).
+
+    Returns:
+        A no-arg callable suitable for QTimer.singleShot.
+
+    Example::
+
+        def dismiss(qtbot, modal):
+            qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+        QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, dismiss))
+    """
+    deadline = [None]
+
+    def handler():
+        if deadline[0] is None:
+            deadline[0] = time.monotonic() + timeout / 1000.0
+
+        modal = QApplication.activeModalWidget() or QApplication.activeWindow()
+        if isinstance(modal, modal_type):
+            modal.setFocus()
+            QTest.qWait(200)
+            action(qtbot, modal)
+            return
+
+        if time.monotonic() < deadline[0]:
+            QTimer.singleShot(poll_interval, handler)
+
+    return handler
 
 
 def click_tree_item(tree: QTreeView, index, qtbot):
