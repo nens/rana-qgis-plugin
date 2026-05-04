@@ -232,7 +232,7 @@ class RanaBrowser(QWidget):
         self.project_publication_added.connect(self.publications_browser.add_items)
         self.project_publication_updated.connect(self.publications_browser.update_item)
         # Connect refresh buttons
-        self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
+        self.projects_browser.projects_refreshed.connect(self._on_projects_refreshed)
         refresh_btn.clicked.connect(self.refresh_project_widget)
         # On selecting a project in the project view
         # - update selected project in file browser and file_view
@@ -526,6 +526,9 @@ class RanaBrowser(QWidget):
                 and self.rana_publications.currentIndex() == 0
             ):
                 self.refresh()
+
+    def _on_projects_refreshed(self):
+        self.last_refresh_time = time.time()
 
     def refresh_projects_browser(self):
         self.projects_browser.refresh()
