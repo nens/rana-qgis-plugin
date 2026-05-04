@@ -350,7 +350,11 @@ class FilesBrowser(QWidget):
                 seen.add(dt)
         items = sorted(
             [
-                (SUPPORTED_DATA_TYPES.get(dt, dt) if dt != "unknown" else "Unknown", dt, None)
+                (
+                    SUPPORTED_DATA_TYPES.get(dt, dt) if dt != "unknown" else "Unknown",
+                    dt,
+                    get_icon_from_theme(get_file_icon_name(dt)) if dt != "unknown" else None,
+                )
                 for dt in seen
             ],
             key=lambda x: x[0],
