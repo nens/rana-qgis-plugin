@@ -34,6 +34,7 @@ from rana_qgis_plugin.utils.generic import (
     get_file_icon_name,
 )
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
+from rana_qgis_plugin.widgets.filter_bar import ComboFilterConfig, FilterBar, TextFilterConfig
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
@@ -111,6 +112,15 @@ class FilesBrowser(QWidget):
         self.fetch_and_populate(project)
 
     def setup_ui(self):
+        self.filter_bar = FilterBar(
+            filters=[
+                TextFilterConfig(key="name", placeholder="🔍 Search by filename"),
+                ComboFilterConfig(key="type", placeholder="All types", dynamic=True),
+            ],
+            refresh_callback=self.refresh,
+            parent=self,
+        )
+        self.filter_bar.filters_changed.connect(self._apply_filters)
         self.files_tv = ContentAwareTreeView()
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
@@ -133,6 +143,7 @@ class FilesBrowser(QWidget):
         btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
         btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
         layout = QVBoxLayout(self)
+        layout.addWidget(self.filter_bar)
         layout.addWidget(self.files_tv)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
@@ -307,8 +318,44 @@ class FilesBrowser(QWidget):
 
         self.files_tv.sortByColumn(sort_column, sort_order)
         self.files_tv.setSortingEnabled(True)
-
         self.files_tv.resize_columns_aware_of_collapsed_items()
+        self._populate_type_combo()
+        self._apply_filters(self.filter_bar.get_filters())
+
+    def _apply_filters(self, filters: dict):
+        name = filters.get("name", "").lower()
+        file_type = filters.get("type")
+        root = self.files_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            name_item = root.child(row, 0)
+            item_dict = name_item.data(Qt.ItemDataRole.UserRole)
+            if item_dict is None:
+                continue
+            is_dir = item_dict.get("type") == "directory"
+            item_name = os.path.basename(item_dict["id"].rstrip("/")).lower()
+            item_data_type = item_dict.get("data_type") or "unknown"
+            visible = (not name or name in item_name) and (
+                is_dir or not file_type or item_data_type == file_type
+            )
+            self.files_tv.setRowHidden(row, QModelIndex(), not visible)
+
+    def _populate_type_combo(self):
+        seen = set()
+        root = self.files_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            name_item = root.child(row, 0)
+            item_dict = name_item.data(Qt.ItemDataRole.UserRole)
+            if item_dict and item_dict.get("type") == "file":
+                dt = item_dict.get("data_type") or "unknown"
+                seen.add(dt)
+        items = sorted(
+            [
+                (SUPPORTED_DATA_TYPES.get(dt, dt) if dt != "unknown" else "Unknown", dt, None)
+                for dt in seen
+            ],
+            key=lambda x: x[0],
+        )
+        self.filter_bar.set_combo_items("type", items)
 
 
 class CreateFolderDialog(QDialog):
