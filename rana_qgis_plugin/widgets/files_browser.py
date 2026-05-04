@@ -337,7 +337,7 @@ class FilesBrowser(QWidget):
             if item_dict is None:
                 continue
             is_dir = item_dict.get("type") == "directory"
-            item_name = os.path.basename(item_dict["id"].rstrip("/")).lower()
+            item_name = item_dict["id"].rstrip("/").split("/")[-1].lower()
             item_data_type = item_dict.get("data_type") or "unknown"
             visible = (not name or name in item_name) and (
                 is_dir or not file_type or item_data_type == file_type
