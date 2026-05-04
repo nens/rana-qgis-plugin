@@ -30,7 +30,7 @@ from rana_qgis_plugin.utils.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
-from rana_qgis_plugin.widgets.filter_bar import ComboFilterConfig, FilterBar, TextFilterConfig
+from rana_qgis_plugin.widgets.filter_bar import FilterBar, TextFilterConfig, ComboFilterConfig
 from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
 
@@ -71,12 +71,6 @@ class ProjectsBrowser(QWidget):
             filters=[
                 TextFilterConfig(key="name", placeholder="🔍 Search for project by name"),
                 ComboFilterConfig(key="who", placeholder="All contributors", dynamic=True),
-                ComboFilterConfig(
-                    key="status",
-                    placeholder="All statuses",
-                    dynamic=False,
-                    items=[("Active", "active"), ("Archived", "archived")],
-                ),
             ],
             refresh_callback=self.refresh,
             parent=self,
@@ -169,12 +163,11 @@ class ProjectsBrowser(QWidget):
     @property
     def filter_active(self):
         f = self.filter_bar.get_filters()
-        return bool(f.get("name") or f.get("who") or f.get("status"))
+        return bool(f.get("name") or f.get("who"))
 
     def _apply_filters(self, filters: dict):
         name = filters.get("name", "").lower()
         who = filters.get("who", [])
-        status = filters.get("status", [])
         if not self.filter_active:
             self.filtered_projects = self.tenant_projects
         else:
@@ -183,7 +176,6 @@ class ProjectsBrowser(QWidget):
                 for p in self.tenant_projects
                 if (not name or name in p["name"].lower())
                 and (not who or any(c["id"] in who for c in p.get("contributors", [])))
-                and (not status or p.get("status") in status)
             ]
         self.current_page = 1
         self.populate_projects()
