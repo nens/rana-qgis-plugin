@@ -2,7 +2,7 @@ import math
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
@@ -21,7 +21,11 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
-from rana_qgis_plugin.utils.settings import get_hcc_url_override, rana_cache_dir
+from rana_qgis_plugin.utils.settings import (
+    base_url,
+    get_hcc_url_override,
+    rana_cache_dir,
+)
 
 
 def is_writable(working_dir: str) -> bool:
@@ -373,3 +377,12 @@ def save_layer_changes(layer: QgsVectorLayer) -> tuple[bool, str | None]:
     except Exception as e:
         # Catch any exceptions from commitChanges (e.g., database errors)
         return False, f"Error committing changes: {str(e)}"
+
+
+def get_hcc_revision_url(
+    schema_id: int, revision_number: int, organisation_id: Optional[str] = None
+) -> str:
+    url = f"{base_url()}/hcc-management/schematisations/{schema_id}/{revision_number}/"
+    if organisation_id:
+        url += f"?organisation={organisation_id}"
+    return url

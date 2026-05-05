@@ -7,9 +7,16 @@ from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QSettings,
     Qt,
+    QUrl,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import (
+    QColor,
+    QDesktopServices,
+    QIcon,
+    QStandardItem,
+    QStandardItemModel,
+)
 from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -38,6 +45,7 @@ from rana_qgis_plugin.utils.generic import (
     NumericItem,
     display_bytes,
     get_file_icon_name,
+    get_hcc_revision_url,
     get_threedi_api,
 )
 from rana_qgis_plugin.utils.spatial import get_bbox_area_in_m2
@@ -260,7 +268,9 @@ class FileView(QWidget):
                 continue
             btn = QPushButton(action.value)
             action_signal = self.file_signals.get_signal(action)
-            if action == FileAction.RENAME:
+            if action == FileAction.OPEN_IN_BROWSER:
+                btn.clicked.connect(self.open_in_browser)
+            elif action == FileAction.RENAME:
                 btn.clicked.connect(lambda _: self.edit_file_name(self.selected_file))
             else:
                 btn.clicked.connect(
@@ -439,6 +449,20 @@ class FileView(QWidget):
             QWidget().setLayout(self.general_box.layout())
         self.general_box.setLayout(layout)
         self.general_box.setCollapsed(False)
+
+    def open_in_browser(self):
+        # skip if there is no file, wrong data type is selected, or there is no schematsiation
+        if (
+            (not self.selected_file)
+            or (self.selected_file.get("data_type") != "threedi_schematisation")
+            or (not self.schematisation)
+        ):
+            return
+        schematisation = self.schematisation.get("schematisation", {})
+        revision = self.schematisation.get("latest_revision", {})
+        url = get_hcc_revision_url(schematisation.get("id"), revision.get("id"))
+        self.communication.log_info(f"{schematisation=}")
+        QDesktopServices.openUrl(QUrl(url))
 
     def update_more_box(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
