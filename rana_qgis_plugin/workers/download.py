@@ -592,28 +592,23 @@ class ResultsDownloader(BaseDownloader):
         """Download raw zip + processed result raster for one result file."""
         target_dir = self.download_context.local_dir
         target_file = self.download_context.local_file_path
-
-        # Skip if the processed result already exists
-        if target_file.exists() and not self.overwrite:
-            signals.finished.emit()
-            return
-
         target_dir.mkdir(parents=True, exist_ok=True)
         cache_file = Path(get_local_file_path(self.project["slug"], self.file["id"]))
-
-        try:
-            url = get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
-            self.download_url(
-                url, cache_file, signals.progress, progress_min=0, progress_max=50
-            )
-        except FetchError as e:
-            signals.failed.emit(
-                f"Failed to fetch url for {self.project['id']}: {str(e)}"
-            )
-            return
-        except requests.exceptions.RequestException as e:
-            signals.failed.emit(f"Failed to download file: {str(e)}")
-            return
+        # Download cache file if not present
+        if not cache_file.exists():
+            try:
+                url = get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+                self.download_url(
+                    url, cache_file, signals.progress, progress_min=0, progress_max=50
+                )
+            except FetchError as e:
+                signals.failed.emit(
+                    f"Failed to fetch url for {self.project['id']}: {str(e)}"
+                )
+                return
+            except requests.exceptions.RequestException as e:
+                signals.failed.emit(f"Failed to download file: {str(e)}")
+                return
         # Extract nested log zip if present
         if cache_file.exists():
             with zipfile.ZipFile(cache_file, "r") as zip_ref:
@@ -631,7 +626,12 @@ class ResultsDownloader(BaseDownloader):
                     )
             except KeyError:
                 signals.warning.emit("Subarchive info missing, ignoring.")
-        if self.result and self.result.get("attachment_url"):
+        # Download target file (water depth) if it doesn't exist and in the results
+        if (
+            not target_file.exists()
+            and self.result
+            and self.result.get("attachment_url")
+        ):
             try:
                 bypass_max_path_limit(str(target_file))
                 self.download_url(

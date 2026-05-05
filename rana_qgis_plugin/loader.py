@@ -555,6 +555,7 @@ class Loader(QObject):
                 context = ResultsDownloadContext(
                     scenario_info, project["slug"], file["id"], result
                 )
+                self.communication.log_info(f"{context.local_file_path=}")
                 downloaders.append(
                     ResultsDownloader(context, project, file, result=result)
                 )
