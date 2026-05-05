@@ -41,6 +41,9 @@ class FileUploadWorker(QThread):
             return False
         return True  # Continue to upload
 
+    def update_payload(self, payload):
+        return payload.copy()
+
     @pyqtSlot()
     def run(self):
         # For a single file finished is only emitted if upload was successfull
@@ -91,6 +94,9 @@ class FileUploadWorker(QThread):
                 response.raise_for_status()
             # Step 3: Complete the upload
             self.progress.emit(int(0.8 * progress_step + progress_start), "")
+
+            upload_response = self.update_payload(upload_response)
+
             response = finish_file_upload(
                 self.project["id"],
                 upload_response,
@@ -121,10 +127,24 @@ class ExistingFileUploadWorker(FileUploadWorker):
         self.file_overwrite = False
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
+        self.file = file
+
         self.finished.connect(self._finish)
 
     def get_online_path(self, local_path: Path) -> str:
         return self.online_path
+
+    def update_payload(self, payload):
+        # In case of existing files, we would like to reset some meta data
+        result = payload.copy()
+        if "meta" in self.file["descriptor"]:
+            if "style_id" in self.file["descriptor"]["meta"]:
+                result["descriptor"] = {
+                    "meta": {"style_id": self.file["descriptor"]["meta"]["style_id"]},
+                    "description": self.file["descriptor"]["description"],
+                    "data_type": self.file["descriptor"]["data_type"],
+                }
+        return result
 
     def handle_file_conflict(self, online_path):
         local_last_modified = QSettings().value(self.last_modified_key)
