@@ -211,6 +211,8 @@ class FilesBrowser(QWidget):
         schematisation = get_threedi_schematisation(
             self.communication, selected_item["descriptor_id"]
         )
+        if not schematisation or not schematisation.get("management_url"):
+            return
         QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):

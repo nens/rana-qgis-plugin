@@ -648,6 +648,7 @@ class FileView(QWidget):
             (not self.selected_file)
             or (self.selected_file.get("data_type") != "threedi_schematisation")
             or (not self.schematisation)
+            or (not self.schematisation.get("management_url"))
         ):
             return
         QDesktopServices.openUrl(QUrl(self.schematisation["management_url"]))

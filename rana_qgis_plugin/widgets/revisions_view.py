@@ -100,6 +100,8 @@ class RevisionsView(QWidget):
         menu.popup(self.revisions_table.viewport().mapToGlobal(pos))
 
     def open_in_browser(self, schematisation, threedi_revision):
+        if not schematisation.get("management_url"):
+            return
         schema_url = schematisation["management_url"]
         old_rev_id = schema_url.split("?")[0].split("/")[-1]
         url = schema_url.replace(old_rev_id, str(threedi_revision.id))

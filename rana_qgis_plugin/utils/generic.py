@@ -21,11 +21,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
-from rana_qgis_plugin.utils.settings import (
-    base_url,
-    get_hcc_url_override,
-    rana_cache_dir,
-)
+from rana_qgis_plugin.utils.settings import get_hcc_url_override, rana_cache_dir
 
 
 def is_writable(working_dir: str) -> bool:
