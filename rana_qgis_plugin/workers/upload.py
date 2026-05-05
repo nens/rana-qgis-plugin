@@ -11,6 +11,7 @@ from qgis.PyQt.QtCore import (
 
 from rana_qgis_plugin.utils.api import (
     finish_file_upload,
+    get_tenant_file_descriptor,
     get_tenant_project_file,
     start_file_upload,
 )
@@ -137,12 +138,14 @@ class ExistingFileUploadWorker(FileUploadWorker):
     def update_payload(self, payload):
         # In case of existing files, we would like to reset some meta data
         result = payload.copy()
-        if "meta" in self.file["descriptor"]:
-            if "style_id" in self.file["descriptor"]["meta"]:
+        descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
+
+        if "meta" in descriptor:
+            if "style_id" in descriptor["meta"]:
                 result["descriptor"] = {
-                    "meta": {"style_id": self.file["descriptor"]["meta"]["style_id"]},
-                    "description": self.file["descriptor"]["description"],
-                    "data_type": self.file["descriptor"]["data_type"],
+                    "meta": {"style_id": descriptor["meta"]["style_id"]},
+                    "description": descriptor["description"],
+                    "data_type": descriptor["data_type"],
                 }
         return result
 
