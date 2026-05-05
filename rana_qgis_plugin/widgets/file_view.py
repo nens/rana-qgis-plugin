@@ -45,7 +45,6 @@ from rana_qgis_plugin.utils.generic import (
     NumericItem,
     display_bytes,
     get_file_icon_name,
-    get_hcc_revision_url,
     get_threedi_api,
 )
 from rana_qgis_plugin.utils.spatial import get_bbox_area_in_m2
@@ -450,20 +449,6 @@ class FileView(QWidget):
         self.general_box.setLayout(layout)
         self.general_box.setCollapsed(False)
 
-    def open_in_browser(self):
-        # skip if there is no file, wrong data type is selected, or there is no schematsiation
-        if (
-            (not self.selected_file)
-            or (self.selected_file.get("data_type") != "threedi_schematisation")
-            or (not self.schematisation)
-        ):
-            return
-        schematisation = self.schematisation.get("schematisation", {})
-        revision = self.schematisation.get("latest_revision", {})
-        url = get_hcc_revision_url(schematisation.get("id"), revision.get("id"))
-        self.communication.log_info(f"{schematisation=}")
-        QDesktopServices.openUrl(QUrl(url))
-
     def update_more_box(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         meta = descriptor.get("meta") if descriptor else None
@@ -656,6 +641,16 @@ class FileView(QWidget):
             self.btn_stack.hide()
             self.btn_export_gpkg.hide()
         self.update_file_action_buttons(selected_file)
+
+    def open_in_browser(self):
+        # skip if there is no file, wrong data type is selected, or there is no schematsiation
+        if (
+            (not self.selected_file)
+            or (self.selected_file.get("data_type") != "threedi_schematisation")
+            or (not self.schematisation)
+        ):
+            return
+        QDesktopServices.openUrl(QUrl(self.schematisation["management_url"]))
 
     def refresh(self):
         # Skip refresh because user is interacting with state of the file
