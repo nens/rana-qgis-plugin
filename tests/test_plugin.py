@@ -18,3 +18,10 @@ def qgis_application() -> QgsApplication:
     gc.collect()
     qgs.exitQgis()
     gc.collect()
+
+
+def test_rana_browser(qgis_application):
+    """Test that the RanaBrowser widget can be instantiated"""
+    communication = UICommunication()
+    widget = RanaBrowser(communication)
+    assert widget is not None
