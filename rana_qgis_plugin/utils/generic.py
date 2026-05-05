@@ -2,7 +2,7 @@ import math
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
