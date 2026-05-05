@@ -438,7 +438,6 @@ class FileView(QWidget):
         if self.general_box.layout():
             QWidget().setLayout(self.general_box.layout())
         self.general_box.setLayout(layout)
-        self.general_box.setCollapsed(False)
 
     def update_more_box(self, selected_file):
         descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
@@ -549,7 +548,6 @@ class FileView(QWidget):
         if self.more_box.layout():
             QWidget().setLayout(self.more_box.layout())
         self.more_box.setLayout(layout)
-        self.more_box.setCollapsed(False)
 
     def update_files_box(self, selected_file):
         # only show files for schematisation with revision
@@ -604,7 +602,6 @@ class FileView(QWidget):
             size_item.setData(file_size, role=Qt.ItemDataRole.UserRole)
             self.files_model.appendRow([name_item, data_type_item, size_item])
         self.files_box.show()
-        self.files_box.setCollapsed(False)
 
     def show_selected_file_details(self, selected_file):
         self.update_selected_file(selected_file)
