@@ -76,6 +76,7 @@ def test_get_file_actions_by_data_type(data_type, expected_actions):
                 FileAction.OPEN_IN_QGIS,
                 FileAction.SAVE_REVISION,
                 FileAction.VIEW_REVISIONS,
+                FileAction.OPEN_IN_BROWSER,
             },
         ),
         (
@@ -83,6 +84,7 @@ def test_get_file_actions_by_data_type(data_type, expected_actions):
             {
                 FileAction.REMOVE_FROM_PROJECT,
                 FileAction.RENAME,
+                FileAction.OPEN_IN_BROWSER,
             },
         ),
     ],
