@@ -1,6 +1,7 @@
 import math
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
@@ -367,3 +368,20 @@ def save_layer_changes(layer: QgsVectorLayer) -> tuple[bool, str | None]:
     except Exception as e:
         # Catch any exceptions from commitChanges (e.g., database errors)
         return False, f"Error committing changes: {str(e)}"
+
+
+def cleanup_folder(folder: Path, communication) -> None:
+    """Remove all contents of a folder, keeping the folder itself.
+
+    Failures are logged via communication.log_warn and never raised.
+    """
+    if not folder.exists():
+        return
+    for item in folder.iterdir():
+        try:
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+        except Exception as exc:
+            communication.log_warn(f"Cache cleanup failed for {item}: {exc}")
