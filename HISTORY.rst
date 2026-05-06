@@ -5,7 +5,7 @@ History
 1.2.12 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Fix styling for geopackage export
 
 
 1.2.11 (2026-05-06)
