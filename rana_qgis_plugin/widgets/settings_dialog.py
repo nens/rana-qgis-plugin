@@ -1,6 +1,7 @@
 import os
 
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -18,10 +19,12 @@ from rana_qgis_plugin.utils.api import get_frontend_settings
 from rana_qgis_plugin.utils.generic import is_writable
 from rana_qgis_plugin.utils.settings import (
     base_url,
+    cleanup_cache_on_close,
     get_advanced_settings,
     hcc_working_dir,
     rana_cache_dir,
     set_base_url,
+    set_cleanup_cache_on_close,
     set_cognito_client_id,
     set_cognito_client_id_native,
     set_hcc_working_dir,
@@ -72,6 +75,9 @@ class SettingsDialog(QDialog):
         )
         if rana_cache_dir(return_default=False) is None:
             self.cache_dir_le.setText(os.path.join(os.path.expanduser("~"), "Rana"))
+        self.cleanup_cache_cb = QCheckBox("Empty cache directory on closing QGIS", files_group)
+        self.cleanup_cache_cb.setChecked(cleanup_cache_on_close())
+        files_group.layout().addWidget(self.cleanup_cache_cb, 1, 0, 1, 3)
         layout.addWidget(files_group)
 
         advanced_settings = get_advanced_settings()
@@ -122,6 +128,7 @@ class SettingsDialog(QDialog):
 
         set_hcc_working_dir(self.working_dir_le.text())
         set_rana_cache_dir(self.cache_dir_le.text())
+        set_cleanup_cache_on_close(self.cleanup_cache_cb.isChecked())
 
         return super().accept()
 
