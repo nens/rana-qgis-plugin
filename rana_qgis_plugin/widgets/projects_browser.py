@@ -2,25 +2,20 @@ import math
 
 from qgis.PyQt.QtCore import (
     QModelIndex,
-    QSize,
     Qt,
     QUrl,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
     QDesktopServices,
-    QIcon,
     QStandardItem,
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
-    QComboBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMenu,
     QPushButton,
-    QSizePolicy,
     QToolButton,
     QTreeView,
     QVBoxLayout,
@@ -36,6 +31,11 @@ from rana_qgis_plugin.utils.settings import base_url, get_tenant_id
 from rana_qgis_plugin.utils.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
+)
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
 )
 from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
@@ -72,27 +72,19 @@ class ProjectsBrowser(QWidget):
                 return
 
     def setup_ui(self):
-        # Create search box
-        self.projects_search = QLineEdit()
-        self.projects_search.setPlaceholderText("🔍 Search for project by name")
-        self.projects_search.textChanged.connect(self.filter_projects)
-        self.projects_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        # Create filter by contributor box
-        self.contributor_filter = QComboBox()
-        self.contributor_filter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.contributor_filter.setEditable(True)
-        self.contributor_filter.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        # add auto complete
-        self.contributor_filter.completer().setCaseSensitivity(
-            Qt.CaseSensitivity.CaseInsensitive
+        # Create filter bar
+        self.filter_bar = FilterBar(
+            filters=[
+                TextFilterConfig(
+                    key="name", placeholder="🔍 Search for project by name"
+                ),
+                ComboFilterConfig(
+                    key="who", placeholder="All contributors", dynamic=True
+                ),
+            ],
+            parent=self,
         )
-        # setup placeholder and reset filter on no user selected
-        if self.contributor_filter.lineEdit():
-            self.contributor_filter.lineEdit().setPlaceholderText("All contributors")
-            self.contributor_filter.lineEdit().textChanged.connect(
-                self._on_contributor_filter_text_changed
-            )
-        self.contributor_filter.currentIndexChanged.connect(self.filter_projects)
+        self.filter_bar.filters_changed.connect(self._apply_filters)
         # Create tree view with project files and model
         self.projects_model = QStandardItemModel()
         self.projects_tv = QTreeView()
@@ -109,11 +101,11 @@ class ProjectsBrowser(QWidget):
         avatar_delegate = ContributorAvatarsDelegate(self.projects_tv)
         self.projects_tv.setItemDelegateForColumn(1, avatar_delegate)
         self.projects_tv.doubleClicked.connect(self.select_project)
-        layout = QVBoxLayout(self.projects_tv.viewport())
-        layout.setContentsMargins(0, 0, 0, 0)
-        # Create placeholder for cases with no projects and put it in a layout so it can be shown
+        viewport_layout = QVBoxLayout(self.projects_tv.viewport())
+        viewport_layout.setContentsMargins(0, 0, 0, 0)
+        # Create placeholder for cases with no projects
         self.empty_label = self.get_empty_placeholder()
-        layout.addWidget(self.empty_label)
+        viewport_layout.addWidget(self.empty_label)
         # Create navigation buttons
         self.btn_previous = QPushButton("<")
         self.label_page_number = QLabel("Page 1/1")
@@ -125,8 +117,7 @@ class ProjectsBrowser(QWidget):
         self.refresh_btn.setIcon(refresh_icon)
         # Organize widgets in layouts
         top_layout = QHBoxLayout()
-        top_layout.addWidget(self.projects_search)
-        top_layout.addWidget(self.contributor_filter)
+        top_layout.addWidget(self.filter_bar)
         top_layout.addWidget(self.refresh_btn)
         pagination_layout = QHBoxLayout()
         pagination_layout.addWidget(self.btn_previous)
@@ -162,11 +153,6 @@ class ProjectsBrowser(QWidget):
         empty_label.hide()
         return empty_label
 
-    def _on_contributor_filter_text_changed(self, text):
-        # reset contribute filter with empty text
-        if not text:
-            self.contributor_filter.setCurrentIndex(-1)
-
     def fetch_projects(self):
         self.tenant_projects = get_tenant_projects(self.communication)
 
@@ -185,66 +171,32 @@ class ProjectsBrowser(QWidget):
         self.fetch_projects()
         self.update_users()
         self.sort_projects(2, Qt.SortOrder.AscendingOrder, populate=False)
-        if self.filter_active:
-            self.filter_projects()
-        else:
-            self.populate_projects()
+        self._apply_filters(self.filter_bar.get_filters())
         self.populate_contributors()
         self.projects_refreshed.emit()
 
     @property
     def filter_active(self):
-        return (
-            self.projects_search.text() or self.contributor_filter.currentIndex() >= 0
-        )
+        f = self.filter_bar.get_filters()
+        return bool(f.get("name") or f.get("who"))
 
-    def filter_projects(self):
+    def _apply_filters(self, filters: dict):
+        name = filters.get("name", "").lower()
+        who = filters.get("who")
         if not self.filter_active:
             self.filtered_projects = self.tenant_projects
         else:
-            # create all filters
-            project_filters = [
-                self.get_projects_filtered_by_name,
-                self.get_projects_filtered_by_contributor,
-            ]
-            # collect all project ids that are included in each active filter
-            project_ids = [
-                {project["id"] for project in filter_func()}
-                for filter_func in project_filters
-            ]
-            # Find project ids that are included in all filters
-            common_ids = set.intersection(*project_ids)
             self.filtered_projects = [
-                project
-                for project in self.tenant_projects
-                if project["id"] in common_ids
+                p
+                for p in self.tenant_projects
+                if (not name or name in p["name"].lower())
+                and (not who or any(c["id"] == who for c in p.get("contributors", [])))
             ]
+        self.current_page = 1
         self.populate_projects()
 
-    def get_projects_filtered_by_name(self):
-        text = self.projects_search.text()
-        if text:
-            return [
-                project
-                for project in self.tenant_projects
-                if text.lower() in project["name"].lower()
-            ]
-        else:
-            return self.tenant_projects
-
-    def get_projects_filtered_by_contributor(self):
-        selected_user_id = self.contributor_filter.currentData()
-        if selected_user_id is None:
-            return self.tenant_projects
-        else:
-            selected_projects = []
-            for project in self.tenant_projects:
-                contributors = [
-                    contributor["id"] for contributor in project.get("contributors", [])
-                ]
-                if selected_user_id in contributors:
-                    selected_projects.append(project)
-            return selected_projects
+    def filter_projects(self):
+        self._apply_filters(self.filter_bar.get_filters())
 
     def sort_projects(self, column_index: int, order: Qt.SortOrder, populate=True):
         # Ensure indicator is set also on direct call
@@ -360,25 +312,18 @@ class ProjectsBrowser(QWidget):
 
     def update_avatar(self, user_id: str):
         avatar = self.avatar_cache.get_avatar_from_cache(user_id)
-        # Update contributor_filter
-        index = self.contributor_filter.findData(user_id)
-        if index != -1:  # -1 means not found
-            self.contributor_filter.setItemIcon(index, QIcon(avatar))
+        # Update who filter combo
+        self.filter_bar.update_combo_avatar("who", user_id, avatar)
         # Update projects model
         root = self.projects_model.invisibleRootItem()
         for row in range(root.rowCount()):
             contributors_item = root.child(row, 1)
             contributors_data = contributors_item.data(Qt.ItemDataRole.UserRole)
-            # Check if any contributors in the data match the updated one
             match = next(
-                (
-                    contributor
-                    for contributor in contributors_data
-                    if contributor["id"] == user_id
-                ),
+                (c for c in contributors_data if c["id"] == user_id),
                 None,
             )
-            if match and match["avatar"]:
+            if match:
                 match["avatar"] = avatar
                 contributors_item.setData(contributors_data, Qt.ItemDataRole.UserRole)
 
@@ -401,19 +346,14 @@ class ProjectsBrowser(QWidget):
             all_contributors.values(),
             key=lambda x: f"{x['given_name']} {x['family_name']}".lower(),
         )
-        # Update combo box items
-        self.contributor_filter.blockSignals(True)
-        self.contributor_filter.clear()
+        items = []
         for user in sorted_users:
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            user_image = self.avatar_cache.get_avatar_for_user(user)
-            self.contributor_filter.addItem(
-                QIcon(user_image), display_name, userData=user["id"]
-            )
-        self.contributor_filter.setCurrentIndex(-1)
-        self.contributor_filter.blockSignals(False)
+            avatar = self.avatar_cache.get_avatar_for_user(user)
+            items.append((display_name, user["id"], avatar))
+        self.filter_bar.set_combo_items("who", items)
 
     def update_pagination(self, projects: list):
         total_items = len(projects)
