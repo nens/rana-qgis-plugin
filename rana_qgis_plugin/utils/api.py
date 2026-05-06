@@ -503,8 +503,8 @@ def finish_file_upload(project_id: str, payload: dict):
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/upload"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.put(payload=payload)
-    if status:
+    result, status = network_manager.put(payload=payload)
+    if result:
         response = network_manager.content
         return response
     return None

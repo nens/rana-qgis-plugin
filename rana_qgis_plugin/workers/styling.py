@@ -183,7 +183,11 @@ class VectorStyleBuilder(StyleBuilder):
         for name, data in json_data:
             json_path = self.tempdir.joinpath(name).with_suffix(".json")
             with open(json_path, "w") as f:
-                json.dump(data, f)
+                with open(json_path, "w") as f:
+                    if isinstance(data, str):
+                        f.write(data)
+                    else:
+                        json.dump(data, f)
             files.append(("files", json_path.name, str(json_path), "application/json"))
         return files
 
