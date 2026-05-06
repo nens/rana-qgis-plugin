@@ -699,6 +699,14 @@ def get_user_image(communication: UICommunication, user_id):
         return None
 
 
+def get_user(params: dict):
+    url = f"{api_url()}/tenants/{get_tenant_id()}/users"
+    user_info = simple_fetch(url, params)["items"]
+    if len(user_info) != 1:
+        return None
+    return user_info[0]
+
+
 def get_project_jobs(project_id: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

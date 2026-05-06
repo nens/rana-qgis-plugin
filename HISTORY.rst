@@ -5,7 +5,7 @@ History
 1.2.13 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Show user that created the last commit in de FileView next to the commit message (nens/#4169)
 
 
 1.2.12 (2026-05-06)
