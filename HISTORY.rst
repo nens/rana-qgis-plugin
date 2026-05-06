@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.11 (unreleased)
+1.2.11 (2026-05-06)
 -------------------
 
 - Add publications browser (nens/rana-qgis-plugin#302)
