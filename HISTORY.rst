@@ -34,6 +34,7 @@ History
 - Fix warnings upon logout (nens/rana#3813)
 - Properly handle errers during revision upload and inform user about model creation (nens/rana#3741)
 - Properly load qml files when layer name contains special characters (nens/rana#4142)
+- Style now maintained when saving data (#331)
 
 
 1.2.10 (2026-04-14)
