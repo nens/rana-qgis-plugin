@@ -122,15 +122,6 @@ class RanaQgisPlugin:
         # Connect cache cleanup to QGIS exit signal
         QgsApplication.instance().aboutToQuit.connect(self._on_qgis_closing)
 
-        # One-time prompt if preference has never been set
-        if QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close") is None:
-            result = UICommunication.ask(
-                self.iface.mainWindow(),
-                PLUGIN_NAME,
-                "Do you want Rana to automatically empty the cache folder when QGIS closes?",
-            )
-            set_cleanup_cache_on_close(result)
-
     def login(self, start_tenant_id: str = None) -> bool:
         if not setup_oauth2(self.communication, start_tenant_id):
             return False
@@ -287,6 +278,15 @@ class RanaQgisPlugin:
 
     def run(self, start_url: str = None):
         """Run method that loads and starts the plugin"""
+
+        # One-time prompt if preference has never been set
+        if QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close") is None:
+            result = UICommunication.ask(
+                self.iface.mainWindow(),
+                PLUGIN_NAME,
+                "Do you want Rana to automatically empty the cache folder when QGIS closes?",
+            )
+            set_cleanup_cache_on_close(result)
 
         if get_plugin_instance("threedi_models_and_simulations"):
             QMessageBox.warning(
