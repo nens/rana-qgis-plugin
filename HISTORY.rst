@@ -5,12 +5,9 @@ History
 1.2.13 (unreleased)
 -------------------
 
-<<<<<<< feat_3537_aggregation_settings
 - Add default values for AggregationSettings (nens/rana#3537)
-=======
 - Retain collapse status of boxes in FileView (nens/rana#4073)
 - Add button / context menu item to open schematisation or revision HCC management page (nens/rana#3195)
->>>>>>> main
 - Change layer name for max waterdepth to "max wd <simulation_name>" and directly place under Waterdepth group in simulation results (nens/rana#3861)
 - Show user that created the last commit in de FileView next to the commit message (nens/#4169)
 
