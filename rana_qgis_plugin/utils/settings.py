@@ -103,8 +103,11 @@ def set_hcc_working_dir(working_dir: str) -> str:
     os.makedirs(hcc_working_dir(), exist_ok=True)
 
 
-def rana_cache_dir() -> str:
-    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir")
+def rana_cache_dir(return_default=True) -> Optional[str]:
+    cache_dir = QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir")
+    if not cache_dir and return_default:
+        cache_dir = str(Path.home() / "Rana")
+    return cache_dir
 
 
 def set_rana_cache_dir(cache_dir: str) -> str:

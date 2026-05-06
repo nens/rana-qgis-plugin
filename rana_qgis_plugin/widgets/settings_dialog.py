@@ -63,17 +63,15 @@ class SettingsDialog(QDialog):
         files_group = QGroupBox("File storage", self)
         files_group.setLayout(QGridLayout())
         files_group.layout().addWidget(QLabel("Cache directory"), 0, 0)
-        self.cache_dir_le = QLineEdit(rana_cache_dir(), files_group)
+        self.cache_dir_le = QLineEdit(rana_cache_dir(return_default=False), files_group)
         files_group.layout().addWidget(self.cache_dir_le, 0, 1)
         cachedir_browse_pb = QPushButton("Browse", files_group)
         files_group.layout().addWidget(cachedir_browse_pb, 0, 2)
         cachedir_browse_pb.clicked.connect(
             lambda: self.browse("Cache Directory", self.cache_dir_le)
         )
-        if rana_cache_dir() is None:
-            base_dir = os.path.join(os.path.expanduser("~"), "Rana")
-            self.cache_dir_le.setText(base_dir)
-
+        if rana_cache_dir(return_default=False) is None:
+            self.cache_dir_le.setText(os.path.join(os.path.expanduser("~"), "Rana"))
         layout.addWidget(files_group)
 
         advanced_settings = get_advanced_settings()

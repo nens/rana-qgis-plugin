@@ -78,10 +78,7 @@ def sanitize_path_for_filesystem(path: str) -> str:
 
 def get_local_dir_structure(project_slug: str, path: str) -> str:
     file_name_without_extension = Path(path).stem
-    if not rana_cache_dir():
-        base_dir = Path.home() / "Rana"
-    else:
-        base_dir = Path(rana_cache_dir())
+    base_dir = Path(rana_cache_dir())
     local_dir_structure = base_dir.joinpath(
         project_slug, "files", Path(path).parent, file_name_without_extension
     )
@@ -98,10 +95,7 @@ def get_local_publication_dir_structure(
     project_slug: str, path: str, publication_tree: list[str]
 ) -> str:
     file_name_without_extension = Path(path).stem
-    if not rana_cache_dir():
-        base_dir = Path.home() / "Rana"
-    else:
-        base_dir = Path(rana_cache_dir())
+    base_dir = Path(rana_cache_dir())
     local_dir_structure = base_dir.joinpath(
         project_slug, "publications", *publication_tree, file_name_without_extension
     )
