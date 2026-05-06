@@ -2,7 +2,19 @@ History
 =======
 
 
-1.2.11 (unreleased)
+1.2.13 (unreleased)
+-------------------
+
+- Add default values for AggregationSettings (nens/rana#3537)
+
+
+1.2.12 (2026-05-06)
+-------------------
+
+- Fix styling for geopackage export
+
+
+1.2.11 (2026-05-06)
 -------------------
 
 - Add publications browser (nens/rana-qgis-plugin#302)
@@ -34,7 +46,7 @@ History
 - Fix warnings upon logout (nens/rana#3813)
 - Properly handle errers during revision upload and inform user about model creation (nens/rana#3741)
 - Properly load qml files when layer name contains special characters (nens/rana#4142)
-- Add default values for AggregationSettings (nens/rana#3537)
+- Style now maintained when saving data (#331)
 
 
 1.2.10 (2026-04-14)
