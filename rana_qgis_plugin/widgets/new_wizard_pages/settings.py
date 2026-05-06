@@ -682,6 +682,54 @@ class SchematisationSettingsWidget(QWidget):
         }
 
     @property
+    def aggregation_settings_defaults(self):
+        return {
+            "id": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+            "interval": [
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+                "300",
+            ],
+            "flow_variable": [
+                "pump_discharge",
+                "lateral_discharge",
+                "simple_infiltration",
+                "rain",
+                "leakage",
+                "interception",
+                "discharge",
+                "discharge",
+                "discharge",
+                "volume",
+                "surface_source_sink_discharge",
+                "surface_source_sink_discharge",
+            ],
+            "aggregation_method": [
+                "cum",
+                "cum",
+                "cum",
+                "cum",
+                "cum",
+                "current",
+                "cum",
+                "cum_negative",
+                "cum_positive",
+                "current",
+                "cum_negative",
+                "cum_positive",
+            ],
+        }
+
+    @property
     def materials_defaults(self):
         return {
             "id": ["0", "1", "2", "3", "4", "5", "6", "7", "8"],
@@ -724,6 +772,7 @@ class SchematisationSettingsWidget(QWidget):
             "dry_weather_flow_distribution": self.dry_weather_flow_distribution_defaults,
             "material": self.materials_defaults,
             "surface_parameters": self.surface_parameters_defaults,
+            "aggregation_settings": self.aggregation_settings_defaults,
         }
         return tables_defaults
 
