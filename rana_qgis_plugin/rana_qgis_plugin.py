@@ -3,9 +3,10 @@ from __future__ import annotations
 import sys
 import traceback
 from functools import partial
+from pathlib import Path
 from typing import Any, Callable, Optional
 
-from qgis.core import QgsApplication
+from qgis.core import QgsApplication, QgsSettings
 from qgis.PyQt.QtCore import QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -20,18 +21,21 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.auth_3di import remove_3di_auth, setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.constant import PLUGIN_NAME
+from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
 from rana_qgis_plugin.utils.api import get_user_info, get_user_tenants
-from rana_qgis_plugin.utils.generic import parse_url
+from rana_qgis_plugin.utils.generic import parse_url, cleanup_folder
 from rana_qgis_plugin.utils.qgis import get_plugin_instance
 from rana_qgis_plugin.utils.settings import (
     get_tenant_id,
     get_use_plugin_excepthook,
     initialize_settings,
     set_tenant_id,
+    cleanup_cache_on_close,
+    set_cleanup_cache_on_close,
+    rana_cache_dir,
 )
 from rana_qgis_plugin.widgets.about_rana_dialog import AboutRanaDialog
 from rana_qgis_plugin.widgets.rana_browser import RanaBrowser
@@ -114,6 +118,18 @@ class RanaQgisPlugin:
         self.toolbar.addAction(self.action)
         self.provider = RanaQgisPluginProvider()
         QgsApplication.processingRegistry().addProvider(self.provider)
+
+        # Connect cache cleanup to QGIS exit signal
+        QgsApplication.instance().aboutToQuit.connect(self._on_qgis_closing)
+
+        # One-time prompt if preference has never been set
+        if QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close") is None:
+            result = UICommunication.ask(
+                self.iface.mainWindow(),
+                PLUGIN_NAME,
+                "Do you want Rana to automatically empty the cache folder when QGIS closes?",
+            )
+            set_cleanup_cache_on_close(result)
 
     def login(self, start_tenant_id: str = None) -> bool:
         if not setup_oauth2(self.communication, start_tenant_id):
@@ -248,8 +264,17 @@ class RanaQgisPlugin:
         about_rana_action.triggered.connect(self.open_about_rana_dialog)
         menu.addAction(about_rana_action)
 
+    def _on_qgis_closing(self) -> None:
+        """Slot called when QGIS is about to quit. Cleans up cache if enabled."""
+        if cleanup_cache_on_close():
+            cleanup_folder(Path(rana_cache_dir()), self.communication)
+
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        try:
+            QgsApplication.instance().aboutToQuit.disconnect(self._on_qgis_closing)
+        except RuntimeError:
+            pass  # Already disconnected or never connected
         QgsApplication.processingRegistry().removeProvider(self.provider)
         menu = self.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
         menu.clear()
