@@ -114,6 +114,14 @@ def set_rana_cache_dir(cache_dir: str) -> str:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cache_dir", cache_dir)
 
 
+def cleanup_cache_on_close() -> bool:
+    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close", False, type=bool)
+
+
+def set_cleanup_cache_on_close(value: bool) -> None:
+    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close", value)
+
+
 def get_use_plugin_excepthook() -> bool:
     return QgsSettings().value(
         f"{RANA_SETTINGS_ENTRY}/use_plugin_excepthook", True, type=bool
