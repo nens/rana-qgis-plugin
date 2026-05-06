@@ -11,6 +11,7 @@ from qgis.PyQt.QtCore import (
 
 from rana_qgis_plugin.utils.api import (
     finish_file_upload,
+    get_tenant_file_descriptor,
     get_tenant_project_file,
     start_file_upload,
 )
@@ -40,6 +41,9 @@ class FileUploadWorker(QThread):
             self.failed.emit("File already exist on server.")
             return False
         return True  # Continue to upload
+
+    def update_payload(self, payload):
+        return payload.copy()
 
     @pyqtSlot()
     def run(self):
@@ -91,6 +95,9 @@ class FileUploadWorker(QThread):
                 response.raise_for_status()
             # Step 3: Complete the upload
             self.progress.emit(int(0.8 * progress_step + progress_start), "")
+
+            upload_response = self.update_payload(upload_response)
+
             response = finish_file_upload(
                 self.project["id"],
                 upload_response,
@@ -121,10 +128,26 @@ class ExistingFileUploadWorker(FileUploadWorker):
         self.file_overwrite = False
         self.last_modified = None
         self.last_modified_key = f"{project['name']}/{file['id']}/last_modified"
+        self.file = file
+
         self.finished.connect(self._finish)
 
     def get_online_path(self, local_path: Path) -> str:
         return self.online_path
+
+    def update_payload(self, payload):
+        # In case of existing files, we would like to reset some meta data
+        result = payload.copy()
+        descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
+
+        if "meta" in descriptor:
+            if "style_id" in descriptor["meta"]:
+                result["descriptor"] = {
+                    "meta": {"style_id": descriptor["meta"]["style_id"]},
+                    "description": descriptor["description"],
+                    "data_type": descriptor["data_type"],
+                }
+        return result
 
     def handle_file_conflict(self, online_path):
         local_last_modified = QSettings().value(self.last_modified_key)
