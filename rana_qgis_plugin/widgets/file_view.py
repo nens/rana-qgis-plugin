@@ -40,6 +40,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_threedi_schematisation,
+    get_user,
 )
 from rana_qgis_plugin.utils.generic import (
     NumericItem,
@@ -398,26 +399,33 @@ class FileView(QWidget):
         rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
         # line 2: user icon - user name - commit msg - time
         # Note that the avatar is not automatically refreshed!
-        user_icon_label = get_icon_label(
-            self.avatar_cache.get_avatar_for_user(selected_file["user"])
-        )
-        username = (
-            selected_file["user"]["given_name"]
-            + " "
-            + selected_file["user"]["family_name"]
-        )
+
         if selected_file["data_type"] == "threedi_schematisation":
             schematisation = self.schematisation
-            msg = schematisation["latest_revision"]["commit_message"]
-            last_modified = format_activity_timestamp_str(
-                schematisation["latest_revision"]["commit_date"]
-            )
+            last_rev = schematisation["latest_revision"]
+            rana_user = get_user({"search": last_rev["commit_user"]})
+            if not rana_user:
+                rana_user = {
+                    "id": last_rev["commit_first_name"]
+                    + "_"
+                    + last_rev["commit_last_name"],
+                    "given_name": last_rev["commit_first_name"],
+                    "family_name": last_rev_["commit_last_name"],
+                }
+            msg = last_rev["commit_message"]
+            self.communication.log_info(f"{schematisation['latest_revision']}")
+            last_modified = format_activity_timestamp_str(last_rev["commit_date"])
         else:
+            rana_user = selected_file["user"]
             descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
             msg = descriptor.get("description")
             last_modified = format_activity_timestamp_str(
                 selected_file["last_modified"]
             )
+        username = rana_user["given_name"] + " " + rana_user["family_name"]
+        user_icon_label = get_icon_label(
+            self.avatar_cache.get_avatar_for_user(rana_user)
+        )
         msg_label = QLabel(msg)
         msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
 

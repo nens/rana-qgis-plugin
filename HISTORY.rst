@@ -6,6 +6,8 @@ History
 -------------------
 
 - Add button / context menu item to open schematisation or revision HCC management page (nens/rana#3195)
+- Change layer name for max waterdepth to "max wd <simulation_name>" and directly place under Waterdepth group in simulation results (nens/rana#3861)
+- Show user that created the last commit in de FileView next to the commit message (nens/#4169)
 
 
 1.2.12 (2026-05-06)
