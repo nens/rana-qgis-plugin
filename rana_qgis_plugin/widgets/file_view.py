@@ -7,9 +7,16 @@ from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QSettings,
     Qt,
+    QUrl,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import (
+    QColor,
+    QDesktopServices,
+    QIcon,
+    QStandardItem,
+    QStandardItemModel,
+)
 from qgis.PyQt.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -261,7 +268,9 @@ class FileView(QWidget):
                 continue
             btn = QPushButton(action.value)
             action_signal = self.file_signals.get_signal(action)
-            if action == FileAction.RENAME:
+            if action == FileAction.OPEN_IN_BROWSER:
+                btn.clicked.connect(self.open_in_browser)
+            elif action == FileAction.RENAME:
                 btn.clicked.connect(lambda _: self.edit_file_name(self.selected_file))
             else:
                 btn.clicked.connect(
@@ -640,6 +649,17 @@ class FileView(QWidget):
             self.btn_stack.hide()
             self.btn_export_gpkg.hide()
         self.update_file_action_buttons(selected_file)
+
+    def open_in_browser(self):
+        # skip if there is no file, wrong data type is selected, or there is no schematsiation
+        if (
+            (not self.selected_file)
+            or (self.selected_file.get("data_type") != "threedi_schematisation")
+            or (not self.schematisation)
+            or (not self.schematisation.get("management_url"))
+        ):
+            return
+        QDesktopServices.openUrl(QUrl(self.schematisation["management_url"]))
 
     def refresh(self):
         # Skip refresh because user is interacting with state of the file
