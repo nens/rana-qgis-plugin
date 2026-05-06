@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.12 (unreleased)
+1.2.12 (2026-05-06)
 -------------------
 
 - Fix styling for geopackage export
