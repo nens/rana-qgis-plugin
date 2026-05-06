@@ -23,6 +23,7 @@ class FileAction(Enum):
     RENAME = "Rename"
     DELETE = "Delete"
     REMOVE_FROM_PROJECT = "Remove from Project"
+    OPEN_IN_BROWSER = "Open in browser"
 
     def __lt__(self, other):
         # sort a list of file actions by order of definition here
@@ -63,6 +64,7 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
         if has_3di_authcfg():
             actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
+        actions += [FileAction.OPEN_IN_BROWSER]
     return sorted(actions)
 
 

@@ -1,11 +1,7 @@
 from collections import namedtuple
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import (
-    QAction,
-    QStandardItem,
-    QStandardItemModel,
-)
+from qgis.PyQt.QtCore import Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QAction, QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QHeaderView,
     QMenu,
@@ -93,8 +89,23 @@ class RevisionsView(QWidget):
                 )
             )
             menu.addAction(action)
+            from rana_qgis_plugin.widgets.utils_file_action import FileAction
 
+            FileAction.OPEN_IN_BROWSER.value
+            action = QAction(FileAction.OPEN_IN_BROWSER.value, self)
+            action.triggered.connect(
+                lambda _: self.open_in_browser(schematisation, threedi_revision)
+            )
+            menu.addAction(action)
         menu.popup(self.revisions_table.viewport().mapToGlobal(pos))
+
+    def open_in_browser(self, schematisation, threedi_revision):
+        if not schematisation.get("management_url"):
+            return
+        schema_url = schematisation["management_url"]
+        old_rev_id = schema_url.split("?")[0].split("/")[-1]
+        url = schema_url.replace(old_rev_id, str(threedi_revision.id))
+        QDesktopServices.openUrl(QUrl(url))
 
     def refresh(self):
         self.show_revisions()
