@@ -511,9 +511,9 @@ class LizardResultDownloadWorker(QThread):
         if self.download_raw:
             project_slug = self.project["slug"]
             path = self.file["id"]
-            local_dir_structure = get_local_dir_structure(project_slug, path)
-            local_file_path = get_local_file_path(project_slug, path)
-            os.makedirs(local_dir_structure, exist_ok=True)
+            local_dir_structure = Path(get_local_dir_structure(project_slug, path))
+            local_file_path = Path(get_local_file_path(project_slug, path))
+            local_dir_structure.mkdir(parents=True, exist_ok=True)
             try:
                 url = get_tenant_file_url(self.project["id"], {"path": path})
                 with requests.get(url, stream=True) as response:
@@ -543,10 +543,10 @@ class LizardResultDownloadWorker(QThread):
                 descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
                 try:
                     sim_id = descriptor["meta"]["simulation"]["id"]
-                    log_zip_path = os.path.join(
-                        self.target_folder, f"log_files_sim_{sim_id}.zip"
+                    log_zip_path = Path(self.target_folder).joinpath(
+                        f"log_files_sim_{sim_id}.zip"
                     )
-                    if os.path.isfile(log_zip_path):
+                    if log_zip_path.is_file():
                         with zipfile.ZipFile(log_zip_path, "r") as log_zip_ref:
                             log_zip_ref.extractall(self.target_folder)
                     else:
@@ -559,7 +559,7 @@ class LizardResultDownloadWorker(QThread):
                         "Subarchive info missing, ignoring.",
                         level=Qgis.MessageLevel.Critical,
                     )
-
+            local_file_path.unlink()
         descriptor_id = self.file["descriptor_id"]
         task_failed = False
         for result_id in self.result_ids:
