@@ -737,6 +737,7 @@ def resolve_schematisation_download_dir(
         if local_schematisation_present:
             if is_latest_revision:
                 if local_schematisation.wip_revision is None:
+                    #  WIP not exist
                     local_schematisation.set_wip_revision(revision_number)
                     schematisation_db_dir = (
                         local_schematisation.wip_revision.schematisation_dir
@@ -744,6 +745,7 @@ def resolve_schematisation_download_dir(
                 else:
                     schematisation_db_dir, wip_replace_requested = decision_tree()
             else:
+                # WIP exists
                 schematisation_db_dir, wip_replace_requested = decision_tree()
         else:
             local_schematisation.set_wip_revision(revision_number)
