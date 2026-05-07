@@ -907,6 +907,9 @@ class Loader(QObject):
                     else:
                         filtered_result_ids.append(result_id)
             else:
+                # Delete folder after cancel, if empty
+                if not os.listdir(target_folder):
+                    os.rmdir(target_folder)
                 self.download_results_cancelled.emit()
                 return
             self.lizard_result_download_worker = LizardResultDownloadWorker(
