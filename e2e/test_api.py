@@ -19,6 +19,7 @@ def _open_project(plugin, qtbot):
     """Open the Rana browser and select the first project."""
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    # Wait until projects list is populated
     qtbot.waitUntil(
         lambda: plugin.rana_browser.projects_browser.projects_tv.model().rowCount() > 0,
         timeout=30000,
@@ -28,6 +29,8 @@ def _open_project(plugin, qtbot):
         plugin.rana_browser.projects_browser.projects_tv.model().index(0, 0),
         qtbot,
     )
+    # Wait until FilesBrowser widget is active
+    # TODO: check if this is not always the case
     qtbot.waitUntil(
         lambda: plugin.rana_browser.rana_files.currentIndex() == 0,
         timeout=30000,
@@ -153,6 +156,7 @@ def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
     )
 
     # Navigate back to file list view
+    # TODO: replace with mouseclick
     plugin.rana_browser.rana_files.setCurrentIndex(0)
     qtbot.waitUntil(
         lambda: plugin.rana_browser.rana_files.currentIndex() == 0,
@@ -165,6 +169,7 @@ def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
     qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
 
     # Find and select the uploaded file
+    # TODO: replace with mouseclick - click checkbox
     file_row = _find_file_row(files_browser, "upload.gpkg")
     assert file_row is not None, "upload.gpkg not found in file list"
     files_browser.files_model.item(file_row, 0).setCheckState(Qt.CheckState.Checked)
@@ -186,6 +191,7 @@ def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
     assert os.path.exists(local_path), f"Downloaded file not found at {local_path}"
 
     # Re-select for delete
+    # TODO: replace with mouseclick - click checkbox
     files_browser.files_model.item(file_row, 0).setCheckState(Qt.CheckState.Checked)
     QTest.qWait(500)
 

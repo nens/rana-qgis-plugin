@@ -8,7 +8,7 @@ from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QTreeView
 
 
 def make_modal_handler(qtbot, modal_type, action, timeout=30000, poll_interval=500):
-    """Create a handler that polls for an active modal and dismisses it.
+    """Create a handler that polls for an active modal and applies an action..
 
     Schedules itself repeatedly via QTimer until the expected modal appears or
     the timeout expires. This avoids the one-shot timing problem where the modal
