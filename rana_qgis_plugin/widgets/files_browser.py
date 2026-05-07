@@ -4,13 +4,10 @@ from pathlib import Path
 from qgis.PyQt.QtCore import (
     QModelIndex,
     Qt,
+    QUrl,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import (
-    QAction,
-    QStandardItem,
-    QStandardItemModel,
-)
+from qgis.PyQt.QtGui import QAction, QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QAbstractItemDelegate,
     QAbstractItemView,
@@ -33,7 +30,10 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
-from rana_qgis_plugin.utils.api import get_tenant_project_files
+from rana_qgis_plugin.utils.api import (
+    get_tenant_project_files,
+    get_threedi_schematisation,
+)
 from rana_qgis_plugin.utils.generic import (
     NumericItem,
     display_bytes,
@@ -373,6 +373,8 @@ class FilesBrowser(QWidget):
                         index, selected_item
                     )
                 )
+            elif file_action == FileAction.OPEN_IN_BROWSER:
+                action.triggered.connect(lambda _: self.open_in_browser(selected_item))
             elif file_action == FileAction.VIEW_REVISIONS:
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(
@@ -389,6 +391,16 @@ class FilesBrowser(QWidget):
                 menu.addSeparator()
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+
+    def open_in_browser(self, selected_item):
+        if selected_item.get("data_type") != "threedi_schematisation":
+            return
+        schematisation = get_threedi_schematisation(
+            self.communication, selected_item["descriptor_id"]
+        )
+        if not schematisation or not schematisation.get("management_url"):
+            return
+        QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):
         """Start in-place editing of the filename for the given item.

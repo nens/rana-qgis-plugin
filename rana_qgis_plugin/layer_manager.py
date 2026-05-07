@@ -148,6 +148,7 @@ class LayerManager(QObject):
                         file_descriptor = get_tenant_file_descriptor(
                             file["descriptor_id"]
                         )
+                        layer_name = "max wd"
                         if file_descriptor and file_descriptor.get("meta"):
                             meta = file_descriptor["meta"]
                             rev_name = meta.get("schematisation", {}).get("name")
@@ -156,14 +157,12 @@ class LayerManager(QObject):
                             waterdepth_parents.append("Waterdepth")
                             sim_name = meta.get("simulation", {}).get("name")
                             if sim_name:
-                                waterdepth_parents.append(sim_name)
+                                layer_name += f" {sim_name}"
+                                # waterdepth_parents.append(sim_name)
+
                         layer = self._create_and_add_layer(
                             QgsRasterLayer,
-                            layer_args=[
-                                str(waterdepth_path),
-                                "max_waterdepth.tif",
-                                "gdal",
-                            ],
+                            layer_args=[str(waterdepth_path), layer_name, "gdal"],
                             parents=waterdepth_parents,
                         )
                         if layer:
