@@ -142,6 +142,8 @@ class BaseBreadcrumbsWidget(QWidget):
         # Truncate items to clicked position
         self._items = self._items[: index + 1]
         clicked_item = self._items[index]
+        self.communication.log_info(f"Breadcrumb clicked: {clicked_item}; {index=}")
+
         if clicked_item.type == BreadcrumbType.PROJECTS:
             self.projects_selected.emit()
         else:

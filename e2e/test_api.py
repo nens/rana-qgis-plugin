@@ -29,12 +29,27 @@ def _open_project(plugin, qtbot):
         plugin.rana_browser.projects_browser.projects_tv.model().index(0, 0),
         qtbot,
     )
-    # Wait until FilesBrowser widget is active
-    # TODO: check if this is not always the case
+    # Wait until RanaBrowser switched to project widget
     qtbot.waitUntil(
-        lambda: plugin.rana_browser.rana_files.currentIndex() == 0,
+        lambda: plugin.rana_browser.rana_browser.currentIndex() == 1,
         timeout=30000,
     )
+
+
+def _click_all_checkboxes(files_browser, qtbot):
+    """Click each checkbox in the files tree view one by one."""
+    for row in range(files_browser.files_model.rowCount()):
+        checkbox_index = files_browser.files_model.index(row, 0)
+        item = files_browser.files_model.item(row, 0)
+        if item is None or not (item.flags() & Qt.ItemFlag.ItemIsUserCheckable):
+            continue
+        files_browser.files_tv.scrollTo(checkbox_index)
+        rect = files_browser.files_tv.visualRect(checkbox_index)
+        assert rect.isValid(), f"Invalid rect for checkbox at row {row}"
+        qtbot.mouseClick(
+            files_browser.files_tv.viewport(), Qt.LeftButton, pos=rect.center()
+        )
+        QTest.qWait(200)
 
 
 def _find_file_row(files_browser, filename):
@@ -155,24 +170,28 @@ def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
         timeout=30000,
     )
 
-    # Navigate back to file list view
-    # TODO: replace with mouseclick
-    plugin.rana_browser.rana_files.setCurrentIndex(0)
+    # Wait for file detail view to be shown after upload
+    qtbot.waitUntil(
+        lambda: plugin.rana_browser.rana_files.currentIndex() == 1,
+        timeout=30000,
+    )
+
+    # Navigate back to file list view by clicking the folder breadcrumb
+    breadcrumbs = plugin.rana_browser.files_breadcrumbs
+    breadcrumbs.on_click(1)  # index 1 is the project root folder
     qtbot.waitUntil(
         lambda: plugin.rana_browser.rana_files.currentIndex() == 0,
         timeout=10000,
     )
+    assert plugin.rana_browser.rana_files.currentIndex() == 0
 
     # Toggle select mode
     files_browser = plugin.rana_browser.files_browser
     QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
     qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
 
-    # Find and select the uploaded file
-    # TODO: replace with mouseclick - click checkbox
-    file_row = _find_file_row(files_browser, "upload.gpkg")
-    assert file_row is not None, "upload.gpkg not found in file list"
-    files_browser.files_model.item(file_row, 0).setCheckState(Qt.CheckState.Checked)
+    # Select all files by clicking each checkbox
+    _click_all_checkboxes(files_browser, qtbot)
 
     # Download selected file
     assert files_browser.btn_download_selected.isEnabled()
@@ -190,9 +209,20 @@ def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
     local_path = get_local_file_path(plugin.rana_browser.project["slug"], "upload.gpkg")
     assert os.path.exists(local_path), f"Downloaded file not found at {local_path}"
 
-    # Re-select for delete
-    # TODO: replace with mouseclick - click checkbox
-    files_browser.files_model.item(file_row, 0).setCheckState(Qt.CheckState.Checked)
+    # Toggle select mode off and on to clear all checkboxes
+    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    qtbot.waitUntil(lambda: not files_browser.select_btn.isChecked(), timeout=5000)
+    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
+
+    # Verify all checkboxes are unchecked
+    for row in range(files_browser.files_model.rowCount()):
+        item = files_browser.files_model.item(row, 0)
+        if item and item.isCheckable():
+            assert item.checkState() == Qt.CheckState.Unchecked
+
+    # Select all files for delete by clicking each checkbox
+    _click_all_checkboxes(files_browser, qtbot)
     QTest.qWait(500)
 
     def confirm_delete(qtbot, modal):
