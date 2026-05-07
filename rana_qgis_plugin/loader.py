@@ -75,7 +75,6 @@ from rana_qgis_plugin.utils.generic import (
     get_local_dir_structure,
     get_threedi_api,
     get_threedi_organisations,
-    get_threedi_schematisation_simulation_results_folder,
     save_layer_changes,
 )
 from rana_qgis_plugin.utils.qgis import (
@@ -94,11 +93,12 @@ from rana_qgis_plugin.workers.avatars import (
 from rana_qgis_plugin.workers.download import (
     BatchFileDownloadWorker,
     FileDownloadContext,
-    LizardResultDownloadWorker,
+    LizardResultDownloader,
     PublicationFileDownloadContext,
     RanaFileDownloader,
+    RanaRawResultsDownloader,
+    RanaResultDownloader,
     ResultsDownloadContext,
-    ResultsDownloader,
     SchematisationGeopackageDownloader,
     SchematisationRevisionDownloadContext,
     SchematisationRevisionDownloader,
@@ -553,12 +553,20 @@ class Loader(QObject):
                     skipped_files.append((file["id"], "no default result found"))
                     continue
                 context = ResultsDownloadContext(
-                    scenario_info, project["slug"], file["id"], result
+                    scenario_info,
+                    project["slug"],
+                    file["id"],
+                    filename="results.zip",
                 )
-                self.communication.log_info(f"{context.local_file_path=}")
-                downloaders.append(
-                    ResultsDownloader(context, project, file, result=result)
-                )
+                downloaders.append(RanaRawResultsDownloader(project, file, context))
+                if result.get("attachment_url"):
+                    result_context = ResultsDownloadContext(
+                        scenario_info,
+                        project["slug"],
+                        file["id"],
+                        filename=map_result_to_file_name(result),
+                    )
+                    downloaders.append(RanaResultDownloader(result_context, result))
             else:
                 context = FileDownloadContext(
                     project["slug"], file["id"], file["descriptor_id"], data_type
@@ -1115,20 +1123,6 @@ class Loader(QObject):
             return
         has_lizard_results = scenario_info.has_lizard_results
         has_3di_simulation = scenario_info.has_3di_simulation
-        if has_3di_simulation:
-            target_folder = get_threedi_schematisation_simulation_results_folder(
-                QgsSettings().value("threedi/working_dir"),
-                scenario_info.schematisation_id,
-                scenario_info.schematisation_name.replace("/", "-").replace("\\", "-"),
-                scenario_info.revision_number,
-                scenario_info.simulation_name.replace("/", "-").replace("\\", "-"),
-                scenario_info.simulation_id,
-            )
-        else:
-            # If there is no 3di simulation attached we cannot download to the simulation folder
-            target_folder = get_local_dir_structure(project["slug"], file["id"])
-
-        os.makedirs(target_folder, exist_ok=True)
 
         if has_lizard_results and has_3di_simulation:
             result_browser = ResultBrowser(
@@ -1147,48 +1141,22 @@ class Loader(QObject):
                 ):
                     self.download_results_cancelled.emit()
                     return
-                filtered_result_ids = []
-                for result_id in result_ids:
-                    result = [
-                        r
-                        for r in scenario_info.lizard_results
-                        if r.get("id") == result_id
-                    ][0]
-                    file_name = map_result_to_file_name(result)
-                    target_file = bypass_max_path_limit(
-                        os.path.join(target_folder, file_name)
-                    )
-                    # Check whether the files already exist locally
-                    if os.path.exists(target_file):
-                        file_overwrite = self.communication.custom_ask(
-                            self.parent(),
-                            "File exists",
-                            f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
-                            "Cancel",
-                            "Download again",
-                            "Continue",
-                        )
-                        if file_overwrite == "Download again":
-                            filtered_result_ids.append(result_id)
-                        elif file_overwrite == "Cancel":
-                            self.download_results_cancelled.emit()
-                            return
-                    else:
-                        filtered_result_ids.append(result_id)
+                downloaders = self._build_result_downloaders(
+                    project,
+                    file,
+                    scenario_info,
+                    result_ids,
+                    nodata,
+                    pixelsize,
+                    crs,
+                    download_raw=result_browser.get_download_raw_result(),
+                )
+                if not downloaders:
+                    self.download_results_cancelled.emit()
+                    return
             else:
                 self.download_results_cancelled.emit()
                 return
-            self.lizard_result_download_worker = LizardResultDownloadWorker(
-                project=project,
-                file=file,
-                result_ids=filtered_result_ids,
-                target_folder=target_folder,
-                grid=scenario_info.grid,
-                nodata=nodata,
-                crs=crs,
-                pixelsize=pixelsize,
-                download_raw=result_browser.get_download_raw_result(),
-            )
         else:
             # If there is no link to HCC, download the raw results to the cache folder
             if not has_3di_simulation:
@@ -1200,33 +1168,89 @@ class Loader(QObject):
                 self.communication.show_info(
                     "There is no post-processing data available. Only raw results will be downloaded."
                 )
-            self.lizard_result_download_worker = LizardResultDownloadWorker(
-                project=project,
-                file=file,
-                result_ids=[],
-                target_folder=target_folder,
-                grid={},
-                nodata=0,
-                crs="",
-                pixelsize=0,
-                download_raw=True,
+            context = ResultsDownloadContext(
+                scenario_info, project["slug"], file["id"], filename="results.zip"
             )
+            downloaders = [RanaRawResultsDownloader(project, file, context)]
+        target_folder = str(downloaders[0].download_context.local_dir)
+        self.lizard_result_download_worker = BatchFileDownloadWorker(downloaders)
         layer_manager = FileLayerManager(self.communication, parent=self.parent())
-        self.lizard_result_download_worker.finished.connect(
-            lambda _project, _file, _local_path: self.on_file_download_finished(
-                _project,
-                _file,
-                _local_path,
+        self.lizard_result_download_worker.signals.all_finished.connect(
+            lambda: self.on_file_download_finished(
+                project,
+                file,
+                target_folder,
                 layer_manager,
                 thread_worker=self.lizard_result_download_worker,
             )
         )
-        self.lizard_result_download_worker.failed.connect(self.on_file_download_failed)
-        self.lizard_result_download_worker.progress.connect(
+        self.lizard_result_download_worker.signals.failed.connect(
+            self.on_file_download_failed
+        )
+        self.lizard_result_download_worker.signals.progress.connect(
             self.on_file_download_progress
         )
         self.lizard_result_download_worker.start()
         return
+
+    def _build_result_downloaders(
+        self,
+        project: dict,
+        file: dict,
+        scenario_info: ScenarioInfo,
+        result_ids: list,
+        nodata: int,
+        pixelsize: float,
+        crs: str,
+        download_raw: bool,
+    ) -> list:
+        """Build list of downloaders for scenario result downloads.
+
+        Returns an empty list if the user cancels via the overwrite dialog.
+        """
+        downloaders = []
+        if download_raw:
+            context = ResultsDownloadContext(
+                scenario_info, project["slug"], file["id"], filename="results.zip"
+            )
+            downloaders.append(RanaRawResultsDownloader(project, file, context))
+        for result_id in result_ids:
+            result = [
+                r for r in scenario_info.lizard_results if r.get("id") == result_id
+            ][0]
+            filename = map_result_to_file_name(result)
+            context = ResultsDownloadContext(
+                scenario_info, project["slug"], file["id"], filename=filename
+            )
+            # Check whether the file already exists locally
+            if context.local_file_path.exists():
+                file_overwrite = self.communication.custom_ask(
+                    self.parent(),
+                    "File exists",
+                    f"Scenario file ({filename}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                    "Cancel",
+                    "Download again",
+                    "Continue",
+                )
+                if file_overwrite == "Cancel":
+                    return []
+                elif file_overwrite == "Continue":
+                    continue
+            if result.get("attachment_url"):
+                downloaders.append(RanaResultDownloader(context, result))
+            else:
+                downloaders.append(
+                    LizardResultDownloader(
+                        download_context=context,
+                        descriptor_id=file["descriptor_id"],
+                        result=result,
+                        grid=scenario_info.grid,
+                        nodata=nodata,
+                        pixelsize=pixelsize,
+                        crs=crs,
+                    )
+                )
+        return downloaders
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):

@@ -24,7 +24,8 @@ _cached_data
 .opencode
 specs/
 AGENTS.md
+doc/
 # IDE / local dev
 .envrc
 .idea/
-
+scripts/
