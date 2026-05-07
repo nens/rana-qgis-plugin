@@ -115,7 +115,9 @@ def set_rana_cache_dir(cache_dir: str) -> str:
 
 
 def cleanup_cache_on_close() -> bool:
-    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close", False, type=bool)
+    return QgsSettings().value(
+        f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close", False, type=bool
+    )
 
 
 def set_cleanup_cache_on_close(value: bool) -> None:

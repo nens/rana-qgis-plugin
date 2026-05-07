@@ -26,16 +26,16 @@ from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
 from rana_qgis_plugin.utils.api import get_user_info, get_user_tenants
-from rana_qgis_plugin.utils.generic import parse_url, cleanup_folder
+from rana_qgis_plugin.utils.generic import cleanup_folder, parse_url
 from rana_qgis_plugin.utils.qgis import get_plugin_instance
 from rana_qgis_plugin.utils.settings import (
+    cleanup_cache_on_close,
     get_tenant_id,
     get_use_plugin_excepthook,
     initialize_settings,
-    set_tenant_id,
-    cleanup_cache_on_close,
-    set_cleanup_cache_on_close,
     rana_cache_dir,
+    set_cleanup_cache_on_close,
+    set_tenant_id,
 )
 from rana_qgis_plugin.widgets.about_rana_dialog import AboutRanaDialog
 from rana_qgis_plugin.widgets.rana_browser import RanaBrowser
