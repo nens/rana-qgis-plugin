@@ -23,6 +23,7 @@ _cached_data
 .minispec.minispec/
 .opencode
 specs/
+docs/
 AGENTS.md
 doc/
 # IDE / local dev

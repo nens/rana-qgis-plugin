@@ -18,7 +18,7 @@ from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.rana_qgis_plugin import RanaQgisPlugin
 from rana_qgis_plugin.utils.api import delete_tenant_project_file
-from rana_qgis_plugin.utils.settings import set_base_url
+from rana_qgis_plugin.utils.settings import set_base_url, set_cleanup_cache_on_close
 
 
 @pytest.fixture(autouse=True)
@@ -189,6 +189,8 @@ def plugin(qgis_iface, qgis_application):
     auth_manager.storeAuthenticationConfig(authcfg)
     newAuthCfgId = authcfg.id()
     assert newAuthCfgId
+
+    set_cleanup_cache_on_close(False)
 
     plugin = RanaQgisPlugin(qgis_iface)
     plugin.initGui()

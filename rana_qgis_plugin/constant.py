@@ -5,6 +5,7 @@ PLUGIN_NAME = "Rana"
 RANA_SETTINGS_ENTRY = "Rana"
 RANA_AUTHCFG_ENTRY = f"{RANA_SETTINGS_ENTRY}/authcfg"
 RANA_TENANT_ENTRY = f"{RANA_SETTINGS_ENTRY}/tenant"
+RANA_CLENUP_CACHE_ON_CLOSE_ENTRY = f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close"
 THREEDI_AUTHCFG_ENTRY = "threedi/authcfg"
 
 COGNITO_AUTHENTICATION_ENDPOINT = "https://auth.lizard.net/oauth2/authorize"

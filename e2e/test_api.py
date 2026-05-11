@@ -1,5 +1,6 @@
 import os
 
+from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
@@ -12,6 +13,9 @@ from e2e.test_utils import (
     make_modal_handler,
     press_button_with_moderator,
 )
+from rana_qgis_plugin.auth import get_authcfg_id
+from rana_qgis_plugin.auth_3di import set_3di_auth
+from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.utils.generic import get_local_file_path
 
 
@@ -67,6 +71,62 @@ def test_smoke(plugin, qtbot, request):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
     _open_project(plugin, qtbot)
     assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
+
+
+def test_login_logout(plugin):
+    """Test login via toolbar click, then logout, then login again."""
+    # Step 1: Click toolbar button to trigger login
+    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
+    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    QTest.qWait(1000)
+
+    # Verify logged-in state
+    menu = plugin.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
+    menu_texts = [action.text() for action in menu.actions()]
+    assert "Logout" in menu_texts
+    assert "test user" in menu_texts
+    assert plugin.dock_widget is not None
+    assert plugin.dock_widget.isVisible()
+
+    # Step 2: Trigger logout via menu action
+    logout_action = next(a for a in menu.actions() if a.text() == "Logout")
+    menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
+    QTest.qWait(100)
+    action_rect = menu.actionGeometry(logout_action)
+    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
+    QTest.qWait(500)
+
+    # Verify logged-out state
+    menu_texts = [action.text() for action in menu.actions()]
+    assert "Logout" not in menu_texts
+    assert "test user" not in menu_texts
+    assert "Open Rana Panel" in menu_texts
+    assert not plugin.dock_widget.isVisible()
+    assert get_authcfg_id() is None
+
+    # Step 3: Re-insert auth configs and login again via toolbar click
+    auth_manager = QgsApplication.authManager()
+    authcfg = QgsAuthMethodConfig()
+    authcfg.setName(RANA_SETTINGS_ENTRY)
+    authcfg.setMethod("Basic")
+    authcfg.setConfig("username", "__key__")
+    authcfg.setConfig("password", os.getenv("RANA_PAK", "test_secret"))
+    assert authcfg.isValid()
+    auth_manager.storeAuthenticationConfig(authcfg)
+    set_3di_auth("test_api_key")
+
+    login_action = next(a for a in menu.actions() if a.text() == "Open Rana Panel")
+    menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
+    QTest.qWait(100)
+    action_rect = menu.actionGeometry(login_action)
+    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
+    QTest.qWait(1000)
+
+    # Verify logged-in state again
+    menu_texts = [action.text() for action in menu.actions()]
+    assert "Logout" in menu_texts
+    assert "test user" in menu_texts
+    assert plugin.dock_widget.isVisible()
 
 
 def test_upload(plugin, qtbot, request, clean_upload_file):

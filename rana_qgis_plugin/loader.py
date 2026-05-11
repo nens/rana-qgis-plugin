@@ -186,6 +186,7 @@ class Loader(QObject):
         self.avatar_runner_pool.setMaxThreadCount(1)
 
         # For upload of schematisations
+        self.avatar_worker: QRunnable = None
         self.upload_thread_pool = QThreadPool()
         self.upload_thread_pool.setMaxThreadCount(1)
 
@@ -195,6 +196,11 @@ class Loader(QObject):
 
     def cleanup(self):
         self.persistent_scheduler.stop()
+        if self.avatar_runner_pool is not None:
+            if self.avatar_worker is not None:
+                self.avatar_worker.cancel()
+            self.avatar_runner_pool.clear()
+            self.avatar_runner_pool.waitForDone(500)  # short grace period (ms)
 
     def __del__(self):
         self.cleanup()
