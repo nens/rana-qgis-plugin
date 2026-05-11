@@ -56,6 +56,52 @@ def feedback_callback_factory(communication):
     return feedback_callback
 
 
+def get_paths_from_geopackage(geopackage_path):
+    """Search GeoPackage database tables for attributes with file paths."""
+    paths = defaultdict(dict)
+    for (
+        table_name,
+        raster_info,
+    ) in SchematisationApiMapper.raster_reference_tables().items():
+        settings_fields = list(raster_info.keys())
+        settings_lyr = geopackage_layer(geopackage_path, table_name)
+        if not settings_lyr.isValid():
+            raise GeoPackageError(
+                f"'{table_name}' table could not be loaded from {geopackage_path}"
+            )
+        try:
+            set_feat = next(settings_lyr.getFeatures())
+        except StopIteration:
+            continue
+        for field_name in settings_fields:
+            field_value = set_feat[field_name]
+            paths[table_name][field_name] = field_value if field_value else None
+    return paths
+
+
+def _create_schematisation_base(tc, working_dir, name, owner, tags, description):
+    """Create schematisation remotely and set up local directory structure.
+
+    Returns a tuple of (schematisation, local_schematisation, wip_revision).
+    """
+    schematisation = tc.create_schematisation(
+        name,
+        owner,
+        tags=tags,
+        meta={"description": description},
+        threedimodel_limit=32767,  # maximum allowed by api
+    )
+    local_schematisation = LocalSchematisation(
+        working_dir,
+        schematisation.id,
+        name,
+        parent_revision_number=0,
+        create=True,
+    )
+    wip_revision = local_schematisation.wip_revision
+    return schematisation, local_schematisation, wip_revision
+
+
 class NewSchematisationWizard(QWizard):
     """New schematisation wizard."""
 
@@ -133,21 +179,9 @@ class NewSchematisationWizard(QWizard):
             self.schematisation_settings_page.main_widget.raster_filepaths()
         )
         try:
-            schematisation = self.tc.create_schematisation(
-                name,
-                owner,
-                tags=tags,
-                meta={"description": description},
-                threedimodel_limit=32767,  # maximum allowed by api
+            schematisation, local_schematisation, wip_revision = _create_schematisation_base(
+                self.tc, self.working_dir, name, owner, tags, description
             )
-            local_schematisation = LocalSchematisation(
-                self.working_dir,
-                schematisation.id,
-                name,
-                parent_revision_number=0,
-                create=True,
-            )
-            wip_revision = local_schematisation.wip_revision
 
             schematisation_filename = f"{name}.gpkg"
             geopackage_filepath = os.path.join(
@@ -216,29 +250,6 @@ class NewSchematisationWizard(QWizard):
             error_msg = f"Error: {e}"
             self.communication.bar_error(error_msg)
 
-    @staticmethod
-    def get_paths_from_geopackage(geopackage_path):
-        """Search GeoPackage database tables for attributes with file paths."""
-        paths = defaultdict(dict)
-        for (
-            table_name,
-            raster_info,
-        ) in SchematisationApiMapper.raster_reference_tables().items():
-            settings_fields = list(raster_info.keys())
-            settings_lyr = geopackage_layer(geopackage_path, table_name)
-            if not settings_lyr.isValid():
-                raise GeoPackageError(
-                    f"'{table_name}' table could not be loaded from {geopackage_path}"
-                )
-            try:
-                set_feat = next(settings_lyr.getFeatures())
-            except StopIteration:
-                continue
-            for field_name in settings_fields:
-                field_value = set_feat[field_name]
-                paths[table_name][field_name] = field_value if field_value else None
-        return paths
-
     def create_schematisation_from_geopackage(self):
         """Get settings from existing GeoPackage and create new schematisation (locally and remotely)."""
         try:
@@ -273,26 +284,13 @@ class NewSchematisationWizard(QWizard):
 
             owner = organisation.unique_id
 
-            schematisation = self.tc.create_schematisation(
-                name,
-                owner,
-                tags=tags,
-                meta={"description": description},
-                threedimodel_limit=32767,  # maximum allowed by api
+            schematisation, local_schematisation, wip_revision = _create_schematisation_base(
+                self.tc, self.working_dir, name, owner, tags, description
             )
-
-            local_schematisation = LocalSchematisation(
-                self.working_dir,
-                schematisation.id,
-                name,
-                parent_revision_number=0,
-                create=True,
-            )
-            wip_revision = local_schematisation.wip_revision
             geopackage_filepath = os.path.join(
                 wip_revision.schematisation_dir, f"{name}.gpkg"
             )
-            raster_paths = self.get_paths_from_geopackage(src_db)
+            raster_paths = get_paths_from_geopackage(src_db)
             src_dir = os.path.dirname(src_db)
             shutil.copyfile(src_db, geopackage_filepath)
             new_paths = defaultdict(dict)
