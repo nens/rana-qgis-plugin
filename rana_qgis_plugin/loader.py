@@ -1554,6 +1554,7 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
+            self.schematisation_upload_failed.emit()
             return None
         tc = ThreediCalls(threedi_api)
         allowed_org_ids = get_threedi_organisations(self.communication)

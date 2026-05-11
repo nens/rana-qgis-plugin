@@ -79,6 +79,19 @@ def get_paths_from_geopackage(geopackage_path):
     return paths
 
 
+def _check_name_available(name, working_dir, communication):
+    """Check if schematisation name is available in the working directory.
+
+    Returns True if available, False if not (and shows an error).
+    """
+    if name in os.listdir(working_dir):
+        communication.show_error(
+            f"Schematisation with name {name} already exists in working directory. Please choose a different name and try again."
+        )
+        return False
+    return True
+
+
 def _create_schematisation_base(tc, working_dir, name, owner, tags, description):
     """Create schematisation remotely and set up local directory structure.
 
@@ -139,11 +152,8 @@ class NewSchematisationWizard(QWizard):
         )
 
     def create_schematisation(self):
-        schematisation_name = self.schematisation_name_page.field("schematisation_name")
-        if schematisation_name in os.listdir(self.working_dir):
-            self.communication.show_error(
-                f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
-            )
+        name = self.schematisation_name_page.name
+        if not _check_name_available(name, self.working_dir, self.communication):
             return
         self.create_new_schematisation()
 
@@ -277,14 +287,10 @@ class UploadExistingSchematisationWizard(QWizard):
 
     def create_schematisation(self):
         """Create a new schematisation from the provided GeoPackage."""
-        schematisation_name = self.schematisation_name_page.field("schematisation_name")
-        if schematisation_name in os.listdir(self.working_dir):
-            self.communication.show_error(
-                f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
-            )
+        name = self.schematisation_name_page.name
+        if not _check_name_available(name, self.working_dir, self.communication):
             return
 
-        name = self.schematisation_name_page.name
         description = self.schematisation_name_page.description
         tags = self.schematisation_name_page.tags
         owner = self.schematisation_name_page.owner
