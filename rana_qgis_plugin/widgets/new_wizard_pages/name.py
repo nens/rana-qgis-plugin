@@ -47,6 +47,31 @@ class SchematisationNamePage(QWizardPage):
     def isComplete(self):
         return bool(self.field("schematisation_name"))
 
+    @property
+    def name(self):
+        """Schematisation name as entered by the user."""
+        return self.field("schematisation_name")
+
+    @property
+    def description(self):
+        """Schematisation description as entered by the user."""
+        return self.field("schematisation_description")
+
+    @property
+    def tags(self):
+        """Schematisation tags as a list of stripped strings."""
+        raw = self.field("schematisation_tags")
+        if not raw:
+            return []
+        return [tag.strip() for tag in raw.split(",")]
+
+    @property
+    def owner(self):
+        """Unique ID of the selected organisation."""
+        if len(self.organisations) > 1:
+            return self.field("schematisation_organisation").unique_id
+        return list(self.organisations.values())[0].unique_id
+
 
 class SchematisationNameWidget(QWidget):
     """Widget for the Schematisation Name and tags page."""

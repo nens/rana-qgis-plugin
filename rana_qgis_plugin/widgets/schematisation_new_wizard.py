@@ -145,34 +145,17 @@ class NewSchematisationWizard(QWizard):
                 f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
             )
             return
-        if self.schematisation_name_page.field("from_geopackage"):
-            self.create_schematisation_from_geopackage()
-        else:
-            self.create_new_schematisation()
+        self.create_new_schematisation()
 
     def create_new_schematisation(self):
         """Get settings from the wizard and create new schematisation (locally and remotely)."""
         if not self.schematisation_settings_page.settings_are_valid:
             return
 
-        name = self.schematisation_name_page.field("schematisation_name")
-        description = self.schematisation_name_page.field("schematisation_description")
-        tags = self.schematisation_name_page.field("schematisation_tags")
-        if not tags:
-            tags = []
-        else:
-            tags = [tag.strip() for tag in tags.split(",")]
-
-        # when there is exactly one 3Di organisation available for a tenant
-        # no organisation dropdown is shown in the wizard
-        if len(self.available_organisations) > 1:
-            organisation = self.schematisation_name_page.field(
-                "schematisation_organisation"
-            )
-        else:
-            organisation = list(self.available_organisations.values())[0]
-
-        owner = organisation.unique_id
+        name = self.schematisation_name_page.name
+        description = self.schematisation_name_page.description
+        tags = self.schematisation_name_page.tags
+        owner = self.schematisation_name_page.owner
 
         schematisation_settings = self.schematisation_settings_page.main_widget.collect_new_schematisation_settings()
         raster_filepaths = (
@@ -250,39 +233,66 @@ class NewSchematisationWizard(QWizard):
             error_msg = f"Error: {e}"
             self.communication.bar_error(error_msg)
 
-    def create_schematisation_from_geopackage(self):
-        """Get settings from existing GeoPackage and create new schematisation (locally and remotely)."""
-        try:
-            src_db = self.schematisation_name_page.field("geopackage_path")
-            schema_is_valid = ensure_valid_schema(  # possible migration
-                src_db, self.communication
+    def cancel_wizard(self):
+        """Handling canceling wizard action."""
+        QSettings().setValue("threedi/new_schematisation_wizard_size", self.size())
+        self.reject()
+
+
+class UploadExistingSchematisationWizard(QWizard):
+    """Wizard for creating a new schematisation from an existing GeoPackage."""
+
+    def __init__(self, threedi_api, working_dir, communication, organisations, gpkg_path):
+        super().__init__()
+        self.setWizardStyle(QWizard.ClassicStyle)
+        self.working_dir = working_dir
+        self.threedi_api = threedi_api
+        self.tc = ThreediCalls(threedi_api)
+        self.communication = communication
+        self.gpkg_path = gpkg_path
+        self.new_schematisation = None
+        self.new_local_schematisation = None
+        self.available_organisations = organisations
+
+        self.schematisation_name_page = SchematisationNamePage(
+            self.available_organisations, self
+        )
+        self.schematisation_name_page.setFinalPage(True)
+        self.addPage(self.schematisation_name_page)
+        self.setButtonText(QWizard.FinishButton, "Create schematisation")
+        self.finish_btn = self.button(QWizard.FinishButton)
+        self.finish_btn.clicked.connect(self.create_schematisation)
+        self.cancel_btn = self.button(QWizard.CancelButton)
+        self.cancel_btn.clicked.connect(self.cancel_wizard)
+        self.setWindowTitle("Upload existing schematisation")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setOption(QWizard.HaveNextButtonOnLastPage, False)
+        self.resize(
+            QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))
+        )
+
+    def create_schematisation(self):
+        """Create a new schematisation from the provided GeoPackage."""
+        schematisation_name = self.schematisation_name_page.field("schematisation_name")
+        if schematisation_name in os.listdir(self.working_dir):
+            self.communication.show_error(
+                f"Schematisation with name {schematisation_name} already exists in working directory. Please choose a different name and try again."
             )
+            return
+
+        name = self.schematisation_name_page.name
+        description = self.schematisation_name_page.description
+        tags = self.schematisation_name_page.tags
+        owner = self.schematisation_name_page.owner
+
+        try:
+            src_db = self.gpkg_path
+            schema_is_valid = ensure_valid_schema(src_db, self.communication)
             if schema_is_valid is True:
                 if src_db.lower().endswith(".sqlite"):
                     src_db = src_db.rsplit(".", 1)[0] + ".gpkg"
             else:
                 return  # ensure_valid_schema deals with showing errors.
-
-            name = self.schematisation_name_page.field("schematisation_name")
-            description = self.schematisation_name_page.field(
-                "schematisation_description"
-            )
-            tags = self.schematisation_name_page.field("schematisation_tags")
-            if not tags:
-                tags = []
-            else:
-                tags = [tag.strip() for tag in tags.split(",")]
-
-            # when there is exactly one 3Di organisation available for a tenant
-            # no organisation dropdown is shown in the wizard
-            if len(self.available_organisations) > 1:
-                organisation = self.schematisation_name_page.field(
-                    "schematisation_organisation"
-                )
-            else:
-                organisation = list(self.available_organisations.values())[0]
-
-            owner = organisation.unique_id
 
             schematisation, local_schematisation, wip_revision = _create_schematisation_base(
                 self.tc, self.working_dir, name, owner, tags, description
@@ -293,7 +303,6 @@ class NewSchematisationWizard(QWizard):
             raster_paths = get_paths_from_geopackage(src_db)
             src_dir = os.path.dirname(src_db)
             shutil.copyfile(src_db, geopackage_filepath)
-            new_paths = defaultdict(dict)
             missing_rasters = []
             for table_name, raster_paths_info in raster_paths.items():
                 for raster_name, raster_rel_path in raster_paths_info.items():
@@ -305,11 +314,7 @@ class NewSchematisationWizard(QWizard):
                             wip_revision.raster_dir, os.path.basename(raster_rel_path)
                         )
                         shutil.copyfile(raster_full_path, new_raster_filepath)
-                        new_paths[table_name][raster_name] = os.path.relpath(
-                            new_raster_filepath, wip_revision.schematisation_dir
-                        )
                     else:
-                        new_paths[table_name][raster_name] = None
                         missing_rasters.append((raster_name, raster_rel_path))
             if missing_rasters:
                 missing_rasters.sort(key=itemgetter(0))
