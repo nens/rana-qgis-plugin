@@ -13,6 +13,7 @@ History
 - Show user that created the last commit in de FileView next to the commit message (nens/rana#4169)
 - Optionally clear cache on close and remove downloaded results zip from cache (nens/rana#3975)
 - Remove results download folder on canceling download (nens/rana-qgis-plugin#323)
+- Split new schematisation from scratch and new schematisation from file functionality (nens/#rana4224)
 
 
 1.2.12 (2026-05-06)
