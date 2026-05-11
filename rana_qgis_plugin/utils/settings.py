@@ -7,6 +7,7 @@ from qgis.core import QgsSettings
 
 from rana_qgis_plugin.constant import (
     COGNITO_LOGOUT_ENDPOINT,
+    RANA_API_VERSION_PREFIX,
     RANA_CLENUP_CACHE_ON_CLOSE_ENTRY,
     RANA_SETTINGS_ENTRY,
     RANA_TENANT_ENTRY,
@@ -77,8 +78,14 @@ def base_url():
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/base_url")
 
 
+def api_version_prefix() -> str:
+    return QgsSettings().value(
+        f"{RANA_SETTINGS_ENTRY}/rana_api_version_prefix", RANA_API_VERSION_PREFIX
+    )
+
+
 def api_url():
-    return f"{base_url()}/v1-alpha"
+    return f"{base_url()}/{api_version_prefix()}"
 
 
 def logout_redirect_uri():
@@ -134,9 +141,9 @@ def get_hcc_url_override() -> Optional[str]:
 
 def get_advanced_settings() -> dict:
     advanced_settings = {}
-    settings_names = ["use_plugin_excepthook", "hcc_url"]
+    settings_names = ["use_plugin_excepthook", "hcc_url", "rana_api_version_prefix"]
     for setting_name in settings_names:
-        value = QgsSettings().value(f"Rana/{setting_name}")
+        value = QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/{setting_name}")
         if value is not None:
             advanced_settings[setting_name] = value
     return advanced_settings

@@ -105,6 +105,15 @@ hcc_url=https://your-hcc-url.com
 to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
 
 
+### API version prefix
+
+The API version prefix defaults to `v1-alpha`. It can be overridden for testing against a different API version by adding:
+```
+rana_api_version_prefix=v2
+```
+to the `[Rana]` section of `QGIS/QGIS3.ini` in your profile folder.
+
+
 ### Handling unhandled errors
 
 The plugin has its own excepthook that handles any error that is not caught. Such errors result in a warning for the user, with an error message that can be copied, and after closing the dialog the rana browser will be enabled. 
