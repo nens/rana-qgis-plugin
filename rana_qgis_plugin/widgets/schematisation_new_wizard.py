@@ -162,8 +162,10 @@ class NewSchematisationWizard(QWizard):
             self.schematisation_settings_page.main_widget.raster_filepaths()
         )
         try:
-            schematisation, local_schematisation, wip_revision = _create_schematisation_base(
-                self.tc, self.working_dir, name, owner, tags, description
+            schematisation, local_schematisation, wip_revision = (
+                _create_schematisation_base(
+                    self.tc, self.working_dir, name, owner, tags, description
+                )
             )
 
             schematisation_filename = f"{name}.gpkg"
@@ -242,7 +244,9 @@ class NewSchematisationWizard(QWizard):
 class UploadExistingSchematisationWizard(QWizard):
     """Wizard for creating a new schematisation from an existing GeoPackage."""
 
-    def __init__(self, threedi_api, working_dir, communication, organisations, gpkg_path):
+    def __init__(
+        self, threedi_api, working_dir, communication, organisations, gpkg_path
+    ):
         super().__init__()
         self.setWizardStyle(QWizard.ClassicStyle)
         self.working_dir = working_dir
@@ -294,8 +298,10 @@ class UploadExistingSchematisationWizard(QWizard):
             else:
                 return  # ensure_valid_schema deals with showing errors.
 
-            schematisation, local_schematisation, wip_revision = _create_schematisation_base(
-                self.tc, self.working_dir, name, owner, tags, description
+            schematisation, local_schematisation, wip_revision = (
+                _create_schematisation_base(
+                    self.tc, self.working_dir, name, owner, tags, description
+                )
             )
             geopackage_filepath = os.path.join(
                 wip_revision.schematisation_dir, f"{name}.gpkg"

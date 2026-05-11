@@ -156,7 +156,9 @@ class FilesBrowser(QWidget):
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
         self.btn_import_schematisation = QPushButton("Import schematisation")
-        self.btn_upload_existing_schematisation = QPushButton("Upload existing schematisation")
+        self.btn_upload_existing_schematisation = QPushButton(
+            "Upload existing schematisation"
+        )
         # Page 0: Normal mode buttons
         normal_page = QWidget()
         btn_layout = QVBoxLayout(normal_page)
