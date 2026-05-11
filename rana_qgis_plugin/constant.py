@@ -1,6 +1,7 @@
 from pathlib import Path
 
 PLUGIN_NAME = "Rana"
+RANA_API_VERSION_PREFIX = "v1-alpha"
 
 RANA_SETTINGS_ENTRY = "Rana"
 RANA_AUTHCFG_ENTRY = f"{RANA_SETTINGS_ENTRY}/authcfg"
