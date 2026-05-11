@@ -7,6 +7,7 @@ from qgis.core import QgsSettings
 
 from rana_qgis_plugin.constant import (
     COGNITO_LOGOUT_ENDPOINT,
+    RANA_CLENUP_CACHE_ON_CLOSE_ENTRY,
     RANA_SETTINGS_ENTRY,
     RANA_TENANT_ENTRY,
 )
@@ -104,10 +105,8 @@ def set_hcc_working_dir(working_dir: str) -> str:
 
 
 def rana_cache_dir(return_default=True) -> Optional[str]:
-    cache_dir = QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir")
-    if not cache_dir and return_default:
-        cache_dir = str(Path.home() / "Rana")
-    return cache_dir
+    default = str(Path.home() / "Rana") if return_default else None
+    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir", default)
 
 
 def set_rana_cache_dir(cache_dir: str) -> str:
@@ -115,9 +114,7 @@ def set_rana_cache_dir(cache_dir: str) -> str:
 
 
 def cleanup_cache_on_close() -> bool:
-    return QgsSettings().value(
-        f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close", False, type=bool
-    )
+    return QgsSettings().value(RANA_CLENUP_CACHE_ON_CLOSE_ENTRY, False, type=bool)
 
 
 def set_cleanup_cache_on_close(value: bool) -> None:

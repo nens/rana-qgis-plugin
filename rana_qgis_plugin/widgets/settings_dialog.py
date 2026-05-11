@@ -74,7 +74,7 @@ class SettingsDialog(QDialog):
             lambda: self.browse("Cache Directory", self.cache_dir_le)
         )
         if rana_cache_dir(return_default=False) is None:
-            self.cache_dir_le.setText(os.path.join(os.path.expanduser("~"), "Rana"))
+            self.cache_dir_le.setText(rana_cache_dir(return_default=True))
         self.cleanup_cache_cb = QCheckBox(
             "Empty cache directory on closing QGIS", files_group
         )

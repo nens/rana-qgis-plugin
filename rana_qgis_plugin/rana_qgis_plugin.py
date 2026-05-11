@@ -21,7 +21,11 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.auth_3di import remove_3di_auth, setup_3di_auth
 from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
+from rana_qgis_plugin.constant import (
+    PLUGIN_NAME,
+    RANA_CLENUP_CACHE_ON_CLOSE_ENTRY,
+    RANA_SETTINGS_ENTRY,
+)
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
@@ -280,7 +284,7 @@ class RanaQgisPlugin:
         """Run method that loads and starts the plugin"""
 
         # One-time prompt if preference has never been set
-        if QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cleanup_cache_on_close") is None:
+        if QgsSettings().value(RANA_CLENUP_CACHE_ON_CLOSE_ENTRY) is None:
             result = UICommunication.ask(
                 self.iface.mainWindow(),
                 PLUGIN_NAME,
