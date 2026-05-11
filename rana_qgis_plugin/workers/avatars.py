@@ -20,9 +20,15 @@ class AvatarWorker(QRunnable):
         self.communication = communication
         self.users = users
         self.signals = AvatarWorkerSignals()
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
 
     def run(self):
         for user in self.users:
+            if self._cancelled:
+                break
             new_avatar = get_avatar(
                 user, self.communication, create_from_initials=False
             )
