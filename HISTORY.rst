@@ -9,6 +9,7 @@ History
 - Retain collapse status of boxes in FileView (nens/rana#4073)
 - Add button / context menu item to open schematisation or revision HCC management page (nens/rana#3195)
 - Change layer name for max waterdepth to "max wd <simulation_name>" and directly place under Waterdepth group in simulation results (nens/rana#3861)
+- Support batch download and delete operations (nens/rana#372)
 - Show user that created the last commit in de FileView next to the commit message (nens/rana#4169)
 - Optionally clear cache on close and remove downloaded results zip from cache (nens/rana#3975)
 - Remove results download folder on canceling download (nens/rana-qgis-plugin#323)

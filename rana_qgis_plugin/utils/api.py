@@ -663,6 +663,20 @@ def get_filename_from_attachment_url(attachment_url: str) -> str:
     return attachment_url.rsplit("/", 1)[-1].split("?", 1)[0]
 
 
+def get_default_result(results: list[dict]) -> dict | None:
+    """Find the default 'max water depth (file)' result from lizard results.
+
+    Returns the result dict if found, None otherwise.
+    """
+    for result in results:
+        if (
+            result.get("attachment_url")
+            and result["name"].lower() == "max water depth (file)"
+        ):
+            return result
+    return None
+
+
 def map_result_to_file_name(result: dict) -> str:
     if result["name"] == "Raw 3Di output":
         return "results_3di.nc"

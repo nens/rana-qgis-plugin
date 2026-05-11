@@ -15,18 +15,18 @@ from qgis.PyQt.QtCore import (
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.constant import STYLE_DIR
-from rana_qgis_plugin.simulation.utils import load_remote_schematisation
+from rana_qgis_plugin.simulation.utils import (
+    BuildOptionActions,
+    load_local_schematisation,
+)
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
-    get_threedi_schematisation,
 )
-from rana_qgis_plugin.utils.generic import get_threedi_api
 from rana_qgis_plugin.utils.qgis import (
     get_qml_name_for_layer,
     get_threedi_results_analysis_tool_instance,
 )
 from rana_qgis_plugin.utils.scenario import get_is_3di_simulation
-from rana_qgis_plugin.utils.settings import hcc_working_dir
 
 
 class LayerManager(QObject):
@@ -265,26 +265,36 @@ class LayerManager(QObject):
                 f"Cannot add wms layer(s) from {Path(file['id']).name}"
             )
 
-    def add_from_schematisation(self, project_name, schematisation, revision):
+    def add_from_schematisation(
+        self,
+        project_name,
+        local_schematisation,
+        revision_number,
+        wip_replace_requested,
+        geopackage_filepath=None,
+    ):
+        """Open a previously downloaded schematisation in the schematisation editor."""
         self.communication.clear_message_bar()
-        pb = self.communication.progress_bar(
-            msg="Downloading remote schematisation...", clear_msg_bar=True
-        )
-        if not hcc_working_dir():
-            self.communication.show_warn(
-                "Working directory not yet set, please configure this in the plugin settings."
-            )
+        if not local_schematisation:
+            self.communication.log_warn("Unable to load local schematisation")
             return
-        load_remote_schematisation(
+
+        assert revision_number in local_schematisation.revisions
+        load_local_schematisation(
             self.communication,
-            schematisation,
-            revision,
-            pb,
-            hcc_working_dir(),
-            get_threedi_api(),
+            local_schematisation=local_schematisation.wip_revision
+            if wip_replace_requested
+            else local_schematisation.revisions[revision_number],
+            action=BuildOptionActions.DOWNLOADED,
+            custom_geopackage_filepath=geopackage_filepath,
             parents=[project_name],
         )
-        self.communication.clear_message_bar()
+        wip_revision = local_schematisation.wip_revision
+        if wip_revision is not None:
+            settings = QSettings("3di", "qgisplugin")
+            settings.setValue(
+                "last_used_geopackage_path", wip_revision.schematisation_dir
+            )
 
 
 class FileLayerManager(LayerManager):
@@ -364,19 +374,5 @@ class PublicationLayerManager(LayerManager):
 def open_file_via_layer_manager(
     project: dict, file: dict, local_file_path: str, layer_manager: LayerManager
 ):
-    if file["data_type"] == "threedi_schematisation":
-        schematisation = get_threedi_schematisation(
-            layer_manager.communication, file["descriptor_id"]
-        )
-        if schematisation:
-            revision = schematisation["latest_revision"]
-            if not revision:
-                layer_manager.communication.show_warn(
-                    "Cannot open a schematisation without a revision."
-                )
-                return
-            layer_manager.add_from_schematisation(
-                project["name"], schematisation["schematisation"], revision
-            )
-    elif file["data_type"] in ["scenario", "vector", "raster"]:
+    if file["data_type"] in ["scenario", "vector", "raster"]:
         layer_manager.add_from_file(project["name"], local_file_path, file)

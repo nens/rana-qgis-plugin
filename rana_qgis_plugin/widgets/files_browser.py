@@ -10,20 +10,26 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QAction, QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QAbstractItemDelegate,
+    QAbstractItemView,
     QDialog,
     QDialogButtonBox,
     QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
+    QSizePolicy,
+    QStackedWidget,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import dir_icon
+from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
 from rana_qgis_plugin.utils.api import (
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -40,7 +46,10 @@ from rana_qgis_plugin.widgets.utils_file_action import (
     get_file_actions_for_data_type,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
-from rana_qgis_plugin.widgets.utils_view import ContentAwareTreeView
+from rana_qgis_plugin.widgets.utils_view import (
+    CheckableHeaderView,
+    ContentAwareTreeView,
+)
 
 # allow for using specific data just for sorting
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -48,19 +57,23 @@ SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 class FileBrowserModel(QStandardItemModel):
     def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        # Do not sort checkbox column
+        if column == 0:
+            return
         self.layoutAboutToBeChanged.emit()
 
         directories = []
         files = []
 
         # First separate directories and files
+        # Col 1 holds the name item with UserRole data
         while self.rowCount() > 0:
             row_items = self.takeRow(0)
             if not row_items:
                 continue
-            item_type = row_items[0].data(Qt.ItemDataRole.UserRole).get("type")
+            item_type = row_items[1].data(Qt.ItemDataRole.UserRole).get("type")
             if item_type == "directory":
-                sort_text = row_items[0].data(Qt.ItemDataRole.DisplayRole) or ""
+                sort_text = row_items[1].data(Qt.ItemDataRole.DisplayRole) or ""
                 directories.append((row_items, sort_text))
             else:
                 # try to use SORT_ROLE data before using UserRole data, then fall back to display text
@@ -72,13 +85,11 @@ class FileBrowserModel(QStandardItemModel):
                 )
                 files.append((row_items, sort_text))
 
-        # Sort directories and files separately
-        # only changing on directory name should affect directory sorting
-        if column == 0:
-            directories.sort(
-                key=lambda x: x[1],
-                reverse=(order == Qt.SortOrder.DescendingOrder),
-            )
+        # Sort directories always by name (col 1), files by the requested column
+        directories.sort(
+            key=lambda x: x[1],
+            reverse=(order == Qt.SortOrder.DescendingOrder),
+        )
         files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
         # Always add directories first, then files
         for row_items, _ in directories:
@@ -93,6 +104,8 @@ class FilesBrowser(QWidget):
     file_selected = pyqtSignal(dict)
     path_changed = pyqtSignal(str)
     create_folder_requested = pyqtSignal(str)
+    batch_download_requested = pyqtSignal(list)  # list of file dicts
+    batch_delete_requested = pyqtSignal(list)
     busy = pyqtSignal()
     ready = pyqtSignal()
 
@@ -112,6 +125,12 @@ class FilesBrowser(QWidget):
 
     def setup_ui(self):
         self.files_tv = ContentAwareTreeView()
+        self.files_tv.setHeader(
+            CheckableHeaderView(Qt.Orientation.Horizontal, self.files_tv)
+        )
+        self.files_tv.header().check_state_changed.connect(
+            self._on_header_check_state_changed
+        )
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
         self.files_model = FileBrowserModel()
@@ -119,26 +138,62 @@ class FilesBrowser(QWidget):
         self.files_tv.setSortingEnabled(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.header().setSectionsMovable(False)
-        # Set default sort: column 3 (Last modified), descending (newest first)
-        self.files_tv.sortByColumn(3, Qt.SortOrder.DescendingOrder)
+        # Remove the branch indicator area so column 0 has no leading indent
+        self.files_tv.setRootIsDecorated(False)
+        # Set default sort: column 4 (Last modified), descending (newest first)
+        # Column 0 is the hidden checkbox column; visible columns start at 1.
+        self.files_tv.sortByColumn(4, Qt.SortOrder.DescendingOrder)
+        self.files_tv.setColumnHidden(0, True)
+        # Disable all user-gesture-triggered editing; rename is started programmatically
+        self.files_tv.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.files_tv.doubleClicked.connect(self.select_file_or_directory)
+        # Select button for batch operations
+        self.select_btn = QPushButton("Select")
+        self.select_btn.setCheckable(True)
+        self.select_btn.setToolTip("Toggle file selection mode")
+        self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
         self.btn_import_schematisation = QPushButton("Import schematisation")
-        btn_layout = QGridLayout()
+        # Page 0: Normal mode buttons
+        normal_page = QWidget()
+        btn_layout = QGridLayout(normal_page)
         btn_layout.addWidget(self.btn_upload, 0, 0)
         btn_layout.addWidget(btn_create_folder, 0, 1)
         btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
         btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
+        # Page 1: Select mode buttons
+        select_page = QWidget()
+        select_layout = QHBoxLayout(select_page)
+        self.btn_download_selected = QPushButton(download_icon, "Download selected")
+        self.btn_download_selected.setToolTip("Download selected file(s)")
+        self.btn_delete_selected = QPushButton(trash_icon, "Delete selected")
+        self.btn_delete_selected.setToolTip("Delete selected file(s)")
+        self.btn_download_selected.setEnabled(False)
+        self.btn_delete_selected.setEnabled(False)
+        self.btn_download_selected.clicked.connect(self._on_download_selected_clicked)
+        self.btn_delete_selected.clicked.connect(self._on_delete_selected_clicked)
+        select_layout.addWidget(self.btn_download_selected)
+        select_layout.addWidget(self.btn_delete_selected)
+        # Stacked widget holding both pages
+        self.btn_stack = QStackedWidget()
+        self.btn_stack.addWidget(normal_page)
+        self.btn_stack.addWidget(select_page)
+        self.btn_stack.setSizePolicy(
+            self.btn_stack.sizePolicy().horizontalPolicy(),
+            QSizePolicy.Fixed,
+        )
         layout = QVBoxLayout(self)
         layout.addWidget(self.files_tv)
-        layout.addLayout(btn_layout)
+        layout.addWidget(self.btn_stack)
         self.setLayout(layout)
 
         self.btn_new_schematisation.setVisible(has_3di_authcfg())
         self.btn_import_schematisation.setVisible(has_3di_authcfg())
+        # Connect checkbox state changes to update batch button states
+        self.files_model.itemChanged.connect(self._update_batch_buttons)
 
     def show_create_folder_dialog(self):
         # Make sure this button cannot do anything if the files browser is not in a folder
@@ -147,8 +202,140 @@ class FilesBrowser(QWidget):
             self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
+        # Remember current select mode state
+        was_in_select_mode = self.select_btn.isChecked()
+        previously_checked = self._get_checked_files() if was_in_select_mode else []
+        # Refresh file list
         self.fetch_and_populate(self.project, self.selected_item["id"])
         self.communication.clear_message_bar()
+        # Restore select mode and re-check previously selected files
+        if was_in_select_mode:
+            self.select_btn.setChecked(True)
+            # setChecked only emits toggled when state changes; since the button
+            # was already checked before refresh, call toggle_select_mode explicitly.
+            self.toggle_select_mode(True)
+            self._restore_checked_files(previously_checked)
+
+    def _checkbox_column_width(self) -> int:
+        """Return a column width snug around the checkbox indicator for the current style.
+        Uses PM_IndicatorWidth to match the size used by CheckableHeaderView."""
+        cb_width = self.files_tv.style().pixelMetric(
+            QStyle.PixelMetric.PM_IndicatorWidth
+        )
+        return cb_width + 8  # 4px padding on each side
+
+    def toggle_select_mode(self, checked: bool):
+        """Toggle Select mode: show/hide checkbox column, swap button sets."""
+        self.communication.log_info(f"Toggle select mode: {checked}")
+        self.files_tv.setColumnHidden(0, not checked)
+        if checked:
+            self.files_tv.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            self.files_tv.header().resizeSection(0, self._checkbox_column_width())
+        self.btn_stack.setCurrentIndex(1 if checked else 0)
+        if not checked:
+            self._clear_all_checkboxes()
+            self.files_tv.header().set_check_state(Qt.CheckState.Unchecked)
+
+    def _clear_all_checkboxes(self):
+        """Uncheck all file rows."""
+        for row in range(self.files_model.rowCount()):
+            checkbox_item = self.files_model.item(row, 0)
+            if checkbox_item and checkbox_item.isCheckable():
+                checkbox_item.setCheckState(Qt.CheckState.Unchecked)
+
+    def _get_checked_files(self) -> list:
+        """Return list of file dicts for all checked rows."""
+        checked_files = []
+        for row in range(self.files_model.rowCount()):
+            checkbox_item = self.files_model.item(row, 0)
+            if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
+                # Col 1 is the name item with UserRole data
+                name_item = self.files_model.item(row, 1)
+                if name_item:
+                    file_data = name_item.data(Qt.ItemDataRole.UserRole)
+                    if file_data:
+                        checked_files.append(file_data)
+        return checked_files
+
+    def _restore_checked_files(self, previously_checked: list):
+        """Re-check files that were checked before refresh, matched by file ID."""
+        if not previously_checked:
+            return
+        # Build a set of IDs for fast lookup
+        previous_ids = {f["id"] for f in previously_checked}
+        # Check rows that match previously checked files
+        for row in range(self.files_model.rowCount()):
+            name_item = self.files_model.item(row, 1)
+            if name_item:
+                file_data = name_item.data(Qt.ItemDataRole.UserRole)
+                if file_data and file_data.get("id") in previous_ids:
+                    checkbox_item = self.files_model.item(row, 0)
+                    if checkbox_item and checkbox_item.isCheckable():
+                        checkbox_item.setCheckState(Qt.CheckState.Checked)
+
+    def _set_batch_buttons_enabled(self, has_checked: bool):
+        """Enable or disable the batch action buttons."""
+        self.btn_download_selected.setEnabled(has_checked)
+        self.btn_delete_selected.setEnabled(has_checked)
+
+    def _update_batch_buttons(self, item: QStandardItem):
+        """Enable/disable batch buttons based on checked count. Called on itemChanged."""
+        # Only react to checkbox column changes
+        if item.column() != 0:
+            return
+        has_checked = len(self._get_checked_files()) > 0
+        self._set_batch_buttons_enabled(has_checked)
+        self._sync_header_checkbox()
+
+    def _on_header_check_state_changed(self, state: int):
+        """Called when the user clicks the header checkbox. Check or uncheck all file rows."""
+        state = Qt.CheckState(state)
+        self.files_model.blockSignals(True)
+        try:
+            for row in range(self.files_model.rowCount()):
+                checkbox_item = self.files_model.item(row, 0)
+                if checkbox_item and checkbox_item.isCheckable():
+                    checkbox_item.setCheckState(state)
+        finally:
+            self.files_model.blockSignals(False)
+        # blockSignals prevented itemChanged from firing, so the view never got
+        # a repaint signal. Emit dataChanged for all of column 0 to trigger it.
+        if self.files_model.rowCount() > 0:
+            self.files_model.dataChanged.emit(
+                self.files_model.index(0, 0),
+                self.files_model.index(self.files_model.rowCount() - 1, 0),
+            )
+        self._set_batch_buttons_enabled(state == Qt.CheckState.Checked)
+
+    def _sync_header_checkbox(self):
+        """Update header checkbox to reflect current row check states."""
+        total = 0
+        checked = 0
+        for row in range(self.files_model.rowCount()):
+            checkbox_item = self.files_model.item(row, 0)
+            if checkbox_item and checkbox_item.isCheckable():
+                total += 1
+                if checkbox_item.checkState() == Qt.CheckState.Checked:
+                    checked += 1
+        if total == 0 or checked == 0:
+            state = Qt.CheckState.Unchecked
+        elif checked == total:
+            state = Qt.CheckState.Checked
+        else:
+            state = Qt.CheckState.PartiallyChecked
+        self.files_tv.header().set_check_state(state)
+
+    def _on_download_selected_clicked(self):
+        """Emit batch download signal for checked files."""
+        checked_files = self._get_checked_files()
+        if checked_files:
+            self.batch_download_requested.emit(checked_files)
+
+    def _on_delete_selected_clicked(self):
+        """Show confirmation dialog before deleting selected files."""
+        checked_files = self._get_checked_files()
+        if checked_files:
+            self.batch_delete_requested.emit(checked_files)
 
     def select_path(self, selected_path: str):
         # Root level path is expected to be ""
@@ -222,7 +409,7 @@ class FilesBrowser(QWidget):
         closes with a commit, emits the rename signal with the new name.
         If the name is unchanged the signal is not emitted.
         """
-        name_index = index.sibling(index.row(), 0)
+        name_index = index.sibling(index.row(), 1)
         name_item = self.files_model.itemFromIndex(name_index)
         if name_item is None:
             return
@@ -253,11 +440,35 @@ class FilesBrowser(QWidget):
         self.files_tv.edit(name_index)
 
     def select_file_or_directory(self, index: QModelIndex):
+        """Handle double-click on tree view. Dispatch to select or navigate."""
+        # Only allow selection of the first visible column (filename = col 1)
+        if index.column() != 1:
+            return
+        # In select mode, toggle checkbox instead of navigating
+        if self.select_btn.isChecked():
+            self._toggle_file_checkbox(index)
+        else:
+            self._navigate_to_file_or_directory(index)
+
+    def _toggle_file_checkbox(self, index: QModelIndex):
+        """Toggle checkbox for a file in select mode. Directories are not toggleable."""
+        file_item = self.files_model.itemFromIndex(index)
+        selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+        # Only toggle checkbox for files, not directories
+        if selected_item.get("type") == "file":
+            checkbox_item = self.files_model.item(index.row(), 0)
+            if checkbox_item and checkbox_item.isCheckable():
+                new_state = (
+                    Qt.CheckState.Unchecked
+                    if checkbox_item.checkState() == Qt.CheckState.Checked
+                    else Qt.CheckState.Checked
+                )
+                checkbox_item.setCheckState(new_state)
+
+    def _navigate_to_file_or_directory(self, index: QModelIndex):
+        """Navigate to directory or view file details in normal mode."""
         self.busy.emit()
         self.communication.progress_bar("Loading files...", clear_msg_bar=True)
-        # Only allow selection of the first column (filename)
-        if index.column() != 0:
-            return
         file_item = self.files_model.itemFromIndex(index)
         self.selected_item = file_item.data(Qt.ItemDataRole.UserRole)
         self.update()
@@ -272,7 +483,7 @@ class FilesBrowser(QWidget):
         sort_order = self.files_tv.header().sortIndicatorOrder()
 
         self.files_model.clear()
-        header = ["Filename", "Data type", "Size", "Last modified"]
+        header = ["", "Filename", "Data type", "Size", "Last modified"]
         self.files_model.setHorizontalHeaderLabels(header)
         directories = [file for file in self.files if file["type"] == "directory"]
         files = [file for file in self.files if file["type"] == "file"]
@@ -284,7 +495,10 @@ class FilesBrowser(QWidget):
             name_item.setToolTip(dir_name)
             name_item.setData(directory, role=Qt.ItemDataRole.UserRole)
             name_item.setData(dir_name.lower(), role=SORT_ROLE)
-            self.files_model.appendRow([name_item])
+            # Col 0: empty non-checkable placeholder (directories cannot be batch-selected)
+            placeholder = QStandardItem()
+            placeholder.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self.files_model.appendRow([placeholder, name_item])
 
         # Add files second
         for file in files:
@@ -312,14 +526,26 @@ class FilesBrowser(QWidget):
             last_modified_item.setData(
                 last_modified_item.data(Qt.ItemDataRole.UserRole), role=SORT_ROLE
             )
+            # Col 0: checkable item for Select mode (hidden by default)
+            checkbox_item = QStandardItem()
+            checkbox_item.setCheckState(Qt.CheckState.Unchecked)
+            checkbox_item.setFlags(
+                Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
+            )
             # Add items to the model
             self.files_model.appendRow(
-                [name_item, data_type_item, size_item, last_modified_item]
+                [
+                    checkbox_item,
+                    name_item,
+                    data_type_item,
+                    size_item,
+                    last_modified_item,
+                ]
             )
 
         self.files_tv.sortByColumn(sort_column, sort_order)
         self.files_tv.setSortingEnabled(True)
-
+        self.files_tv.setColumnHidden(0, not self.select_btn.isChecked())
         self.files_tv.resize_columns_aware_of_collapsed_items()
 
 

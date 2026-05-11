@@ -141,15 +141,17 @@ def results_folder_subpath(result_folder_info):
 
 
 def test_get_threedi_schematisation_simulation_results_folder_no_local_data(
-    result_folder_info, results_folder_subpath
+    tmp_path, result_folder_info, results_folder_subpath
 ):
     results_folder = utils.get_threedi_schematisation_simulation_results_folder(
-        "./", **result_folder_info
+        str(tmp_path), **result_folder_info
     )
     expected_folder = str(
-        Path(result_folder_info["schematisation_name"]).joinpath(
-            *results_folder_subpath
-        )
+        tmp_path
+        / result_folder_info["schematisation_name"]
+        / "revision 1"
+        / "results"
+        / f"{result_folder_info['simulation_name']} ({result_folder_info['simulation_id']})"
     )
     assert results_folder == expected_folder
 
@@ -178,7 +180,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(
     config_path = Path(schemadir) / "admin" / "schematisation.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config = {
-        "id": 1,
+        "id": result_folder_info["schematisation_id"],
         "name": result_folder_info["schematisation_name"],
         "revisions": [result_folder_info["revision_number"]],
         "wip_parent_revision": 1,

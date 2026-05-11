@@ -95,6 +95,7 @@ class ProcessesBrowser(QWidget):
     def setup_ui(self):
         self.processes_model = QStandardItemModel()
         self.processes_tv = QTreeView()
+        self.processes_tv.setRootIsDecorated(False)
         self.processes_tv.setModel(self.processes_model)
         self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
         layout = QVBoxLayout(self)

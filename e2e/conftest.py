@@ -17,6 +17,7 @@ import rana_qgis_plugin.utils.api as utils_api
 from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.rana_qgis_plugin import RanaQgisPlugin
+from rana_qgis_plugin.utils.api import delete_tenant_project_file
 from rana_qgis_plugin.utils.settings import set_base_url, set_cleanup_cache_on_close
 
 
@@ -197,3 +198,14 @@ def plugin(qgis_iface, qgis_application):
 
     plugin.unload()
     qgis_application.processEvents()
+
+
+@pytest.fixture
+def clean_upload_file():
+    """Ensure upload.gpkg is removed before and after the test.
+
+    Calls the API to delete the file, ignoring errors if it doesn't exist.
+    """
+    delete_tenant_project_file("NEEjN2HZ", {"path": "upload.gpkg"})
+    yield
+    delete_tenant_project_file("NEEjN2HZ", {"path": "upload.gpkg"})

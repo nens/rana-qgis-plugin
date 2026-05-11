@@ -1,5 +1,4 @@
 import io
-import os
 import shutil
 import tempfile
 import warnings
@@ -7,10 +6,10 @@ import zipfile
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import List, Optional
+from typing import Optional
 
 import requests
-from qgis.core import Qgis, QgsMessageLog
+from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import (
     QObject,
     QThread,
@@ -25,9 +24,7 @@ from rana_qgis_plugin.utils.api import (
     get_publication_style,
     get_raster_file_link,
     get_tenant_file_descriptor,
-    get_tenant_file_descriptor_view,
     get_tenant_file_url,
-    map_result_to_file_name,
     request_raster_generate,
 )
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
@@ -38,9 +35,11 @@ from rana_qgis_plugin.utils.generic import (
     get_local_publication_dir_structure,
     get_local_publication_file_path,
     get_threedi_api,
+    get_threedi_schematisation_simulation_results_folder,
     split_scenario_extent,
 )
 from rana_qgis_plugin.utils.qgis import rescale_qml_file
+from rana_qgis_plugin.utils.scenario import ScenarioInfo
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -169,9 +168,55 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
             return style_zip
 
 
+class ResultsDownloadContext(AbstractDownloadContext):
+    """Download context for lizard scenario results (batch downloads).
+
+    Resolves the target folder based on whether a 3Di simulation is linked.
+    """
+
+    def __init__(
+        self,
+        scenario_info: ScenarioInfo,
+        project_slug: str,
+        file_id: str,
+        filename: str = "",
+    ):
+        self.scenario_info = scenario_info
+        self.project_slug = project_slug
+        self.file_id = file_id
+        self.filename = filename
+
+    @cached_property
+    def local_dir(self) -> Path:
+        if self.scenario_info.has_3di_simulation:
+            return Path(
+                get_threedi_schematisation_simulation_results_folder(
+                    QgsSettings().value("threedi/working_dir"),
+                    self.scenario_info.schematisation_id,
+                    self.scenario_info.schematisation_name.replace("/", "-").replace(
+                        "\\", "-"
+                    ),
+                    self.scenario_info.revision_number,
+                    self.scenario_info.simulation_name.replace("/", "-").replace(
+                        "\\", "-"
+                    ),
+                    self.scenario_info.simulation_id,
+                )
+            )
+        return Path(get_local_dir_structure(self.project_slug, self.file_id))
+
+    @property
+    def local_file_path(self) -> Path:
+        return Path(bypass_max_path_limit(str(self.local_dir / self.filename)))
+
+
 class BaseDownloader:
     def __init__(self, download_context: AbstractDownloadContext):
         self.download_context = download_context
+
+    @property
+    def file_id(self) -> str:
+        raise NotImplementedError
 
     @property
     def url(self) -> str:
@@ -184,28 +229,39 @@ class BaseDownloader:
     def postprocess(self):
         raise NotImplementedError
 
+    @staticmethod
+    def download_url(
+        url, target_file: Path, progress_signal, progress_min=0, progress_max=100
+    ):
+        """Download a URL to a file, emitting progress signals."""
+        with requests.get(url, stream=True) as response:
+            response.raise_for_status()
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            total_size = int(response.headers.get("content-length", 0))
+            progress_frac = (
+                (progress_max - progress_min) / total_size if total_size > 0 else 0
+            )
+            downloaded_size = 0
+            previous_progress = -1
+            with open(target_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    f.write(chunk)
+                    downloaded_size += len(chunk)
+                    progress = progress_min + int(downloaded_size * progress_frac)
+                    if progress > previous_progress:
+                        progress_signal.emit(progress, str(target_file))
+                        previous_progress = progress
+
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Handles the core logic for downloading a file and emits signals from the worker."""
         self.download_context.local_dir.mkdir(parents=True, exist_ok=True)
         try:
             if download_file:
-                with requests.get(self.url, stream=True) as response:
-                    response.raise_for_status()
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded_size = 0
-                    previous_progress = -1
-                    with open(
-                        self.download_context.local_file_path, "wb"
-                    ) as local_file:
-                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                            local_file.write(chunk)
-                            downloaded_size += len(chunk)
-                            progress = int((downloaded_size / total_size) * 100)
-                            if progress > previous_progress:
-                                signals.progress.emit(
-                                    progress, str(self.download_context.local_file_path)
-                                )
-                                previous_progress = progress
+                self.download_url(
+                    self.url,
+                    self.download_context.local_file_path,
+                    signals.progress,
+                )
             self.postprocess()
             # Emit finished signal from the worker
             signals.finished.emit()
@@ -221,12 +277,33 @@ class BaseDownloader:
 
 
 class RanaDownloader(BaseDownloader):
+    """Base downloader for files stored in a Rana project.
+
+    Provides the download URL (via tenant file API) and file_id.
+    Subclasses implement postprocess() for file-type-specific handling.
+    """
+
     def __init__(
         self, project: dict, file: dict, download_context: AbstractDownloadContext
     ):
         super().__init__(download_context)
         self.project = project
         self.file = file
+
+    @property
+    def url(self) -> Optional[str]:
+        return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+
+    @property
+    def file_id(self) -> str:
+        return self.file["id"]
+
+
+class RanaFileDownloader(RanaDownloader):
+    """Downloads a tenant file and applies QML styling.
+
+    Used for raster and vector files that have associated style data.
+    """
 
     def postprocess(self):
         """Handles the extraction of QML zip file and matching/renaming for rasters."""
@@ -275,7 +352,43 @@ class RanaDownloader(BaseDownloader):
         rescale_qml_file(qml_path, float(new_min), float(new_max))
 
 
-class SchematisationDownloader(BaseDownloader):
+class RanaRawResultsDownloader(RanaDownloader):
+    """Downloads and extracts the raw results zip for a scenario file."""
+
+    def __init__(
+        self, project: dict, file: dict, download_context: AbstractDownloadContext
+    ):
+        super().__init__(project, file, download_context)
+        self._warning_signal = None
+
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        """Store warning signal for use in postprocess, then delegate to parent."""
+        self._warning_signal = signals.warning
+        super().download_file(signals, download_file)
+
+    def postprocess(self):
+        """Extract zip into local_dir, handle nested log zip, remove zip."""
+        zip_path = self.download_context.local_file_path
+        target_dir = self.download_context.local_dir
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(str(target_dir))
+        zip_path.unlink()
+        descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
+        try:
+            sim_id = descriptor["meta"]["simulation"]["id"]
+            log_zip_path = target_dir / f"log_files_sim_{sim_id}.zip"
+            if log_zip_path.is_file():
+                with zipfile.ZipFile(log_zip_path, "r") as log_zip_ref:
+                    log_zip_ref.extractall(str(target_dir))
+            else:
+                self._warning_signal.emit(
+                    "Subarchive containing log files not present, ignoring."
+                )
+        except KeyError:
+            self._warning_signal.emit("Subarchive info missing, ignoring.")
+
+
+class SchematisationGeopackageDownloader(BaseDownloader):
     def __init__(
         self,
         schematisation_id: int,
@@ -399,10 +512,268 @@ class SchematisationDownloader(BaseDownloader):
             raise SchematisationUpgradeError(f"Failed to upgrade schematisation: {e}")
 
 
-class RanaFileDownloader(RanaDownloader):
+class RanaResultDownloader(BaseDownloader):
+    """Downloads a pre-generated result raster via attachment_url."""
+
+    def __init__(self, download_context: ResultsDownloadContext, result: dict):
+        super().__init__(download_context)
+        self.result = result
+
     @property
-    def url(self) -> Optional[str]:
-        return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+    def url(self) -> str:
+        return self.result["attachment_url"]
+
+    @property
+    def file_id(self) -> str:
+        return self.result["id"]
+
+    def postprocess(self):
+        pass
+
+
+class SchematisationRevisionDownloadContext(AbstractDownloadContext):
+    """Download context for schematisation revision files."""
+
+    def __init__(self, schematisation_db_dir: Path):
+        self.schematisation_db_dir = schematisation_db_dir
+        # Populated after download completes
+        self.local_schematisation = None
+        self.geopackage_filepath = None
+        self.wip_replace_requested = False
+
+    @property
+    def local_dir(self) -> Path:
+        return self.schematisation_db_dir
+
+    @property
+    def local_file_path(self) -> Path:
+        return self.schematisation_db_dir / "schematisation.zip"
+
+    def get_style_zip(self):
+        return None
+
+
+class SchematisationRevisionDownloader(BaseDownloader):
+    """Downloads schematisation revision files via download_required_files.
+
+    The dialog to resolve the target directory must happen before constructing
+    this downloader (use resolve_schematisation_download_dir on the main thread).
+    """
+
+    def __init__(
+        self,
+        download_context: SchematisationRevisionDownloadContext,
+        schematisation,
+        revision,
+        local_schematisation,
+        wip_replace_requested: bool,
+    ):
+        super().__init__(download_context)
+        self.schematisation = schematisation
+        self.revision = revision
+        self.local_schematisation = local_schematisation
+        self.wip_replace_requested = wip_replace_requested
+
+    @property
+    def url(self) -> str:
+        raise NotImplementedError(
+            "SchematisationRevisionDownloader overrides download_file"
+        )
+
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        """Download schematisation revision files."""
+        from rana_qgis_plugin.simulation.utils import download_required_files
+
+        try:
+            result = download_required_files(
+                self.schematisation,
+                self.revision,
+                self.download_context.schematisation_db_dir,
+                self.local_schematisation,
+                self.wip_replace_requested,
+                progress_fn=signals.progress.emit,
+            )
+            self.download_context.local_schematisation = result[0]
+            self.download_context.geopackage_filepath = result[1]
+            self.download_context.wip_replace_requested = result[2]
+            signals.finished.emit()
+        except Exception as e:
+            signals.failed.emit(f"Failed to download schematisation: {str(e)}")
+
+    def postprocess(self):
+        pass
+
+    @property
+    def file_id(self) -> str:
+        schematisation_id = (
+            self.schematisation["id"]
+            if isinstance(self.schematisation, dict)
+            else self.schematisation.id
+        )
+        revision_number = (
+            self.revision["number"]
+            if isinstance(self.revision, dict)
+            else self.revision.number
+        )
+        return f"schematisation-{schematisation_id}-rev{revision_number}"
+
+
+class LizardResultDownloader(BaseDownloader):
+    """Downloads a result raster that requires on-demand generation from Lizard."""
+
+    def __init__(
+        self,
+        download_context: ResultsDownloadContext,
+        descriptor_id: str,
+        result: dict,
+        grid: dict,
+        nodata: int,
+        pixelsize: float,
+        crs: str,
+    ):
+        super().__init__(download_context)
+        self.descriptor_id = descriptor_id
+        self.result = result
+        self.grid = grid
+        self.nodata = nodata
+        self.pixelsize = pixelsize
+        self.crs = crs
+
+    @property
+    def url(self) -> str:
+        raise NotImplementedError("LizardResultDownloader overrides download_file")
+
+    @property
+    def file_id(self) -> str:
+        return self.result["id"]
+
+    def postprocess(self):
+        pass
+
+    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
+        """Generate raster tiles, poll until ready, download, and build VRT."""
+        file_name = self.download_context.local_file_path.stem
+        target_dir = self.download_context.local_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Split extent into tiles
+        spatial_bounds = split_scenario_extent(
+            grid=self.grid, resolution=self.pixelsize, max_pixel_count=1 * 10**8
+        )
+        bboxes, width, height = spatial_bounds
+
+        # Request generation for each tile
+        raster_tasks = []
+        for i, (x1, y1, x2, y2) in enumerate(bboxes):
+            bbox = f"{x1},{y1},{x2},{y2}"
+            payload = {
+                "width": width,
+                "height": height,
+                "bbox": bbox,
+                "projection": self.crs,
+                "format": "geotiff",
+                "async": "true",
+            }
+            if self.nodata is not None:
+                payload["nodata"] = self.nodata
+            r = request_raster_generate(
+                descriptor_id=self.descriptor_id,
+                raster_id=self.result["raster_id"],
+                payload=payload,
+            )
+            raster_tasks.append(r)
+            progress = int(((i + 1) / len(bboxes)) * 10)
+            signals.progress.emit(progress, file_name)
+
+        # Multi-tile: poll and download each tile
+        if len(raster_tasks) > 1:
+            rasters = {
+                raster_task_id: {
+                    "downloaded": False,
+                    "filepath": bypass_max_path_limit(
+                        str(target_dir / f"{file_name}{task_number:02d}.tif")
+                    ),
+                }
+                for task_number, raster_task_id in enumerate(raster_tasks)
+            }
+            task_counter = 0
+
+            while False in [task["downloaded"] for task in rasters.values()]:
+                sleep(5)
+                for raster_task_id in rasters.keys():
+                    if not rasters[raster_task_id]["downloaded"]:
+                        try:
+                            file_link = get_raster_file_link(
+                                descriptor_id=self.descriptor_id,
+                                task_id=raster_task_id,
+                            )
+                            if file_link:
+                                self._download_tile(
+                                    file_link, rasters[raster_task_id]["filepath"]
+                                )
+                                rasters[raster_task_id]["downloaded"] = True
+                                task_counter += 1
+                                progress = int(
+                                    10 + (task_counter / len(raster_tasks)) * 80
+                                )
+                                signals.progress.emit(progress, file_name)
+                        except requests.exceptions.RequestException as e:
+                            signals.failed.emit(f"Failed to download file: {str(e)}")
+                            return
+                        except Exception as e:
+                            signals.failed.emit(f"An error occurred: {str(e)}")
+                            return
+
+            raster_filepaths = [item["filepath"] for item in rasters.values()]
+            raster_filepaths.sort()
+            first_raster_filepath = raster_filepaths[0]
+            vrt_filepath = first_raster_filepath.replace("_01", "").replace(
+                ".tif", ".vrt"
+            )
+            vrt_options = {
+                "resolution": "average",
+                "resampleAlg": "nearest",
+                "srcNodata": self.nodata,
+            }
+            build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
+            signals.progress.emit(100, file_name)
+
+        # Single-tile: poll and download
+        else:
+            target_file = bypass_max_path_limit(str(target_dir / (file_name + ".tif")))
+            file_link = False
+            while not file_link:
+                sleep(5)
+                try:
+                    file_link = get_raster_file_link(
+                        descriptor_id=self.descriptor_id, task_id=raster_tasks[0]
+                    )
+                    if not file_link:
+                        continue
+                    self.download_url(
+                        file_link,
+                        Path(target_file),
+                        signals.progress,
+                        progress_min=10,
+                        progress_max=100,
+                    )
+                except requests.exceptions.RequestException as e:
+                    signals.failed.emit(f"Failed to download file: {str(e)}")
+                    return
+                except Exception as e:
+                    signals.failed.emit(f"An error occurred: {str(e)}")
+                    return
+
+        signals.finished.emit()
+
+    @staticmethod
+    def _download_tile(file_link: str, target_file: str):
+        """Download a single tile without progress tracking."""
+        with requests.get(file_link, stream=True) as response:
+            response.raise_for_status()
+            with open(target_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    f.write(chunk)
 
 
 class SingleFileDownloadWorker(QThread):
@@ -426,10 +797,20 @@ class BatchFileDownloadWorker(QThread):
         self.signals = FileDownloadWorkerSignals()
         self.downloaders = downloaders
         self.downloaded_files = {}
+        self.warning_cnt = 0
+        self.fail_cnt = 0
+        self.signals.warning.connect(self._on_warning)
+        self.signals.failed.connect(self._on_failed)
+
+    def _on_warning(self, msg: str):
+        self.warning_cnt += 1
+
+    def _on_failed(self, msg: str):
+        self.fail_cnt += 1
 
     @cached_property
     def unique_file_ids(self) -> set[str]:
-        return set([downloader.file["id"] for downloader in self.downloaders])
+        return set([downloader.file_id for downloader in self.downloaders])
 
     @property
     def nof_files(self) -> int:
@@ -438,7 +819,7 @@ class BatchFileDownloadWorker(QThread):
 
     def handle_existing(self, downloader) -> bool:
         """Check if a file was already downloaded by this worker. If so, just copy the file to the required destination"""
-        if downloader.file["id"] in self.downloaded_files:
+        if downloader.file_id in self.downloaded_files:
             download_path = downloader.download_context.local_file_path
             file_location = self.downloaded_files[downloader.file["id"]]
             # make sure the file didn't disappear somehow
@@ -462,300 +843,21 @@ class BatchFileDownloadWorker(QThread):
             downloader = next(
                 downloader
                 for downloader in self.downloaders
-                if downloader.file["id"] == file_id
+                if downloader.file_id == file_id
             )
-            downloader.download_file(self.signals)
-            download_path = downloader.download_context.local_file_path
-            self.downloaded_files[downloader.file["id"]] = download_path
+            try:
+                downloader.download_file(self.signals)
+                download_path = downloader.download_context.local_file_path
+                self.downloaded_files[downloader.file_id] = download_path
+            except Exception as e:
+                self.signals.failed.emit(f"An error occurred: {str(e)}")
             self.downloaders.remove(downloader)
         # Iterate over the remaining downloaders and copy the existing file
         for downloader in self.downloaders:
             # copy existing, and if redownload if that was unsuccessful
             download_file = not self.handle_existing(downloader)
-            downloader.download_file(self.signals, download_file)
-        self.signals.all_finished.emit()
-
-
-class LizardResultDownloadWorker(QThread):
-    """Worker thread for downloading files from ."""
-
-    progress = pyqtSignal(int, str)
-    finished = pyqtSignal(dict, dict, str)
-    failed = pyqtSignal(str)
-
-    def __init__(
-        self,
-        project: dict,
-        file: dict,
-        result_ids: List[int],
-        target_folder: str,
-        grid: dict,
-        nodata: int,
-        pixelsize: float,
-        crs: str,
-        download_raw: bool,
-    ):
-        super().__init__()
-        self.project = project
-        self.file = file
-        self.result_ids = result_ids
-        self.target_folder = target_folder
-        self.grid = grid
-        self.nodata = nodata
-        self.pixelsize = pixelsize
-        self.crs = crs
-        self.download_raw = download_raw
-
-    @pyqtSlot()
-    def run(self):
-        if self.download_raw:
-            project_slug = self.project["slug"]
-            path = self.file["id"]
-            local_dir_structure = Path(get_local_dir_structure(project_slug, path))
-            local_file_path = Path(get_local_file_path(project_slug, path))
-            local_dir_structure.mkdir(parents=True, exist_ok=True)
             try:
-                url = get_tenant_file_url(self.project["id"], {"path": path})
-                with requests.get(url, stream=True) as response:
-                    response.raise_for_status()
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded_size = 0
-                    previous_progress = -1
-                    with open(local_file_path, "wb") as file:
-                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                            file.write(chunk)
-                            downloaded_size += len(chunk)
-                            progress = int((downloaded_size / total_size) * 100)
-                            if progress > previous_progress:
-                                self.progress.emit(progress, "Downloading raw data")
-                                previous_progress = progress
-            except requests.exceptions.RequestException as e:
-                self.failed.emit(f"Failed to download file: {str(e)}")
-                return
+                downloader.download_file(self.signals, download_file)
             except Exception as e:
-                self.failed.emit(f"An error occurred: {str(e)}")
-                return
-
-            # unzip the raw results in the working directory
-            with zipfile.ZipFile(local_file_path, "r") as zip_ref:
-                zip_ref.extractall(self.target_folder)
-                # check if there is a zip containing log files, these need to be extracted as well
-                descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
-                try:
-                    sim_id = descriptor["meta"]["simulation"]["id"]
-                    log_zip_path = Path(self.target_folder).joinpath(
-                        f"log_files_sim_{sim_id}.zip"
-                    )
-                    if log_zip_path.is_file():
-                        with zipfile.ZipFile(log_zip_path, "r") as log_zip_ref:
-                            log_zip_ref.extractall(self.target_folder)
-                    else:
-                        QgsMessageLog.logMessage(
-                            "Subarchive containing log files not present, ignoring.",
-                            level=Qgis.MessageLevel.Warning,
-                        )
-                except KeyError:
-                    QgsMessageLog.logMessage(
-                        "Subarchive info missing, ignoring.",
-                        level=Qgis.MessageLevel.Critical,
-                    )
-            local_file_path.unlink()
-        descriptor_id = self.file["descriptor_id"]
-        task_failed = False
-        for result_id in self.result_ids:
-            # Retrieve URLS from file descriptors (again), presigned url might be expired
-            results = get_tenant_file_descriptor_view(
-                descriptor_id, "lizard-scenario-results"
-            )
-            result = [r for r in results if r["id"] == result_id][0]
-            file_name = map_result_to_file_name(result)
-            # if raster can be downloaded directly from rana
-            if result["attachment_url"]:
-                target_file = bypass_max_path_limit(
-                    os.path.join(self.target_folder, file_name)
-                )
-                try:
-                    with requests.get(
-                        result["attachment_url"], stream=True
-                    ) as response:
-                        response.raise_for_status()
-                        total_size = int(response.headers.get("content-length", 0))
-                        downloaded_size = 0
-                        previous_progress = -1
-                        with open(target_file, "wb") as file:
-                            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                                file.write(chunk)
-                                downloaded_size += len(chunk)
-                                progress = int((downloaded_size / total_size) * 100)
-                                if progress > previous_progress:
-                                    self.progress.emit(progress, file_name)
-                                    previous_progress = progress
-
-                except requests.exceptions.RequestException as e:
-                    self.failed.emit(f"Failed to download file: {str(e)}")
-                    task_failed = True
-                    break
-                except Exception as e:
-                    self.failed.emit(f"An error occurred: {str(e)}")
-                    task_failed = True
-                    break
-            # if raster first needs to be generated
-            else:
-                previous_progress = -1
-                spatial_bounds = split_scenario_extent(
-                    grid=self.grid, resolution=self.pixelsize, max_pixel_count=1 * 10**8
-                )
-                # start generate task for each tile of the raster to be downloaded
-                bboxes, width, height = spatial_bounds
-                raster_tasks = []
-                counter = 0
-                for x1, y1, x2, y2 in bboxes:
-                    bbox = f"{x1},{y1},{x2},{y2}"
-                    payload = {
-                        "width": width,
-                        "height": height,
-                        "bbox": bbox,
-                        "projection": self.crs,
-                        "format": "geotiff",
-                        "async": "true",
-                    }
-                    if self.nodata is not None:
-                        payload["nodata"] = self.nodata
-                    r = request_raster_generate(
-                        descriptor_id=descriptor_id,
-                        raster_id=result["raster_id"],
-                        payload=payload,
-                    )
-                    raster_tasks.append(r)
-                    counter += 1
-                    progress = int((counter / len(bboxes)) * 10)
-                    if progress > previous_progress:
-                        self.progress.emit(progress, file_name)
-                        previous_progress = progress
-
-                # multi-tile raster download
-                if len(raster_tasks) > 1:
-
-                    def download_tile(file_link, target_file):
-                        with requests.get(file_link, stream=True) as response:
-                            response.raise_for_status()
-                            total_size = int(response.headers.get("content-length", 0))
-                            with open(target_file, "wb") as file:
-                                for chunk in response.iter_content(
-                                    chunk_size=CHUNK_SIZE
-                                ):
-                                    file.write(chunk)
-
-                    rasters = {
-                        raster_task_id: {
-                            "downloaded": False,
-                            "filepath": bypass_max_path_limit(
-                                os.path.join(
-                                    self.target_folder,
-                                    f"{file_name}{task_number:02d}.tif",
-                                )
-                            ),
-                        }
-                        for task_number, raster_task_id in enumerate(raster_tasks)
-                    }
-                    task_counter = 0
-
-                    while (
-                        False in [task["downloaded"] for task in rasters.values()]
-                        and not task_failed
-                    ):
-                        # wait between each repoll of task statuses
-                        sleep(5)
-                        for raster_task_id in rasters.keys():
-                            # poll all raster generate tasks to check if any is ready to download
-                            if not rasters[raster_task_id]["downloaded"]:
-                                try:
-                                    file_link = get_raster_file_link(
-                                        descriptor_id=descriptor_id,
-                                        task_id=raster_task_id,
-                                    )
-                                    if file_link:
-                                        download_tile(
-                                            file_link,
-                                            rasters[raster_task_id]["filepath"],
-                                        )
-                                        rasters[raster_task_id]["downloaded"] = True
-
-                                        task_counter += 1
-                                        # reserve last 10% of progress for raster merging
-                                        progress = int(
-                                            10 + (task_counter / len(raster_tasks)) * 80
-                                        )
-                                        if progress > previous_progress:
-                                            self.progress.emit(progress, file_name)
-                                        previous_progress = progress
-                                except requests.exceptions.RequestException as e:
-                                    self.failed.emit(
-                                        f"Failed to download file: {str(e)}"
-                                    )
-                                    task_failed = True
-                                    break
-                                except Exception as e:
-                                    self.failed.emit(f"An error occurred: {str(e)}")
-                                    task_failed = True
-                                    break
-                    if not task_failed:
-                        raster_filepaths = [
-                            item["filepath"] for item in rasters.values()
-                        ]
-                        raster_filepaths.sort()
-                        first_raster_filepath = raster_filepaths[0]
-                        vrt_filepath = first_raster_filepath.replace("_01", "").replace(
-                            ".tif", ".vrt"
-                        )
-
-                        vrt_options = {
-                            "resolution": "average",
-                            "resampleAlg": "nearest",
-                            "srcNodata": self.nodata,
-                        }
-                        build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
-                        self.progress.emit(100, file_name)
-                # single-tile raster download
-                else:
-                    target_file = bypass_max_path_limit(
-                        os.path.join(self.target_folder, (file_name + ".tif"))
-                    )
-                    file_link = False
-                    while not (file_link or task_failed):
-                        sleep(5)
-                        try:
-                            file_link = get_raster_file_link(
-                                descriptor_id=descriptor_id, task_id=raster_tasks[0]
-                            )
-                            if not file_link:
-                                continue
-
-                            with requests.get(file_link, stream=True) as response:
-                                response.raise_for_status()
-                                total_size = int(
-                                    response.headers.get("content-length", 0)
-                                )
-                                downloaded_size = 0
-                                with open(target_file, "wb") as file:
-                                    for chunk in response.iter_content(
-                                        chunk_size=CHUNK_SIZE
-                                    ):
-                                        file.write(chunk)
-                                        downloaded_size += len(chunk)
-                                        progress = int(
-                                            10 + (downloaded_size / total_size) * 90
-                                        )
-                                        if progress > previous_progress:
-                                            self.progress.emit(progress, file_name)
-                                            previous_progress = progress
-
-                        except requests.exceptions.RequestException as e:
-                            self.failed.emit(f"Failed to download file: {str(e)}")
-                            task_failed = True
-                        except Exception as e:
-                            self.failed.emit(f"An error occurred: {str(e)}")
-                            task_failed = True
-
-        if not task_failed:
-            self.finished.emit(self.project, self.file, self.target_folder)
+                self.signals.failed.emit(f"An error occurred: {str(e)}")
+        self.signals.all_finished.emit()

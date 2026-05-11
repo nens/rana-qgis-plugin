@@ -11,7 +11,7 @@ The process ensures schematisations are upgraded to the latest schema version be
 ```mermaid
 sequenceDiagram
     participant Loader
-    participant DownloadWorker as SingleFileDownloadWorker<br/>(SchematisationDownloader)
+    participant DownloadWorker as SingleFileDownloadWorker<br/>(SchematisationGeopackageDownloader)
     participant UploadWorker as FileUploadWorker<br/>or<br/>ExistingFileUploadWorker
     participant StyleWorker as FileDescriptorStyleUploadWorker<br/>(SchematisationStyleBuilder)
     
@@ -78,7 +78,7 @@ sequenceDiagram
 
 **Trigger**: User selects "Export schematisation" from file menu (`loader.py:487-513`)
 
-**Worker**: `SingleFileDownloadWorker` with `SchematisationDownloader`
+**Worker**: `SingleFileDownloadWorker` with `SchematisationGeopackageDownloader`
 
 **Steps**:
 1. Creates `TempDownloadContext` for transient storage (schematisation will be uploaded, not kept locally)
@@ -192,7 +192,7 @@ Each handler method sets up the next worker and starts it, creating a sequential
 **Reusability**:
 - Same upload workers used for other file types
 - Same style worker used for other schematisation styling operations
-- Schema upgrade logic isolated in `SchematisationDownloader`
+- Schema upgrade logic isolated in `SchematisationGeopackageDownloader`
 
 ## Common Issues
 

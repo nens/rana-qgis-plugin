@@ -655,87 +655,38 @@ class BuildOptionActions(Enum):
     DOWNLOADED = "downloaded"
 
 
-def load_remote_schematisation(
-    communications,
-    schematisation,
-    revision,
-    progress_bar,
-    working_dir,
-    threedi_api,
-    parents=None,
-):
-    """Download and load a schematisation from the server."""
-    if isinstance(schematisation, dict):
-        schematisation = NestedObject(schematisation)
-    if isinstance(revision, dict):
-        revision = NestedObject(revision)
-
-    required_files = download_required_files(
-        communications,
-        schematisation,
-        revision,
-        False,
-        progress_bar,
-        working_dir,
-        threedi_api,
-    )
-
-    if required_files is not None:
-        (
-            downloaded_local_schematisation,
-            custom_geopackage_filepath,
-            wip_replace_requested,
-        ) = required_files
-        if not downloaded_local_schematisation:
-            communications.log_warn("Unable to load local schematisation")
-            return
-
-        assert revision.number in downloaded_local_schematisation.revisions
-        load_local_schematisation(
-            communications,
-            local_schematisation=downloaded_local_schematisation.wip_revision
-            if wip_replace_requested
-            else downloaded_local_schematisation.revisions[revision.number],
-            action=BuildOptionActions.DOWNLOADED,
-            custom_geopackage_filepath=custom_geopackage_filepath,
-            parents=parents,
-        )
-        wip_revision = downloaded_local_schematisation.wip_revision
-        if wip_revision is not None:
-            settings = QSettings("3di", "qgisplugin")
-            settings.setValue(
-                "last_used_geopackage_path", wip_revision.schematisation_dir
-            )
-
-
-def download_required_files(
+def resolve_schematisation_download_dir(
     communications,
     schematisation,
     revision,
     is_latest_revision,
-    external_progress_bar,
     working_dir,
     threedi_api,
 ):
-    """Download required schematisation revision files."""
+    """Resolve the local directory for a schematisation revision download.
+
+    Shows the decision_tree dialog if needed. Must be called on the main thread.
+
+    Returns:
+        Tuple of (schematisation_db_dir, local_schematisation, wip_replace_requested)
+        or None if the user cancelled.
+    """
+    if isinstance(schematisation, dict):
+        schematisation = NestedObject(schematisation)
+    if isinstance(revision, dict):
+        revision = NestedObject(revision)
     try:
-        progress_bar = external_progress_bar
         schematisation_pk = schematisation.id
         schematisation_name = schematisation.name
 
-        # Move code from M&S plugin's SchematisationDownload to make this function more or less standalone.
         tc = ThreediCalls(threedi_api)
         revisions = tc.fetch_schematisation_revisions(schematisation_pk)
         local_schematisations = list_local_schematisations(
             working_dir, use_config_for_revisions=False
         )
-        downloaded_geopackage_filepath = None
-        downloaded_local_schematisation = None
         wip_replace_requested = False
 
-        revision_pk = revision.id
         revision_number = revision.number
-        revision_sqlite = revision.sqlite
         if not is_latest_revision:
             latest_online_revision = (
                 max([rev.number for rev in revisions]) if revisions else None
@@ -760,12 +711,10 @@ def download_required_files(
                 None, title, question, replace, store, cancel
             )
             if picked_action_name == replace:
-                # Replace
                 local_schematisation.set_wip_revision(revision_number)
                 schema_db_dir = local_schematisation.wip_revision.schematisation_dir
                 wip_replace_requested = True
             elif picked_action_name == store:
-                # Store as a separate revision
                 if revision_number in local_schematisation.revisions:
                     question = f"Replace local revision {revision_number} or Cancel?"
                     picked_action_name = communications.custom_ask(
@@ -788,15 +737,15 @@ def download_required_files(
         if local_schematisation_present:
             if is_latest_revision:
                 if local_schematisation.wip_revision is None:
-                    # WIP not exist
+                    #  WIP not exist
                     local_schematisation.set_wip_revision(revision_number)
                     schematisation_db_dir = (
                         local_schematisation.wip_revision.schematisation_dir
                     )
                 else:
-                    # WIP exist
                     schematisation_db_dir, wip_replace_requested = decision_tree()
             else:
+                # WIP exists
                 schematisation_db_dir, wip_replace_requested = decision_tree()
         else:
             local_schematisation.set_wip_revision(revision_number)
@@ -804,8 +753,92 @@ def download_required_files(
             wip_replace_requested = True
 
         if not schematisation_db_dir:
-            return
+            return None
 
+        return (schematisation_db_dir, local_schematisation, wip_replace_requested)
+    except ApiException as e:
+        error_msg = extract_error_message(e)
+        communications.show_error(error_msg)
+    except Exception as e:
+        error_msg = f"Error: {e}"
+        communications.show_error(error_msg)
+
+    return None
+
+
+def resolve_schematisation_download_dir_auto(
+    schematisation: dict,
+    revision: dict,
+    local_schematisations: dict,
+    working_dir: str,
+) -> tuple:
+    """Resolve the local directory for a schematisation revision download (non-interactive).
+
+    Unlike resolve_schematisation_download_dir, this always replaces the WIP without
+    showing any dialogs. Intended for batch downloads.
+
+    Args:
+        schematisation: dict with at least 'id' and 'name' keys.
+        revision: dict with at least 'number' key.
+        local_schematisations: Pre-fetched dict from list_local_schematisations.
+        working_dir: The threedi working directory.
+
+    Returns:
+        Tuple of (schematisation_db_dir, local_schematisation, wip_replace_requested).
+    """
+    schematisation_pk = schematisation["id"]
+    schematisation_name = schematisation["name"]
+    revision_number = revision["number"]
+    local_schematisation = local_schematisations.get(schematisation_pk)
+    if not local_schematisation:
+        local_schematisation = LocalSchematisation(
+            working_dir, schematisation_pk, schematisation_name, create=True
+        )
+    local_schematisation.set_wip_revision(revision_number)
+    schematisation_db_dir = local_schematisation.wip_revision.schematisation_dir
+    wip_replace_requested = True
+    return (schematisation_db_dir, local_schematisation, wip_replace_requested)
+
+
+def download_required_files(
+    schematisation,
+    revision,
+    schematisation_db_dir,
+    local_schematisation,
+    wip_replace_requested,
+    threedi_api=None,
+    progress_fn=None,
+):
+    """Download schematisation revision files (sqlite + gridadmin + rasters).
+
+    This function only downloads; the dialog to resolve the target directory
+    should be handled separately via resolve_schematisation_download_dir.
+
+    Args:
+        threedi_api: Optional; if None, uses get_threedi_api().
+        progress_fn: Optional callback(percentage: int, message: str) for progress.
+
+    Returns:
+        Tuple of (local_schematisation, geopackage_filepath, wip_replace_requested)
+        or (None, None, None) on failure.
+    """
+    if isinstance(schematisation, dict):
+        schematisation = NestedObject(schematisation)
+    if isinstance(revision, dict):
+        revision = NestedObject(revision)
+    try:
+        schematisation_pk = schematisation.id
+        schematisation_name = schematisation.name
+        revision_pk = revision.id
+        revision_number = revision.number
+        revision_sqlite = revision.sqlite
+
+        if threedi_api is None:
+            from rana_qgis_plugin.utils.generic import get_threedi_api
+
+            threedi_api = get_threedi_api()
+
+        tc = ThreediCalls(threedi_api)
         sqlite_download = tc.download_schematisation_revision_sqlite(
             schematisation_pk, revision_pk
         )
@@ -851,15 +884,20 @@ def download_required_files(
         zip_filepath = os.path.join(
             schematisation_db_dir, revision_sqlite.file.filename
         )
-        progress_bar.setMaximum(number_of_steps)
         current_progress = 0
-        progress_bar.setValue(current_progress)
+
+        def _emit_progress(message="Downloading schematisation files"):
+            if progress_fn is not None:
+                progress = int((current_progress / number_of_steps) * 100)
+                progress_fn(progress, message)
+
+        _emit_progress()
         get_download_file(sqlite_download, zip_filepath)
         content_list = unzip_archive(zip_filepath)
         os.remove(zip_filepath)
         schematisation_db_file = content_list[0]
         current_progress += 1
-        progress_bar.setValue(current_progress)
+        _emit_progress("Downloaded schematisation database")
         if gridadmin_download is not None:
             grid_filepath = os.path.join(
                 local_schematisation.revisions[revision_number].grid_dir,
@@ -867,7 +905,7 @@ def download_required_files(
             )
             get_download_file(gridadmin_download, grid_filepath)
             current_progress += 1
-            progress_bar.setValue(current_progress)
+            _emit_progress("Downloaded gridadmin")
         if gridadmin_download_gpkg is not None:
             gpkg_filepath = os.path.join(
                 local_schematisation.revisions[revision_number].grid_dir,
@@ -875,15 +913,14 @@ def download_required_files(
             )
             get_download_file(gridadmin_download_gpkg, gpkg_filepath)
             current_progress += 1
-            progress_bar.setValue(current_progress)
+            _emit_progress("Downloaded gridadmin geopackage")
         for raster_filename, raster_download in rasters_downloads:
             raster_filepath = os.path.join(
                 schematisation_db_dir, "rasters", raster_filename
             )
             get_download_file(raster_download, raster_filepath)
             current_progress += 1
-            progress_bar.setValue(current_progress)
-        downloaded_local_schematisation = local_schematisation
+            _emit_progress(f"Downloaded {raster_filename}")
         expected_geopackage_path = os.path.join(
             schematisation_db_dir, schematisation_db_file
         )
@@ -891,27 +928,22 @@ def download_required_files(
             expected_geopackage_path = (
                 expected_geopackage_path.rsplit(".", 1)[0] + ".gpkg"
             )
+        downloaded_geopackage_filepath = None
         if os.path.isfile(expected_geopackage_path):
             downloaded_geopackage_filepath = expected_geopackage_path
         sleep(1)
         settings = QSettings()
         settings.setValue("threedi/last_schematisation_folder", schematisation_db_dir)
-        msg = f"Schematisation '{schematisation_name} (revision {revision_number})' downloaded!"
-        communications.bar_info(msg)
 
         return (
-            downloaded_local_schematisation,
+            local_schematisation,
             downloaded_geopackage_filepath,
             wip_replace_requested,
         )
     except ApiException as e:
-        error_msg = extract_error_message(e)
-        communications.show_error(error_msg)
+        raise
     except Exception as e:
-        error_msg = f"Error: {e}"
-        communications.show_error(error_msg)
-
-    return None, None, None
+        raise
 
 
 def get_plugin_instance(plugin_name):

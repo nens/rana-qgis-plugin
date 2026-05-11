@@ -457,6 +457,12 @@ class RanaQgisPlugin:
             self.rana_browser.create_folder_selected.connect(
                 self.loader.create_new_folder_on_rana
             )
+            # TODO: consider disable / enable
+            # TODO: consider disable select mode after delete
+            # TODO: refresh after delete?
+            self.rana_browser.batch_delete.connect(self.loader.delete_files)
+            self.rana_browser.batch_download.connect(self.rana_browser.disable)
+            self.rana_browser.batch_download.connect(self.loader.download_files)
             self.rana_browser.save_revision_selected.connect(self.rana_browser.disable)
             self.rana_browser.save_revision_selected.connect(self.loader.save_revision)
             self.loader.model_created.connect(self.rana_browser.show_processes_overview)

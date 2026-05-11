@@ -28,3 +28,5 @@ def get_safe_icon(standard_pixmap):
 # Use the safe function
 dir_icon = get_safe_icon(QStyle.StandardPixmap.SP_DirIcon)
 file_icon = get_safe_icon(QStyle.StandardPixmap.SP_FileIcon)
+download_icon = get_safe_icon(QStyle.StandardPixmap.SP_DialogSaveButton)
+trash_icon = get_safe_icon(QStyle.StandardPixmap.SP_TrashIcon)

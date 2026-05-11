@@ -83,6 +83,8 @@ class RanaBrowser(QWidget):
     project_changed = pyqtSignal(str)
     run_persistent_tasks = pyqtSignal()
     update_project_publications = pyqtSignal()
+    batch_delete = pyqtSignal(dict, list)
+    batch_download = pyqtSignal(dict, list)
 
     def __init__(self, communication: UICommunication):
         super().__init__()
@@ -168,7 +170,14 @@ class RanaBrowser(QWidget):
         refresh_btn = QToolButton()
         refresh_btn.setToolTip("Refresh")
         refresh_btn.setIcon(refresh_icon)
-        self.project_widget.setCornerWidget(refresh_btn)
+        # Corner widget: [Select button, Refresh button]
+        corner = QWidget()
+        corner_layout = QHBoxLayout(corner)
+        corner_layout.setContentsMargins(0, 0, 0, 0)
+        corner_layout.setSpacing(2)
+        corner_layout.addWidget(self.files_browser.select_btn)
+        corner_layout.addWidget(refresh_btn)
+        self.project_widget.setCornerWidget(corner)
         self.project_widget.currentChanged.connect(self.on_project_tab_changed)
         # Create stacked widget for file browsing
         self.rana_files = QStackedWidget()
@@ -327,6 +336,14 @@ class RanaBrowser(QWidget):
             lambda _,: self.import_schematisation_selected.emit(
                 self.project, self.selected_item
             )
+        )
+        # Connect batch delete
+        self.files_browser.batch_delete_requested.connect(
+            lambda files: self.batch_delete.emit(self.project, files)
+        )
+        # Connect batch download
+        self.files_browser.batch_download_requested.connect(
+            lambda files: self.batch_download.emit(self.project, files)
         )
         # Connect updating folder from breadcrumb
         self.files_breadcrumbs.folder_selected.connect(
@@ -507,6 +524,7 @@ class RanaBrowser(QWidget):
 
     def on_project_tab_changed(self, index):
         self.breadcrumbs_manager.set_index(index)
+        # Hide refresh button (corner widget) on Processes tab (index 1)
         if index == 1:
             self.project_widget.cornerWidget().hide()
         else:

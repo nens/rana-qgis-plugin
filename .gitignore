@@ -25,7 +25,8 @@ _cached_data
 specs/
 docs/
 AGENTS.md
+doc/
 # IDE / local dev
 .envrc
 .idea/
-
+scripts/

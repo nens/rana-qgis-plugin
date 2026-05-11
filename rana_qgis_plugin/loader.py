@@ -40,6 +40,8 @@ from rana_qgis_plugin.simulation.utils import (
     UploadFileType,
     extract_error_message,
     load_local_schematisation,
+    resolve_schematisation_download_dir,
+    resolve_schematisation_download_dir_auto,
 )
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils.api import (
@@ -48,6 +50,7 @@ from rana_qgis_plugin.utils.api import (
     create_folder,
     delete_tenant_project_directory,
     delete_tenant_project_file,
+    get_default_result,
     get_process_id_for_tag,
     get_publication_version_details,
     get_tenant_details,
@@ -72,7 +75,6 @@ from rana_qgis_plugin.utils.generic import (
     get_local_dir_structure,
     get_threedi_api,
     get_threedi_organisations,
-    get_threedi_schematisation_simulation_results_folder,
     save_layer_changes,
 )
 from rana_qgis_plugin.utils.qgis import (
@@ -91,10 +93,15 @@ from rana_qgis_plugin.workers.avatars import (
 from rana_qgis_plugin.workers.download import (
     BatchFileDownloadWorker,
     FileDownloadContext,
-    LizardResultDownloadWorker,
+    LizardResultDownloader,
     PublicationFileDownloadContext,
     RanaFileDownloader,
-    SchematisationDownloader,
+    RanaRawResultsDownloader,
+    RanaResultDownloader,
+    ResultsDownloadContext,
+    SchematisationGeopackageDownloader,
+    SchematisationRevisionDownloadContext,
+    SchematisationRevisionDownloader,
     SingleFileDownloadWorker,
     TempDownloadContext,
 )
@@ -289,9 +296,81 @@ class Loader(QObject):
         self.file_download_finished.emit(None)
 
     @pyqtSlot(dict, dict, dict)
-    def open_schematisation_with_revision(self, project, revision, schematisation):
+    def open_schematisation_with_revision(
+        self, project, revision, schematisation, source_file=None
+    ):
+        from rana_qgis_plugin.utils.settings import hcc_working_dir
+
+        working_dir = hcc_working_dir()
+        if not working_dir:
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        # Resolve directory (dialog on main thread)
+        result = resolve_schematisation_download_dir(
+            self.communication,
+            schematisation,
+            revision,
+            False,
+            working_dir,
+            get_threedi_api(),
+        )
+        if result is None:
+            self.communication.clear_message_bar()
+            return
+
+        schematisation_db_dir, local_schematisation, wip_replace_requested = result
+
+        # Set up downloader and worker
+        download_context = SchematisationRevisionDownloadContext(
+            Path(schematisation_db_dir)
+        )
+        downloader = SchematisationRevisionDownloader(
+            download_context,
+            schematisation,
+            revision,
+            local_schematisation,
+            wip_replace_requested,
+        )
+        self.schematisation_download_worker = SingleFileDownloadWorker(downloader)
+        self.schematisation_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
+        self.schematisation_download_worker.signals.failed.connect(
+            self.on_file_download_failed
+        )
+        self.schematisation_download_worker.signals.finished.connect(
+            lambda: self.on_download_schematisation_revision_finished(
+                project, revision, download_context, source_file=source_file
+            )
+        )
+        self.communication.progress_bar(
+            msg="Downloading remote schematisation...", clear_msg_bar=True
+        )
+        self.schematisation_download_worker.start()
+
+    def on_download_schematisation_revision_finished(
+        self, project, revision, download_context, source_file=None
+    ):
+        self.communication.clear_message_bar()
+        if isinstance(revision, dict):
+            revision_number = revision["number"]
+        else:
+            revision_number = revision.number
+
         layer_manager = FileLayerManager(self.communication, parent=self.parent())
-        layer_manager.add_from_schematisation(project["name"], schematisation, revision)
+        layer_manager.add_from_schematisation(
+            project["name"],
+            download_context.local_schematisation,
+            revision_number,
+            download_context.wip_replace_requested,
+            geopackage_filepath=download_context.geopackage_filepath,
+        )
+        self.communication.bar_info("Schematisation downloaded!", dur=10)
+        if source_file is not None:
+            self.file_opened.emit(source_file)
         self.file_download_finished.emit(None)
 
     def on_file_download_finished(
@@ -311,6 +390,28 @@ class Loader(QObject):
                 self.communication.show_warn(f"sender type: {type(thread_worker)}")
             assert isinstance(thread_worker, QThread)
             thread_worker.wait()
+        # Schematisation link files need async download; redirect to dedicated handler
+        if file["data_type"] == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, file["descriptor_id"]
+            )
+            if schematisation:
+                revision = schematisation["latest_revision"]
+                if not revision:
+                    self.communication.show_warn(
+                        "Cannot open a schematisation without a revision."
+                    )
+                    self.file_download_finished.emit(None)
+                    return
+                self.open_schematisation_with_revision(
+                    project,
+                    revision,
+                    schematisation["schematisation"],
+                    source_file=file,
+                )
+            else:
+                self.file_download_finished.emit(None)
+            return
         open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
         if isinstance(layer_manager, FileLayerManager):
@@ -361,25 +462,201 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def delete_file(self, project, file):
-        confirm = QMessageBox.question(
-            self.parent(),
-            "Confirm Delete",
-            f"Are you sure you want to remove {file['id']}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if confirm == QMessageBox.StandardButton.No:
+        if self.communication.ask(
+            parent=self.parent(),
+            title="Confirm Delete",
+            question=f"Are you sure you want to delete {file['id']}?",
+        ):
+            if self._delete_file(project["id"], file):
+                self.file_deleted.emit()
+
+    @pyqtSlot(dict, list)
+    def delete_files(self, project: dict, files: list[dict]):
+        if not self.communication.ask(
+            parent=self.parent(),
+            title="Confirm Delete",
+            question=f"Are you sure you want to delete {len(files)} file{'s' if len(files) > 1 else ''}?",
+        ):
             return
-        if file["type"] == "directory":
-            if delete_tenant_project_directory(project["id"], {"path": file["id"]}):
-                self.file_deleted.emit()
+        for file in files:
+            self._delete_file(project["id"], file)
+        self.file_deleted.emit()
+
+    @pyqtSlot(dict, list)
+    def download_files(self, project: dict, files: list[dict]):
+        """Batch download files from the file browser."""
+        working_dir = hcc_working_dir()
+        downloaders = []
+        skipped_files = []
+        local_schematisations = None
+
+        for file in files:
+            data_type = file.get("data_type")
+            if data_type == "threedi_schematisation":
+                if not working_dir:
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: working directory not set."
+                    )
+                    skipped_files.append((file["id"], "working directory not set"))
+                    continue
+                threedi_schema = get_threedi_schematisation(
+                    self.communication, file["descriptor_id"]
+                )
+                if not threedi_schema:
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: failed to retrieve schematisation info."
+                    )
+                    skipped_files.append(
+                        (file["id"], "failed to retrieve schematisation info")
+                    )
+                    continue
+                schematisation_info = threedi_schema["schematisation"]
+                revision_info = threedi_schema.get("latest_revision")
+                if not revision_info:
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: no revision available."
+                    )
+                    skipped_files.append((file["id"], "no revision available"))
+                    continue
+                if local_schematisations is None:
+                    local_schematisations = list_local_schematisations(working_dir)
+                result = resolve_schematisation_download_dir_auto(
+                    schematisation_info,
+                    revision_info,
+                    local_schematisations,
+                    working_dir,
+                )
+                context = SchematisationRevisionDownloadContext(Path(result[0]))
+                downloaders.append(
+                    SchematisationRevisionDownloader(
+                        context,
+                        schematisation_info,
+                        revision_info,
+                        result[1],
+                        result[2],
+                    )
+                )
+            elif data_type == "scenario":
+                descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+                if not descriptor.get("meta"):
+                    self.communication.log_warn(
+                        f"Skipping scenario {file['id']}: missing metadata."
+                    )
+                    skipped_files.append((file["id"], "missing metadata"))
+                    continue
+                scenario_info = ScenarioInfo(descriptor)
+                if not scenario_info.has_lizard_results:
+                    self.communication.log_warn(
+                        f"Skipping scenario {file['id']}: no results available."
+                    )
+                    skipped_files.append((file["id"], "no results available"))
+                    continue
+                result = get_default_result(scenario_info.lizard_results)
+                if not result:
+                    self.communication.log_warn(
+                        f"Skipping scenario {file['id']}: no default result found."
+                    )
+                    skipped_files.append((file["id"], "no default result found"))
+                    continue
+                context = ResultsDownloadContext(
+                    scenario_info,
+                    project["slug"],
+                    file["id"],
+                    filename="results.zip",
+                )
+                downloaders.append(RanaRawResultsDownloader(project, file, context))
+                if result.get("attachment_url"):
+                    result_context = ResultsDownloadContext(
+                        scenario_info,
+                        project["slug"],
+                        file["id"],
+                        filename=map_result_to_file_name(result),
+                    )
+                    downloaders.append(RanaResultDownloader(result_context, result))
             else:
-                self.communication.show_warn(f"Unable to delete directory {file['id']}")
+                context = FileDownloadContext(
+                    project["slug"], file["id"], file["descriptor_id"], data_type
+                )
+                downloaders.append(RanaFileDownloader(project, file, context))
+
+        if not downloaders:
+            self.communication.bar_warn("No downloadable files selected.")
+            return
+
+        if skipped_files:
+            skipped_lines = "".join(
+                f"&bull; {fid} ({reason})<br>" for fid, reason in skipped_files
+            )
+            question = (
+                f"The following {len(skipped_files)} file(s) will be skipped "
+                f"(see logs for details):<br><br>{skipped_lines}<br>"
+                f"Do you want to continue downloading the remaining {len(downloaders)} file(s)?"
+            )
+            if not self.communication.ask(
+                parent=self.parent(),
+                title="Some files will be skipped",
+                question=question,
+            ):
+                return
+
+        self.batch_file_download_worker = BatchFileDownloadWorker(downloaders)
+        if self.batch_file_download_worker.nof_files > 10:
+            if not self.communication.ask(
+                parent=self.parent(),
+                title="Confirm download",
+                question=f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
+            ):
+                return
+
+        self.batch_file_download_worker.signals.all_finished.connect(
+            self._on_batch_download_finished
+        )
+        self.batch_file_download_worker.signals.failed.connect(
+            self.communication.log_err
+        )
+        self.batch_file_download_worker.signals.warning.connect(
+            self.communication.log_warn
+        )
+        self.batch_file_download_worker.signals.progress.connect(
+            self.on_file_download_progress
+        )
+        self.communication.bar_info(
+            f"Start downloading {self.batch_file_download_worker.nof_files} files..."
+        )
+        self.batch_file_download_worker.start()
+
+    def _on_batch_download_finished(self):
+        """Handle completion of batch file download."""
+        self.communication.clear_message_bar()
+        self.batch_file_download_worker.wait()
+        nof_files = self.batch_file_download_worker.nof_files
+        fail_cnt = self.batch_file_download_worker.fail_cnt
+        warning_cnt = self.batch_file_download_worker.warning_cnt
+        msg = f"Downloaded {nof_files - fail_cnt} of {nof_files} file(s)."
+        if fail_cnt > 0:
+            msg += f" {fail_cnt} failed, see logs for details."
+        if warning_cnt > 0:
+            msg += f" {warning_cnt} warning(s), see logs for details."
+        if fail_cnt > 0:
+            self.communication.show_warn(msg)
         else:
-            if delete_tenant_project_file(project["id"], {"path": file["id"]}):
-                self.file_deleted.emit()
+            self.communication.show_info(msg)
+        self.file_download_finished.emit(None)
+
+    def _delete_file(self, project_id: str, file: dict) -> bool:
+        file_path = file["id"]
+        params = {"path": file_path}
+        if file["type"] == "directory":
+            if delete_tenant_project_directory(project_id, params):
+                return True
             else:
-                self.communication.show_warn(f"Unable to delete file {file['id']}")
+                self.communication.show_warn(f"Unable to delete directory {file_path}")
+        else:
+            if delete_tenant_project_file(project_id, params):
+                return True
+            else:
+                self.communication.show_warn(f"Unable to delete file {file_path}")
+        return False
 
     @pyqtSlot(dict, dict, str)
     def rename_file(self, project, file, new_name):
@@ -492,7 +769,7 @@ class Loader(QObject):
         self, project: dict, file: dict, schematisation: dict, revision: dict
     ):
         download_context = TempDownloadContext(revision["sqlite"]["file"]["filename"])
-        downloader = SchematisationDownloader(
+        downloader = SchematisationGeopackageDownloader(
             schematisation_id=schematisation["id"],
             revision=revision,
             download_context=download_context,
@@ -852,20 +1129,6 @@ class Loader(QObject):
             return
         has_lizard_results = scenario_info.has_lizard_results
         has_3di_simulation = scenario_info.has_3di_simulation
-        if has_3di_simulation:
-            target_folder = get_threedi_schematisation_simulation_results_folder(
-                QgsSettings().value("threedi/working_dir"),
-                scenario_info.schematisation_id,
-                scenario_info.schematisation_name.replace("/", "-").replace("\\", "-"),
-                scenario_info.revision_number,
-                scenario_info.simulation_name.replace("/", "-").replace("\\", "-"),
-                scenario_info.simulation_id,
-            )
-        else:
-            # If there is no 3di simulation attached we cannot download to the simulation folder
-            target_folder = get_local_dir_structure(project["slug"], file["id"])
-
-        os.makedirs(target_folder, exist_ok=True)
 
         if has_lizard_results and has_3di_simulation:
             result_browser = ResultBrowser(
@@ -884,51 +1147,22 @@ class Loader(QObject):
                 ):
                     self.download_results_cancelled.emit()
                     return
-                filtered_result_ids = []
-                for result_id in result_ids:
-                    result = [
-                        r
-                        for r in scenario_info.lizard_results
-                        if r.get("id") == result_id
-                    ][0]
-                    file_name = map_result_to_file_name(result)
-                    target_file = bypass_max_path_limit(
-                        os.path.join(target_folder, file_name)
-                    )
-                    # Check whether the files already exist locally
-                    if os.path.exists(target_file):
-                        file_overwrite = self.communication.custom_ask(
-                            self.parent(),
-                            "File exists",
-                            f"Scenario file ({file_name}) has already been downloaded before. Do you want to download again and overwrite existing data?",
-                            "Cancel",
-                            "Download again",
-                            "Continue",
-                        )
-                        if file_overwrite == "Download again":
-                            filtered_result_ids.append(result_id)
-                        elif file_overwrite == "Cancel":
-                            self.download_results_cancelled.emit()
-                            return
-                    else:
-                        filtered_result_ids.append(result_id)
+                downloaders = self._build_result_downloaders(
+                    project,
+                    file,
+                    scenario_info,
+                    result_ids,
+                    nodata,
+                    pixelsize,
+                    crs,
+                    download_raw=result_browser.get_download_raw_result(),
+                )
+                if not downloaders:
+                    self.download_results_cancelled.emit()
+                    return
             else:
-                # Delete folder after cancel, if empty
-                if not os.listdir(target_folder):
-                    os.rmdir(target_folder)
                 self.download_results_cancelled.emit()
                 return
-            self.lizard_result_download_worker = LizardResultDownloadWorker(
-                project=project,
-                file=file,
-                result_ids=filtered_result_ids,
-                target_folder=target_folder,
-                grid=scenario_info.grid,
-                nodata=nodata,
-                crs=crs,
-                pixelsize=pixelsize,
-                download_raw=result_browser.get_download_raw_result(),
-            )
         else:
             # If there is no link to HCC, download the raw results to the cache folder
             if not has_3di_simulation:
@@ -940,33 +1174,89 @@ class Loader(QObject):
                 self.communication.show_info(
                     "There is no post-processing data available. Only raw results will be downloaded."
                 )
-            self.lizard_result_download_worker = LizardResultDownloadWorker(
-                project=project,
-                file=file,
-                result_ids=[],
-                target_folder=target_folder,
-                grid={},
-                nodata=0,
-                crs="",
-                pixelsize=0,
-                download_raw=True,
+            context = ResultsDownloadContext(
+                scenario_info, project["slug"], file["id"], filename="results.zip"
             )
+            downloaders = [RanaRawResultsDownloader(project, file, context)]
+        target_folder = str(downloaders[0].download_context.local_dir)
+        self.lizard_result_download_worker = BatchFileDownloadWorker(downloaders)
         layer_manager = FileLayerManager(self.communication, parent=self.parent())
-        self.lizard_result_download_worker.finished.connect(
-            lambda _project, _file, _local_path: self.on_file_download_finished(
-                _project,
-                _file,
-                _local_path,
+        self.lizard_result_download_worker.signals.all_finished.connect(
+            lambda: self.on_file_download_finished(
+                project,
+                file,
+                target_folder,
                 layer_manager,
                 thread_worker=self.lizard_result_download_worker,
             )
         )
-        self.lizard_result_download_worker.failed.connect(self.on_file_download_failed)
-        self.lizard_result_download_worker.progress.connect(
+        self.lizard_result_download_worker.signals.failed.connect(
+            self.on_file_download_failed
+        )
+        self.lizard_result_download_worker.signals.progress.connect(
             self.on_file_download_progress
         )
         self.lizard_result_download_worker.start()
         return
+
+    def _build_result_downloaders(
+        self,
+        project: dict,
+        file: dict,
+        scenario_info: ScenarioInfo,
+        result_ids: list,
+        nodata: int,
+        pixelsize: float,
+        crs: str,
+        download_raw: bool,
+    ) -> list:
+        """Build list of downloaders for scenario result downloads.
+
+        Returns an empty list if the user cancels via the overwrite dialog.
+        """
+        downloaders = []
+        if download_raw:
+            context = ResultsDownloadContext(
+                scenario_info, project["slug"], file["id"], filename="results.zip"
+            )
+            downloaders.append(RanaRawResultsDownloader(project, file, context))
+        for result_id in result_ids:
+            result = [
+                r for r in scenario_info.lizard_results if r.get("id") == result_id
+            ][0]
+            filename = map_result_to_file_name(result)
+            context = ResultsDownloadContext(
+                scenario_info, project["slug"], file["id"], filename=filename
+            )
+            # Check whether the file already exists locally
+            if context.local_file_path.exists():
+                file_overwrite = self.communication.custom_ask(
+                    self.parent(),
+                    "File exists",
+                    f"Scenario file ({filename}) has already been downloaded before. Do you want to download again and overwrite existing data?",
+                    "Cancel",
+                    "Download again",
+                    "Continue",
+                )
+                if file_overwrite == "Cancel":
+                    return []
+                elif file_overwrite == "Continue":
+                    continue
+            if result.get("attachment_url"):
+                downloaders.append(RanaResultDownloader(context, result))
+            else:
+                downloaders.append(
+                    LizardResultDownloader(
+                        download_context=context,
+                        descriptor_id=file["descriptor_id"],
+                        result=result,
+                        grid=scenario_info.grid,
+                        nodata=nodata,
+                        pixelsize=pixelsize,
+                        crs=crs,
+                    )
+                )
+        return downloaders
 
     @pyqtSlot(dict, dict)
     def download_file(self, project, file):

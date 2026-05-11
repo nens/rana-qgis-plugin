@@ -10,20 +10,66 @@ from e2e.test_utils import (
     canvas_to_image,
     click_tree_item,
     images_equal,
+    make_modal_handler,
     press_button_with_moderator,
 )
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
-from rana_qgis_plugin.utils.api import delete_tenant_project_file
+from rana_qgis_plugin.utils.generic import get_local_file_path
 
 
-def test_smoke(plugin, request):
-    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+def _open_project(plugin, qtbot):
+    """Open the Rana browser and select the first project."""
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.qWait(1000)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-    QTest.qWait(1000)
+    # Wait until projects list is populated
+    qtbot.waitUntil(
+        lambda: plugin.rana_browser.projects_browser.projects_tv.model().rowCount() > 0,
+        timeout=30000,
+    )
+    click_tree_item(
+        plugin.rana_browser.projects_browser.projects_tv,
+        plugin.rana_browser.projects_browser.projects_tv.model().index(0, 0),
+        qtbot,
+    )
+    # Wait until RanaBrowser switched to project widget
+    qtbot.waitUntil(
+        lambda: plugin.rana_browser.rana_browser.currentIndex() == 1,
+        timeout=30000,
+    )
+
+
+def _click_all_checkboxes(files_browser, qtbot):
+    """Click each checkbox in the files tree view one by one."""
+    for row in range(files_browser.files_model.rowCount()):
+        checkbox_index = files_browser.files_model.index(row, 0)
+        item = files_browser.files_model.item(row, 0)
+        if item is None or not (item.flags() & Qt.ItemFlag.ItemIsUserCheckable):
+            continue
+        files_browser.files_tv.scrollTo(checkbox_index)
+        rect = files_browser.files_tv.visualRect(checkbox_index)
+        assert rect.isValid(), f"Invalid rect for checkbox at row {row}"
+        qtbot.mouseClick(
+            files_browser.files_tv.viewport(), Qt.LeftButton, pos=rect.center()
+        )
+        QTest.qWait(200)
+
+
+def _find_file_row(files_browser, filename):
+    """Return the row index of a file by name, or None if not found."""
+    for row in range(files_browser.files_model.rowCount()):
+        name_item = files_browser.files_model.item(row, 1)
+        if name_item:
+            file_data = name_item.data(Qt.ItemDataRole.UserRole)
+            if file_data and file_data.get("id") == filename:
+                return row
+    return None
+
+
+def test_smoke(plugin, qtbot, request):
+    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+    _open_project(plugin, qtbot)
     assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
 
 
@@ -83,52 +129,45 @@ def test_login_logout(plugin):
     assert plugin.dock_widget.isVisible()
 
 
-def test_upload(plugin, qtbot, request):
-    # Delete the file from previous runs if it exists
-    delete_tenant_project_file("NEEjN2HZ", {"path": "upload.gpkg"})
-
+def test_upload(plugin, qtbot, request, clean_upload_file):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-    QTest.qWait(2000)
-    # Select the one and only project
-    click_tree_item(
-        plugin.rana_browser.projects_browser.projects_tv,
-        plugin.rana_browser.projects_browser.projects_tv.model().index(0, 0),
-        qtbot,
-    )
-    QTest.qWait(2000)
+    _open_project(plugin, qtbot)
 
     # Check we don't start in file detail view
     assert plugin.rana_browser.rana_files.currentIndex() != 1
 
-    def handle_dialog_load_layer():
-        # Note that this might not for native widgets (in that case dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True) should be set)
-        modal = QApplication.activeModalWidget()
-        assert isinstance(modal, QMessageBox)
-        modal.setFocus()
+    def handle_dialog_load_layer(qtbot, modal):
+        # Note that this might not work for native widgets (in that case
+        # dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True) should be set)
         QTest.qWait(1000)
         press_button_with_moderator(qtbot, modal, Qt.Key_Tab)
         QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-    QTimer.singleShot(10000, handle_dialog_load_layer)
+    QTimer.singleShot(
+        500, make_modal_handler(qtbot, QMessageBox, handle_dialog_load_layer)
+    )
 
-    with qtbot.waitSignal(plugin.loader.file_upload_finished):
+    with qtbot.waitSignal(plugin.loader.file_upload_finished, timeout=30000):
 
-        def handle_dialog_select_file():
-            modal = QApplication.activeModalWidget()
-            assert isinstance(modal, QFileDialog)
+        def handle_dialog_select_file(qtbot, modal):
             QTest.qWait(500)
-            modal.setFocus()
-            modal.selectFile("upload.gpkg")  # Clear any selected file
+            modal.selectFile("upload.gpkg")
             QTest.qWait(500)
             qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-        QTimer.singleShot(3000, handle_dialog_select_file)
+        QTimer.singleShot(
+            500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_file)
+        )
         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    QTest.qWait(13000)
+    # Wait for layer to appear on canvas
+    qtbot.waitUntil(
+        lambda: any(
+            "test" in layer.name() for layer in plugin.iface.mapCanvas().layers()
+        ),
+        timeout=30000,
+    )
 
     # Check we end in file detail view
     assert plugin.rana_browser.rana_files.currentIndex() == 1
@@ -153,5 +192,109 @@ def test_upload(plugin, qtbot, request):
         actual_image.convertToFormat(QImage.Format_ARGB32),
     )
 
-    # Delete the file
-    delete_tenant_project_file("NEEjN2HZ", {"path": "upload.gpkg"})
+
+def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
+    """Upload a file, then use select mode to download and delete it."""
+    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+    _open_project(plugin, qtbot)
+
+    def handle_dialog_load_layer(qtbot, modal):
+        QTest.qWait(1000)
+        press_button_with_moderator(qtbot, modal, Qt.Key_Tab)
+        QTest.qWait(1000)
+        qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+    QTimer.singleShot(
+        500, make_modal_handler(qtbot, QMessageBox, handle_dialog_load_layer)
+    )
+
+    with qtbot.waitSignal(plugin.loader.file_upload_finished, timeout=30000):
+
+        def handle_dialog_select_file(qtbot, modal):
+            QTest.qWait(500)
+            modal.selectFile("upload.gpkg")
+            QTest.qWait(500)
+            qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+        QTimer.singleShot(
+            500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_file)
+        )
+        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+
+    # Wait for the load-layer message box to be dismissed before proceeding
+    qtbot.waitUntil(
+        lambda: not isinstance(
+            QApplication.activeModalWidget() or QApplication.activeWindow(),
+            QMessageBox,
+        ),
+        timeout=30000,
+    )
+
+    # Wait for file detail view to be shown after upload
+    qtbot.waitUntil(
+        lambda: plugin.rana_browser.rana_files.currentIndex() == 1,
+        timeout=30000,
+    )
+
+    # Navigate back to file list view by clicking the folder breadcrumb
+    breadcrumbs = plugin.rana_browser.files_breadcrumbs
+    breadcrumbs.on_click(1)  # index 1 is the project root folder
+    qtbot.waitUntil(
+        lambda: plugin.rana_browser.rana_files.currentIndex() == 0,
+        timeout=10000,
+    )
+    assert plugin.rana_browser.rana_files.currentIndex() == 0
+
+    # Toggle select mode
+    files_browser = plugin.rana_browser.files_browser
+    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
+
+    # Select all files by clicking each checkbox
+    _click_all_checkboxes(files_browser, qtbot)
+
+    # Download selected file
+    assert files_browser.btn_download_selected.isEnabled()
+
+    def dismiss_download_msg(qtbot, modal):
+        qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+    with qtbot.waitSignal(plugin.loader.file_download_finished, timeout=30000):
+        QTimer.singleShot(
+            500, make_modal_handler(qtbot, QMessageBox, dismiss_download_msg)
+        )
+        QTest.mouseClick(files_browser.btn_download_selected, Qt.LeftButton)
+
+    QTest.qWait(500)
+    local_path = get_local_file_path(plugin.rana_browser.project["slug"], "upload.gpkg")
+    assert os.path.exists(local_path), f"Downloaded file not found at {local_path}"
+
+    # Toggle select mode off and on to clear all checkboxes
+    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    qtbot.waitUntil(lambda: not files_browser.select_btn.isChecked(), timeout=5000)
+    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
+
+    # Verify all checkboxes are unchecked
+    for row in range(files_browser.files_model.rowCount()):
+        item = files_browser.files_model.item(row, 0)
+        if item and item.isCheckable():
+            assert item.checkState() == Qt.CheckState.Unchecked
+
+    # Select all files for delete by clicking each checkbox
+    _click_all_checkboxes(files_browser, qtbot)
+    QTest.qWait(500)
+
+    def confirm_delete(qtbot, modal):
+        yes_button = modal.button(QMessageBox.StandardButton.Yes)
+        if yes_button:
+            QTest.mouseClick(yes_button, Qt.LeftButton)
+
+    QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, confirm_delete))
+    QTest.mouseClick(files_browser.btn_delete_selected, Qt.LeftButton)
+    QTest.qWait(1000)
+
+    # Verify file is gone from the list
+    assert _find_file_row(files_browser, "upload.gpkg") is None, (
+        "upload.gpkg should have been deleted from the file list"
+    )
