@@ -44,7 +44,10 @@ def test_login_logout(plugin):
 
     # Step 2: Trigger logout via menu action
     logout_action = next(a for a in menu.actions() if a.text() == "Logout")
-    logout_action.trigger()
+    menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
+    QTest.qWait(100)
+    action_rect = menu.actionGeometry(logout_action)
+    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
     QTest.qWait(500)
 
     # Verify logged-out state
@@ -66,7 +69,11 @@ def test_login_logout(plugin):
     auth_manager.storeAuthenticationConfig(authcfg)
     set_3di_auth("test_api_key")
 
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    login_action = next(a for a in menu.actions() if a.text() == "Open Rana Panel")
+    menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
+    QTest.qWait(100)
+    action_rect = menu.actionGeometry(login_action)
+    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
     QTest.qWait(1000)
 
     # Verify logged-in state again
