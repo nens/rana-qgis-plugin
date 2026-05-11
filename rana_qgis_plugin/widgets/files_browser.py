@@ -13,7 +13,6 @@ from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QDialogButtonBox,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -157,13 +156,21 @@ class FilesBrowser(QWidget):
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
         self.btn_new_schematisation = QPushButton("New schematisation")
         self.btn_import_schematisation = QPushButton("Import schematisation")
+        self.btn_upload_existing_schematisation = QPushButton(
+            "Upload existing schematisation"
+        )
         # Page 0: Normal mode buttons
         normal_page = QWidget()
-        btn_layout = QGridLayout(normal_page)
-        btn_layout.addWidget(self.btn_upload, 0, 0)
-        btn_layout.addWidget(btn_create_folder, 0, 1)
-        btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
-        btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
+        btn_layout = QVBoxLayout(normal_page)
+        row1 = QHBoxLayout()
+        row1.addWidget(self.btn_upload)
+        row1.addWidget(btn_create_folder)
+        row2 = QHBoxLayout()
+        row2.addWidget(self.btn_new_schematisation)
+        row2.addWidget(self.btn_upload_existing_schematisation)
+        row2.addWidget(self.btn_import_schematisation)
+        btn_layout.addLayout(row1)
+        btn_layout.addLayout(row2)
         # Page 1: Select mode buttons
         select_page = QWidget()
         select_layout = QHBoxLayout(select_page)
@@ -192,6 +199,7 @@ class FilesBrowser(QWidget):
 
         self.btn_new_schematisation.setVisible(has_3di_authcfg())
         self.btn_import_schematisation.setVisible(has_3di_authcfg())
+        self.btn_upload_existing_schematisation.setVisible(has_3di_authcfg())
         # Connect checkbox state changes to update batch button states
         self.files_model.itemChanged.connect(self._update_batch_buttons)
 

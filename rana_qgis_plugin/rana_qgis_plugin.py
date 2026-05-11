@@ -390,6 +390,12 @@ class RanaQgisPlugin:
             self.rana_browser.upload_new_schematisation_selected.connect(
                 self.loader.upload_new_schematisation_to_rana
             )
+            self.rana_browser.upload_existing_schematisation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.upload_existing_schematisation_selected.connect(
+                self.loader.upload_existing_schematisation_to_rana
+            )
             self.rana_browser.import_schematisation_selected.connect(
                 self.rana_browser.disable
             )
