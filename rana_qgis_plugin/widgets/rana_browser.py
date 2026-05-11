@@ -73,6 +73,7 @@ class RanaBrowser(QWidget):
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
+    upload_existing_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
@@ -328,6 +329,12 @@ class RanaBrowser(QWidget):
         # Connect new schematisation button
         self.files_browser.btn_new_schematisation.clicked.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
+        )
+        # Connect upload existing schematisation button
+        self.files_browser.btn_upload_existing_schematisation.clicked.connect(
+            lambda _,: self.upload_existing_schematisation_selected.emit(
                 self.project, self.selected_item
             )
         )
