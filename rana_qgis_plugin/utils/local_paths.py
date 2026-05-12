@@ -184,26 +184,6 @@ def get_local_results_dir_from_meta(meta: dict, working_dir: str) -> Optional[st
     )
 
 
-def get_threedi_schematisation_simulation_results_folder(
-    working_dir: str,
-    schematisation_id: int,
-    schematisation_name: str,
-    revision_number: int,
-    simulation_name: str,
-    simulation_id: int,
-) -> str:
-    """Deprecated: use get_local_results_dir instead."""
-    return get_local_results_dir(
-        working_dir,
-        schematisation_id,
-        schematisation_name,
-        revision_number,
-        simulation_name,
-        simulation_id,
-        create=True,
-    )
-
-
 def cleanup_folder(folder: Path, communication) -> None:
     """Remove all contents of a folder, keeping the folder itself.
 

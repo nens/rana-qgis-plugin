@@ -102,10 +102,10 @@ def test_get_local_publication_file_path():
     assert local_path == expected_local_dir + "/" + file_id
 
 
-def test_get_threedi_schematisation_simulation_results_folder_no_local_data(
+def test_get_local_results_dir_no_local_data(
     tmp_path, result_folder_info, results_folder_subpath
 ):
-    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_local_results_dir(
         str(tmp_path), **result_folder_info
     )
     expected_folder = str(
@@ -118,20 +118,20 @@ def test_get_threedi_schematisation_simulation_results_folder_no_local_data(
     assert results_folder == expected_folder
 
 
-def test_get_threedi_schematisation_simulation_results_folder_with_local_schema(
+def test_get_local_results_dir_with_local_schema(
     tmp_path, result_folder_info, results_folder_subpath
 ):
     workdir = Path(tmp_path)
     schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
     schemadir.mkdir(parents=True, exist_ok=True)
-    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_local_results_dir(
         str(workdir), **result_folder_info
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath))
     assert results_folder == expected_folder
 
 
-def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(
+def test_get_local_results_dir_with_local_rev(
     tmp_path, result_folder_info, results_folder_subpath
 ):
     workdir = Path(tmp_path)
@@ -149,21 +149,21 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(
     }
     with open(config_path, "w") as f:
         json.dump(config, f)
-    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_local_results_dir(
         str(workdir), **result_folder_info
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath))
     assert results_folder == expected_folder
 
 
-def test_get_threedi_schematisation_simulation_results_folder_with_colon(
+def test_get_local_results_dir_with_colon(
     tmp_path, result_folder_info, results_folder_subpath
 ):
     workdir = Path(tmp_path)
     result_folder_info["schematisation_name"] = "foo:bar"
     schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
     schemadir.mkdir(parents=True, exist_ok=True)
-    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_local_results_dir(
         str(workdir), **result_folder_info
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
