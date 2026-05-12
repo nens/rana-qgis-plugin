@@ -7,10 +7,13 @@ from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
 
-
 class FileAction(Enum):
+    # Actions related to downloading and local files
     OPEN_IN_QGIS = "Open in QGIS"
     OPEN_WMS = "Open WMS in QGIS"
+    DOWNLOAD_RESULTS = "Download Results"
+    OPEN_IN_FILE_BROWSER = "Open in file browser"
+    # Actions related to viewing or modifying files on Rana
     SAVE_REVISION = "Upload to Rana"
     # Saving vector and raster styling follows a different path and thus there are different actions
     SAVE_VECTOR_STYLING = "Save vector style to Rana"
@@ -19,7 +22,6 @@ class FileAction(Enum):
     SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
     VIEW_REVISIONS = "View all Revisions"
-    DOWNLOAD_RESULTS = "Download Results"
     RENAME = "Rename"
     DELETE = "Delete"
     REMOVE_FROM_PROJECT = "Remove from Project"
@@ -37,10 +39,10 @@ class FileAction(Enum):
 def get_file_actions_for_data_type(selected_item: dict) -> List[FileAction]:
     data_type = selected_item.get("data_type")
     actions = get_file_actions_by_data_type(data_type)
-    # Add options to open WMS and download file and results only for 3Di scenarios
     if data_type == "scenario":
         descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         actions = get_scenario_actions(actions, descriptor)
+    # Add options to open WMS and download file and results only for 3Di scenarios
     return sorted(actions)
 
 
@@ -50,6 +52,9 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     if data_type in SUPPORTED_DATA_TYPES:
         if (data_type != "threedi_schematisation") or has_3di_authcfg():
             actions.append(FileAction.OPEN_IN_QGIS)
+            # Add open in file browser to any file type that can be opened
+            # Actual check for file availibility will be done downstream
+            actions.append(FileAction.OPEN_IN_FILE_BROWSER)
     # Add save only for vector and raster files
     if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
@@ -76,6 +81,9 @@ def get_scenario_actions(
         actions.append(FileAction.DOWNLOAD_RESULTS)
         if meta["simulation"]["software"]["id"] == "3Di":
             actions.append(FileAction.OPEN_WMS)
+        # Add open in file browser to any file type that can be opened
+        # Actual check for file availibility will be done downstream
+        actions.append(FileAction.OPEN_IN_FILE_BROWSER)
     # remove any interactions for objects that are being processed
     elif (
         FileDescriptorStatus.from_fd_response(descriptor)

@@ -20,6 +20,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.OPEN_IN_QGIS,
                 FileAction.UPLOAD_FILE,
                 FileAction.SAVE_VECTOR_STYLING,
+                FileAction.OPEN_IN_FILE_BROWSER,
             },
         ),
         (
@@ -30,6 +31,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.OPEN_IN_QGIS,
                 FileAction.UPLOAD_FILE,
                 FileAction.SAVE_RASTER_STYLING,
+                FileAction.OPEN_IN_FILE_BROWSER,
             },
         ),
         (
@@ -38,6 +40,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.DELETE,
                 FileAction.RENAME,
                 FileAction.OPEN_IN_QGIS,
+                FileAction.OPEN_IN_FILE_BROWSER,
             },
         ),
         (
@@ -77,6 +80,7 @@ def test_get_file_actions_by_data_type(data_type, expected_actions):
                 FileAction.SAVE_REVISION,
                 FileAction.VIEW_REVISIONS,
                 FileAction.OPEN_IN_BROWSER,
+                FileAction.OPEN_IN_FILE_BROWSER,
             },
         ),
         (
@@ -118,7 +122,7 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
                     "simulation": {"software": {"id": "3Di"}},
                 }
             },
-            {FileAction.DOWNLOAD_RESULTS, FileAction.OPEN_WMS},
+            {FileAction.DOWNLOAD_RESULTS, FileAction.OPEN_WMS, FileAction.OPEN_IN_FILE_BROWSER},
             "3di_simulation",
         ),
         (
@@ -128,7 +132,7 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
                     "simulation": {"software": {"id": "OtherSoftware"}},
                 }
             },
-            {FileAction.DOWNLOAD_RESULTS},
+            {FileAction.DOWNLOAD_RESULTS, FileAction.OPEN_IN_FILE_BROWSER},
             "non_3di_simulation",
         ),
         (
@@ -145,17 +149,10 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
 def test_get_file_actions_for_data_type_scenarios(
     mock_get_descriptor, descriptor, expected_actions, test_id
 ):
-    """Test scenario-specific actions based on descriptor metadata.
-
-    Note: Non-scenario data types delegate to get_file_actions_by_data_type and are
-    tested there. This only tests the scenario-specific logic.
-
-    For processing scenarios, descriptor["meta"] must be present (even if None) due to
-    current implementation checking descriptor["meta"] before descriptor.get("status").
-    """
     mock_get_descriptor.return_value = descriptor
     selected_item = {
         "id": "test/scenario.json",
+        "type": "file",
         "data_type": "scenario",
         "descriptor_id": "desc789",
     }
