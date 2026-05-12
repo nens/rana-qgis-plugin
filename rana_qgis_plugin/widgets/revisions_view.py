@@ -19,6 +19,8 @@ from rana_qgis_plugin.utils.api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils.generic import NumericItem, get_threedi_api
+from rana_qgis_plugin.utils.local_paths import get_local_schematisation_revision_dir
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 
 
@@ -89,9 +91,26 @@ class RevisionsView(QWidget):
                 )
             )
             menu.addAction(action)
+            # Open in file browser: only show when local revision folder exists
+            working_dir = hcc_working_dir()
+            if working_dir:
+                revision_dir = get_local_schematisation_revision_dir(
+                    working_dir,
+                    schematisation["schematisation"]["id"],
+                    schematisation["schematisation"].get("name", ""),
+                    threedi_revision.number,
+                    create=False,
+                )
+                if revision_dir and revision_dir.exists():
+                    action = QAction("Open in file browser", self)
+                    action.triggered.connect(
+                        lambda _, path=str(revision_dir): QDesktopServices.openUrl(
+                            QUrl.fromLocalFile(path)
+                        )
+                    )
+                    menu.addAction(action)
             from rana_qgis_plugin.widgets.utils_file_action import FileAction
 
-            FileAction.OPEN_IN_BROWSER.value
             action = QAction(FileAction.OPEN_IN_BROWSER.value, self)
             action.triggered.connect(
                 lambda _: self.open_in_browser(schematisation, threedi_revision)

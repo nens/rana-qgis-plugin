@@ -26,10 +26,10 @@ from rana_qgis_plugin.utils.api import (
 )
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils.generic import (
-    get_local_publication_file_path,
     image_to_bytes,
 )
 from rana_qgis_plugin.utils.lizard import import_from_geostyler
+from rana_qgis_plugin.utils.local_paths import get_local_publication_file_path
 
 
 class StyleBuilder(QObject):

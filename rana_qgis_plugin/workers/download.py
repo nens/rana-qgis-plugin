@@ -30,13 +30,15 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils.generic import (
     build_vrt,
+    get_threedi_api,
+    split_scenario_extent,
+)
+from rana_qgis_plugin.utils.local_paths import (
     get_local_dir_structure,
     get_local_file_path,
     get_local_publication_dir_structure,
     get_local_publication_file_path,
-    get_threedi_api,
-    get_threedi_schematisation_simulation_results_folder,
-    split_scenario_extent,
+    get_local_results_dir,
 )
 from rana_qgis_plugin.utils.qgis import rescale_qml_file
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
@@ -190,7 +192,7 @@ class ResultsDownloadContext(AbstractDownloadContext):
     def local_dir(self) -> Path:
         if self.scenario_info.has_3di_simulation:
             return Path(
-                get_threedi_schematisation_simulation_results_folder(
+                get_local_results_dir(
                     QgsSettings().value("threedi/working_dir"),
                     self.scenario_info.schematisation_id,
                     self.scenario_info.schematisation_name.replace("/", "-").replace(

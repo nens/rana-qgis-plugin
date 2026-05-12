@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from qgis.PyQt.QtCore import (
     QModelIndex,
@@ -30,6 +31,7 @@ from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
 from rana_qgis_plugin.utils.api import (
+    get_tenant_file_descriptor,
     get_tenant_project_files,
     get_threedi_schematisation,
 )
@@ -38,11 +40,18 @@ from rana_qgis_plugin.utils.generic import (
     display_bytes,
     get_file_icon_name,
 )
+from rana_qgis_plugin.utils.local_paths import (
+    get_local_dir_structure,
+    get_local_file_path,
+    get_local_results_dir_from_meta,
+    get_local_schematisation_revision_dir,
+)
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
-    get_file_actions_for_data_type,
+    get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.widgets.utils_view import (
@@ -368,7 +377,22 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        file_actions = get_file_actions_for_data_type(selected_item)
+        # For scenarios, fetch the descriptor once and reuse it
+        descriptor = None
+        if selected_item.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        file_actions = get_file_actions(selected_item, descriptor=descriptor)
+        # Resolve local path on demand; filter out action if not available locally
+        local_path = self._resolve_local_path(
+            selected_item,
+            self.project["slug"],
+            hcc_working_dir(),
+            descriptor=descriptor,
+        )
+        if not local_path:
+            file_actions = [
+                a for a in file_actions if a != FileAction.OPEN_IN_FILE_BROWSER
+            ]
         menu = QMenu(self)
         actions = []
         # create and connect actions
@@ -383,6 +407,10 @@ class FilesBrowser(QWidget):
                 )
             elif file_action == FileAction.OPEN_IN_BROWSER:
                 action.triggered.connect(lambda _: self.open_in_browser(selected_item))
+            elif file_action == FileAction.OPEN_IN_FILE_BROWSER:
+                action.triggered.connect(
+                    lambda _, path=local_path: self.open_in_file_browser(path)
+                )
             elif file_action == FileAction.VIEW_REVISIONS:
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(
@@ -409,6 +437,85 @@ class FilesBrowser(QWidget):
         if not schematisation or not schematisation.get("management_url"):
             return
         QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
+
+    def open_in_file_browser(self, local_path: str):
+        """Open a local path in the OS file explorer."""
+        path = Path(local_path)
+        # For files, open the containing directory
+        if path.is_file():
+            path = path.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def _resolve_local_path(
+        self,
+        file: dict,
+        project_slug: str,
+        working_dir: str,
+        descriptor: dict = None,
+    ) -> Optional[str]:
+        """Resolve the local path for a file, or return None if not present locally."""
+        data_type = file.get("data_type")
+        if data_type == "threedi_schematisation":
+            return self._resolve_schematisation_local_path(file, working_dir)
+        elif data_type == "scenario":
+            return self._resolve_scenario_local_path(
+                file,
+                project_slug,
+                working_dir,
+                descriptor=descriptor,
+            )
+        else:
+            local_path = get_local_file_path(project_slug, file["id"])
+            return local_path if Path(local_path).exists() else None
+
+    def _resolve_schematisation_local_path(
+        self, file: dict, working_dir: str
+    ) -> Optional[str]:
+        """Resolve the local revision directory for a schematisation file."""
+        if not working_dir:
+            return None
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        if not schematisation:
+            return None
+        latest_revision = schematisation.get("latest_revision")
+        if not latest_revision:
+            return None
+        revision_dir = get_local_schematisation_revision_dir(
+            working_dir,
+            schematisation["schematisation"]["id"],
+            schematisation["schematisation"]["name"],
+            latest_revision["number"],
+            create=False,
+        )
+        if revision_dir and revision_dir.exists():
+            return str(revision_dir)
+        return None
+
+    def _resolve_scenario_local_path(
+        self,
+        file: dict,
+        project_slug: str,
+        working_dir: str,
+        descriptor: dict = None,
+    ) -> Optional[str]:
+        """Resolve the local results directory for a scenario file."""
+        if descriptor is None:
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        if not descriptor:
+            return None
+        meta = descriptor.get("meta")
+        if not meta or "id" not in meta:
+            return None
+        # Try 3Di results path first
+        if working_dir:
+            results_dir = get_local_results_dir_from_meta(meta, working_dir)
+            if results_dir and Path(results_dir).exists():
+                return results_dir
+        # Fall back to generic local dir structure
+        local_dir = get_local_dir_structure(project_slug, file["id"])
+        return local_dir if Path(local_dir).exists() else None
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):
         """Start in-place editing of the filename for the given item.

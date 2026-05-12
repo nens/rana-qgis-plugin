@@ -73,11 +73,11 @@ from rana_qgis_plugin.utils.data_models import (
 from rana_qgis_plugin.utils.generic import (
     find_publication_map_layer_from_tree,
     get_editable_layers_for_file,
-    get_local_dir_structure,
     get_threedi_api,
     get_threedi_organisations,
     save_layer_changes,
 )
+from rana_qgis_plugin.utils.local_paths import get_local_dir_structure
 from rana_qgis_plugin.utils.qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,

@@ -16,7 +16,7 @@ from e2e.test_utils import (
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
-from rana_qgis_plugin.utils.generic import get_local_file_path
+from rana_qgis_plugin.utils.local_paths import get_local_file_path
 
 
 def _open_project(plugin, qtbot):

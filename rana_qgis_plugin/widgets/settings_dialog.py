@@ -16,7 +16,7 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
 from rana_qgis_plugin.utils.api import get_frontend_settings
-from rana_qgis_plugin.utils.generic import is_writable
+from rana_qgis_plugin.utils.local_paths import is_writable
 from rana_qgis_plugin.utils.settings import (
     base_url,
     cleanup_cache_on_close,
