@@ -79,6 +79,7 @@ def test_get_file_actions_by_data_type(data_type, expected_actions):
                 FileAction.OPEN_IN_QGIS,
                 FileAction.SAVE_REVISION,
                 FileAction.VIEW_REVISIONS,
+                FileAction.EXPORT_GPKG,
                 FileAction.OPEN_IN_BROWSER,
                 FileAction.OPEN_IN_FILE_BROWSER,
             },
@@ -88,6 +89,7 @@ def test_get_file_actions_by_data_type(data_type, expected_actions):
             {
                 FileAction.REMOVE_FROM_PROJECT,
                 FileAction.RENAME,
+                FileAction.EXPORT_GPKG,
                 FileAction.OPEN_IN_BROWSER,
             },
         ),
@@ -125,6 +127,7 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
             {
                 FileAction.DOWNLOAD_RESULTS,
                 FileAction.OPEN_WMS,
+                FileAction.COPY_WMS_URL,
                 FileAction.OPEN_IN_FILE_BROWSER,
             },
             "3di_simulation",

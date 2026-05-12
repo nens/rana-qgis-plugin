@@ -15,6 +15,8 @@ History
 - Remove results download folder on canceling download (nens/rana-qgis-plugin#323)
 - Split new schematisation from scratch and new schematisation from file functionality (nens/rana#4224)
 - Add open in browser functionality to files (context menu), file view (button) and revivisions view (context menu) (nens/rana#3732)
+- Add "copy wms url" functionality to files (context menu) and file view (button) (nens/rana#4165)
+- Add ellipsis button to file view and reorganize buttons (nens/rana#4165)
 
 
 1.2.12 (2026-05-06)
