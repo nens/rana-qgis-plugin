@@ -9,11 +9,12 @@ from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_des
 
 
 class FileAction(Enum):
-    # Actions related to downloading and local files
+    # Actions related to accessing data
     OPEN_IN_QGIS = "Open in QGIS"
     OPEN_WMS = "Open WMS in QGIS"
     DOWNLOAD_RESULTS = "Download Results"
     OPEN_IN_FILE_BROWSER = "Open in file browser"
+    COPY_WMS_URL = "Copy WMS URL"
     # Actions related to viewing or modifying files on Rana
     SAVE_REVISION = "Upload to Rana"
     # Saving vector and raster styling follows a different path and thus there are different actions
@@ -23,6 +24,7 @@ class FileAction(Enum):
     SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
     VIEW_REVISIONS = "View all Revisions"
+    HISTORY = "History"
     RENAME = "Rename"
     DELETE = "Delete"
     REMOVE_FROM_PROJECT = "Remove from Project"
@@ -83,6 +85,7 @@ def get_scenario_actions(
         actions.append(FileAction.DOWNLOAD_RESULTS)
         if meta["simulation"]["software"]["id"] == "3Di":
             actions.append(FileAction.OPEN_WMS)
+            actions.append(FileAction.COPY_WMS_URL)
         # Add open in file browser to any file type that can be opened
         # Actual check for file availibility will be done downstream
         actions.append(FileAction.OPEN_IN_FILE_BROWSER)
@@ -104,6 +107,7 @@ class FileActionSignals(QObject):
     save_raster_styling_requested = pyqtSignal(dict)
     save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
+    copy_wms_url_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
     view_all_revisions_requested = pyqtSignal(dict, dict)
@@ -119,7 +123,9 @@ class FileActionSignals(QObject):
             FileAction.SAVE_RASTER_STYLING: self.save_raster_styling_requested,
             FileAction.SAVE_REVISION: self.save_revision_requested,
             FileAction.OPEN_WMS: self.open_wms_requested,
+            FileAction.COPY_WMS_URL: self.copy_wms_url_requested,
             FileAction.DOWNLOAD_RESULTS: self.download_results_requested,
             FileAction.VIEW_REVISIONS: self.view_all_revisions_requested,
+            FileAction.HISTORY: self.view_all_revisions_requested,
         }
         return signal_map.get(signal_type)
