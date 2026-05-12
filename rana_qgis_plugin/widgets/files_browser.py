@@ -373,6 +373,8 @@ class FilesBrowser(QWidget):
 
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
+        if not index.isValid() or index.column() != 1:
+            return
         file_item = self.files_model.itemFromIndex(index)
         if not file_item:
             return
