@@ -51,6 +51,7 @@ from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
+    copy_wms_url_to_clipboard,
     get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
@@ -415,6 +416,12 @@ class FilesBrowser(QWidget):
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(
                         self.project, selected_item
+                    )
+                )
+            elif file_action == FileAction.COPY_WMS_URL:
+                action.triggered.connect(
+                    lambda _, item=selected_item: copy_wms_url_to_clipboard(
+                        item, self.communication
                     )
                 )
             else:

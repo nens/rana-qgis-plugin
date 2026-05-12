@@ -64,6 +64,7 @@ from rana_qgis_plugin.utils.time import (
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
+    copy_wms_url_to_clipboard,
     get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
@@ -251,14 +252,22 @@ class FileView(QWidget):
                 self.project, self.selected_file
             )
         )
+        self.btn_copy_wms_url = QPushButton(FileAction.COPY_WMS_URL.value)
+        self.btn_copy_wms_url.clicked.connect(
+            lambda _: copy_wms_url_to_clipboard(
+                self.selected_file, self.communication
+            )
+        )
         self.btn_export_gpkg = QPushButton("Export to GeoPackage")
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.btn_history.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.btn_copy_wms_url.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
         button_layout.addWidget(self.btn_export_gpkg)
         button_layout.addWidget(btn_show_revisions)
         button_layout.addWidget(self.btn_history)
+        button_layout.addWidget(self.btn_copy_wms_url)
         self.file_action_btn_dict = self.get_file_action_buttons()
         file_action_btn_layout = QHBoxLayout()
         for btn in self.file_action_btn_dict.values():
@@ -280,7 +289,8 @@ class FileView(QWidget):
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in sorted(FileAction):
-            if action in (FileAction.VIEW_REVISIONS, FileAction.HISTORY):
+            if action in (FileAction.VIEW_REVISIONS, FileAction.HISTORY,
+                         FileAction.COPY_WMS_URL):
                 continue
             btn = QPushButton(action.value)
             action_signal = self.file_signals.get_signal(action)
@@ -345,6 +355,9 @@ class FileView(QWidget):
                 btn.show()
             else:
                 btn.hide()
+        # Show Copy WMS URL button for 3Di scenarios
+        if FileAction.COPY_WMS_URL in active_actions:
+            self.btn_copy_wms_url.show()
 
     def update_selected_file(self, selected_file: dict):
         if self.selected_file != selected_file:
@@ -673,11 +686,13 @@ class FileView(QWidget):
                 self.btn_export_gpkg.hide()
                 self.btn_show_revisions.hide()
             self.btn_history.hide()
+            self.btn_copy_wms_url.hide()
         else:
             self.btn_stack.hide()
             self.btn_export_gpkg.hide()
             self.btn_show_revisions.hide()
             self.btn_history.show()
+            self.btn_copy_wms_url.hide()
         self.update_file_action_buttons(selected_file)
 
     def open_in_browser(self):
