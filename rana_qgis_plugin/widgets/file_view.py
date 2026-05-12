@@ -244,12 +244,21 @@ class FileView(QWidget):
                 self.project, self.selected_file
             )
         )
+        self.btn_show_revisions = btn_show_revisions
+        self.btn_history = QPushButton(FileAction.HISTORY.value)
+        self.btn_history.clicked.connect(
+            lambda _: self.file_signals.view_all_revisions_requested.emit(
+                self.project, self.selected_file
+            )
+        )
         self.btn_export_gpkg = QPushButton("Export to GeoPackage")
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.btn_history.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
         button_layout.addWidget(self.btn_export_gpkg)
         button_layout.addWidget(btn_show_revisions)
+        button_layout.addWidget(self.btn_history)
         self.file_action_btn_dict = self.get_file_action_buttons()
         file_action_btn_layout = QHBoxLayout()
         for btn in self.file_action_btn_dict.values():
@@ -271,7 +280,7 @@ class FileView(QWidget):
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
         btn_dict = {}
         for action in sorted(FileAction):
-            if action == FileAction.VIEW_REVISIONS:
+            if action in (FileAction.VIEW_REVISIONS, FileAction.HISTORY):
                 continue
             btn = QPushButton(action.value)
             action_signal = self.file_signals.get_signal(action)
@@ -658,12 +667,17 @@ class FileView(QWidget):
                 else:
                     self.btn_stack.setCurrentIndex(1)
                 self.btn_export_gpkg.show()
+                self.btn_show_revisions.show()
             else:
                 self.btn_stack.hide()
                 self.btn_export_gpkg.hide()
+                self.btn_show_revisions.hide()
+            self.btn_history.hide()
         else:
             self.btn_stack.hide()
             self.btn_export_gpkg.hide()
+            self.btn_show_revisions.hide()
+            self.btn_history.show()
         self.update_file_action_buttons(selected_file)
 
     def open_in_browser(self):
