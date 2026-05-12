@@ -37,9 +37,7 @@ class FileAction(Enum):
         return NotImplemented
 
 
-def get_file_actions(
-    selected_item: dict, descriptor: dict = None
-) -> List[FileAction]:
+def get_file_actions(selected_item: dict, descriptor: dict = None) -> List[FileAction]:
     data_type = selected_item.get("data_type")
     actions = get_file_actions_by_data_type(data_type)
     if data_type == "scenario":

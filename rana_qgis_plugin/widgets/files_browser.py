@@ -384,7 +384,9 @@ class FilesBrowser(QWidget):
         file_actions = get_file_actions(selected_item, descriptor=descriptor)
         # Resolve local path on demand; filter out action if not available locally
         local_path = self._resolve_local_path(
-            selected_item, self.project["slug"], hcc_working_dir(),
+            selected_item,
+            self.project["slug"],
+            hcc_working_dir(),
             descriptor=descriptor,
         )
         if not local_path:
@@ -445,7 +447,10 @@ class FilesBrowser(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _resolve_local_path(
-        self, file: dict, project_slug: str, working_dir: str,
+        self,
+        file: dict,
+        project_slug: str,
+        working_dir: str,
         descriptor: dict = None,
     ) -> Optional[str]:
         """Resolve the local path for a file, or return None if not present locally."""
@@ -454,7 +459,10 @@ class FilesBrowser(QWidget):
             return self._resolve_schematisation_local_path(file, working_dir)
         elif data_type == "scenario":
             return self._resolve_scenario_local_path(
-                file, project_slug, working_dir, descriptor=descriptor,
+                file,
+                project_slug,
+                working_dir,
+                descriptor=descriptor,
             )
         else:
             local_path = get_local_file_path(project_slug, file["id"])
@@ -486,7 +494,10 @@ class FilesBrowser(QWidget):
         return None
 
     def _resolve_scenario_local_path(
-        self, file: dict, project_slug: str, working_dir: str,
+        self,
+        file: dict,
+        project_slug: str,
+        working_dir: str,
         descriptor: dict = None,
     ) -> Optional[str]:
         """Resolve the local results directory for a scenario file."""
