@@ -4,8 +4,8 @@ import pytest
 
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
+    get_file_actions,
     get_file_actions_by_data_type,
-    get_file_actions_for_data_type,
 )
 
 
@@ -161,7 +161,7 @@ def test_get_file_actions_for_data_type_scenarios(
         "descriptor_id": "desc789",
     }
 
-    actions = get_file_actions_for_data_type(selected_item)
+    actions = get_file_actions(selected_item)
     actions_set = set(actions)
 
     if expected_actions:

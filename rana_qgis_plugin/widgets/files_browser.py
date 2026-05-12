@@ -51,7 +51,7 @@ from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
-    get_file_actions_for_data_type,
+    get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.widgets.utils_view import (
@@ -377,7 +377,7 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        file_actions = get_file_actions_for_data_type(selected_item)
+        file_actions = get_file_actions(selected_item)
         # Resolve local path on demand; filter out action if not available locally
         local_path = self._resolve_local_path(
             selected_item, self.project["slug"], hcc_working_dir()

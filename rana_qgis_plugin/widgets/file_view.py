@@ -64,7 +64,7 @@ from rana_qgis_plugin.utils.time import (
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
-    get_file_actions_for_data_type,
+    get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
     get_icon_from_theme_as_pixmap,
@@ -317,7 +317,7 @@ class FileView(QWidget):
         self.filename_edit.selectAll()
 
     def update_file_action_buttons(self, selected_file: dict):
-        active_actions = get_file_actions_for_data_type(selected_file)
+        active_actions = get_file_actions(selected_file)
         # Resolve local path on demand; exclude action if not available locally
         local_path = self._resolve_local_path(selected_file)
         if not local_path:
