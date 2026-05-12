@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
     QModelIndex,
     Qt,
@@ -23,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QStyle,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -163,23 +165,39 @@ class FilesBrowser(QWidget):
         self.btn_upload = QPushButton("Upload Files to Rana")
         btn_create_folder = QPushButton("Create New Folder")
         btn_create_folder.clicked.connect(self.show_create_folder_dialog)
-        self.btn_new_schematisation = QPushButton("New schematisation")
-        self.btn_import_schematisation = QPushButton("Import schematisation")
-        self.btn_upload_existing_schematisation = QPushButton(
-            "Upload existing schematisation"
+        # Add schematisation menu button
+        self.btn_add_schematisation = QToolButton()
+        self.btn_add_schematisation.setText("Add schematisation")
+        self.btn_add_schematisation.setIcon(
+            QgsApplication.getThemeIcon("/mActionAdd.svg")
         )
+        self.btn_add_schematisation.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self.btn_add_schematisation.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        schematisation_menu = QMenu(self.btn_add_schematisation)
+        self.action_new_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "New schematisation"
+        )
+        self.action_upload_existing_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionFileOpen.svg"),
+            "Upload existing schematisation",
+        )
+        self.action_import_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionSharingImport.svg"),
+            "Import schematisation",
+        )
+        self.btn_add_schematisation.setMenu(schematisation_menu)
         # Page 0: Normal mode buttons
         normal_page = QWidget()
         btn_layout = QVBoxLayout(normal_page)
         row1 = QHBoxLayout()
         row1.addWidget(self.btn_upload)
+        row1.addWidget(self.btn_add_schematisation)
         row1.addWidget(btn_create_folder)
-        row2 = QHBoxLayout()
-        row2.addWidget(self.btn_new_schematisation)
-        row2.addWidget(self.btn_upload_existing_schematisation)
-        row2.addWidget(self.btn_import_schematisation)
         btn_layout.addLayout(row1)
-        btn_layout.addLayout(row2)
         # Page 1: Select mode buttons
         select_page = QWidget()
         select_layout = QHBoxLayout(select_page)
@@ -206,9 +224,7 @@ class FilesBrowser(QWidget):
         layout.addWidget(self.btn_stack)
         self.setLayout(layout)
 
-        self.btn_new_schematisation.setVisible(has_3di_authcfg())
-        self.btn_import_schematisation.setVisible(has_3di_authcfg())
-        self.btn_upload_existing_schematisation.setVisible(has_3di_authcfg())
+        self.btn_add_schematisation.setVisible(has_3di_authcfg())
         # Connect checkbox state changes to update batch button states
         self.files_model.itemChanged.connect(self._update_batch_buttons)
 

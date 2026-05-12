@@ -326,20 +326,20 @@ class RanaBrowser(QWidget):
         )
         self.publication_view.save_styles_to_rana.connect(self.disable)
         self.publication_view.save_styles_finished.connect(self.enable)
-        # Connect new schematisation button
-        self.files_browser.btn_new_schematisation.clicked.connect(
+        # Connect new schematisation action
+        self.files_browser.action_new_schematisation.triggered.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(
                 self.project, self.selected_item
             )
         )
-        # Connect upload existing schematisation button
-        self.files_browser.btn_upload_existing_schematisation.clicked.connect(
+        # Connect upload existing schematisation action
+        self.files_browser.action_upload_existing_schematisation.triggered.connect(
             lambda _,: self.upload_existing_schematisation_selected.emit(
                 self.project, self.selected_item
             )
         )
-        # Connect import schematisation button
-        self.files_browser.btn_import_schematisation.clicked.connect(
+        # Connect import schematisation action
+        self.files_browser.action_import_schematisation.triggered.connect(
             lambda _,: self.import_schematisation_selected.emit(
                 self.project, self.selected_item
             )
