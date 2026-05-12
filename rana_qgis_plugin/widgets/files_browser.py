@@ -377,10 +377,15 @@ class FilesBrowser(QWidget):
         if not file_item:
             return
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        file_actions = get_file_actions(selected_item)
+        # For scenarios, fetch the descriptor once and reuse it
+        descriptor = None
+        if selected_item.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        file_actions = get_file_actions(selected_item, descriptor=descriptor)
         # Resolve local path on demand; filter out action if not available locally
         local_path = self._resolve_local_path(
-            selected_item, self.project["slug"], hcc_working_dir()
+            selected_item, self.project["slug"], hcc_working_dir(),
+            descriptor=descriptor,
         )
         if not local_path:
             file_actions = [
@@ -440,14 +445,17 @@ class FilesBrowser(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _resolve_local_path(
-        self, file: dict, project_slug: str, working_dir: str
+        self, file: dict, project_slug: str, working_dir: str,
+        descriptor: dict = None,
     ) -> Optional[str]:
         """Resolve the local path for a file, or return None if not present locally."""
         data_type = file.get("data_type")
         if data_type == "threedi_schematisation":
             return self._resolve_schematisation_local_path(file, working_dir)
         elif data_type == "scenario":
-            return self._resolve_scenario_local_path(file, project_slug, working_dir)
+            return self._resolve_scenario_local_path(
+                file, project_slug, working_dir, descriptor=descriptor,
+            )
         else:
             local_path = get_local_file_path(project_slug, file["id"])
             return local_path if Path(local_path).exists() else None
@@ -461,7 +469,6 @@ class FilesBrowser(QWidget):
         schematisation = get_threedi_schematisation(
             self.communication, file["descriptor_id"]
         )
-        self.communication.log_info(f"{schematisation=}")
         if not schematisation:
             return None
         latest_revision = schematisation.get("latest_revision")
@@ -479,10 +486,12 @@ class FilesBrowser(QWidget):
         return None
 
     def _resolve_scenario_local_path(
-        self, file: dict, project_slug: str, working_dir: str
+        self, file: dict, project_slug: str, working_dir: str,
+        descriptor: dict = None,
     ) -> Optional[str]:
         """Resolve the local results directory for a scenario file."""
-        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        if descriptor is None:
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
         if not descriptor:
             return None
         meta = descriptor.get("meta")

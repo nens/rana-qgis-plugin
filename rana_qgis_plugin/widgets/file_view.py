@@ -317,9 +317,13 @@ class FileView(QWidget):
         self.filename_edit.selectAll()
 
     def update_file_action_buttons(self, selected_file: dict):
-        active_actions = get_file_actions(selected_file)
+        # For scenarios, fetch the descriptor once and reuse it
+        descriptor = None
+        if selected_file.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        active_actions = get_file_actions(selected_file, descriptor=descriptor)
         # Resolve local path on demand; exclude action if not available locally
-        local_path = self._resolve_local_path(selected_file)
+        local_path = self._resolve_local_path(selected_file, descriptor=descriptor)
         if not local_path:
             active_actions = [
                 a for a in active_actions if a != FileAction.OPEN_IN_FILE_BROWSER
@@ -685,13 +689,17 @@ class FileView(QWidget):
             path = path.parent
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
-    def _resolve_local_path(self, selected_file: dict) -> Optional[str]:
+    def _resolve_local_path(
+        self, selected_file: dict, descriptor: dict = None
+    ) -> Optional[str]:
         """Resolve the local path for a file, or return None if not present."""
         data_type = selected_file.get("data_type")
         if data_type == "threedi_schematisation":
             return self._resolve_schematisation_local_path(selected_file)
         elif data_type == "scenario":
-            return self._resolve_scenario_local_path(selected_file)
+            return self._resolve_scenario_local_path(
+                selected_file, descriptor=descriptor
+            )
         else:
             local_path = get_local_file_path(self.project["slug"], selected_file["id"])
             return local_path if Path(local_path).exists() else None
@@ -718,9 +726,12 @@ class FileView(QWidget):
             return str(revision_dir)
         return None
 
-    def _resolve_scenario_local_path(self, selected_file: dict) -> Optional[str]:
+    def _resolve_scenario_local_path(
+        self, selected_file: dict, descriptor: dict = None
+    ) -> Optional[str]:
         """Resolve the local results directory for a scenario."""
-        descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        if descriptor is None:
+            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
         if not descriptor:
             return None
         meta = descriptor.get("meta")

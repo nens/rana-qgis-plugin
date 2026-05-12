@@ -37,11 +37,14 @@ class FileAction(Enum):
         return NotImplemented
 
 
-def get_file_actions(selected_item: dict) -> List[FileAction]:
+def get_file_actions(
+    selected_item: dict, descriptor: dict = None
+) -> List[FileAction]:
     data_type = selected_item.get("data_type")
     actions = get_file_actions_by_data_type(data_type)
     if data_type == "scenario":
-        descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        if descriptor is None:
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
         actions = get_scenario_actions(actions, descriptor)
     # Add options to open WMS and download file and results only for 3Di scenarios
     return sorted(actions)

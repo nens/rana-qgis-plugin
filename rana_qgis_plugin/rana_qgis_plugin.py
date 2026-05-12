@@ -30,7 +30,8 @@ from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
 from rana_qgis_plugin.utils.api import get_user_info, get_user_tenants
-from rana_qgis_plugin.utils.generic import cleanup_folder, parse_url
+from rana_qgis_plugin.utils.generic import parse_url
+from rana_qgis_plugin.utils.local_paths import cleanup_folder
 from rana_qgis_plugin.utils.qgis import get_plugin_instance
 from rana_qgis_plugin.utils.settings import (
     cleanup_cache_on_close,
