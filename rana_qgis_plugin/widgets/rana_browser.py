@@ -374,9 +374,9 @@ class RanaBrowser(QWidget):
                 self.project, self.file_view.selected_file
             )
         )
-        self.file_view.btn_export_gpkg.clicked.connect(
-            lambda _: self.export_gpkg_selected.emit(
-                self.project, self.file_view.selected_file
+        self.file_view.export_gpkg_requested.connect(
+            lambda file: self.export_gpkg_selected.emit(
+                self.project, file
             )
         )
         self.revisions_view.export_schematisation_revision.connect(
