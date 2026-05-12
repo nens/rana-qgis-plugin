@@ -3,7 +3,7 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
@@ -174,6 +174,91 @@ def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     return path_params, query_params
 
 
+def get_local_schematisation_revision_dir(
+    working_dir: str,
+    schematisation_id: int,
+    schematisation_name: str,
+    revision_number: int,
+    create: bool = True,
+) -> Optional[Path]:
+    """Return the local revision directory for a schematisation.
+
+    If create is True (default), creates the schematisation and revision structure
+    if not found locally. If False, returns None when not found.
+    """
+    if not working_dir or not schematisation_id:
+        return None
+    local_schematisations = list_local_schematisations(working_dir)
+    local_schematisation = local_schematisations.get(schematisation_id)
+    if not local_schematisation:
+        if not create:
+            return None
+        local_schematisation = LocalSchematisation(
+            working_dir, schematisation_id, schematisation_name, create=True
+        )
+    local_revision = local_schematisation.revisions.get(revision_number)
+    if not local_revision:
+        if not create:
+            return None
+        local_revision = LocalRevision(local_schematisation, revision_number)
+        local_revision.make_revision_structure()
+    return Path(local_revision.main_dir)
+
+
+def get_local_results_dir(
+    working_dir: str,
+    schematisation_id: int,
+    schematisation_name: str,
+    revision_number: int,
+    simulation_name: str,
+    simulation_id: int,
+    create: bool = True,
+) -> Optional[str]:
+    """Return the local results directory for a schematisation simulation.
+
+    If create is True (default), creates the directory structure if not found locally.
+    If False, returns None when the revision directory is not found.
+    """
+    revision_dir = get_local_schematisation_revision_dir(
+        working_dir, schematisation_id, schematisation_name, revision_number, create
+    )
+    if not revision_dir:
+        return None
+    result = str(
+        Path(revision_dir / "results").joinpath(
+            f"{simulation_name} ({simulation_id})"
+        )
+    )
+    # replace colons, invalid for Windows paths (don't replace drive colon)
+    return result[:3] + result[3:].replace(":", "_")
+
+
+def get_local_results_dir_from_meta(meta: dict, working_dir: str) -> Optional[str]:
+    """Return the local results directory from scenario metadata.
+
+    Only works for scenarios with complete schematisation/simulation metadata.
+    Returns None if metadata is incomplete or the directory is not found locally.
+    """
+    schematisation = meta.get("schematisation") or {}
+    simulation = meta.get("simulation") or {}
+    schematisation_id = schematisation.get("id")
+    schematisation_name = schematisation.get("name", "")
+    revision_number = schematisation.get("version")
+    simulation_name = simulation.get("name")
+    simulation_id = simulation.get("id")
+    if not all([schematisation_id, revision_number, simulation_name, simulation_id]):
+        return None
+    return get_local_results_dir(
+        working_dir,
+        schematisation_id,
+        schematisation_name,
+        revision_number,
+        simulation_name,
+        simulation_id,
+        create=False,
+    )
+
+
 def get_threedi_schematisation_simulation_results_folder(
     working_dir: str,
     schematisation_id: int,
@@ -182,24 +267,16 @@ def get_threedi_schematisation_simulation_results_folder(
     simulation_name: str,
     simulation_id: int,
 ) -> str:
-    local_schematisations = list_local_schematisations(working_dir)
-    if schematisation_id:
-        local_schematisation = local_schematisations.get(schematisation_id)
-        if not local_schematisation:
-            local_schematisation = LocalSchematisation(
-                working_dir, schematisation_id, schematisation_name, create=True
-            )
-        local_revision = local_schematisation.revisions.get(revision_number)
-        if not local_revision:
-            local_revision = LocalRevision(local_schematisation, revision_number)
-            local_revision.make_revision_structure()
-        result = str(
-            Path(local_revision.results_dir).joinpath(
-                f"{simulation_name} ({simulation_id})"
-            )
-        )
-        # replace colons, invalid for Windows paths (don't replace drive colon)
-        return result[:3] + result[3:].replace(":", "_")
+    """Deprecated: use get_local_results_dir instead."""
+    return get_local_results_dir(
+        working_dir,
+        schematisation_id,
+        schematisation_name,
+        revision_number,
+        simulation_name,
+        simulation_id,
+        create=True,
+    )
 
 
 def split_scenario_extent(grid, resolution=None, max_pixel_count=1 * 10**8):

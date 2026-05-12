@@ -208,7 +208,121 @@ def test_get_threedi_schematisation_simulation_results_folder_with_colon(
     assert results_folder == expected_folder
 
 
-def test_find_publication_map_layer_from_tree():
+def test_get_local_schematisation_revision_dir_not_found(tmp_path):
+    """Returns None when schematisation is not found locally and create=False."""
+    result = utils.get_local_schematisation_revision_dir(
+        str(tmp_path), 999, "nonexistent", 1, create=False
+    )
+    assert result is None
+
+
+def test_get_local_schematisation_revision_dir_no_working_dir():
+    """Returns None when working_dir is empty."""
+    result = utils.get_local_schematisation_revision_dir(
+        "", 1, "foo", 1, create=False
+    )
+    assert result is None
+
+
+def test_get_local_schematisation_revision_dir_found(
+    tmp_path, result_folder_info
+):
+    """Returns the revision dir when it exists locally."""
+    workdir = tmp_path
+    schemadir = workdir / result_folder_info["schematisation_name"]
+    revdir = schemadir / f"revision {result_folder_info['revision_number']}"
+    revdir.mkdir(parents=True, exist_ok=True)
+    # create schematisation config
+    config_path = schemadir / "admin" / "schematisation.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config = {
+        "id": result_folder_info["schematisation_id"],
+        "name": result_folder_info["schematisation_name"],
+        "revisions": [result_folder_info["revision_number"]],
+        "wip_parent_revision": 1,
+    }
+    with open(config_path, "w") as f:
+        json.dump(config, f)
+
+    result = utils.get_local_schematisation_revision_dir(
+        str(workdir),
+        result_folder_info["schematisation_id"],
+        result_folder_info["schematisation_name"],
+        result_folder_info["revision_number"],
+        create=False,
+    )
+    assert result == revdir
+
+
+def test_get_local_schematisation_revision_dir_creates(
+    tmp_path, result_folder_info
+):
+    """Creates the revision dir when create=True."""
+    result = utils.get_local_schematisation_revision_dir(
+        str(tmp_path),
+        result_folder_info["schematisation_id"],
+        result_folder_info["schematisation_name"],
+        result_folder_info["revision_number"],
+        create=True,
+    )
+    assert result is not None
+    assert result.exists()
+
+
+def test_get_local_results_dir_from_meta_complete(tmp_path, result_folder_info):
+    """Returns results dir when meta is complete and revision exists."""
+    workdir = tmp_path
+    schemadir = workdir / result_folder_info["schematisation_name"]
+    revdir = schemadir / f"revision {result_folder_info['revision_number']}"
+    revdir.mkdir(parents=True, exist_ok=True)
+    config_path = schemadir / "admin" / "schematisation.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config = {
+        "id": result_folder_info["schematisation_id"],
+        "name": result_folder_info["schematisation_name"],
+        "revisions": [result_folder_info["revision_number"]],
+        "wip_parent_revision": 1,
+    }
+    with open(config_path, "w") as f:
+        json.dump(config, f)
+
+    meta = {
+        "schematisation": {
+            "id": result_folder_info["schematisation_id"],
+            "name": result_folder_info["schematisation_name"],
+            "version": result_folder_info["revision_number"],
+        },
+        "simulation": {
+            "id": result_folder_info["simulation_id"],
+            "name": result_folder_info["simulation_name"],
+        },
+    }
+    result = utils.get_local_results_dir_from_meta(meta, str(workdir))
+    expected = str(
+        revdir / "results"
+        / f"{result_folder_info['simulation_name']} ({result_folder_info['simulation_id']})"
+    )
+    assert result == expected
+
+
+def test_get_local_results_dir_from_meta_incomplete():
+    """Returns None when meta is missing required fields."""
+    meta = {
+        "schematisation": {"id": 1, "name": "foo"},
+        "simulation": {},  # missing name and id
+    }
+    result = utils.get_local_results_dir_from_meta(meta, "/tmp/fake")
+    assert result is None
+
+
+def test_get_local_results_dir_from_meta_no_local_revision(tmp_path):
+    """Returns None when revision doesn't exist locally (create=False)."""
+    meta = {
+        "schematisation": {"id": 999, "name": "nonexistent", "version": 1},
+        "simulation": {"id": 42, "name": "sim"},
+    }
+    result = utils.get_local_results_dir_from_meta(meta, str(tmp_path))
+    assert result is None
     publication_version = {
         "maps": [
             {
