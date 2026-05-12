@@ -15,6 +15,7 @@ class FileAction(Enum):
     OPEN_WMS = "Open WMS in QGIS"
     DOWNLOAD_RESULTS = "Download Results"
     OPEN_IN_FILE_BROWSER = "Open in file browser"
+    OPEN_IN_BROWSER = "Open in browser"
     COPY_WMS_URL = "Copy WMS URL"
     # Actions related to viewing or modifying files on Rana
     SAVE_REVISION = "Upload to Rana"
@@ -24,12 +25,12 @@ class FileAction(Enum):
     # SAVE_STYLING action is not used atm, only defined for naming
     SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
+    EXPORT_GPKG = "Export to GeoPackage"
     VIEW_REVISIONS = "View all Revisions"
     HISTORY = "History"
     RENAME = "Rename"
     DELETE = "Delete"
     REMOVE_FROM_PROJECT = "Remove from Project"
-    OPEN_IN_BROWSER = "Open in browser"
 
     def __lt__(self, other):
         # sort a list of file actions by order of definition here
@@ -74,7 +75,7 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
         if has_3di_authcfg():
             actions += [FileAction.SAVE_REVISION, FileAction.VIEW_REVISIONS]
-        actions += [FileAction.OPEN_IN_BROWSER]
+        actions += [FileAction.EXPORT_GPKG, FileAction.OPEN_IN_BROWSER]
     return sorted(actions)
 
 
@@ -128,6 +129,7 @@ class FileActionSignals(QObject):
     save_raster_styling_requested = pyqtSignal(dict)
     save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
+    export_gpkg_requested = pyqtSignal(dict)
     download_file_requested = pyqtSignal(dict)
     download_results_requested = pyqtSignal(dict)
     view_all_revisions_requested = pyqtSignal(dict, dict)
@@ -143,6 +145,7 @@ class FileActionSignals(QObject):
             FileAction.SAVE_RASTER_STYLING: self.save_raster_styling_requested,
             FileAction.SAVE_REVISION: self.save_revision_requested,
             FileAction.OPEN_WMS: self.open_wms_requested,
+            FileAction.EXPORT_GPKG: self.export_gpkg_requested,
             FileAction.DOWNLOAD_RESULTS: self.download_results_requested,
             FileAction.VIEW_REVISIONS: self.view_all_revisions_requested,
             FileAction.HISTORY: self.view_all_revisions_requested,

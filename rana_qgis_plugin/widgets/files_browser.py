@@ -430,7 +430,7 @@ class FilesBrowser(QWidget):
                 )
             actions.append(action)
         for i, action in enumerate(actions):
-            if file_actions[i] == FileAction.DELETE:
+            if file_actions[i] in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
                 menu.addSeparator()
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))

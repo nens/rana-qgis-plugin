@@ -144,7 +144,6 @@ class EditLabel(QLineEdit):
 
 class FileView(QWidget):
     show_revisions_clicked = pyqtSignal(dict, dict)
-    export_gpkg_requested = pyqtSignal(dict)
 
     def __init__(
         self, communication, file_signals: FileActionSignals, avatar_cache, parent=None
@@ -287,14 +286,17 @@ class FileView(QWidget):
             button.setEnabled(enabled)
 
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
+        top_row_actions = sorted([
+            FileAction.OPEN_IN_QGIS,
+            FileAction.OPEN_WMS,
+            FileAction.DOWNLOAD_RESULTS,
+            FileAction.SAVE_REVISION,
+            FileAction.SAVE_VECTOR_STYLING,
+            FileAction.SAVE_RASTER_STYLING,
+            FileAction.UPLOAD_FILE,
+        ])
         btn_dict = {}
-        for action in sorted(FileAction):
-            if action in (FileAction.VIEW_REVISIONS, FileAction.HISTORY,
-                         FileAction.COPY_WMS_URL, FileAction.RENAME,
-                         FileAction.DELETE, FileAction.OPEN_IN_FILE_BROWSER,
-                         FileAction.OPEN_IN_BROWSER,
-                         FileAction.REMOVE_FROM_PROJECT):
-                continue
+        for action in sorted(top_row_actions):
             btn = QPushButton(action.value)
             btn.setMinimumSize(btn.sizeHint())
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -330,71 +332,67 @@ class FileView(QWidget):
         if not self.selected_file:
             return
         data_type = self.selected_file.get("data_type")
+        is_schematisation = data_type == "threedi_schematisation"
 
-        # Rename (all files)
-        rename_action = QAction(FileAction.RENAME.value, menu)
-        rename_action.triggered.connect(
-            lambda _: self.edit_file_name(self.selected_file)
-        )
-        menu.addAction(rename_action)
+        # Determine which actions to show in the ellipsis menu
+        ellipsis_actions = set()
+        ellipsis_actions.add(FileAction.RENAME)
+        if not is_schematisation:
+            ellipsis_actions.add(FileAction.HISTORY)
+            ellipsis_actions.add(FileAction.DELETE)
+        if is_schematisation:
+            ellipsis_actions.add(FileAction.REMOVE_FROM_PROJECT)
+        # Actions that depend on the descriptor / active actions
+        for action in (FileAction.OPEN_IN_FILE_BROWSER,
+                       FileAction.OPEN_IN_BROWSER,
+                       FileAction.COPY_WMS_URL,
+                       FileAction.EXPORT_GPKG):
+            if action in self._active_actions:
+                ellipsis_actions.add(action)
 
-        # History (non-schematisation files)
-        if data_type != "threedi_schematisation":
-            history_action = QAction(FileAction.HISTORY.value, menu)
-            history_action.triggered.connect(
-                lambda _: self.file_signals.view_all_revisions_requested.emit(
-                    self.project, self.selected_file
+        # Add actions in FileAction enum order
+        for action in sorted(ellipsis_actions):
+            menu_action = QAction(action.value, menu)
+            if action == FileAction.RENAME:
+                menu_action.triggered.connect(
+                    lambda _: self.edit_file_name(self.selected_file)
                 )
-            )
-            menu.addAction(history_action)
-
-        # Open in file browser (all files that have a local path)
-        if FileAction.OPEN_IN_FILE_BROWSER in self._active_actions:
-            open_fb_action = QAction(FileAction.OPEN_IN_FILE_BROWSER.value, menu)
-            open_fb_action.triggered.connect(lambda _: self.open_in_file_browser())
-            menu.addAction(open_fb_action)
-
-        # Export GeoPackage (schematisations)
-        if data_type == "threedi_schematisation":
-            export_action = QAction("Export to GeoPackage", menu)
-            export_action.triggered.connect(
-                lambda _: self.export_gpkg_requested.emit(self.selected_file)
-            )
-            menu.addAction(export_action)
-
-            # Open in browser (schematisations)
-            if FileAction.OPEN_IN_BROWSER in self._active_actions:
-                open_browser_action = QAction(
-                    FileAction.OPEN_IN_BROWSER.value, menu
+            elif action in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
+                menu_action.triggered.connect(
+                    lambda _: self.file_signals.file_deletion_requested.emit(
+                        self.selected_file
+                    )
                 )
-                open_browser_action.triggered.connect(
+            elif action in (FileAction.HISTORY, FileAction.VIEW_REVISIONS):
+                menu_action.triggered.connect(
+                    lambda _: self.file_signals.view_all_revisions_requested.emit(
+                        self.project, self.selected_file
+                    )
+                )
+            elif action == FileAction.OPEN_IN_FILE_BROWSER:
+                menu_action.triggered.connect(
+                    lambda _: self.open_in_file_browser()
+                )
+            elif action == FileAction.OPEN_IN_BROWSER:
+                menu_action.triggered.connect(
                     lambda _: self.open_in_browser()
                 )
-                menu.addAction(open_browser_action)
-
-        # Copy WMS URL (3Di scenarios)
-        if FileAction.COPY_WMS_URL in self._active_actions:
-            copy_wms_action = QAction(FileAction.COPY_WMS_URL.value, menu)
-            copy_wms_action.triggered.connect(
-                lambda _: copy_wms_url_to_clipboard(
-                    self.selected_file, self.communication
+            elif action == FileAction.COPY_WMS_URL:
+                menu_action.triggered.connect(
+                    lambda _: copy_wms_url_to_clipboard(
+                        self.selected_file, self.communication
+                    )
                 )
-            )
-            menu.addAction(copy_wms_action)
-
-        menu.addSeparator()
-
-        # Delete / Remove from project (all files, last item)
-        if data_type == "threedi_schematisation":
-            delete_action = QAction(FileAction.REMOVE_FROM_PROJECT.value, menu)
-        else:
-            delete_action = QAction(FileAction.DELETE.value, menu)
-        delete_action.triggered.connect(
-            lambda _: self.file_signals.file_deletion_requested.emit(
-                self.selected_file
-            )
-        )
-        menu.addAction(delete_action)
+            elif action == FileAction.EXPORT_GPKG:
+                menu_action.triggered.connect(
+                    lambda _: self.file_signals.export_gpkg_requested.emit(
+                        self.selected_file
+                    )
+                )
+            # Add separator before delete/remove
+            if action in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
+                menu.addSeparator()
+            menu.addAction(menu_action)
 
     def edit_file_name(self, selected_item: dict):
         current_name = self.filename_edit.text()
