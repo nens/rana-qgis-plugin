@@ -7,6 +7,7 @@ from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
 
+
 class FileAction(Enum):
     # Actions related to downloading and local files
     OPEN_IN_QGIS = "Open in QGIS"

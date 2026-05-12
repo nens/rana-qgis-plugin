@@ -122,7 +122,11 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
                     "simulation": {"software": {"id": "3Di"}},
                 }
             },
-            {FileAction.DOWNLOAD_RESULTS, FileAction.OPEN_WMS, FileAction.OPEN_IN_FILE_BROWSER},
+            {
+                FileAction.DOWNLOAD_RESULTS,
+                FileAction.OPEN_WMS,
+                FileAction.OPEN_IN_FILE_BROWSER,
+            },
             "3di_simulation",
         ),
         (
