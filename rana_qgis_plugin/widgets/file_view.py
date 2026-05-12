@@ -252,6 +252,12 @@ class FileView(QWidget):
             )
         )
         self.btn_show_revisions = btn_show_revisions
+        self.btn_show_revisions.setMinimumSize(
+            self.btn_show_revisions.sizeHint()
+        )
+        self.btn_show_revisions.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         self.btn_show_revisions.hide()
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
@@ -261,9 +267,10 @@ class FileView(QWidget):
             file_action_btn_layout.addWidget(btn)
         file_action_btn_layout.addWidget(self.btn_show_revisions)
         self.btn_ellipsis = self._create_ellipsis_button()
-        # Match height of the other action buttons
+        # Match height of the other action buttons, keep width fixed
         reference_btn = next(iter(self.file_action_btn_dict.values()))
         self.btn_ellipsis.setFixedHeight(reference_btn.sizeHint().height())
+        self.btn_ellipsis.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         file_action_btn_layout.addWidget(self.btn_ellipsis)
 
         # Put scroll area in layout
@@ -289,6 +296,8 @@ class FileView(QWidget):
                          FileAction.REMOVE_FROM_PROJECT):
                 continue
             btn = QPushButton(action.value)
+            btn.setMinimumSize(btn.sizeHint())
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             action_signal = self.file_signals.get_signal(action)
             btn.clicked.connect(
                 lambda _, signal=action_signal: signal.emit(self.selected_file)
