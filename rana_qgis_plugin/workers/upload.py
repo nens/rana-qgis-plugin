@@ -15,7 +15,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_project_file,
     start_file_upload,
 )
-from rana_qgis_plugin.utils.generic import get_local_file_path
+from rana_qgis_plugin.utils.local_paths import get_local_file_path
 
 
 class FileUploadWorker(QThread):

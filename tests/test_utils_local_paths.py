@@ -3,121 +3,8 @@ from pathlib import Path
 
 import pytest
 
-import rana_qgis_plugin.utils.generic as utils
-
-
-@pytest.mark.parametrize(
-    "input_path,expected_output",
-    [
-        ("/path/to/valid_file.txt", "/path/to/valid_file.txt"),
-        (
-            '/path/with/most:<special>|cha"r"s/file?name*.txt',
-            "/path/with/most__special__cha_r_s/file_name_.txt",
-        ),
-        # backslash is invalid; on Linux it's treated as part of the filename
-        ("/folder/name\\file.txt", "/folder/name_file.txt"),
-        # rstrip: trailing dot and space are stripped (Windows limitation)
-        ("/folder/name./file.txt", "/folder/name/file.txt"),
-        ("/folder/name /file.txt", "/folder/name/file.txt"),
-    ],
-)
-def test_sanitize_path_for_filesystem(input_path, expected_output):
-    result = utils.sanitize_path_for_filesystem(input_path)
-    assert result == expected_output
-
-
-def test_get_local_dir_structure():
-    rana_root = "/root/Rana/"
-    project = "foo"
-    file_id = "baz/bar.txt"
-    file_stem = Path(file_id).stem
-    local_dir = utils.get_local_dir_structure(project, file_id)
-    expected_local_dir = rana_root + project + "/files/baz/" + file_stem
-    assert local_dir == expected_local_dir
-
-
-def test_get_local_file_path():
-    rana_root = "/root/Rana/"
-    project = "foo"
-    file_id = "baz/bar.txt"
-    file_name = Path(file_id).name
-    file_stem = Path(file_id).stem
-    local_path = utils.get_local_file_path(project, file_id)
-    expected_local_path = (
-        rana_root + project + "/files/baz/" + file_stem + "/" + file_name
-    )
-    assert local_path == expected_local_path
-
-
-def test_get_local_publication_dir_structure():
-    rana_root = "/root/Rana/"
-    project = "foo"
-    file_id = "bar.txt"
-    file_stem = Path(file_id).stem
-    publication_tree = ["publication", "map", "folder"]
-    local_dir = utils.get_local_publication_dir_structure(
-        project, file_id, publication_tree
-    )
-    publication_tree_path = "/".join(publication_tree)
-    expected_local_dir = (
-        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
-    )
-    assert local_dir == expected_local_dir
-
-
-def test_get_local_publication_file_path():
-    rana_root = "/root/Rana/"
-    project = "foo"
-    file_id = "bar.txt"
-    file_stem = Path(file_id).stem
-    publication_tree = ["publication", "map", "folder"]
-    local_path = utils.get_local_publication_file_path(
-        project, file_id, publication_tree
-    )
-    publication_tree_path = "/".join(publication_tree)
-    expected_local_dir = (
-        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
-    )
-    assert local_path == expected_local_dir + "/" + file_id
-
-
-@pytest.mark.parametrize(
-    "input_bytes, expected_output",
-    [
-        (0, "0 Byte"),
-        (1, "1.0 Bytes"),
-        (1023, "1023.0 Bytes"),
-        (1024, "1.0 KB"),
-        (2048, "2.0 KB"),
-        (1048576, "1.0 MB"),
-        (1073741824, "1.0 GB"),
-        (pow(1024, 4), "1.0 TB"),  # 1 Terabyte
-        (123456789, "117.74 MB"),
-    ],
-)
-def test_display_bytes(input_bytes, expected_output):
-    assert utils.display_bytes(input_bytes) == expected_output
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "/tenant/something/project",
-        "/tenant/something/project/somethingelse",
-        "/tenant/something/project/somethingelse/file.txt",
-    ],
-)
-def test_parse_url_no_query(url):
-    # ensure the correct elements are extracted from the path
-    path_params, query_params = utils.parse_url(url)
-    assert path_params == {"tenant_id": "tenant", "project_id": "project"}
-
-
-def test_parse_url_with_query():
-    # just ensure that query_parmas are returned, no need to test urllib
-    url = "/tenant/something/project?param1=value1"
-    path_params, query_params = utils.parse_url(url)
-    assert query_params == {"param1": ["value1"]}
+from rana_qgis_plugin.utils import generic as utils
+from rana_qgis_plugin.utils import local_paths
 
 
 @pytest.fixture
@@ -140,10 +27,85 @@ def results_folder_subpath(result_folder_info):
     ]
 
 
+@pytest.mark.parametrize(
+    "input_path,expected_output",
+    [
+        ("/path/to/valid_file.txt", "/path/to/valid_file.txt"),
+        (
+            '/path/with/most:<special>|cha"r"s/file?name*.txt',
+            "/path/with/most__special__cha_r_s/file_name_.txt",
+        ),
+        # backslash is invalid; on Linux it's treated as part of the filename
+        ("/folder/name\\file.txt", "/folder/name_file.txt"),
+        # rstrip: trailing dot and space are stripped (Windows limitation)
+        ("/folder/name./file.txt", "/folder/name/file.txt"),
+        ("/folder/name /file.txt", "/folder/name/file.txt"),
+    ],
+)
+def test_sanitize_path_for_filesystem(input_path, expected_output):
+    result = local_paths.sanitize_path_for_filesystem(input_path)
+    assert result == expected_output
+
+
+def test_get_local_dir_structure():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "baz/bar.txt"
+    file_stem = Path(file_id).stem
+    local_dir = local_paths.get_local_dir_structure(project, file_id)
+    expected_local_dir = rana_root + project + "/files/baz/" + file_stem
+    assert local_dir == expected_local_dir
+
+
+def test_get_local_file_path():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "baz/bar.txt"
+    file_name = Path(file_id).name
+    file_stem = Path(file_id).stem
+    local_path = local_paths.get_local_file_path(project, file_id)
+    expected_local_path = (
+        rana_root + project + "/files/baz/" + file_stem + "/" + file_name
+    )
+    assert local_path == expected_local_path
+
+
+def test_get_local_publication_dir_structure():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "bar.txt"
+    file_stem = Path(file_id).stem
+    publication_tree = ["publication", "map", "folder"]
+    local_dir = local_paths.get_local_publication_dir_structure(
+        project, file_id, publication_tree
+    )
+    publication_tree_path = "/".join(publication_tree)
+    expected_local_dir = (
+        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
+    )
+    assert local_dir == expected_local_dir
+
+
+def test_get_local_publication_file_path():
+    rana_root = "/root/Rana/"
+    project = "foo"
+    file_id = "bar.txt"
+    file_stem = Path(file_id).stem
+    publication_tree = ["publication", "map", "folder"]
+    local_path = local_paths.get_local_publication_file_path(
+        project, file_id, publication_tree
+    )
+    publication_tree_path = "/".join(publication_tree)
+    expected_local_dir = (
+        rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
+    )
+    assert local_path == expected_local_dir + "/" + file_id
+
+
 def test_get_threedi_schematisation_simulation_results_folder_no_local_data(
     tmp_path, result_folder_info, results_folder_subpath
 ):
-    results_folder = utils.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
         str(tmp_path), **result_folder_info
     )
     expected_folder = str(
@@ -162,7 +124,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_schema(
     workdir = Path(tmp_path)
     schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
     schemadir.mkdir(parents=True, exist_ok=True)
-    results_folder = utils.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
         str(workdir), **result_folder_info
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath))
@@ -187,7 +149,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_local_rev(
     }
     with open(config_path, "w") as f:
         json.dump(config, f)
-    results_folder = utils.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
         str(workdir), **result_folder_info
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath))
@@ -201,7 +163,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_colon(
     result_folder_info["schematisation_name"] = "foo:bar"
     schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
     schemadir.mkdir(parents=True, exist_ok=True)
-    results_folder = utils.get_threedi_schematisation_simulation_results_folder(
+    results_folder = local_paths.get_threedi_schematisation_simulation_results_folder(
         str(workdir), **result_folder_info
     )
     expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
@@ -210,7 +172,7 @@ def test_get_threedi_schematisation_simulation_results_folder_with_colon(
 
 def test_get_local_schematisation_revision_dir_not_found(tmp_path):
     """Returns None when schematisation is not found locally and create=False."""
-    result = utils.get_local_schematisation_revision_dir(
+    result = local_paths.get_local_schematisation_revision_dir(
         str(tmp_path), 999, "nonexistent", 1, create=False
     )
     assert result is None
@@ -218,15 +180,13 @@ def test_get_local_schematisation_revision_dir_not_found(tmp_path):
 
 def test_get_local_schematisation_revision_dir_no_working_dir():
     """Returns None when working_dir is empty."""
-    result = utils.get_local_schematisation_revision_dir(
+    result = local_paths.get_local_schematisation_revision_dir(
         "", 1, "foo", 1, create=False
     )
     assert result is None
 
 
-def test_get_local_schematisation_revision_dir_found(
-    tmp_path, result_folder_info
-):
+def test_get_local_schematisation_revision_dir_found(tmp_path, result_folder_info):
     """Returns the revision dir when it exists locally."""
     workdir = tmp_path
     schemadir = workdir / result_folder_info["schematisation_name"]
@@ -244,7 +204,7 @@ def test_get_local_schematisation_revision_dir_found(
     with open(config_path, "w") as f:
         json.dump(config, f)
 
-    result = utils.get_local_schematisation_revision_dir(
+    result = local_paths.get_local_schematisation_revision_dir(
         str(workdir),
         result_folder_info["schematisation_id"],
         result_folder_info["schematisation_name"],
@@ -254,11 +214,9 @@ def test_get_local_schematisation_revision_dir_found(
     assert result == revdir
 
 
-def test_get_local_schematisation_revision_dir_creates(
-    tmp_path, result_folder_info
-):
+def test_get_local_schematisation_revision_dir_creates(tmp_path, result_folder_info):
     """Creates the revision dir when create=True."""
-    result = utils.get_local_schematisation_revision_dir(
+    result = local_paths.get_local_schematisation_revision_dir(
         str(tmp_path),
         result_folder_info["schematisation_id"],
         result_folder_info["schematisation_name"],
@@ -297,9 +255,10 @@ def test_get_local_results_dir_from_meta_complete(tmp_path, result_folder_info):
             "name": result_folder_info["simulation_name"],
         },
     }
-    result = utils.get_local_results_dir_from_meta(meta, str(workdir))
+    result = local_paths.get_local_results_dir_from_meta(meta, str(workdir))
     expected = str(
-        revdir / "results"
+        revdir
+        / "results"
         / f"{result_folder_info['simulation_name']} ({result_folder_info['simulation_id']})"
     )
     assert result == expected
@@ -311,7 +270,7 @@ def test_get_local_results_dir_from_meta_incomplete():
         "schematisation": {"id": 1, "name": "foo"},
         "simulation": {},  # missing name and id
     }
-    result = utils.get_local_results_dir_from_meta(meta, "/tmp/fake")
+    result = local_paths.get_local_results_dir_from_meta(meta, "/tmp/fake")
     assert result is None
 
 
@@ -321,7 +280,7 @@ def test_get_local_results_dir_from_meta_no_local_revision(tmp_path):
         "schematisation": {"id": 999, "name": "nonexistent", "version": 1},
         "simulation": {"id": 42, "name": "sim"},
     }
-    result = utils.get_local_results_dir_from_meta(meta, str(tmp_path))
+    result = local_paths.get_local_results_dir_from_meta(meta, str(tmp_path))
     assert result is None
     publication_version = {
         "maps": [
