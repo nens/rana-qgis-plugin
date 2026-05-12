@@ -14,6 +14,7 @@ History
 - Optionally clear cache on close and remove downloaded results zip from cache (nens/rana#3975)
 - Remove results download folder on canceling download (nens/rana-qgis-plugin#323)
 - Split new schematisation from scratch and new schematisation from file functionality (nens/rana#4224)
+- Add open in browser button (nens/rana#3732)
 
 
 1.2.12 (2026-05-06)
