@@ -251,12 +251,8 @@ class FileView(QWidget):
             )
         )
         self.btn_show_revisions = btn_show_revisions
-        self.btn_show_revisions.setMinimumSize(
-            self.btn_show_revisions.sizeHint()
-        )
-        self.btn_show_revisions.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Fixed
-        )
+        self.btn_show_revisions.setMinimumSize(self.btn_show_revisions.sizeHint())
+        self.btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_show_revisions.hide()
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
@@ -286,15 +282,17 @@ class FileView(QWidget):
             button.setEnabled(enabled)
 
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
-        top_row_actions = sorted([
-            FileAction.OPEN_IN_QGIS,
-            FileAction.OPEN_WMS,
-            FileAction.DOWNLOAD_RESULTS,
-            FileAction.SAVE_REVISION,
-            FileAction.SAVE_VECTOR_STYLING,
-            FileAction.SAVE_RASTER_STYLING,
-            FileAction.UPLOAD_FILE,
-        ])
+        top_row_actions = sorted(
+            [
+                FileAction.OPEN_IN_QGIS,
+                FileAction.OPEN_WMS,
+                FileAction.DOWNLOAD_RESULTS,
+                FileAction.SAVE_REVISION,
+                FileAction.SAVE_VECTOR_STYLING,
+                FileAction.SAVE_RASTER_STYLING,
+                FileAction.UPLOAD_FILE,
+            ]
+        )
         btn_dict = {}
         for action in sorted(top_row_actions):
             btn = QPushButton(action.value)
@@ -316,9 +314,7 @@ class FileView(QWidget):
         btn.setIcon(QgsApplication.getThemeIcon("/mIconHamburgerMenu.svg"))
         btn.setToolTip("More actions")
         btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        btn.setStyleSheet(
-            "QToolButton::menu-indicator { image: none; }"
-        )
+        btn.setStyleSheet("QToolButton::menu-indicator { image: none; }")
         menu = QMenu()
         btn.setMenu(menu)
         menu.aboutToShow.connect(self._build_ellipsis_menu)
@@ -343,10 +339,12 @@ class FileView(QWidget):
         if is_schematisation:
             ellipsis_actions.add(FileAction.REMOVE_FROM_PROJECT)
         # Actions that depend on the descriptor / active actions
-        for action in (FileAction.OPEN_IN_FILE_BROWSER,
-                       FileAction.OPEN_IN_BROWSER,
-                       FileAction.COPY_WMS_URL,
-                       FileAction.EXPORT_GPKG):
+        for action in (
+            FileAction.OPEN_IN_FILE_BROWSER,
+            FileAction.OPEN_IN_BROWSER,
+            FileAction.COPY_WMS_URL,
+            FileAction.EXPORT_GPKG,
+        ):
             if action in self._active_actions:
                 ellipsis_actions.add(action)
 
@@ -370,13 +368,9 @@ class FileView(QWidget):
                     )
                 )
             elif action == FileAction.OPEN_IN_FILE_BROWSER:
-                menu_action.triggered.connect(
-                    lambda _: self.open_in_file_browser()
-                )
+                menu_action.triggered.connect(lambda _: self.open_in_file_browser())
             elif action == FileAction.OPEN_IN_BROWSER:
-                menu_action.triggered.connect(
-                    lambda _: self.open_in_browser()
-                )
+                menu_action.triggered.connect(lambda _: self.open_in_browser())
             elif action == FileAction.COPY_WMS_URL:
                 menu_action.triggered.connect(
                     lambda _: copy_wms_url_to_clipboard(
