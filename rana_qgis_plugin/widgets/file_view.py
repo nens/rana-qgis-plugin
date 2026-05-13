@@ -288,8 +288,7 @@ class FileView(QWidget):
                 FileAction.OPEN_WMS,
                 FileAction.DOWNLOAD_RESULTS,
                 FileAction.SAVE_REVISION,
-                FileAction.SAVE_VECTOR_STYLING,
-                FileAction.SAVE_RASTER_STYLING,
+                FileAction.SAVE_STYLING,
                 FileAction.UPLOAD_FILE,
             ]
         )

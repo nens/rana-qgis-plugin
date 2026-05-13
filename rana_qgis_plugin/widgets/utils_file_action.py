@@ -19,10 +19,6 @@ class FileAction(Enum):
     COPY_WMS_URL = "Copy WMS URL"
     # Actions related to viewing or modifying files on Rana
     SAVE_REVISION = "Upload to Rana"
-    # Saving vector and raster styling follows a different path and thus there are different actions
-    SAVE_VECTOR_STYLING = "Save vector style to Rana"
-    SAVE_RASTER_STYLING = "Save raster style to Rana"
-    # SAVE_STYLING action is not used atm, only defined for naming
     SAVE_STYLING = "Save style to Rana"
     UPLOAD_FILE = "Save Data to Rana"
     EXPORT_GPKG = "Export to GeoPackage"
@@ -64,12 +60,7 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     # Add save only for vector and raster files
     if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
-    # Add save raster style only for raster files
-    if data_type == "raster":
-        actions.append(FileAction.SAVE_RASTER_STYLING)
-    # Add save vector style only for vector files
-    if data_type == "vector":
-        actions.append(FileAction.SAVE_VECTOR_STYLING)
+        actions.append(FileAction.SAVE_STYLING)
     elif data_type == "threedi_schematisation":
         # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
@@ -125,8 +116,7 @@ class FileActionSignals(QObject):
     file_rename_requested = pyqtSignal(dict, str)
     open_in_qgis_requested = pyqtSignal(dict)
     upload_file_requested = pyqtSignal(dict)
-    save_vector_styling_requested = pyqtSignal(dict)
-    save_raster_styling_requested = pyqtSignal(dict)
+    save_styling_requested = pyqtSignal(dict)
     save_revision_requested = pyqtSignal(dict)
     open_wms_requested = pyqtSignal(dict)
     export_gpkg_requested = pyqtSignal(dict)
@@ -141,8 +131,7 @@ class FileActionSignals(QObject):
             FileAction.RENAME: self.file_rename_requested,
             FileAction.OPEN_IN_QGIS: self.open_in_qgis_requested,
             FileAction.UPLOAD_FILE: self.upload_file_requested,
-            FileAction.SAVE_VECTOR_STYLING: self.save_vector_styling_requested,
-            FileAction.SAVE_RASTER_STYLING: self.save_raster_styling_requested,
+            FileAction.SAVE_STYLING: self.save_styling_requested,
             FileAction.SAVE_REVISION: self.save_revision_requested,
             FileAction.OPEN_WMS: self.open_wms_requested,
             FileAction.EXPORT_GPKG: self.export_gpkg_requested,

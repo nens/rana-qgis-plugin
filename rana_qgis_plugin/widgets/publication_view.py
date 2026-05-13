@@ -139,8 +139,7 @@ class LayerItemData(MapItemData):
     @property
     def support_save(self) -> bool:
         return (
-            FileAction.SAVE_RASTER_STYLING in self.supported_actions
-            or FileAction.SAVE_VECTOR_STYLING in self.supported_actions
+            FileAction.SAVE_STYLING in self.supported_actions
         )
 
 

@@ -373,10 +373,7 @@ class RanaQgisPlugin:
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
             )
-            self.rana_browser.save_vector_styling_selected.connect(
-                self.loader.save_file_descriptor_style
-            )
-            self.rana_browser.save_raster_styling_selected.connect(
+            self.rana_browser.save_styling_selected.connect(
                 self.loader.save_file_descriptor_style
             )
             self.rana_browser.upload_new_file_selected.connect(
@@ -417,10 +414,7 @@ class RanaQgisPlugin:
                 self.loader.download_results
             )
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
-            self.rana_browser.save_vector_styling_selected.connect(
-                self.rana_browser.disable
-            )
-            self.rana_browser.save_raster_styling_selected.connect(
+            self.rana_browser.save_styling_selected.connect(
                 self.rana_browser.disable
             )
             self.loader.download_results_cancelled.connect(self.rana_browser.enable)
