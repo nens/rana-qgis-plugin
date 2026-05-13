@@ -53,6 +53,7 @@ from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
+    copy_wms_url_to_clipboard,
     get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
@@ -414,6 +415,8 @@ class FilesBrowser(QWidget):
 
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
+        if not index.isValid() or index.column() != 1:
+            return
         file_item = self.files_model.itemFromIndex(index)
 
         # Click on empty space (below all rows): show create folder menu
@@ -478,13 +481,19 @@ class FilesBrowser(QWidget):
                         self.project, selected_item
                     )
                 )
+            elif file_action == FileAction.COPY_WMS_URL:
+                action.triggered.connect(
+                    lambda _, item=selected_item: copy_wms_url_to_clipboard(
+                        item, self.communication
+                    )
+                )
             else:
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(selected_item)
                 )
             actions.append(action)
         for i, action in enumerate(actions):
-            if file_actions[i] == FileAction.DELETE:
+            if file_actions[i] in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
                 menu.addSeparator()
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))

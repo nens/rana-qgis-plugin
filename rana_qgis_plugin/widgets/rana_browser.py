@@ -298,6 +298,7 @@ class RanaBrowser(QWidget):
                 self.download_results_selected,
             ),
             (file_signals.save_revision_requested, self.save_revision_selected),
+            (file_signals.export_gpkg_requested, self.export_gpkg_selected),
         )
         for file_signal, rana_signal in context_menu_signals:
             file_signal.connect(
@@ -371,11 +372,6 @@ class RanaBrowser(QWidget):
         )
         self.file_view.btn_create_model.clicked.connect(
             lambda _: self.create_model_selected.emit(
-                self.project, self.file_view.selected_file
-            )
-        )
-        self.file_view.btn_export_gpkg.clicked.connect(
-            lambda _: self.export_gpkg_selected.emit(
                 self.project, self.file_view.selected_file
             )
         )
