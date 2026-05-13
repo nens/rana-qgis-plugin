@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
     QModelIndex,
     Qt,
@@ -23,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QStyle,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -142,6 +144,8 @@ class FilesBrowser(QWidget):
         )
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
+        # Ensure there is always empty space at the bottom for right-click context menu
+        self.files_tv.setViewportMargins(0, 0, 0, 30)
         self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
@@ -162,25 +166,55 @@ class FilesBrowser(QWidget):
         self.select_btn.setToolTip("Toggle file selection mode")
         self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
-        btn_create_folder = QPushButton("Create New Folder")
-        btn_create_folder.clicked.connect(self.show_create_folder_dialog)
-        self.btn_new_schematisation = QPushButton("New schematisation")
-        self.btn_import_schematisation = QPushButton("Import schematisation")
-        self.btn_upload_existing_schematisation = QPushButton(
-            "Upload existing schematisation"
+        self.btn_upload.setIcon(
+            QgsApplication.getThemeIcon("/mActionSharingExport.svg")
         )
+        self.btn_upload.setToolTip("Upload your files to Rana Web Platform")
+        # Add schematisation menu button
+        self.btn_add_schematisation = QToolButton()
+        self.btn_add_schematisation.setText("Upload schematisation")
+        self.btn_add_schematisation.setIcon(
+            QgsApplication.getThemeIcon("/mActionAdd.svg")
+        )
+        self.btn_add_schematisation.setToolTip(
+            "Add schematisation on Rana web platform"
+        )
+        self.btn_add_schematisation.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self.btn_add_schematisation.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        schematisation_menu = QMenu(self.btn_add_schematisation)
+        schematisation_menu.setToolTipsVisible(True)
+        self.action_new_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "New schematisation"
+        )
+        self.action_new_schematisation.setToolTip(
+            "Create a new schematisation on Rana web platform"
+        )
+        self.action_upload_existing_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionFileOpen.svg"),
+            "Upload existing schematisation",
+        )
+        self.action_upload_existing_schematisation.setToolTip(
+            "Upload your local schematisation to Rana web platform"
+        )
+        self.action_import_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionSharingImport.svg"),
+            "Import schematisation",
+        )
+        self.action_import_schematisation.setToolTip(
+            "Import a schematisation from the model databank into Rana Webplatform"
+        )
+        self.btn_add_schematisation.setMenu(schematisation_menu)
         # Page 0: Normal mode buttons
         normal_page = QWidget()
         btn_layout = QVBoxLayout(normal_page)
         row1 = QHBoxLayout()
         row1.addWidget(self.btn_upload)
-        row1.addWidget(btn_create_folder)
-        row2 = QHBoxLayout()
-        row2.addWidget(self.btn_new_schematisation)
-        row2.addWidget(self.btn_upload_existing_schematisation)
-        row2.addWidget(self.btn_import_schematisation)
+        row1.addWidget(self.btn_add_schematisation)
         btn_layout.addLayout(row1)
-        btn_layout.addLayout(row2)
         # Page 1: Select mode buttons
         select_page = QWidget()
         select_layout = QHBoxLayout(select_page)
@@ -207,9 +241,7 @@ class FilesBrowser(QWidget):
         layout.addWidget(self.btn_stack)
         self.setLayout(layout)
 
-        self.btn_new_schematisation.setVisible(has_3di_authcfg())
-        self.btn_import_schematisation.setVisible(has_3di_authcfg())
-        self.btn_upload_existing_schematisation.setVisible(has_3di_authcfg())
+        self.btn_add_schematisation.setVisible(has_3di_authcfg())
         # Connect checkbox state changes to update batch button states
         self.files_model.itemChanged.connect(self._update_batch_buttons)
 
@@ -372,14 +404,41 @@ class FilesBrowser(QWidget):
             self.file_selected.emit(self.selected_item)
         self.communication.clear_message_bar()
 
+    def _show_empty_space_menu(self, pos):
+        """Show a context menu with only the 'Create new folder' action."""
+        menu = QMenu(self)
+        action = QAction("Create new folder", self)
+        action.setIcon(QgsApplication.getThemeIcon("/mActionNewFolder.svg"))
+        action.triggered.connect(self.show_create_folder_dialog)
+        menu.addAction(action)
+        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
-        if not index.isValid() or index.column() != 1:
-            return
         file_item = self.files_model.itemFromIndex(index)
-        if not file_item:
+
+        # Click on empty space (below all rows): show create folder menu
+        if not index.isValid() or not file_item:
+            self._show_empty_space_menu(pos)
             return
+
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
+
+        # Click on an empty column of a folder row (cols 2-4 have no item data
+        # for folders): show create folder menu
+        if not selected_item:
+            self._show_empty_space_menu(pos)
+            return
+
+        # Click on a file row in a non-name column: no context menu
+        if index.column() != 1 and selected_item["type"] != "directory":
+            return
+
+        # Click on an item: show item menu
+        self._show_item_menu(pos, index, selected_item)
+
+    def _show_item_menu(self, pos, index, selected_item):
+        """Show a context menu with actions for the selected file/folder."""
         # For scenarios, fetch the descriptor once and reuse it
         descriptor = None
         if selected_item.get("data_type") == "scenario":
