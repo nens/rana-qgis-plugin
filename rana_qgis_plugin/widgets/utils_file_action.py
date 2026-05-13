@@ -108,6 +108,7 @@ _ICON_PATHS = {
     FileAction.RENAME: "/mActionChangeLabelProperties.svg",
     FileAction.DELETE: "/mActionDeleteSelected.svg",
     FileAction.REMOVE_FROM_PROJECT: "/mActionDeleteSelected.svg",
+    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg"
 }
 
 
