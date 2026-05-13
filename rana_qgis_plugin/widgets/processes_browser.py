@@ -10,13 +10,36 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QProgressBar,
     QSizePolicy,
     QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
+
+from rana_qgis_plugin.communication import ColoredProgressBar
+from rana_qgis_plugin.constant import PROGRESS_COLOR_FAILED
+
+
+class ProcessProgressBar(ColoredProgressBar):
+    """Progress bar that colors based on job status: blue=running/cancelling, green=finished, red=crashed."""
+
+    COLOR_FAILED = PROGRESS_COLOR_FAILED
+
+    def set_status(self, status):
+        if status == "completed":
+            color = self.COLOR_FINISHED
+        elif status in ["scheduled", "pending", "paused", "cancelling", "running"]:
+            color = self.COLOR_RUNNING
+        else:
+            color = self.COLOR_FAILED
+            self.setStyleSheet(
+                f"QProgressBar::chunk {{ background-color: {color}; }}"
+                f"QProgressBar {{ background-color: {color}; }}"
+            )
+            return
+        self.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
+
 
 from rana_qgis_plugin.utils.api import get_process_id_for_tag, get_tenant_id
 from rana_qgis_plugin.utils.settings import base_url
@@ -142,7 +165,7 @@ class ProcessesBrowser(QWidget):
         status_item = QStandardItem()
         status_item.setData(job.status, Qt.ItemDataRole.UserRole)
         # Create the progress bar and cancel button
-        progress_bar = QProgressBar()
+        progress_bar = ProcessProgressBar()
         progress_bar.setFixedWidth(160)
         self.update_pb_progress(progress_bar, job)
         progress_bar.setTextVisible(True)
@@ -198,6 +221,7 @@ class ProcessesBrowser(QWidget):
         progress_bar.setValue(job.progress)
         progress_bar.setMaximum(job.max_progress)
         progress_bar.setFormat(job.progress_str())
+        progress_bar.set_status(job.status)
 
     def update_job_link(self, link_label, job):
         if job.process_id:
