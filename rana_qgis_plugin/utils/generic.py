@@ -178,6 +178,40 @@ def find_publication_map_layer_from_tree(publication_version: dict, tree: list[s
     return None
 
 
+def has_layers_loaded_from_dir(directory: str) -> bool:
+    """Check if any QGIS layers are loaded from files inside the given directory.
+
+    This is used to detect whether a schematisation directory can be safely
+    overwritten. On Windows, open files are locked by the OS, so attempting
+    to delete them will fail with a PermissionError.
+
+    Args:
+        directory: Path to the directory to check.
+
+    Returns:
+        True if at least one layer sources a file inside the directory.
+    """
+    project = QgsProject.instance()
+    normalized_dir = str(Path(directory).resolve())
+
+    for layer in project.mapLayers().values():
+        if not hasattr(layer, "source"):
+            continue
+        source = layer.source()
+        # QGIS layer sources may include "|layername=..." suffixes; strip them
+        source_path = source.split("|")[0]
+        try:
+            normalized_source = str(Path(source_path).resolve())
+        except (OSError, ValueError):
+            continue
+        if (
+            normalized_source.startswith(normalized_dir + os.sep)
+            or normalized_source == normalized_dir
+        ):
+            return True
+    return False
+
+
 def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
     """Get vector layers in edit mode with unsaved changes for a specific file.
 
