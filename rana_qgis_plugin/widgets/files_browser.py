@@ -456,10 +456,13 @@ class FilesBrowser(QWidget):
                 a for a in file_actions if a != FileAction.OPEN_IN_FILE_BROWSER
             ]
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+        data_type = selected_item.get("data_type")
         actions = []
         # create and connect actions
         for file_action in file_actions:
-            action = QAction(file_action.value, self)
+            action = QAction(file_action.icon, file_action.value, self)
+            action.setToolTip(file_action.get_tooltip(data_type))
             action_signal = self.file_signals.get_signal(file_action)
             if file_action == FileAction.RENAME:
                 action.triggered.connect(

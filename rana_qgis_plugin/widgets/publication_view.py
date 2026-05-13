@@ -5,6 +5,7 @@ from functools import cached_property
 from typing import Optional
 
 import mistune
+from qgis.core import QgsApplication
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     Qt,
@@ -138,10 +139,7 @@ class LayerItemData(MapItemData):
 
     @property
     def support_save(self) -> bool:
-        return (
-            FileAction.SAVE_RASTER_STYLING in self.supported_actions
-            or FileAction.SAVE_VECTOR_STYLING in self.supported_actions
-        )
+        return FileAction.SAVE_STYLING in self.supported_actions
 
 
 class MapCollector:
@@ -285,9 +283,13 @@ class PublicationView(QWidget):
         scroll_area.setAlignment(Qt.AlignTop)
 
         button_layout = QHBoxLayout()
-        btn_open = QPushButton("Open all maps in QGIS")
+        btn_open = QPushButton("Open all maps")
+        btn_open.setIcon(QgsApplication.getThemeIcon("/mActionSharingImport.svg"))
+        btn_open.setToolTip("Download all maps and layers and open them in QGIS")
         btn_open.clicked.connect(lambda _: self.open_maps(self.root_item))
-        btn_rana = QPushButton("Open publication in Rana (web)")
+        btn_rana = QPushButton("Open publication")
+        btn_rana.setIcon(QgsApplication.getThemeIcon("/mActionLink.svg"))
+        btn_rana.setToolTip("Open this publication in the Rana Web Platform")
         btn_rana.clicked.connect(lambda: self.open_in_rana())
         button_layout.addWidget(btn_open)
         button_layout.addWidget(btn_rana)
@@ -487,19 +489,53 @@ class PublicationView(QWidget):
     def get_button_container(
         self,
         map_item: MapItemData,
+        is_map: bool = False,
     ) -> QWidget:
         btn_container = QWidget()
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         if map_item.support_open:
-            open_btn = QPushButton(FileAction.OPEN_IN_QGIS.value)
+            if is_map:
+                open_label = "Open map"
+                open_tooltip = "Open this map in the QGIS canvas"
+                open_icon = QgsApplication.getThemeIcon("/mLayoutItemMap.svg")
+            elif isinstance(map_item, FolderItemData):
+                open_label = FileAction.OPEN_IN_QGIS.value
+                open_tooltip = "Open layers in this group in the QGIS canvas"
+                open_icon = FileAction.OPEN_IN_QGIS.icon
+            else:
+                open_label = FileAction.OPEN_IN_QGIS.value
+                open_tooltip = "Open this layer in the QGIS canvas"
+                open_icon = FileAction.OPEN_IN_QGIS.icon
+            open_btn = QPushButton(open_label)
+            open_btn.setIcon(open_icon)
+            open_btn.setToolTip(open_tooltip)
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            if self._open_btn_width is None:
+                self._open_btn_width = open_btn.sizeHint().width()
+            open_btn.setFixedWidth(self._open_btn_width)
             open_btn.clicked.connect(lambda: self.open_maps(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
-            save_btn = QPushButton(FileAction.SAVE_STYLING.value)
+            if is_map:
+                save_label = "Save map styles"
+                save_tooltip = "Save all local styles for this map to Rana Web Platform"
+            elif isinstance(map_item, FolderItemData):
+                save_label = FileAction.SAVE_STYLING.value
+                save_tooltip = (
+                    "Save local style for layers in this group to Rana Web Platform"
+                )
+            else:
+                save_label = FileAction.SAVE_STYLING.value
+                save_tooltip = "Save local style for this layer to Rana Web Platform"
+            save_btn = QPushButton(save_label)
+            save_btn.setIcon(FileAction.SAVE_STYLING.icon)
+            save_btn.setToolTip(save_tooltip)
             save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            if self._save_btn_width is None:
+                self._save_btn_width = save_btn.sizeHint().width()
+            save_btn.setFixedWidth(self._save_btn_width)
             save_btn.clicked.connect(lambda: self.save_styles(map_item))
             layout.addWidget(save_btn)
         btn_container.setLayout(layout)
@@ -576,6 +612,8 @@ class PublicationView(QWidget):
         self.communication.progress_bar("Loading maps...", clear_msg_bar=True)
         self.maps_model.clear()
         self.maps_model.setHorizontalHeaderLabels(["Name", "Type", ""])
+        self._open_btn_width = None
+        self._save_btn_width = None
         map_collector = MapCollector(self.file_map)
         all_maps = [
             FolderItemData(
@@ -606,7 +644,7 @@ class PublicationView(QWidget):
             name_item.setFont(bold_font)
             self.maps_model.appendRow([name_item, QStandardItem(), QStandardItem()])
             name_item.setData(map_item, Qt.UserRole)
-            btn_container = self.get_button_container(map_item)
+            btn_container = self.get_button_container(map_item, is_map=True)
             self.add_buttons_to_row(btn_container)
             self.add_map_layers(name_item, map_item.sub_items)
             map_index = self.maps_model.indexFromItem(name_item)

@@ -19,6 +19,7 @@ History
 - Fix error on requesting context menu for files view on non-filename column
 - Add "copy wms url" functionality to files (context menu) and file view (button) (nens/rana#4165)
 - Add ellipsis button to file view and reorganize buttons (nens/rana#4165)
+- Add icons and tooltips to most buttons (nens/rana#4166)
 
 
 1.2.12 (2026-05-06)

@@ -245,6 +245,8 @@ class FileView(QWidget):
         self.btn_stack.addWidget(self.btn_start_simulation)
         self.btn_stack.addWidget(self.btn_create_model)
         btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
+        btn_show_revisions.setIcon(FileAction.VIEW_REVISIONS.icon)
+        btn_show_revisions.setToolTip(FileAction.VIEW_REVISIONS.get_tooltip())
         btn_show_revisions.clicked.connect(
             lambda _: self.file_signals.view_all_revisions_requested.emit(
                 self.project, self.selected_file
@@ -288,14 +290,14 @@ class FileView(QWidget):
                 FileAction.OPEN_WMS,
                 FileAction.DOWNLOAD_RESULTS,
                 FileAction.SAVE_REVISION,
-                FileAction.SAVE_VECTOR_STYLING,
-                FileAction.SAVE_RASTER_STYLING,
+                FileAction.SAVE_STYLING,
                 FileAction.UPLOAD_FILE,
             ]
         )
         btn_dict = {}
         for action in sorted(top_row_actions):
             btn = QPushButton(action.value)
+            btn.setIcon(action.icon)
             btn.setMinimumSize(btn.sizeHint())
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             action_signal = self.file_signals.get_signal(action)
@@ -325,6 +327,7 @@ class FileView(QWidget):
         """Populate the ellipsis menu based on the currently selected file."""
         menu = self.btn_ellipsis.menu()
         menu.clear()
+        menu.setToolTipsVisible(True)
         if not self.selected_file:
             return
         data_type = self.selected_file.get("data_type")
@@ -349,8 +352,10 @@ class FileView(QWidget):
                 ellipsis_actions.add(action)
 
         # Add actions in FileAction enum order
+        data_type = self.selected_file.get("data_type") if self.selected_file else None
         for action in sorted(ellipsis_actions):
-            menu_action = QAction(action.value, menu)
+            menu_action = QAction(action.icon, action.value, menu)
+            menu_action.setToolTip(action.get_tooltip(data_type))
             if action == FileAction.RENAME:
                 menu_action.triggered.connect(
                     lambda _: self.edit_file_name(self.selected_file)
@@ -426,11 +431,13 @@ class FileView(QWidget):
                 a for a in active_actions if a != FileAction.OPEN_IN_FILE_BROWSER
             ]
         self._active_actions = active_actions
+        data_type = selected_file.get("data_type")
         for action in FileAction:
             btn = self.file_action_btn_dict.get(action)
             if not btn:
                 continue
             if action in active_actions:
+                btn.setToolTip(action.get_tooltip(data_type))
                 btn.show()
             else:
                 btn.hide()
