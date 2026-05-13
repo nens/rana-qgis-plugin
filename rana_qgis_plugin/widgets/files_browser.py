@@ -188,24 +188,24 @@ class FilesBrowser(QWidget):
         schematisation_menu = QMenu(self.btn_add_schematisation)
         schematisation_menu.setToolTipsVisible(True)
         self.action_new_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "New schematisation"
+            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "From scratch"
         )
         self.action_new_schematisation.setToolTip(
             "Create a new schematisation on Rana web platform"
         )
         self.action_upload_existing_schematisation = schematisation_menu.addAction(
             QgsApplication.getThemeIcon("/mActionFileOpen.svg"),
-            "Upload existing schematisation",
+            "Upload existing",
         )
         self.action_upload_existing_schematisation.setToolTip(
             "Upload your local schematisation to Rana web platform"
         )
         self.action_import_schematisation = schematisation_menu.addAction(
             QgsApplication.getThemeIcon("/mActionSharingImport.svg"),
-            "Import schematisation",
+            "Import from HCC",
         )
         self.action_import_schematisation.setToolTip(
-            "Import a schematisation from the model databank into Rana Webplatform"
+            "Import a schematisation from the model databank into Rana web platform"
         )
         self.btn_add_schematisation.setMenu(schematisation_menu)
         # Page 0: Normal mode buttons
