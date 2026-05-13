@@ -1,5 +1,7 @@
 import os
+import uuid
 
+import pytest
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QImage
@@ -16,21 +18,20 @@ from e2e.test_utils import (
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
+from rana_qgis_plugin.utils.api import (
+    create_project,
+    delete_project,
+    delete_tenant_project_file,
+)
 from rana_qgis_plugin.utils.generic import get_local_file_path
 
 
-def _open_project(plugin, qtbot):
+def _open_project(plugin, qtbot, project_name):
     """Open the Rana browser and select the first project."""
-    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-    # Wait until projects list is populated
-    qtbot.waitUntil(
-        lambda: plugin.rana_browser.projects_browser.projects_tv.model().rowCount() > 0,
-        timeout=30000,
-    )
+    row = _find_project_row(plugin.rana_browser.projects_browser, project_name)
     click_tree_item(
         plugin.rana_browser.projects_browser.projects_tv,
-        plugin.rana_browser.projects_browser.projects_tv.model().index(0, 0),
+        plugin.rana_browser.projects_browser.projects_tv.model().index(row, 0),
         qtbot,
     )
     # Wait until RanaBrowser switched to project widget
@@ -67,14 +68,62 @@ def _find_file_row(files_browser, filename):
     return None
 
 
+def _find_project_row(project_browser, project_name):
+    """Return the row index of a project by name, or None if not found."""
+    for row in range(project_browser.projects_model.rowCount()):
+        name_item = project_browser.projects_model.item(row, 0)
+        if name_item:
+            project = name_item.text()
+            if project == project_name:
+                return row
+    return None
+
+
+@pytest.fixture(scope="function")
+def login(plugin, qtbot):
+    """Open the Rana browser and select the first project."""
+    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
+    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+
+
+@pytest.fixture(scope="function")
+def rana_project(plugin, login):
+    name = "test_project_" + str(uuid.uuid4())
+    result = create_project({"code": name[:32], "name": name[:64]})
+    plugin.rana_browser.refresh()
+    print(result)
+    yield result["name"]
+    delete_project(result["id"])
+
+
 def test_smoke(plugin, qtbot, request):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-    _open_project(plugin, qtbot)
-    assert plugin.rana_browser.projects_browser.projects_tv.model().rowCount() == 1
+
+    assert not plugin.dock_widget
+    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
+    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    QTest.qWait(1000)
+    assert plugin.dock_widget.isVisible()
 
 
-def test_login_logout(plugin):
+def test_create_project(plugin, login, qtbot, request, rana_project):
+    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+
+    # Wait until projects list is populated
+    qtbot.waitUntil(
+        lambda: plugin.rana_browser.projects_browser.projects_tv.model().rowCount() > 0,
+        timeout=30000,
+    )
+    assert (
+        _find_project_row(plugin.rana_browser.projects_browser, rana_project)
+        is not None
+    )
+
+
+def test_login_logout(plugin, request):
     """Test login via toolbar click, then logout, then login again."""
+    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+
     # Step 1: Click toolbar button to trigger login
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
     QTest.mouseClick(rana_tool_button, Qt.LeftButton)
@@ -129,9 +178,9 @@ def test_login_logout(plugin):
     assert plugin.dock_widget.isVisible()
 
 
-def test_upload(plugin, qtbot, request, clean_upload_file):
+def test_upload(plugin, qtbot, request, rana_project):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-    _open_project(plugin, qtbot)
+    _open_project(plugin, qtbot, rana_project)
 
     # Check we don't start in file detail view
     assert plugin.rana_browser.rana_files.currentIndex() != 1
@@ -175,7 +224,7 @@ def test_upload(plugin, qtbot, request, clean_upload_file):
     # Check whether the map layer was added to the canvas
     assert any("test" in layer.name() for layer in plugin.iface.mapCanvas().layers())
     assert (
-        "/root/Rana/plugin-test/files/upload/upload.gpkg"
+        f"/root/Rana/{rana_project[:31]}/files/upload/upload.gpkg"
         in plugin.iface.mapCanvas().layers()[0].dataProvider().dataSourceUri()
     )
     expected_image = QImage(
@@ -193,10 +242,10 @@ def test_upload(plugin, qtbot, request, clean_upload_file):
     )
 
 
-def test_select_download_and_delete(plugin, qtbot, request, clean_upload_file):
+def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     """Upload a file, then use select mode to download and delete it."""
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-    _open_project(plugin, qtbot)
+    _open_project(plugin, qtbot, rana_project)
 
     def handle_dialog_load_layer(qtbot, modal):
         QTest.qWait(1000)
