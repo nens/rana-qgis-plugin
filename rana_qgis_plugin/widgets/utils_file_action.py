@@ -1,7 +1,9 @@
 from enum import Enum
 from typing import List, Optional
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QObject, pyqtSignal
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
@@ -11,19 +13,19 @@ from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_des
 
 class FileAction(Enum):
     # Actions related to accessing data
-    OPEN_IN_QGIS = "Open in QGIS"
+    OPEN_IN_QGIS = "Open"
     OPEN_WMS = "Open WMS in QGIS"
-    DOWNLOAD_RESULTS = "Download Results"
-    OPEN_IN_FILE_BROWSER = "Open in file browser"
-    OPEN_IN_BROWSER = "Open in browser"
-    COPY_WMS_URL = "Copy WMS URL"
+    DOWNLOAD_RESULTS = "Download"
+    OPEN_IN_FILE_BROWSER = "Open in local folder"
+    OPEN_IN_BROWSER = "Open in web viewer"
+    COPY_WMS_URL = "Copy WMS url"
     # Actions related to viewing or modifying files on Rana
-    SAVE_REVISION = "Upload to Rana"
-    SAVE_STYLING = "Save style to Rana"
-    UPLOAD_FILE = "Save Data to Rana"
-    EXPORT_GPKG = "Export to GeoPackage"
-    VIEW_REVISIONS = "View all Revisions"
-    HISTORY = "History"
+    SAVE_REVISION = "Save new revision"
+    SAVE_STYLING = "Save style"
+    UPLOAD_FILE = "Save data"
+    EXPORT_GPKG = "Export to gpkg"
+    VIEW_REVISIONS = "View all revisions"
+    HISTORY = "File History"
     RENAME = "Rename"
     DELETE = "Delete"
     REMOVE_FROM_PROJECT = "Remove from Project"
@@ -35,6 +37,78 @@ class FileAction(Enum):
                 other.name
             )
         return NotImplemented
+
+    def get_tooltip(self, data_type: str = None) -> str:
+        """Return the tooltip for this action.
+
+        Args:
+            data_type: The file's data type, used for context-dependent tooltips.
+        """
+        if self == FileAction.OPEN_IN_QGIS:
+            if data_type == "threedi_schematisation":
+                return (
+                    "Download schematisation and open in Schematisation Editor"
+                )
+            return f"Download {data_type} file and open in QGIS"
+        if self == FileAction.OPEN_IN_FILE_BROWSER:
+            if data_type == "scenario":
+                return "Open results folder in file browser"
+            elif data_type == "threedi_schematisation":
+                return "Open revision folder in file browser"
+            return "Open folder containing this file"
+        return _TOOLTIPS.get(self, "")
+
+    @property
+    def icon_path(self) -> str:
+        """Return the QGIS theme icon path for this action."""
+        return _ICON_PATHS.get(self, "")
+
+    @property
+    def icon(self) -> QIcon:
+        """Return the QIcon for this action."""
+        path = self.icon_path
+        if path:
+            return QgsApplication.getThemeIcon(path)
+        return QIcon()
+
+
+_TOOLTIPS = {
+    FileAction.DOWNLOAD_RESULTS: (
+        "Download results and open in Rana Results Analysis"
+    ),
+    FileAction.COPY_WMS_URL: "Copy WMS URL to clipboard",
+    FileAction.SAVE_REVISION: (
+        "Save your local changes as a new revision to this schematisation"
+    ),
+    FileAction.SAVE_STYLING: "Save your local style to Rana web Platform",
+    FileAction.UPLOAD_FILE: (
+        "Save your local data changes to Rana web Platform"
+    ),
+    FileAction.EXPORT_GPKG: "Export to GeoPackage for use in publication",
+    FileAction.VIEW_REVISIONS: (
+        "View all revisions that are part of this schematisation"
+    ),
+    FileAction.HISTORY: "View file history",
+    FileAction.OPEN_IN_BROWSER: "Open schematisation in Rana HCC",
+}
+
+_ICON_PATHS = {
+    FileAction.OPEN_IN_QGIS: "/mActionSharingImport.svg",
+    FileAction.OPEN_WMS: "/mActionOpenUrl.svg",
+    FileAction.DOWNLOAD_RESULTS: "/mActionSharingImport.svg",
+    FileAction.OPEN_IN_FILE_BROWSER: "/mActionFileOpen.svg",
+    FileAction.OPEN_IN_BROWSER: "/mIconGlobe.svg",
+    FileAction.COPY_WMS_URL: "/mActionEditCopy.svg",
+    FileAction.SAVE_REVISION: "/mActionSharingExport.svg",
+    FileAction.SAVE_STYLING: "/mActionSymbology.svg",
+    FileAction.UPLOAD_FILE: "/mActionSharingExport.svg",
+    FileAction.EXPORT_GPKG: "/mActionEditCopy.svg",
+    FileAction.VIEW_REVISIONS: "/mActionHistory.svg",
+    FileAction.HISTORY: "/mActionHistory.svg",
+    FileAction.RENAME: "/mActionRename.svg",
+    FileAction.DELETE: "/mActionDeleteSelected.svg",
+    FileAction.REMOVE_FROM_PROJECT: "/mActionRemoveLayer.svg",
+}
 
 
 def get_file_actions(selected_item: dict, descriptor: dict = None) -> List[FileAction]:
