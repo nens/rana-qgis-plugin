@@ -139,9 +139,7 @@ class LayerItemData(MapItemData):
 
     @property
     def support_save(self) -> bool:
-        return (
-            FileAction.SAVE_STYLING in self.supported_actions
-        )
+        return FileAction.SAVE_STYLING in self.supported_actions
 
 
 class MapCollector:
@@ -286,18 +284,12 @@ class PublicationView(QWidget):
 
         button_layout = QHBoxLayout()
         btn_open = QPushButton("Open all maps")
-        btn_open.setIcon(
-            QgsApplication.getThemeIcon("/mActionSharingImport.svg")
-        )
-        btn_open.setToolTip(
-            "Download all maps and layers and open them in QGIS"
-        )
+        btn_open.setIcon(QgsApplication.getThemeIcon("/mActionSharingImport.svg"))
+        btn_open.setToolTip("Download all maps and layers and open them in QGIS")
         btn_open.clicked.connect(lambda _: self.open_maps(self.root_item))
         btn_rana = QPushButton("Open publication")
         btn_rana.setIcon(QgsApplication.getThemeIcon("/mActionLink.svg"))
-        btn_rana.setToolTip(
-            "Open this publication in the Rana Web Platform"
-        )
+        btn_rana.setToolTip("Open this publication in the Rana Web Platform")
         btn_rana.clicked.connect(lambda: self.open_in_rana())
         button_layout.addWidget(btn_open)
         button_layout.addWidget(btn_rana)
@@ -528,20 +520,15 @@ class PublicationView(QWidget):
         if map_item.support_save:
             if is_map:
                 save_label = "Save map styles"
-                save_tooltip = (
-                    "Save all local styles for this map to Rana Web Platform"
-                )
+                save_tooltip = "Save all local styles for this map to Rana Web Platform"
             elif isinstance(map_item, FolderItemData):
                 save_label = FileAction.SAVE_STYLING.value
                 save_tooltip = (
-                    "Save local style for layers in this group"
-                    " to Rana Web Platform"
+                    "Save local style for layers in this group to Rana Web Platform"
                 )
             else:
                 save_label = FileAction.SAVE_STYLING.value
-                save_tooltip = (
-                    "Save local style for this layer to Rana Web Platform"
-                )
+                save_tooltip = "Save local style for this layer to Rana Web Platform"
             save_btn = QPushButton(save_label)
             save_btn.setIcon(FileAction.SAVE_STYLING.icon)
             save_btn.setToolTip(save_tooltip)

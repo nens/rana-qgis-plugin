@@ -414,9 +414,7 @@ class RanaQgisPlugin:
                 self.loader.download_results
             )
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
-            self.rana_browser.save_styling_selected.connect(
-                self.rana_browser.disable
-            )
+            self.rana_browser.save_styling_selected.connect(self.rana_browser.disable)
             self.loader.download_results_cancelled.connect(self.rana_browser.enable)
             self.rana_browser.download_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.start_simulation_selected.connect(
