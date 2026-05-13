@@ -30,7 +30,8 @@ from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.processing.providers import RanaQgisPluginProvider
 from rana_qgis_plugin.utils.api import get_user_info, get_user_tenants
-from rana_qgis_plugin.utils.generic import cleanup_folder, parse_url
+from rana_qgis_plugin.utils.generic import parse_url
+from rana_qgis_plugin.utils.local_paths import cleanup_folder
 from rana_qgis_plugin.utils.qgis import get_plugin_instance
 from rana_qgis_plugin.utils.settings import (
     cleanup_cache_on_close,
@@ -372,10 +373,7 @@ class RanaQgisPlugin:
             self.rana_browser.upload_file_selected.connect(
                 self.loader.upload_file_to_rana
             )
-            self.rana_browser.save_vector_styling_selected.connect(
-                self.loader.save_file_descriptor_style
-            )
-            self.rana_browser.save_raster_styling_selected.connect(
+            self.rana_browser.save_styling_selected.connect(
                 self.loader.save_file_descriptor_style
             )
             self.rana_browser.upload_new_file_selected.connect(
@@ -389,6 +387,12 @@ class RanaQgisPlugin:
             )
             self.rana_browser.upload_new_schematisation_selected.connect(
                 self.loader.upload_new_schematisation_to_rana
+            )
+            self.rana_browser.upload_existing_schematisation_selected.connect(
+                self.rana_browser.disable
+            )
+            self.rana_browser.upload_existing_schematisation_selected.connect(
+                self.loader.upload_existing_schematisation_to_rana
             )
             self.rana_browser.import_schematisation_selected.connect(
                 self.rana_browser.disable
@@ -410,12 +414,7 @@ class RanaQgisPlugin:
                 self.loader.download_results
             )
             self.rana_browser.upload_file_selected.connect(self.rana_browser.disable)
-            self.rana_browser.save_vector_styling_selected.connect(
-                self.rana_browser.disable
-            )
-            self.rana_browser.save_raster_styling_selected.connect(
-                self.rana_browser.disable
-            )
+            self.rana_browser.save_styling_selected.connect(self.rana_browser.disable)
             self.loader.download_results_cancelled.connect(self.rana_browser.enable)
             self.rana_browser.download_file_selected.connect(self.rana_browser.disable)
             self.rana_browser.start_simulation_selected.connect(

@@ -112,14 +112,9 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setWordWrap(True)
         self.processes_tv.setUniformRowHeights(False)
         self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.processes_tv.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.processes_tv.header().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.processes_tv.header().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.processes_tv.header().setSectionResizeMode(3, QHeaderView.Fixed)
-        self.processes_tv.setColumnWidth(1, 50)
-        self.processes_tv.setColumnWidth(2, 150)
-        self.processes_tv.setColumnWidth(3, 190)
+        self.processes_tv.header().setSectionResizeMode(QHeaderView.Interactive)
         self.processes_tv.header().setStretchLastSection(False)
+        self.processes_tv.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
 
     def add_item(self, job):
@@ -127,6 +122,7 @@ class ProcessesBrowser(QWidget):
         # Create QLabel to display a link as a typical html link
         name_link = QLabel("")
         self.update_job_link(name_link, job)
+        name_link.setToolTip(job.name)
         who_item = QStandardItem()
         who_item.setData(
             [
@@ -177,7 +173,8 @@ class ProcessesBrowser(QWidget):
             self.row_map[id] += 1
         self.row_map[job.id] = 0
         self.processes_tv.setIndexWidget(name_item.index(), name_link)
-        self.processes_tv.resizeColumnToContents(0)
+        for col in range(self.processes_model.columnCount()):
+            self.processes_tv.resizeColumnToContents(col)
 
     def on_simulation_cancel_requested(self, job):
         # store cancellation related data on the fly to prevent a lot of bookkeeping
@@ -216,6 +213,8 @@ class ProcessesBrowser(QWidget):
     def add_items(self, job_list: list[dict]):
         for job in reversed(job_list):
             self.add_item(JobData.from_job_dict(job))
+        for col in range(self.processes_model.columnCount()):
+            self.processes_tv.resizeColumnToContents(col)
 
     def update_job_state(self, job_dict: dict):
         self.update_state_for_job(JobData.from_job_dict(job_dict))

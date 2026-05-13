@@ -43,6 +43,7 @@ from rana_qgis_plugin.simulation.utils import (
     resolve_schematisation_download_dir,
     resolve_schematisation_download_dir_auto,
 )
+from rana_qgis_plugin.simulation.utils_ui import get_filepath
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils.api import (
     ConflictError,
@@ -72,11 +73,12 @@ from rana_qgis_plugin.utils.data_models import (
 from rana_qgis_plugin.utils.generic import (
     find_publication_map_layer_from_tree,
     get_editable_layers_for_file,
-    get_local_dir_structure,
     get_threedi_api,
     get_threedi_organisations,
+    has_layers_loaded_from_dir,
     save_layer_changes,
 )
+from rana_qgis_plugin.utils.local_paths import get_local_dir_structure
 from rana_qgis_plugin.utils.qgis import (
     convert_vectorfile_to_geopackage,
     is_loaded_in_schematisation_editor,
@@ -86,7 +88,11 @@ from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.time import convert_timestamp_str_to_local_time
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
-from rana_qgis_plugin.widgets.schematisation_new_wizard import NewSchematisationWizard
+from rana_qgis_plugin.widgets.schematisation_new_wizard import (
+    NewSchematisationWizard,
+    UploadExistingSchematisationWizard,
+    get_paths_from_geopackage,
+)
 from rana_qgis_plugin.workers.avatars import (
     AvatarWorker,
 )
@@ -306,6 +312,7 @@ class Loader(QObject):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
             )
+            self.file_download_failed.emit("")
             return
 
         # Resolve directory (dialog on main thread)
@@ -319,9 +326,19 @@ class Loader(QObject):
         )
         if result is None:
             self.communication.clear_message_bar()
+            self.file_download_failed.emit("")
             return
 
         schematisation_db_dir, local_schematisation, wip_replace_requested = result
+
+        # Check if the target directory has files currently loaded in QGIS.
+        if has_layers_loaded_from_dir(str(schematisation_db_dir)):
+            self.communication.show_warn(
+                "The schematisation is currently open in QGIS. "
+                "Please close it before downloading."
+            )
+            self.file_download_failed.emit("")
+            return
 
         # Set up downloader and worker
         download_context = SchematisationRevisionDownloadContext(
@@ -526,6 +543,13 @@ class Loader(QObject):
                     local_schematisations,
                     working_dir,
                 )
+                if has_layers_loaded_from_dir(str(result[0])):
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: "
+                        "target directory is currently open in QGIS."
+                    )
+                    skipped_files.append((file["id"], "schematisation is open in QGIS"))
+                    continue
                 context = SchematisationRevisionDownloadContext(Path(result[0]))
                 downloaders.append(
                     SchematisationRevisionDownloader(
@@ -581,6 +605,7 @@ class Loader(QObject):
 
         if not downloaders:
             self.communication.bar_warn("No downloadable files selected.")
+            self.file_download_finished.emit(None)
             return
 
         if skipped_files:
@@ -1541,38 +1566,33 @@ class Loader(QObject):
             )
         self.schematisation_import_finished.emit()
 
-    @pyqtSlot(dict, dict)
-    def upload_new_schematisation_to_rana(self, project, selected_item):
-        assert selected_item["type"] == "directory"
-        rana_path = selected_item["id"]
+    def _get_threedi_api_and_organisations(self):
+        """Fetch threedi API and available organisations for the current tenant.
+
+        Returns a tuple of (threedi_api, organisations) or None if setup fails.
+        """
         threedi_api = get_threedi_api()
         tenant_details = get_tenant_details(self.communication)
         if not tenant_details:
-            return
+            self.schematisation_upload_failed.emit()
+            return None
         tc = ThreediCalls(threedi_api)
         allowed_org_ids = get_threedi_organisations(self.communication)
         organisations = {
             org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
         }
-
         if len(organisations) == 0:
             self.communication.show_error(
                 "No 3Di organisations available for this Rana organisation; please make sure your API endpoint is configured."
             )
             self.schematisation_upload_failed.emit()
-            return
+            return None
+        return threedi_api, organisations
 
-        work_dir = QSettings().value("threedi/working_dir", "")
-        new_schematisation_wizard = NewSchematisationWizard(
-            threedi_api, work_dir, self.communication, organisations
-        )
-        response = new_schematisation_wizard.exec()
-        if response != QDialog.DialogCode.Accepted:
-            self.schematisation_upload_cancelled.emit()
-            return
-
-        local_schematisation = new_schematisation_wizard.new_local_schematisation
-        new_schematisation = new_schematisation_wizard.new_schematisation
+    def _finish_schematisation_upload(self, project, rana_path, wizard):
+        """Handle the post-wizard flow common to both schematisation upload slots."""
+        local_schematisation = wizard.new_local_schematisation
+        new_schematisation = wizard.new_schematisation
         if new_schematisation is None or local_schematisation is None:
             self.communication.bar_error("Schematisation creation failed")
             self.schematisation_upload_failed.emit()
@@ -1584,9 +1604,7 @@ class Loader(QObject):
                 "Revision creation failed; please create one manually later in the Rana browser"
             )
         else:
-            # Search GeoPackage database tables for attributes with file paths.
-            paths = new_schematisation_wizard.get_paths_from_geopackage(db_path)
-
+            paths = get_paths_from_geopackage(db_path)
             self.save_initial_revision(
                 project, new_schematisation, local_schematisation, paths
             )
@@ -1620,6 +1638,55 @@ class Loader(QObject):
             local_schematisation=local_schematisation.wip_revision,
             action=BuildOptionActions.CREATED,
         )
+
+    @pyqtSlot(dict, dict)
+    def upload_new_schematisation_to_rana(self, project, selected_item):
+        assert selected_item["type"] == "directory"
+        rana_path = selected_item["id"]
+        result = self._get_threedi_api_and_organisations()
+        if result is None:
+            return
+        threedi_api, organisations = result
+
+        work_dir = QSettings().value("threedi/working_dir", "")
+        wizard = NewSchematisationWizard(
+            threedi_api, work_dir, self.communication, organisations
+        )
+        response = wizard.exec()
+        if response != QDialog.DialogCode.Accepted:
+            self.schematisation_upload_cancelled.emit()
+            return
+        self._finish_schematisation_upload(project, rana_path, wizard)
+
+    @pyqtSlot(dict, dict)
+    def upload_existing_schematisation_to_rana(self, project, selected_item):
+        assert selected_item["type"] == "directory"
+        rana_path = selected_item["id"]
+
+        gpkg_filter = "GeoPackage/SQLite (*.gpkg *.GPKG *.sqlite *SQLITE)"
+        gpkg_path = get_filepath(
+            None,
+            dialog_title="Select Schematisation file",
+            extension_filter=gpkg_filter,
+        )
+        if gpkg_path is None:
+            self.schematisation_upload_cancelled.emit()
+            return
+
+        result = self._get_threedi_api_and_organisations()
+        if result is None:
+            return
+        threedi_api, organisations = result
+
+        work_dir = QSettings().value("threedi/working_dir", "")
+        wizard = UploadExistingSchematisationWizard(
+            threedi_api, work_dir, self.communication, organisations, gpkg_path
+        )
+        response = wizard.exec()
+        if response != QDialog.DialogCode.Accepted:
+            self.schematisation_upload_cancelled.emit()
+            return
+        self._finish_schematisation_upload(project, rana_path, wizard)
 
     @pyqtSlot(dict, dict)
     def save_revision(self, project, file):

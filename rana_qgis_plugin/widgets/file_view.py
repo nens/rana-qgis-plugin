@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from qgis.core import QgsApplication
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QSettings,
@@ -18,16 +19,19 @@ from qgis.PyQt.QtGui import (
     QStandardItemModel,
 )
 from qgis.PyQt.QtWidgets import (
+    QAction,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTableView,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -48,6 +52,13 @@ from rana_qgis_plugin.utils.generic import (
     get_file_icon_name,
     get_threedi_api,
 )
+from rana_qgis_plugin.utils.local_paths import (
+    get_local_dir_structure,
+    get_local_file_path,
+    get_local_results_dir_from_meta,
+    get_local_schematisation_revision_dir,
+)
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.spatial import get_bbox_area_in_m2
 from rana_qgis_plugin.utils.time import (
     format_activity_timestamp,
@@ -57,7 +68,8 @@ from rana_qgis_plugin.utils.time import (
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
-    get_file_actions_for_data_type,
+    copy_wms_url_to_clipboard,
+    get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
     get_icon_from_theme_as_pixmap,
@@ -142,6 +154,7 @@ class FileView(QWidget):
         self.avatar_cache = avatar_cache
         self.project = None
         self.file_signals = file_signals
+        self._active_actions = []
         self.setup_ui()
         self.no_refresh = False
         self.threedi_objects = {}
@@ -232,21 +245,30 @@ class FileView(QWidget):
         self.btn_stack.addWidget(self.btn_start_simulation)
         self.btn_stack.addWidget(self.btn_create_model)
         btn_show_revisions = QPushButton(FileAction.VIEW_REVISIONS.value)
+        btn_show_revisions.setIcon(FileAction.VIEW_REVISIONS.icon)
+        btn_show_revisions.setToolTip(FileAction.VIEW_REVISIONS.get_tooltip())
         btn_show_revisions.clicked.connect(
             lambda _: self.file_signals.view_all_revisions_requested.emit(
                 self.project, self.selected_file
             )
         )
-        self.btn_export_gpkg = QPushButton("Export to GeoPackage")
+        self.btn_show_revisions = btn_show_revisions
+        self.btn_show_revisions.setMinimumSize(self.btn_show_revisions.sizeHint())
+        self.btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn_show_revisions.hide()
         self.btn_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        btn_show_revisions.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addWidget(self.btn_stack)
-        button_layout.addWidget(self.btn_export_gpkg)
-        button_layout.addWidget(btn_show_revisions)
         self.file_action_btn_dict = self.get_file_action_buttons()
         file_action_btn_layout = QHBoxLayout()
         for btn in self.file_action_btn_dict.values():
             file_action_btn_layout.addWidget(btn)
+        file_action_btn_layout.addWidget(self.btn_show_revisions)
+        self.btn_ellipsis = self._create_ellipsis_button()
+        # Match height of the other action buttons, keep width fixed
+        reference_btn = next(iter(self.file_action_btn_dict.values()))
+        self.btn_ellipsis.setFixedHeight(reference_btn.sizeHint().height())
+        self.btn_ellipsis.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        file_action_btn_layout.addWidget(self.btn_ellipsis)
 
         # Put scroll area in layout
         layout = QVBoxLayout(self)
@@ -262,25 +284,114 @@ class FileView(QWidget):
             button.setEnabled(enabled)
 
     def get_file_action_buttons(self) -> dict[FileAction, QPushButton]:
+        top_row_actions = sorted(
+            [
+                FileAction.OPEN_IN_QGIS,
+                FileAction.OPEN_WMS,
+                FileAction.DOWNLOAD_RESULTS,
+                FileAction.SAVE_REVISION,
+                FileAction.SAVE_STYLING,
+                FileAction.UPLOAD_FILE,
+            ]
+        )
         btn_dict = {}
-        for action in sorted(FileAction):
-            if action == FileAction.VIEW_REVISIONS:
-                continue
+        for action in sorted(top_row_actions):
             btn = QPushButton(action.value)
+            btn.setIcon(action.icon)
+            btn.setMinimumSize(btn.sizeHint())
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             action_signal = self.file_signals.get_signal(action)
-            if action == FileAction.OPEN_IN_BROWSER:
-                btn.clicked.connect(self.open_in_browser)
-            elif action == FileAction.RENAME:
-                btn.clicked.connect(lambda _: self.edit_file_name(self.selected_file))
-            else:
-                btn.clicked.connect(
-                    lambda _, signal=action_signal: signal.emit(self.selected_file)
-                )
+            btn.clicked.connect(
+                lambda _, signal=action_signal: signal.emit(self.selected_file)
+            )
             # hide buttons by default to prevent big width in size hint
             # update_file_action_buttons ensures buttons are correctly shown on display
             btn.hide()
             btn_dict[action] = btn
         return btn_dict
+
+    def _create_ellipsis_button(self):
+        """Create the ellipsis button with a dynamically populated menu."""
+        btn = QToolButton()
+        btn.setIcon(QgsApplication.getThemeIcon("/mIconHamburgerMenu.svg"))
+        btn.setToolTip("More actions")
+        btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        btn.setStyleSheet("QToolButton::menu-indicator { image: none; }")
+        menu = QMenu()
+        btn.setMenu(menu)
+        menu.aboutToShow.connect(self._build_ellipsis_menu)
+        btn.hide()
+        return btn
+
+    def _build_ellipsis_menu(self):
+        """Populate the ellipsis menu based on the currently selected file."""
+        menu = self.btn_ellipsis.menu()
+        menu.clear()
+        menu.setToolTipsVisible(True)
+        if not self.selected_file:
+            return
+        data_type = self.selected_file.get("data_type")
+        is_schematisation = data_type == "threedi_schematisation"
+
+        # Determine which actions to show in the ellipsis menu
+        ellipsis_actions = set()
+        ellipsis_actions.add(FileAction.RENAME)
+        if not is_schematisation:
+            ellipsis_actions.add(FileAction.HISTORY)
+            ellipsis_actions.add(FileAction.DELETE)
+        if is_schematisation:
+            ellipsis_actions.add(FileAction.REMOVE_FROM_PROJECT)
+        # Actions that depend on the descriptor / active actions
+        for action in (
+            FileAction.OPEN_IN_FILE_BROWSER,
+            FileAction.OPEN_IN_BROWSER,
+            FileAction.COPY_WMS_URL,
+            FileAction.EXPORT_GPKG,
+        ):
+            if action in self._active_actions:
+                ellipsis_actions.add(action)
+
+        # Add actions in FileAction enum order
+        data_type = self.selected_file.get("data_type") if self.selected_file else None
+        for action in sorted(ellipsis_actions):
+            menu_action = QAction(action.icon, action.value, menu)
+            menu_action.setToolTip(action.get_tooltip(data_type))
+            if action == FileAction.RENAME:
+                menu_action.triggered.connect(
+                    lambda _: self.edit_file_name(self.selected_file)
+                )
+            elif action in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
+                menu_action.triggered.connect(
+                    lambda _: self.file_signals.file_deletion_requested.emit(
+                        self.selected_file
+                    )
+                )
+            elif action in (FileAction.HISTORY, FileAction.VIEW_REVISIONS):
+                menu_action.triggered.connect(
+                    lambda _: self.file_signals.view_all_revisions_requested.emit(
+                        self.project, self.selected_file
+                    )
+                )
+            elif action == FileAction.OPEN_IN_FILE_BROWSER:
+                menu_action.triggered.connect(lambda _: self.open_in_file_browser())
+            elif action == FileAction.OPEN_IN_BROWSER:
+                menu_action.triggered.connect(lambda _: self.open_in_browser())
+            elif action == FileAction.COPY_WMS_URL:
+                menu_action.triggered.connect(
+                    lambda _: copy_wms_url_to_clipboard(
+                        self.selected_file, self.communication
+                    )
+                )
+            elif action == FileAction.EXPORT_GPKG:
+                menu_action.triggered.connect(
+                    lambda _: self.file_signals.export_gpkg_requested.emit(
+                        self.selected_file
+                    )
+                )
+            # Add separator before delete/remove
+            if action in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
+                menu.addSeparator()
+            menu.addAction(menu_action)
 
     def edit_file_name(self, selected_item: dict):
         current_name = self.filename_edit.text()
@@ -308,15 +419,29 @@ class FileView(QWidget):
         self.filename_edit.selectAll()
 
     def update_file_action_buttons(self, selected_file: dict):
-        active_actions = get_file_actions_for_data_type(selected_file)
+        # For scenarios, fetch the descriptor once and reuse it
+        descriptor = None
+        if selected_file.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        active_actions = get_file_actions(selected_file, descriptor=descriptor)
+        # Resolve local path on demand; exclude action if not available locally
+        local_path = self._resolve_local_path(selected_file, descriptor=descriptor)
+        if not local_path:
+            active_actions = [
+                a for a in active_actions if a != FileAction.OPEN_IN_FILE_BROWSER
+            ]
+        self._active_actions = active_actions
+        data_type = selected_file.get("data_type")
         for action in FileAction:
             btn = self.file_action_btn_dict.get(action)
             if not btn:
                 continue
             if action in active_actions:
+                btn.setToolTip(action.get_tooltip(data_type))
                 btn.show()
             else:
                 btn.hide()
+        self.btn_ellipsis.show()
 
     def update_selected_file(self, selected_file: dict):
         if self.selected_file != selected_file:
@@ -638,13 +763,13 @@ class FileView(QWidget):
                     self.btn_stack.setCurrentIndex(0)
                 else:
                     self.btn_stack.setCurrentIndex(1)
-                self.btn_export_gpkg.show()
+                self.btn_show_revisions.show()
             else:
                 self.btn_stack.hide()
-                self.btn_export_gpkg.hide()
+                self.btn_show_revisions.hide()
         else:
             self.btn_stack.hide()
-            self.btn_export_gpkg.hide()
+            self.btn_show_revisions.hide()
         self.update_file_action_buttons(selected_file)
 
     def open_in_browser(self):
@@ -657,6 +782,74 @@ class FileView(QWidget):
         ):
             return
         QDesktopServices.openUrl(QUrl(self.schematisation["management_url"]))
+
+    def open_in_file_browser(self):
+        """Open the local path of the selected file in the OS file explorer."""
+        if not self.selected_file:
+            return
+        local_path = self._resolve_local_path(self.selected_file)
+        if not local_path:
+            return
+        path = Path(local_path)
+        if path.is_file():
+            path = path.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def _resolve_local_path(
+        self, selected_file: dict, descriptor: dict = None
+    ) -> Optional[str]:
+        """Resolve the local path for a file, or return None if not present."""
+        data_type = selected_file.get("data_type")
+        if data_type == "threedi_schematisation":
+            return self._resolve_schematisation_local_path(selected_file)
+        elif data_type == "scenario":
+            return self._resolve_scenario_local_path(
+                selected_file, descriptor=descriptor
+            )
+        else:
+            local_path = get_local_file_path(self.project["slug"], selected_file["id"])
+            return local_path if Path(local_path).exists() else None
+
+    def _resolve_schematisation_local_path(self, selected_file: dict) -> Optional[str]:
+        """Resolve the local revision directory for a schematisation."""
+        working_dir = hcc_working_dir()
+        if not working_dir:
+            return None
+        schematisation = self.schematisation
+        if not schematisation:
+            return None
+        latest_revision = schematisation.get("latest_revision")
+        if not latest_revision:
+            return None
+        revision_dir = get_local_schematisation_revision_dir(
+            working_dir,
+            schematisation["schematisation"]["id"],
+            schematisation["schematisation"]["name"],
+            latest_revision["number"],
+            create=False,
+        )
+        if revision_dir and revision_dir.exists():
+            return str(revision_dir)
+        return None
+
+    def _resolve_scenario_local_path(
+        self, selected_file: dict, descriptor: dict = None
+    ) -> Optional[str]:
+        """Resolve the local results directory for a scenario."""
+        if descriptor is None:
+            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        if not descriptor:
+            return None
+        meta = descriptor.get("meta")
+        if not meta or "id" not in meta:
+            return None
+        working_dir = hcc_working_dir()
+        if working_dir:
+            results_dir = get_local_results_dir_from_meta(meta, working_dir)
+            if results_dir and Path(results_dir).exists():
+                return results_dir
+        local_dir = get_local_dir_structure(self.project["slug"], selected_file["id"])
+        return local_dir if Path(local_dir).exists() else None
 
     def refresh(self):
         # Skip refresh because user is interacting with state of the file

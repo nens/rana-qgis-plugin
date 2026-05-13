@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+from typing import Optional
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
     QModelIndex,
     Qt,
@@ -13,7 +15,6 @@ from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QDialogButtonBox,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -23,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QStyle,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -31,6 +33,7 @@ from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
 from rana_qgis_plugin.utils.api import (
+    get_tenant_file_descriptor,
     get_tenant_project_files,
     get_threedi_schematisation,
 )
@@ -39,11 +42,19 @@ from rana_qgis_plugin.utils.generic import (
     display_bytes,
     get_file_icon_name,
 )
+from rana_qgis_plugin.utils.local_paths import (
+    get_local_dir_structure,
+    get_local_file_path,
+    get_local_results_dir_from_meta,
+    get_local_schematisation_revision_dir,
+)
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
-    get_file_actions_for_data_type,
+    copy_wms_url_to_clipboard,
+    get_file_actions,
 )
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.widgets.utils_view import (
@@ -133,6 +144,8 @@ class FilesBrowser(QWidget):
         )
         self.files_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.files_tv.customContextMenuRequested.connect(self.menu_requested)
+        # Ensure there is always empty space at the bottom for right-click context menu
+        self.files_tv.setViewportMargins(0, 0, 0, 30)
         self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
@@ -153,17 +166,55 @@ class FilesBrowser(QWidget):
         self.select_btn.setToolTip("Toggle file selection mode")
         self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
-        btn_create_folder = QPushButton("Create New Folder")
-        btn_create_folder.clicked.connect(self.show_create_folder_dialog)
-        self.btn_new_schematisation = QPushButton("New schematisation")
-        self.btn_import_schematisation = QPushButton("Import schematisation")
+        self.btn_upload.setIcon(
+            QgsApplication.getThemeIcon("/mActionSharingExport.svg")
+        )
+        self.btn_upload.setToolTip("Upload your files to Rana Web Platform")
+        # Add schematisation menu button
+        self.btn_add_schematisation = QToolButton()
+        self.btn_add_schematisation.setText("Upload schematisation")
+        self.btn_add_schematisation.setIcon(
+            QgsApplication.getThemeIcon("/mActionAdd.svg")
+        )
+        self.btn_add_schematisation.setToolTip(
+            "Add schematisation on Rana web platform"
+        )
+        self.btn_add_schematisation.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self.btn_add_schematisation.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        schematisation_menu = QMenu(self.btn_add_schematisation)
+        schematisation_menu.setToolTipsVisible(True)
+        self.action_new_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "From scratch"
+        )
+        self.action_new_schematisation.setToolTip(
+            "Create a new schematisation on Rana web platform"
+        )
+        self.action_upload_existing_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionFileOpen.svg"),
+            "Upload existing",
+        )
+        self.action_upload_existing_schematisation.setToolTip(
+            "Upload your local schematisation to Rana web platform"
+        )
+        self.action_import_schematisation = schematisation_menu.addAction(
+            QgsApplication.getThemeIcon("/mActionSharingImport.svg"),
+            "Import from HCC",
+        )
+        self.action_import_schematisation.setToolTip(
+            "Import a schematisation from the model databank into Rana web platform"
+        )
+        self.btn_add_schematisation.setMenu(schematisation_menu)
         # Page 0: Normal mode buttons
         normal_page = QWidget()
-        btn_layout = QGridLayout(normal_page)
-        btn_layout.addWidget(self.btn_upload, 0, 0)
-        btn_layout.addWidget(btn_create_folder, 0, 1)
-        btn_layout.addWidget(self.btn_new_schematisation, 1, 0)
-        btn_layout.addWidget(self.btn_import_schematisation, 1, 1)
+        btn_layout = QVBoxLayout(normal_page)
+        row1 = QHBoxLayout()
+        row1.addWidget(self.btn_upload)
+        row1.addWidget(self.btn_add_schematisation)
+        btn_layout.addLayout(row1)
         # Page 1: Select mode buttons
         select_page = QWidget()
         select_layout = QHBoxLayout(select_page)
@@ -190,8 +241,7 @@ class FilesBrowser(QWidget):
         layout.addWidget(self.btn_stack)
         self.setLayout(layout)
 
-        self.btn_new_schematisation.setVisible(has_3di_authcfg())
-        self.btn_import_schematisation.setVisible(has_3di_authcfg())
+        self.btn_add_schematisation.setVisible(has_3di_authcfg())
         # Connect checkbox state changes to update batch button states
         self.files_model.itemChanged.connect(self._update_batch_buttons)
 
@@ -354,18 +404,65 @@ class FilesBrowser(QWidget):
             self.file_selected.emit(self.selected_item)
         self.communication.clear_message_bar()
 
+    def _show_empty_space_menu(self, pos):
+        """Show a context menu with only the 'Create new folder' action."""
+        menu = QMenu(self)
+        action = QAction("Create new folder", self)
+        action.setIcon(QgsApplication.getThemeIcon("/mActionNewFolder.svg"))
+        action.triggered.connect(self.show_create_folder_dialog)
+        menu.addAction(action)
+        menu.popup(self.files_tv.viewport().mapToGlobal(pos))
+
     def menu_requested(self, pos):
         index = self.files_tv.indexAt(pos)
         file_item = self.files_model.itemFromIndex(index)
-        if not file_item:
+
+        # Click on empty space (below all rows): show create folder menu
+        if not index.isValid() or not file_item:
+            self._show_empty_space_menu(pos)
             return
+
         selected_item = file_item.data(Qt.ItemDataRole.UserRole)
-        file_actions = get_file_actions_for_data_type(selected_item)
+
+        # Click on an empty column of a folder row (cols 2-4 have no item data
+        # for folders): show create folder menu
+        if not selected_item:
+            self._show_empty_space_menu(pos)
+            return
+
+        # Click on a file row in a non-name column: no context menu
+        if index.column() != 1 and selected_item["type"] != "directory":
+            return
+
+        # Click on an item: show item menu
+        self._show_item_menu(pos, index, selected_item)
+
+    def _show_item_menu(self, pos, index, selected_item):
+        """Show a context menu with actions for the selected file/folder."""
+        # For scenarios, fetch the descriptor once and reuse it
+        descriptor = None
+        if selected_item.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(selected_item["descriptor_id"])
+        file_actions = get_file_actions(selected_item, descriptor=descriptor)
+        # Resolve local path on demand; filter out action if not available locally
+        local_path = self._resolve_local_path(
+            selected_item,
+            self.project["slug"],
+            hcc_working_dir(),
+            descriptor=descriptor,
+        )
+        if not local_path:
+            file_actions = [
+                a for a in file_actions if a != FileAction.OPEN_IN_FILE_BROWSER
+            ]
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+        data_type = selected_item.get("data_type")
         actions = []
         # create and connect actions
         for file_action in file_actions:
-            action = QAction(file_action.value, self)
+            action = QAction(file_action.icon, file_action.value, self)
+            action.setToolTip(file_action.get_tooltip(data_type))
             action_signal = self.file_signals.get_signal(file_action)
             if file_action == FileAction.RENAME:
                 action.triggered.connect(
@@ -375,10 +472,20 @@ class FilesBrowser(QWidget):
                 )
             elif file_action == FileAction.OPEN_IN_BROWSER:
                 action.triggered.connect(lambda _: self.open_in_browser(selected_item))
+            elif file_action == FileAction.OPEN_IN_FILE_BROWSER:
+                action.triggered.connect(
+                    lambda _, path=local_path: self.open_in_file_browser(path)
+                )
             elif file_action == FileAction.VIEW_REVISIONS:
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(
                         self.project, selected_item
+                    )
+                )
+            elif file_action == FileAction.COPY_WMS_URL:
+                action.triggered.connect(
+                    lambda _, item=selected_item: copy_wms_url_to_clipboard(
+                        item, self.communication
                     )
                 )
             else:
@@ -387,7 +494,7 @@ class FilesBrowser(QWidget):
                 )
             actions.append(action)
         for i, action in enumerate(actions):
-            if file_actions[i] == FileAction.DELETE:
+            if file_actions[i] in (FileAction.DELETE, FileAction.REMOVE_FROM_PROJECT):
                 menu.addSeparator()
             menu.addAction(action)
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
@@ -401,6 +508,85 @@ class FilesBrowser(QWidget):
         if not schematisation or not schematisation.get("management_url"):
             return
         QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
+
+    def open_in_file_browser(self, local_path: str):
+        """Open a local path in the OS file explorer."""
+        path = Path(local_path)
+        # For files, open the containing directory
+        if path.is_file():
+            path = path.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def _resolve_local_path(
+        self,
+        file: dict,
+        project_slug: str,
+        working_dir: str,
+        descriptor: dict = None,
+    ) -> Optional[str]:
+        """Resolve the local path for a file, or return None if not present locally."""
+        data_type = file.get("data_type")
+        if data_type == "threedi_schematisation":
+            return self._resolve_schematisation_local_path(file, working_dir)
+        elif data_type == "scenario":
+            return self._resolve_scenario_local_path(
+                file,
+                project_slug,
+                working_dir,
+                descriptor=descriptor,
+            )
+        else:
+            local_path = get_local_file_path(project_slug, file["id"])
+            return local_path if Path(local_path).exists() else None
+
+    def _resolve_schematisation_local_path(
+        self, file: dict, working_dir: str
+    ) -> Optional[str]:
+        """Resolve the local revision directory for a schematisation file."""
+        if not working_dir:
+            return None
+        schematisation = get_threedi_schematisation(
+            self.communication, file["descriptor_id"]
+        )
+        if not schematisation:
+            return None
+        latest_revision = schematisation.get("latest_revision")
+        if not latest_revision:
+            return None
+        revision_dir = get_local_schematisation_revision_dir(
+            working_dir,
+            schematisation["schematisation"]["id"],
+            schematisation["schematisation"]["name"],
+            latest_revision["number"],
+            create=False,
+        )
+        if revision_dir and revision_dir.exists():
+            return str(revision_dir)
+        return None
+
+    def _resolve_scenario_local_path(
+        self,
+        file: dict,
+        project_slug: str,
+        working_dir: str,
+        descriptor: dict = None,
+    ) -> Optional[str]:
+        """Resolve the local results directory for a scenario file."""
+        if descriptor is None:
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        if not descriptor:
+            return None
+        meta = descriptor.get("meta")
+        if not meta or "id" not in meta:
+            return None
+        # Try 3Di results path first
+        if working_dir:
+            results_dir = get_local_results_dir_from_meta(meta, working_dir)
+            if results_dir and Path(results_dir).exists():
+                return results_dir
+        # Fall back to generic local dir structure
+        local_dir = get_local_dir_structure(project_slug, file["id"])
+        return local_dir if Path(local_dir).exists() else None
 
     def edit_file_name(self, index: QModelIndex, selected_item: dict):
         """Start in-place editing of the filename for the given item.

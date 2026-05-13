@@ -1,9 +1,8 @@
 import math
 import os
 import re
-import shutil
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
@@ -23,94 +22,6 @@ from rana_qgis_plugin.simulation.threedi_calls import (
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
 from rana_qgis_plugin.utils.settings import get_hcc_url_override, rana_cache_dir
-
-
-def is_writable(working_dir: str) -> bool:
-    """Try to write and remove an empty text file into given location."""
-    try:
-        test_filename = f"{uuid4()}.txt"
-        test_file_path = os.path.join(working_dir, test_filename)
-        with open(test_file_path, "w") as test_file:
-            test_file.write("")
-        os.remove(test_file_path)
-    except (PermissionError, OSError):
-        return False
-    else:
-        return True
-
-
-def sanitize_path_for_filesystem(path: str) -> str:
-    """
-    Sanitize a path to be valid for Linux and Windows
-    """
-
-    INVALID_CHARS = r'[<>:"/\\|?*]'
-
-    def clean_part(part: str) -> str:
-        # Replace invalid characters with underscore
-        part = re.sub(INVALID_CHARS, "_", part)
-        # Strip trailing spaces and dots (Windows limitation)
-        part = part.rstrip(" .")
-        return part
-
-    if not path:
-        return path
-    path_obj = Path(path)
-
-    parts = path_obj.parts
-
-    # Remove anchor (drive + root) from parts
-    anchor = path_obj.anchor  # e.g. "C:\\"
-    if anchor:
-        parts = parts[1:]
-
-    # Clean each part
-    sanitized_parts = [clean_part(p) for p in parts]
-
-    # Rebuild relative path first
-    sanitized_path = Path(*sanitized_parts)
-
-    # Restore full anchor (drive + root)
-    if anchor:
-        sanitized_path = Path(anchor) / sanitized_path
-
-    return str(sanitized_path)
-
-
-def get_local_dir_structure(project_slug: str, path: str) -> str:
-    file_name_without_extension = Path(path).stem
-    base_dir = Path(rana_cache_dir())
-    local_dir_structure = base_dir.joinpath(
-        project_slug, "files", Path(path).parent, file_name_without_extension
-    )
-    return sanitize_path_for_filesystem(str(local_dir_structure))
-
-
-def get_local_file_path(project_slug: str, path: str) -> str:
-    local_dir_structure = Path(get_local_dir_structure(project_slug, path))
-    file_name = sanitize_path_for_filesystem(Path(path).name)
-    return str(local_dir_structure.joinpath(file_name))
-
-
-def get_local_publication_dir_structure(
-    project_slug: str, path: str, publication_tree: list[str]
-) -> str:
-    file_name_without_extension = Path(path).stem
-    base_dir = Path(rana_cache_dir())
-    local_dir_structure = base_dir.joinpath(
-        project_slug, "publications", *publication_tree, file_name_without_extension
-    )
-    return sanitize_path_for_filesystem(str(local_dir_structure))
-
-
-def get_local_publication_file_path(
-    project_slug: str, path: str, publication_tree: list[str]
-) -> str:
-    local_dir_structure = Path(
-        get_local_publication_dir_structure(project_slug, path, publication_tree)
-    )
-    local_file_path = local_dir_structure.joinpath(Path(path).name)
-    return sanitize_path_for_filesystem(str(local_file_path))
 
 
 def get_threedi_api():
@@ -172,34 +83,6 @@ def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     }
     query_params = parse_qs(parsed.query)
     return path_params, query_params
-
-
-def get_threedi_schematisation_simulation_results_folder(
-    working_dir: str,
-    schematisation_id: int,
-    schematisation_name: str,
-    revision_number: int,
-    simulation_name: str,
-    simulation_id: int,
-) -> str:
-    local_schematisations = list_local_schematisations(working_dir)
-    if schematisation_id:
-        local_schematisation = local_schematisations.get(schematisation_id)
-        if not local_schematisation:
-            local_schematisation = LocalSchematisation(
-                working_dir, schematisation_id, schematisation_name, create=True
-            )
-        local_revision = local_schematisation.revisions.get(revision_number)
-        if not local_revision:
-            local_revision = LocalRevision(local_schematisation, revision_number)
-            local_revision.make_revision_structure()
-        result = str(
-            Path(local_revision.results_dir).joinpath(
-                f"{simulation_name} ({simulation_id})"
-            )
-        )
-        # replace colons, invalid for Windows paths (don't replace drive colon)
-        return result[:3] + result[3:].replace(":", "_")
 
 
 def split_scenario_extent(grid, resolution=None, max_pixel_count=1 * 10**8):
@@ -295,6 +178,40 @@ def find_publication_map_layer_from_tree(publication_version: dict, tree: list[s
     return None
 
 
+def has_layers_loaded_from_dir(directory: str) -> bool:
+    """Check if any QGIS layers are loaded from files inside the given directory.
+
+    This is used to detect whether a schematisation directory can be safely
+    overwritten. On Windows, open files are locked by the OS, so attempting
+    to delete them will fail with a PermissionError.
+
+    Args:
+        directory: Path to the directory to check.
+
+    Returns:
+        True if at least one layer sources a file inside the directory.
+    """
+    project = QgsProject.instance()
+    normalized_dir = str(Path(directory).resolve())
+
+    for layer in project.mapLayers().values():
+        if not hasattr(layer, "source"):
+            continue
+        source = layer.source()
+        # QGIS layer sources may include "|layername=..." suffixes; strip them
+        source_path = source.split("|")[0]
+        try:
+            normalized_source = str(Path(source_path).resolve())
+        except (OSError, ValueError):
+            continue
+        if (
+            normalized_source.startswith(normalized_dir + os.sep)
+            or normalized_source == normalized_dir
+        ):
+            return True
+    return False
+
+
 def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
     """Get vector layers in edit mode with unsaved changes for a specific file.
 
@@ -368,20 +285,3 @@ def save_layer_changes(layer: QgsVectorLayer) -> tuple[bool, str | None]:
     except Exception as e:
         # Catch any exceptions from commitChanges (e.g., database errors)
         return False, f"Error committing changes: {str(e)}"
-
-
-def cleanup_folder(folder: Path, communication) -> None:
-    """Remove all contents of a folder, keeping the folder itself.
-
-    Failures are logged via communication.log_warn and never raised.
-    """
-    if not folder.exists():
-        return
-    for item in folder.iterdir():
-        try:
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
-        except Exception as exc:
-            communication.log_warn(f"Cache cleanup failed for {item}: {exc}")

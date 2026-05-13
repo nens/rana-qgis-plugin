@@ -21,9 +21,8 @@ from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.utils.api import (
     create_project,
     delete_project,
-    delete_tenant_project_file,
 )
-from rana_qgis_plugin.utils.generic import get_local_file_path
+from rana_qgis_plugin.utils.local_paths import get_local_file_path
 
 
 def _open_project(plugin, qtbot, project_name):

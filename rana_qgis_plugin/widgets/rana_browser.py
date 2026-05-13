@@ -55,8 +55,7 @@ class RanaBrowser(QWidget):
     open_in_qgis_from_publication_selected = pyqtSignal(dict, dict, list)
     save_styles_from_publication_selected = pyqtSignal(dict, dict, list)
     upload_file_selected = pyqtSignal(dict, dict)
-    save_vector_styling_selected = pyqtSignal(dict, dict)
-    save_raster_styling_selected = pyqtSignal(dict, dict)
+    save_styling_selected = pyqtSignal(dict, dict)
     upload_new_file_selected = pyqtSignal(dict, dict)
     download_file_selected = pyqtSignal(dict, dict)
     download_results_selected = pyqtSignal(dict, dict)
@@ -73,6 +72,7 @@ class RanaBrowser(QWidget):
     rename_file_selected = pyqtSignal(dict, dict, str)
     create_folder_selected = pyqtSignal(dict, dict, str)
     upload_new_schematisation_selected = pyqtSignal(dict, dict)
+    upload_existing_schematisation_selected = pyqtSignal(dict, dict)
     import_schematisation_selected = pyqtSignal(dict, dict)
     project_jobs_added = pyqtSignal(list)
     project_job_updated = pyqtSignal(dict)
@@ -283,12 +283,8 @@ class RanaBrowser(QWidget):
             (file_signals.open_in_qgis_requested, self.open_in_qgis_selected),
             (file_signals.upload_file_requested, self.upload_file_selected),
             (
-                file_signals.save_vector_styling_requested,
-                self.save_vector_styling_selected,
-            ),
-            (
-                file_signals.save_raster_styling_requested,
-                self.save_raster_styling_selected,
+                file_signals.save_styling_requested,
+                self.save_styling_selected,
             ),
             (file_signals.open_wms_requested, self.open_wms_selected),
             (file_signals.download_file_requested, self.download_file_selected),
@@ -297,6 +293,7 @@ class RanaBrowser(QWidget):
                 self.download_results_selected,
             ),
             (file_signals.save_revision_requested, self.save_revision_selected),
+            (file_signals.export_gpkg_requested, self.export_gpkg_selected),
         )
         for file_signal, rana_signal in context_menu_signals:
             file_signal.connect(
@@ -325,14 +322,20 @@ class RanaBrowser(QWidget):
         )
         self.publication_view.save_styles_to_rana.connect(self.disable)
         self.publication_view.save_styles_finished.connect(self.enable)
-        # Connect new schematisation button
-        self.files_browser.btn_new_schematisation.clicked.connect(
+        # Connect new schematisation action
+        self.files_browser.action_new_schematisation.triggered.connect(
             lambda _,: self.upload_new_schematisation_selected.emit(
                 self.project, self.selected_item
             )
         )
-        # Connect import schematisation button
-        self.files_browser.btn_import_schematisation.clicked.connect(
+        # Connect upload existing schematisation action
+        self.files_browser.action_upload_existing_schematisation.triggered.connect(
+            lambda _,: self.upload_existing_schematisation_selected.emit(
+                self.project, self.selected_item
+            )
+        )
+        # Connect import schematisation action
+        self.files_browser.action_import_schematisation.triggered.connect(
             lambda _,: self.import_schematisation_selected.emit(
                 self.project, self.selected_item
             )
@@ -364,11 +367,6 @@ class RanaBrowser(QWidget):
         )
         self.file_view.btn_create_model.clicked.connect(
             lambda _: self.create_model_selected.emit(
-                self.project, self.file_view.selected_file
-            )
-        )
-        self.file_view.btn_export_gpkg.clicked.connect(
-            lambda _: self.export_gpkg_selected.emit(
                 self.project, self.file_view.selected_file
             )
         )

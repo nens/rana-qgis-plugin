@@ -18,6 +18,7 @@ rana_qgis_customisations
 docker-compose.override.yml
 output.mp4
 _cached_data
+symbology-style.db
 # AI stuff
 .minispec
 .minispec.minispec/
