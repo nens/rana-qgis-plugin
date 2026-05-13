@@ -1,3 +1,7 @@
+import os
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 import rana_qgis_plugin.utils.generic as utils
@@ -40,3 +44,27 @@ def test_parse_url_with_query():
     url = "/tenant/something/project?param1=value1"
     path_params, query_params = utils.parse_url(url)
     assert query_params == {"param1": ["value1"]}
+
+
+@patch("rana_qgis_plugin.utils.generic.QgsProject")
+def test_has_layer_loaded_from_dir_no_layers(mock_qgs_project, tmp_path):
+    mock_qgs_project.instance.return_value.mapLayers.return_value = {}
+    assert utils.has_layers_loaded_from_dir(str(tmp_path)) is False
+
+
+@pytest.mark.parametrize(
+    "check_dir,expected_result", [("gpkg", True), ("other", False)]
+)
+@pytest.mark.parametrize("layer_suffix", ["", "|layername=connection_node"])
+@patch("rana_qgis_plugin.utils.generic.QgsProject")
+def test_has_layer_loaded_from_dir(
+    mock_qgs_project, tmp_path, layer_suffix: str, check_dir: str, expected_result: bool
+):
+    gpkg = tmp_path / "gpkg" / "schematisation.gpkg"
+    gpkg.parent.mkdir(parents=True, exist_ok=True)
+    gpkg.touch()
+    layer = MagicMock()
+    layer.source.return_value = str(gpkg) + layer_suffix
+    mock_qgs_project.instance.return_value.mapLayers.return_value = {"l1": layer}
+    target_dir = tmp_path / check_dir
+    assert utils.has_layers_loaded_from_dir(str(target_dir)) is expected_result

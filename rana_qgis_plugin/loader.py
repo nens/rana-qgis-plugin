@@ -75,6 +75,7 @@ from rana_qgis_plugin.utils.generic import (
     get_editable_layers_for_file,
     get_threedi_api,
     get_threedi_organisations,
+    has_layers_loaded_from_dir,
     save_layer_changes,
 )
 from rana_qgis_plugin.utils.local_paths import get_local_dir_structure
@@ -311,6 +312,7 @@ class Loader(QObject):
             self.communication.show_warn(
                 "Working directory not yet set, please configure this in the plugin settings."
             )
+            self.file_download_failed.emit("")
             return
 
         # Resolve directory (dialog on main thread)
@@ -324,9 +326,19 @@ class Loader(QObject):
         )
         if result is None:
             self.communication.clear_message_bar()
+            self.file_download_failed.emit("")
             return
 
         schematisation_db_dir, local_schematisation, wip_replace_requested = result
+
+        # Check if the target directory has files currently loaded in QGIS.
+        if has_layers_loaded_from_dir(str(schematisation_db_dir)):
+            self.communication.show_warn(
+                "The schematisation is currently open in QGIS. "
+                "Please close it before downloading."
+            )
+            self.file_download_failed.emit("")
+            return
 
         # Set up downloader and worker
         download_context = SchematisationRevisionDownloadContext(
@@ -531,6 +543,13 @@ class Loader(QObject):
                     local_schematisations,
                     working_dir,
                 )
+                if has_layers_loaded_from_dir(str(result[0])):
+                    self.communication.log_warn(
+                        f"Skipping schematisation {file['id']}: "
+                        "target directory is currently open in QGIS."
+                    )
+                    skipped_files.append((file["id"], "schematisation is open in QGIS"))
+                    continue
                 context = SchematisationRevisionDownloadContext(Path(result[0]))
                 downloaders.append(
                     SchematisationRevisionDownloader(
@@ -586,6 +605,7 @@ class Loader(QObject):
 
         if not downloaders:
             self.communication.bar_warn("No downloadable files selected.")
+            self.file_download_finished.emit(None)
             return
 
         if skipped_files:
