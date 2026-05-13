@@ -492,12 +492,17 @@ class PublicationView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         if map_item.support_open:
             open_btn = QPushButton(FileAction.OPEN_IN_QGIS.value)
+            open_btn.setIcon(FileAction.OPEN_IN_QGIS.icon)
+            data_type = getattr(map_item, "data_type", None)
+            open_btn.setToolTip(FileAction.OPEN_IN_QGIS.get_tooltip(data_type))
             open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
             open_btn.clicked.connect(lambda: self.open_maps(map_item))
             layout.addWidget(open_btn)
         layout.addStretch()
         if map_item.support_save:
             save_btn = QPushButton(FileAction.SAVE_STYLING.value)
+            save_btn.setIcon(FileAction.SAVE_STYLING.icon)
+            save_btn.setToolTip(FileAction.SAVE_STYLING.get_tooltip())
             save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
             save_btn.clicked.connect(lambda: self.save_styles(map_item))
             layout.addWidget(save_btn)

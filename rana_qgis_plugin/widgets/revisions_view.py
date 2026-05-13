@@ -22,6 +22,7 @@ from rana_qgis_plugin.utils.generic import NumericItem, get_threedi_api
 from rana_qgis_plugin.utils.local_paths import get_local_schematisation_revision_dir
 from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
+from rana_qgis_plugin.widgets.utils_file_action import FileAction
 
 
 class RevisionsView(QWidget):
@@ -77,14 +78,27 @@ class RevisionsView(QWidget):
         threedi_revision, schematisation = data
         if threedi_revision:
             menu = QMenu(self)
-            action = QAction("Open in QGIS", self)
+            menu.setToolTipsVisible(True)
+
+            data_type = "threedi_schematisation"
+            action = QAction(
+                FileAction.OPEN_IN_QGIS.icon,
+                FileAction.OPEN_IN_QGIS.value,
+                self,
+            )
+            action.setToolTip(FileAction.OPEN_IN_QGIS.get_tooltip(data_type))
             action.triggered.connect(
                 lambda _: self.open_schematisation_revision_in_qgis_requested.emit(
                     threedi_revision.to_dict(), schematisation["schematisation"]
                 )
             )
             menu.addAction(action)
-            action = QAction("Export as geopackage", self)
+            action = QAction(
+                FileAction.EXPORT_GPKG.icon,
+                FileAction.EXPORT_GPKG.value,
+                self,
+            )
+            action.setToolTip(FileAction.EXPORT_GPKG.get_tooltip())
             action.triggered.connect(
                 lambda _: self.export_schematisation_revision.emit(
                     schematisation["schematisation"], threedi_revision.to_dict()
@@ -102,16 +116,27 @@ class RevisionsView(QWidget):
                     create=False,
                 )
                 if revision_dir and revision_dir.exists():
-                    action = QAction("Open in file browser", self)
+                    action = QAction(
+                        FileAction.OPEN_IN_FILE_BROWSER.icon,
+                        FileAction.OPEN_IN_FILE_BROWSER.value,
+                        self,
+                    )
+                    action.setToolTip(
+                        FileAction.OPEN_IN_FILE_BROWSER.get_tooltip(data_type)
+                    )
                     action.triggered.connect(
                         lambda _, path=str(revision_dir): QDesktopServices.openUrl(
                             QUrl.fromLocalFile(path)
                         )
                     )
                     menu.addAction(action)
-            from rana_qgis_plugin.widgets.utils_file_action import FileAction
 
-            action = QAction(FileAction.OPEN_IN_BROWSER.value, self)
+            action = QAction(
+                FileAction.OPEN_IN_BROWSER.icon,
+                FileAction.OPEN_IN_BROWSER.value,
+                self,
+            )
+            action.setToolTip(FileAction.OPEN_IN_BROWSER.get_tooltip())
             action.triggered.connect(
                 lambda _: self.open_in_browser(schematisation, threedi_revision)
             )
