@@ -46,9 +46,7 @@ class FileAction(Enum):
         """
         if self == FileAction.OPEN_IN_QGIS:
             if data_type == "threedi_schematisation":
-                return (
-                    "Download schematisation and open in Schematisation Editor"
-                )
+                return "Download schematisation and open in Schematisation Editor"
             return f"Download {data_type} file and open in QGIS"
         if self == FileAction.OPEN_IN_FILE_BROWSER:
             if data_type == "scenario":
@@ -73,23 +71,20 @@ class FileAction(Enum):
 
 
 _TOOLTIPS = {
-    FileAction.DOWNLOAD_RESULTS: (
-        "Download results and open in Rana Results Analysis"
-    ),
+    FileAction.DOWNLOAD_RESULTS: ("Download results and open in Rana Results Analysis"),
     FileAction.COPY_WMS_URL: "Copy WMS URL to clipboard",
     FileAction.SAVE_REVISION: (
         "Save your local changes as a new revision to this schematisation"
     ),
     FileAction.SAVE_STYLING: "Save your local style to Rana web Platform",
-    FileAction.UPLOAD_FILE: (
-        "Save your local data changes to Rana web Platform"
-    ),
+    FileAction.UPLOAD_FILE: ("Save your local data changes to Rana web Platform"),
     FileAction.EXPORT_GPKG: "Export to GeoPackage for use in publication",
     FileAction.VIEW_REVISIONS: (
         "View all revisions that are part of this schematisation"
     ),
     FileAction.HISTORY: "View file history",
     FileAction.OPEN_IN_BROWSER: "Open schematisation in Rana HCC",
+    FileAction.OPEN_WMS: "Retrieve WMS url and open layer in QGIS",
 }
 
 _ICON_PATHS = {
@@ -108,7 +103,7 @@ _ICON_PATHS = {
     FileAction.RENAME: "/mActionChangeLabelProperties.svg",
     FileAction.DELETE: "/mActionDeleteSelected.svg",
     FileAction.REMOVE_FROM_PROJECT: "/mActionDeleteSelected.svg",
-    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg"
+    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg",
 }
 
 
