@@ -94,20 +94,20 @@ _TOOLTIPS = {
 
 _ICON_PATHS = {
     FileAction.OPEN_IN_QGIS: "/mActionSharingImport.svg",
-    FileAction.OPEN_WMS: "/mActionOpenUrl.svg",
+    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg",
     FileAction.DOWNLOAD_RESULTS: "/mActionSharingImport.svg",
     FileAction.OPEN_IN_FILE_BROWSER: "/mActionFileOpen.svg",
-    FileAction.OPEN_IN_BROWSER: "/mIconGlobe.svg",
+    FileAction.OPEN_IN_BROWSER: "/mActionLink.svg",
     FileAction.COPY_WMS_URL: "/mActionEditCopy.svg",
     FileAction.SAVE_REVISION: "/mActionSharingExport.svg",
-    FileAction.SAVE_STYLING: "/mActionSymbology.svg",
+    FileAction.SAVE_STYLING: "/propertyicons/symbology.svg",
     FileAction.UPLOAD_FILE: "/mActionSharingExport.svg",
     FileAction.EXPORT_GPKG: "/mActionEditCopy.svg",
     FileAction.VIEW_REVISIONS: "/mActionHistory.svg",
     FileAction.HISTORY: "/mActionHistory.svg",
-    FileAction.RENAME: "/mActionRename.svg",
+    FileAction.RENAME: "/mActionChangeLabelProperties.svg",
     FileAction.DELETE: "/mActionDeleteSelected.svg",
-    FileAction.REMOVE_FROM_PROJECT: "/mActionRemoveLayer.svg",
+    FileAction.REMOVE_FROM_PROJECT: "/mActionDeleteSelected.svg",
 }
 
 
