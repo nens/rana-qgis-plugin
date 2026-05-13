@@ -113,7 +113,7 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setUniformRowHeights(False)
         self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.processes_tv.header().setSectionResizeMode(QHeaderView.Interactive)
-        self.processes_tv.header().setStretchLastSection(False)
+        self.processes_tv.header().setStretchLastSection(True)
         self.processes_tv.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
 

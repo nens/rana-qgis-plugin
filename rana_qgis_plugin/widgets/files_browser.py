@@ -149,6 +149,7 @@ class FilesBrowser(QWidget):
         self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
+        self.files_tv.header().setStretchLastSection(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.header().setSectionsMovable(False)
         # Remove the branch indicator area so column 0 has no leading indent
