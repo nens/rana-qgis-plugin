@@ -525,7 +525,9 @@ class FileView(QWidget):
         # line 2: user icon - user name - commit msg - time
         # Note that the avatar is not automatically refreshed!
 
-        if selected_file["data_type"] == "threedi_schematisation":
+        if selected_file["data_type"] == "threedi_schematisation" and (
+            self.schematisation is not None
+        ):
             schematisation = self.schematisation
             last_rev = schematisation["latest_revision"]
             rana_user = get_user({"search": last_rev["commit_user"]})
