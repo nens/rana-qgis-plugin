@@ -535,10 +535,9 @@ class FileView(QWidget):
                     + "_"
                     + last_rev["commit_last_name"],
                     "given_name": last_rev["commit_first_name"],
-                    "family_name": last_rev_["commit_last_name"],
+                    "family_name": last_rev["commit_last_name"],
                 }
             msg = last_rev["commit_message"]
-            self.communication.log_info(f"{schematisation['latest_revision']}")
             last_modified = format_activity_timestamp_str(last_rev["commit_date"])
         else:
             rana_user = selected_file["user"]
