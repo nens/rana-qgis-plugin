@@ -22,6 +22,8 @@ History
 - Add ellipsis button to file view and reorganize buttons (nens/rana#4165)
 - Add icons and tooltips to most buttons (nens/rana#4166)
 - Fix failure to open schematisation when schematisation from the same location is already opened (nens/rana-qgis-plugin#291)
+- Added fix for exporting the same schematisation twice.
+- Fixed bug in general box update
 - Make column in processes view resizable and show tooltop for long process names (nens/rana-qgis-plugin#292)
 
 
