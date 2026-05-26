@@ -31,7 +31,7 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
+from rana_qgis_plugin.icons import add_icon, dir_icon, download_icon, trash_icon
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_tenant_project_files,
@@ -174,9 +174,7 @@ class FilesBrowser(QWidget):
         # Add schematisation menu button
         self.btn_add_schematisation = QToolButton()
         self.btn_add_schematisation.setText("Upload schematisation")
-        self.btn_add_schematisation.setIcon(
-            QgsApplication.getThemeIcon("/mActionAdd.svg")
-        )
+        self.btn_add_schematisation.setIcon(add_icon)
         self.btn_add_schematisation.setToolTip(
             "Add schematisation on Rana web platform"
         )

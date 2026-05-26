@@ -25,6 +25,7 @@ History
 - Added fix for exporting the same schematisation twice.
 - Fixed bug in general box update
 - Make column in processes view resizable and show tooltop for long process names (nens/rana-qgis-plugin#292)
+- Changed some icons into Rana style (#403)
 
 
 1.2.12 (2026-05-06)
