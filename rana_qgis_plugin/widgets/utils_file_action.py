@@ -8,6 +8,18 @@ from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.icons import (
+    copy_icon,
+    dir_icon,
+    download_icon,
+    edit_icon,
+    history_icon,
+    link_icon,
+    style_icon,
+    trash_icon,
+    upload_icon,
+    wms_icon,
+)
 from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
 
 
@@ -57,17 +69,9 @@ class FileAction(Enum):
         return _TOOLTIPS.get(self, "")
 
     @property
-    def icon_path(self) -> str:
-        """Return the QGIS theme icon path for this action."""
-        return _ICON_PATHS.get(self, "")
-
-    @property
     def icon(self) -> QIcon:
         """Return the QIcon for this action."""
-        path = self.icon_path
-        if path:
-            return QgsApplication.getThemeIcon(path)
-        return QIcon()
+        return _ICONS.get(self, QIcon())
 
 
 _TOOLTIPS = {
@@ -87,23 +91,23 @@ _TOOLTIPS = {
     FileAction.OPEN_WMS: "Retrieve WMS url and open layer in QGIS",
 }
 
-_ICON_PATHS = {
-    FileAction.OPEN_IN_QGIS: "/mActionSharingImport.svg",
-    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg",
-    FileAction.DOWNLOAD_RESULTS: "/mActionSharingImport.svg",
-    FileAction.OPEN_IN_FILE_BROWSER: "/mActionFileOpen.svg",
-    FileAction.OPEN_IN_BROWSER: "/mActionLink.svg",
-    FileAction.COPY_WMS_URL: "/mActionEditCopy.svg",
-    FileAction.SAVE_REVISION: "/mActionSharingExport.svg",
-    FileAction.SAVE_STYLING: "/propertyicons/symbology.svg",
-    FileAction.UPLOAD_FILE: "/mActionSharingExport.svg",
-    FileAction.EXPORT_GPKG: "/mActionEditCopy.svg",
-    FileAction.VIEW_REVISIONS: "/mActionHistory.svg",
-    FileAction.HISTORY: "/mActionHistory.svg",
-    FileAction.RENAME: "/mActionChangeLabelProperties.svg",
-    FileAction.DELETE: "/mActionDeleteSelected.svg",
-    FileAction.REMOVE_FROM_PROJECT: "/mActionDeleteSelected.svg",
-    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg",
+_ICONS = {
+    FileAction.OPEN_IN_QGIS: download_icon,
+    FileAction.OPEN_WMS: wms_icon,
+    FileAction.DOWNLOAD_RESULTS: download_icon,
+    FileAction.OPEN_IN_FILE_BROWSER: dir_icon,
+    FileAction.OPEN_IN_BROWSER: link_icon,
+    FileAction.COPY_WMS_URL: copy_icon,
+    FileAction.SAVE_REVISION: upload_icon,
+    FileAction.SAVE_STYLING: style_icon,
+    FileAction.UPLOAD_FILE: upload_icon,
+    FileAction.EXPORT_GPKG: copy_icon,
+    FileAction.VIEW_REVISIONS: history_icon,
+    FileAction.HISTORY: history_icon,
+    FileAction.RENAME: edit_icon,
+    FileAction.DELETE: trash_icon,
+    FileAction.REMOVE_FROM_PROJECT: trash_icon,
+    FileAction.OPEN_WMS: wms_icon,
 }
 
 

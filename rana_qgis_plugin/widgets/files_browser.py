@@ -31,7 +31,13 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import add_icon, dir_icon, download_icon, trash_icon
+from rana_qgis_plugin.icons import (
+    add_icon,
+    dir_icon,
+    download_icon,
+    trash_icon,
+    upload_icon,
+)
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_tenant_project_files,
@@ -167,9 +173,7 @@ class FilesBrowser(QWidget):
         self.select_btn.setToolTip("Toggle file selection mode")
         self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
-        self.btn_upload.setIcon(
-            QgsApplication.getThemeIcon("/mActionSharingExport.svg")
-        )
+        self.btn_upload.setIcon(upload_icon)
         self.btn_upload.setToolTip("Upload your files to Rana Web Platform")
         # Add schematisation menu button
         self.btn_add_schematisation = QToolButton()
@@ -193,14 +197,14 @@ class FilesBrowser(QWidget):
             "Create a new schematisation on Rana web platform"
         )
         self.action_upload_existing_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionFileOpen.svg"),
+            dir_icon,
             "Upload existing",
         )
         self.action_upload_existing_schematisation.setToolTip(
             "Upload your local schematisation to Rana web platform"
         )
         self.action_import_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionSharingImport.svg"),
+            download_icon,
             "Import from HCC",
         )
         self.action_import_schematisation.setToolTip(
