@@ -35,6 +35,7 @@ from rana_qgis_plugin.icons import (
     add_icon,
     dir_icon,
     download_icon,
+    new_icon,
     trash_icon,
     upload_icon,
 )
@@ -191,7 +192,7 @@ class FilesBrowser(QWidget):
         schematisation_menu = QMenu(self.btn_add_schematisation)
         schematisation_menu.setToolTipsVisible(True)
         self.action_new_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "From scratch"
+            new_icon, "From scratch"
         )
         self.action_new_schematisation.setToolTip(
             "Create a new schematisation on Rana web platform"
