@@ -177,7 +177,7 @@ class FilesBrowser(QWidget):
         self.btn_upload.setToolTip("Upload your files to Rana Web Platform")
         # Add schematisation menu button
         self.btn_add_schematisation = QToolButton()
-        self.btn_add_schematisation.setText("Upload schematisation")
+        self.btn_add_schematisation.setText("Add Schematisation")
         self.btn_add_schematisation.setIcon(add_icon)
         self.btn_add_schematisation.setToolTip(
             "Add schematisation on Rana web platform"
@@ -197,7 +197,7 @@ class FilesBrowser(QWidget):
             "Create a new schematisation on Rana web platform"
         )
         self.action_upload_existing_schematisation = schematisation_menu.addAction(
-            dir_icon,
+            upload_icon,
             "Upload existing",
         )
         self.action_upload_existing_schematisation.setToolTip(
