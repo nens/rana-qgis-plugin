@@ -120,7 +120,6 @@ class FileBrowserModel(QStandardItemModel):
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
-    path_changed = pyqtSignal(str)
     create_folder_requested = pyqtSignal(str)
     batch_download_requested = pyqtSignal(list)  # list of file dicts
     batch_delete_requested = pyqtSignal(list)

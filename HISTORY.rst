@@ -26,6 +26,7 @@ History
 - Fixed bug in general box update
 - Make column in processes view resizable and show tooltop for long process names (nens/rana-qgis-plugin#292)
 - Changed some icons into Rana style (#403)
+- Fixed that Select button was visible in File View (nens/rana#4366)
 
 
 1.2.12 (2026-05-06)
