@@ -463,6 +463,8 @@ class FileView(QWidget):
                 return f"EPSG:{dem['epsg_code']}"
         elif meta and meta.get("extent"):
             return meta["extent"].get("crs")
+        elif meta and meta.get("grid"):
+            return meta["grid"].get("crs")
         return None
 
     @staticmethod

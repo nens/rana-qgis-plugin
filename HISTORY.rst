@@ -28,6 +28,7 @@ History
 - Fixed that Select button was visible in File View (nens/rana#4366)
 - UX improvements (nens/rana#4375)
 - Show warning when a result does not contain WMS layers (nens/rana#4387)
+- Projection of raster is now properly shown in file view (nens/rana#4365)
 
 1.2.12 (2026-05-06)
 -------------------
