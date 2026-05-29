@@ -45,6 +45,8 @@ class RevisionsView(QWidget):
     def setup_ui(self):
         self.revisions_table = QTableView()
         self.revisions_table.setSortingEnabled(True)
+        self.revisions_table.setSelectionBehavior(QTableView.SelectRows)
+        self.revisions_table.setSelectionMode(QTableView.SingleSelection)
         self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
@@ -258,9 +260,11 @@ class RevisionsView(QWidget):
             if latest:
                 commit_item.setText(commit_item.text() + " (latest)")
             # We store the revision object for loading specific revisions in menu_requested.
+            event_item = QStandardItem(event)
             if threedi_revision:
                 commit_item.setData((threedi_revision, threedi_schematisation))
-            row += [commit_item, QStandardItem(event)]
+                event_item.setData((threedi_revision, threedi_schematisation))
+            row += [commit_item, event_item]
             self.revisions_model.appendRow(row)
             for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 3):
                 if btn_data:

@@ -29,6 +29,7 @@ History
 - UX improvements (nens/rana#4375)
 - Show warning when a result does not contain WMS layers (nens/rana#4387)
 - Projection of raster is now properly shown in file view (nens/rana#4365)
+- Schematisation revision can now also be loaded by right-clicking on event column in Revisions View (#405)
 
 1.2.12 (2026-05-06)
 -------------------
