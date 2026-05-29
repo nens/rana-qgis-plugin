@@ -30,7 +30,6 @@ class FileAction(Enum):
     DOWNLOAD_RESULTS = "Download"
     OPEN_IN_FILE_BROWSER = "Open in local folder"
     OPEN_IN_BROWSER = "Open in web viewer"
-    COPY_WMS_URL = "Copy WMS url"
     # Actions related to viewing or modifying files on Rana
     SAVE_REVISION = "Save new revision"
     SAVE_STYLING = "Save style"
@@ -76,7 +75,6 @@ class FileAction(Enum):
 
 _TOOLTIPS = {
     FileAction.DOWNLOAD_RESULTS: ("Download results and open in Rana Results Analysis"),
-    FileAction.COPY_WMS_URL: "Copy WMS URL to clipboard",
     FileAction.SAVE_REVISION: (
         "Save your local changes as a new revision to this schematisation"
     ),
@@ -97,7 +95,6 @@ _ICONS = {
     FileAction.DOWNLOAD_RESULTS: download_icon,
     FileAction.OPEN_IN_FILE_BROWSER: dir_icon,
     FileAction.OPEN_IN_BROWSER: link_icon,
-    FileAction.COPY_WMS_URL: copy_icon,
     FileAction.SAVE_REVISION: upload_icon,
     FileAction.SAVE_STYLING: style_icon,
     FileAction.UPLOAD_FILE: upload_icon,
@@ -152,7 +149,6 @@ def get_scenario_actions(
         actions.append(FileAction.DOWNLOAD_RESULTS)
         if meta["simulation"]["software"]["id"] == "3Di":
             actions.append(FileAction.OPEN_WMS)
-            actions.append(FileAction.COPY_WMS_URL)
         # Add open in file browser to any file type that can be opened
         # Actual check for file availibility will be done downstream
         actions.append(FileAction.OPEN_IN_FILE_BROWSER)

@@ -18,7 +18,6 @@ History
 - Add open in browser functionality to files (context menu), file view (button) and revivisions view (context menu) (nens/rana#3732)
 - Organize add schematisation actions in files in menu and move "create new folder" to context menu on empty space (nens/rana#4254)
 - Fix error on requesting context menu for files view on non-filename column
-- Add "copy wms url" functionality to files (context menu) and file view (button) (nens/rana#4165)
 - Add ellipsis button to file view and reorganize buttons (nens/rana#4165)
 - Add icons and tooltips to most buttons (nens/rana#4166)
 - Fix failure to open schematisation when schematisation from the same location is already opened (nens/rana-qgis-plugin#291)

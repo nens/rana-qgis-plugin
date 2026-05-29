@@ -127,7 +127,6 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
             {
                 FileAction.DOWNLOAD_RESULTS,
                 FileAction.OPEN_WMS,
-                FileAction.COPY_WMS_URL,
                 FileAction.OPEN_IN_FILE_BROWSER,
             },
             "3di_simulation",

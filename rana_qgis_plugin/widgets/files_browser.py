@@ -485,12 +485,6 @@ class FilesBrowser(QWidget):
                         self.project, selected_item
                     )
                 )
-            elif file_action == FileAction.COPY_WMS_URL:
-                action.triggered.connect(
-                    lambda _, item=selected_item: copy_wms_url_to_clipboard(
-                        item, self.communication
-                    )
-                )
             else:
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(selected_item)

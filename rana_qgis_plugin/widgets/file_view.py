@@ -345,7 +345,6 @@ class FileView(QWidget):
         for action in (
             FileAction.OPEN_IN_FILE_BROWSER,
             FileAction.OPEN_IN_BROWSER,
-            FileAction.COPY_WMS_URL,
             FileAction.EXPORT_GPKG,
         ):
             if action in self._active_actions:
@@ -376,12 +375,6 @@ class FileView(QWidget):
                 menu_action.triggered.connect(lambda _: self.open_in_file_browser())
             elif action == FileAction.OPEN_IN_BROWSER:
                 menu_action.triggered.connect(lambda _: self.open_in_browser())
-            elif action == FileAction.COPY_WMS_URL:
-                menu_action.triggered.connect(
-                    lambda _: copy_wms_url_to_clipboard(
-                        self.selected_file, self.communication
-                    )
-                )
             elif action == FileAction.EXPORT_GPKG:
                 menu_action.triggered.connect(
                     lambda _: self.file_signals.export_gpkg_requested.emit(
