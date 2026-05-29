@@ -55,7 +55,7 @@ from rana_qgis_plugin.utils.local_paths import (
     get_local_results_dir_from_meta,
     get_local_schematisation_revision_dir,
 )
-from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.utils.settings import base_url, get_tenant_id, hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
@@ -497,14 +497,27 @@ class FilesBrowser(QWidget):
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def open_in_browser(self, selected_item):
-        if selected_item.get("data_type") != "threedi_schematisation":
-            return
-        schematisation = get_threedi_schematisation(
-            self.communication, selected_item["descriptor_id"]
-        )
-        if not schematisation or not schematisation.get("management_url"):
-            return
-        QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
+        if selected_item.get("data_type") == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_item["descriptor_id"]
+            )
+            if not schematisation or not schematisation.get("management_url"):
+                return
+            QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
+        elif selected_item.get("data_type") in ["vector", "raster"]:
+            link = (
+                f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=1&"
+            )
+
+            file_id = selected_item.get("id")
+            if "/" in file_id:
+                path = file_id.rsplit("/", 1)[0]
+                fileName = file_id.rsplit("/", 1)[1]
+                link = link + f"paths={path.replace('/', ',')}&fileName={fileName}"
+            else:
+                link = link + f"fileName={file_id}"
+
+            QDesktopServices.openUrl(QUrl(link))
 
     def open_in_file_browser(self, local_path: str):
         """Open a local path in the OS file explorer."""

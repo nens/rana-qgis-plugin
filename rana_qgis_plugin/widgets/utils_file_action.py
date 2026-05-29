@@ -132,6 +132,7 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
         actions.append(FileAction.SAVE_STYLING)
+        actions.append(FileAction.OPEN_IN_BROWSER)
     elif data_type == "threedi_schematisation":
         # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
