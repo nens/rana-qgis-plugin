@@ -133,6 +133,7 @@ class FilesBrowser(QWidget):
         self.selected_item = None
         self.file_signals = file_signals
         self._pending_close_editor_handler = None
+        self.no_refresh = False
         self.setup_ui()
 
     def update_project(self, project: dict):
@@ -255,6 +256,8 @@ class FilesBrowser(QWidget):
             self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
+        if self.no_refresh:
+            return
         # Remember current select mode state
         was_in_select_mode = self.select_btn.isChecked()
         previously_checked = self._get_checked_files() if was_in_select_mode else []
@@ -610,6 +613,8 @@ class FilesBrowser(QWidget):
         if name_item is None:
             return
 
+        self.no_refresh = True
+
         original_name = name_item.text()
         delegate = self.files_tv.itemDelegate()
 
@@ -619,9 +624,13 @@ class FilesBrowser(QWidget):
             self._pending_close_editor_handler = None
 
         def on_close_editor(editor, hint):
+            self.no_refresh = False
             delegate.closeEditor.disconnect(on_close_editor)
             self._pending_close_editor_handler = None
-            if hint == QAbstractItemDelegate.EndEditHint.NoHint:
+            if hint in [
+                QAbstractItemDelegate.EndEditHint.NoHint,
+                QAbstractItemDelegate.EndEditHint.RevertModelCache,
+            ]:
                 # editing was cancelled (Escape)
                 return
             new_name = editor.text().strip()
