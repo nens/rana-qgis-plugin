@@ -28,6 +28,7 @@ History
 - Changed some icons into Rana style (#403)
 - Fixed that Select button was visible in File View (nens/rana#4366)
 - UX improvements (nens/rana#4375)
+- Show warning when a result does not contain WMS layers (nens/rana#4387)
 
 1.2.12 (2026-05-06)
 -------------------
