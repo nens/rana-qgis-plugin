@@ -21,6 +21,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.UPLOAD_FILE,
                 FileAction.SAVE_STYLING,
                 FileAction.OPEN_IN_FILE_BROWSER,
+                FileAction.OPEN_IN_BROWSER,
             },
         ),
         (
@@ -32,6 +33,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.UPLOAD_FILE,
                 FileAction.SAVE_STYLING,
                 FileAction.OPEN_IN_FILE_BROWSER,
+                FileAction.OPEN_IN_BROWSER,
             },
         ),
         (
