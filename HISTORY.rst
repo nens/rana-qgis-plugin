@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.13 (unreleased)
+1.2.13 (2026-06-01)
 -------------------
 
 - Add default values for AggregationSettings (nens/rana#3537)
