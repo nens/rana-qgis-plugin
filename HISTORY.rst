@@ -5,7 +5,7 @@ History
 1.2.14 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Remove unnecessary back and next buttons from upload schematisation wizard (nens/rana#4408)
 
 
 1.2.13 (2026-06-01)

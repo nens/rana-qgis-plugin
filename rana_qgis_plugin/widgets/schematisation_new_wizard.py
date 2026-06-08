@@ -280,7 +280,7 @@ class UploadExistingSchematisationWizard(QWizard):
         self.cancel_btn.clicked.connect(self.cancel_wizard)
         self.setWindowTitle("Upload existing schematisation")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setOption(QWizard.HaveNextButtonOnLastPage, False)
+        self.setButtonLayout([QWizard.Stretch, QWizard.FinishButton, QWizard.CancelButton])
         self.resize(
             QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))
         )
