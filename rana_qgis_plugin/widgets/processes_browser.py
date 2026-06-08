@@ -16,9 +16,9 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from threedi_mi_utils.constants import PROGRESS_COLOR_FAILED
 
 from rana_qgis_plugin.communication import ColoredProgressBar
-from rana_qgis_plugin.constant import PROGRESS_COLOR_FAILED
 
 
 class ProcessProgressBar(ColoredProgressBar):

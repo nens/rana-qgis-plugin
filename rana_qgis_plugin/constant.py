@@ -22,7 +22,3 @@ SUPPORTED_DATA_TYPES = {
 }
 
 STYLE_DIR = Path(__file__).parent / "styles"
-
-PROGRESS_COLOR_RUNNING = "#2196F3"  # blue
-PROGRESS_COLOR_FINISHED = "#4CAF50"  # green
-PROGRESS_COLOR_FAILED = "#F44336"  # red

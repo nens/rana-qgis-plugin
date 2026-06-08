@@ -3,8 +3,7 @@
 from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox, QProgressBar, QPushButton
-
-from rana_qgis_plugin.constant import PROGRESS_COLOR_FINISHED, PROGRESS_COLOR_RUNNING
+from threedi_mi_utils.constants import PROGRESS_COLOR_FINISHED, PROGRESS_COLOR_RUNNING
 
 
 class ColoredProgressBar(QProgressBar):
