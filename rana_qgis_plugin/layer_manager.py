@@ -255,6 +255,9 @@ class LayerManager(QObject):
             (link for link in descriptor["links"] if link["rel"] == "wms"), None
         )
         if wms_link:
+            if len(layers) == 0:
+                self.communication.bar_info("No layers present in this file.")
+                return
             for layer in layers:
                 self._add_wms_for_layer(layer, wms_link, parents=parents)
             self.communication.bar_info(

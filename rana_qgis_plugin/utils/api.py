@@ -224,6 +224,35 @@ def get_tenant_project_files(
         return []
 
 
+def create_project(params: dict):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, desc = network_manager.post(payload=params)
+
+    if status:
+        response = network_manager.content
+        return response
+    else:
+        return None
+
+
+def delete_project(project_id: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}"
+
+    network_manager = NetworkManager(url, authcfg_id)
+    status, desc = network_manager.delete()
+
+    if status:
+        return True
+    else:
+        return False
+
+
 def delete_tenant_project_file(project_id: str, params: dict):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()

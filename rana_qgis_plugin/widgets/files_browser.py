@@ -31,7 +31,14 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.icons import dir_icon, download_icon, trash_icon
+from rana_qgis_plugin.icons import (
+    add_icon,
+    dir_icon,
+    download_icon,
+    new_icon,
+    trash_icon,
+    upload_icon,
+)
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_tenant_project_files,
@@ -48,7 +55,7 @@ from rana_qgis_plugin.utils.local_paths import (
     get_local_results_dir_from_meta,
     get_local_schematisation_revision_dir,
 )
-from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.utils.settings import base_url, get_tenant_id, hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
@@ -113,7 +120,6 @@ class FileBrowserModel(QStandardItemModel):
 class FilesBrowser(QWidget):
     folder_selected = pyqtSignal(str)
     file_selected = pyqtSignal(dict)
-    path_changed = pyqtSignal(str)
     create_folder_requested = pyqtSignal(str)
     batch_download_requested = pyqtSignal(list)  # list of file dicts
     batch_delete_requested = pyqtSignal(list)
@@ -127,6 +133,7 @@ class FilesBrowser(QWidget):
         self.selected_item = None
         self.file_signals = file_signals
         self._pending_close_editor_handler = None
+        self.no_refresh = False
         self.setup_ui()
 
     def update_project(self, project: dict):
@@ -149,6 +156,7 @@ class FilesBrowser(QWidget):
         self.files_model = FileBrowserModel()
         self.files_tv.setModel(self.files_model)
         self.files_tv.setSortingEnabled(True)
+        self.files_tv.header().setStretchLastSection(True)
         self.files_tv.header().setSortIndicatorShown(True)
         self.files_tv.header().setSectionsMovable(False)
         # Remove the branch indicator area so column 0 has no leading indent
@@ -166,16 +174,12 @@ class FilesBrowser(QWidget):
         self.select_btn.setToolTip("Toggle file selection mode")
         self.select_btn.toggled.connect(self.toggle_select_mode)
         self.btn_upload = QPushButton("Upload Files to Rana")
-        self.btn_upload.setIcon(
-            QgsApplication.getThemeIcon("/mActionSharingExport.svg")
-        )
+        self.btn_upload.setIcon(upload_icon)
         self.btn_upload.setToolTip("Upload your files to Rana Web Platform")
         # Add schematisation menu button
         self.btn_add_schematisation = QToolButton()
-        self.btn_add_schematisation.setText("Upload schematisation")
-        self.btn_add_schematisation.setIcon(
-            QgsApplication.getThemeIcon("/mActionAdd.svg")
-        )
+        self.btn_add_schematisation.setText("Add Schematisation")
+        self.btn_add_schematisation.setIcon(add_icon)
         self.btn_add_schematisation.setToolTip(
             "Add schematisation on Rana web platform"
         )
@@ -188,24 +192,24 @@ class FilesBrowser(QWidget):
         schematisation_menu = QMenu(self.btn_add_schematisation)
         schematisation_menu.setToolTipsVisible(True)
         self.action_new_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionNewPage.svg"), "New schematisation"
+            new_icon, "From scratch"
         )
         self.action_new_schematisation.setToolTip(
             "Create a new schematisation on Rana web platform"
         )
         self.action_upload_existing_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionFileOpen.svg"),
-            "Upload existing schematisation",
+            upload_icon,
+            "Upload existing",
         )
         self.action_upload_existing_schematisation.setToolTip(
             "Upload your local schematisation to Rana web platform"
         )
         self.action_import_schematisation = schematisation_menu.addAction(
-            QgsApplication.getThemeIcon("/mActionSharingImport.svg"),
-            "Import schematisation",
+            download_icon,
+            "Import from HCC",
         )
         self.action_import_schematisation.setToolTip(
-            "Import a schematisation from the model databank into Rana Webplatform"
+            "Import a schematisation from the model databank into Rana web platform"
         )
         self.btn_add_schematisation.setMenu(schematisation_menu)
         # Page 0: Normal mode buttons
@@ -252,6 +256,8 @@ class FilesBrowser(QWidget):
             self.create_folder_requested.emit(dialog.folder_name())
 
     def refresh(self):
+        if self.no_refresh:
+            return
         # Remember current select mode state
         was_in_select_mode = self.select_btn.isChecked()
         previously_checked = self._get_checked_files() if was_in_select_mode else []
@@ -482,12 +488,6 @@ class FilesBrowser(QWidget):
                         self.project, selected_item
                     )
                 )
-            elif file_action == FileAction.COPY_WMS_URL:
-                action.triggered.connect(
-                    lambda _, item=selected_item: copy_wms_url_to_clipboard(
-                        item, self.communication
-                    )
-                )
             else:
                 action.triggered.connect(
                     lambda _, signal=action_signal: signal.emit(selected_item)
@@ -500,14 +500,27 @@ class FilesBrowser(QWidget):
         menu.popup(self.files_tv.viewport().mapToGlobal(pos))
 
     def open_in_browser(self, selected_item):
-        if selected_item.get("data_type") != "threedi_schematisation":
-            return
-        schematisation = get_threedi_schematisation(
-            self.communication, selected_item["descriptor_id"]
-        )
-        if not schematisation or not schematisation.get("management_url"):
-            return
-        QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
+        if selected_item.get("data_type") == "threedi_schematisation":
+            schematisation = get_threedi_schematisation(
+                self.communication, selected_item["descriptor_id"]
+            )
+            if not schematisation or not schematisation.get("management_url"):
+                return
+            QDesktopServices.openUrl(QUrl(schematisation["management_url"]))
+        elif selected_item.get("data_type") in ["vector", "raster"]:
+            link = (
+                f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=1&"
+            )
+
+            file_id = selected_item.get("id")
+            if "/" in file_id:
+                path = file_id.rsplit("/", 1)[0]
+                fileName = file_id.rsplit("/", 1)[1]
+                link = link + f"paths={path.replace('/', ',')}&fileName={fileName}"
+            else:
+                link = link + f"fileName={file_id}"
+
+            QDesktopServices.openUrl(QUrl(link))
 
     def open_in_file_browser(self, local_path: str):
         """Open a local path in the OS file explorer."""
@@ -600,6 +613,8 @@ class FilesBrowser(QWidget):
         if name_item is None:
             return
 
+        self.no_refresh = True
+
         original_name = name_item.text()
         delegate = self.files_tv.itemDelegate()
 
@@ -609,9 +624,13 @@ class FilesBrowser(QWidget):
             self._pending_close_editor_handler = None
 
         def on_close_editor(editor, hint):
+            self.no_refresh = False
             delegate.closeEditor.disconnect(on_close_editor)
             self._pending_close_editor_handler = None
-            if hint == QAbstractItemDelegate.EndEditHint.NoHint:
+            if hint in [
+                QAbstractItemDelegate.EndEditHint.NoHint,
+                QAbstractItemDelegate.EndEditHint.RevertModelCache,
+            ]:
                 # editing was cancelled (Escape)
                 return
             new_name = editor.text().strip()

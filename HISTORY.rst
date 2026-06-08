@@ -2,7 +2,13 @@ History
 =======
 
 
-1.2.13 (unreleased)
+1.2.14 (unreleased)
+-------------------
+
+- Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
+
+
+1.2.13 (2026-06-01)
 -------------------
 
 - Add default values for AggregationSettings (nens/rana#3537)
@@ -13,15 +19,25 @@ History
 - Show user that created the last commit in de FileView next to the commit message (nens/rana#4169)
 - Optionally clear cache on close and remove downloaded results zip from cache (nens/rana#3975)
 - Remove results download folder on canceling download (nens/rana-qgis-plugin#323)
+- e2e: use tenant token (to add and remove a unique project at the start of tests) (#345)
 - Split new schematisation from scratch and new schematisation from file functionality (nens/rana#4224)
 - Add open in browser functionality to files (context menu), file view (button) and revivisions view (context menu) (nens/rana#3732)
 - Organize add schematisation actions in files in menu and move "create new folder" to context menu on empty space (nens/rana#4254)
 - Fix error on requesting context menu for files view on non-filename column
-- Add "copy wms url" functionality to files (context menu) and file view (button) (nens/rana#4165)
 - Add ellipsis button to file view and reorganize buttons (nens/rana#4165)
 - Add icons and tooltips to most buttons (nens/rana#4166)
 - Fix failure to open schematisation when schematisation from the same location is already opened (nens/rana-qgis-plugin#291)
-- Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
+- Added fix for exporting the same schematisation twice.
+- Fixed bug in general box update
+- Make column in processes view resizable and show tooltop for long process names (nens/rana-qgis-plugin#292)
+- Changed some icons into Rana style (#403)
+- Fixed that Select button was visible in File View (nens/rana#4366)
+- UX improvements (nens/rana#4375)
+- Show warning when a result does not contain WMS layers (nens/rana#4387)
+- Projection of raster is now properly shown in file view (nens/rana#4365)
+- Schematisation revision can now also be loaded by right-clicking on event column in Revisions View (#405)
+- Add "Open in Web Viewer" options to vectors and rasters (#4341)
+- Auto-refresh is now suspended when a file is being renamed in the Files view (nens/rana#4372)
 
 
 1.2.12 (2026-05-06)

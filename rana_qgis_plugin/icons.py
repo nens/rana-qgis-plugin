@@ -15,18 +15,16 @@ rana_icon = QIcon(os.path.join(ICONS_DIR, "rana.svg"))
 separator_icon = QIcon(os.path.join(ICONS_DIR, "separator.svg"))
 ellipsis_icon = QIcon(os.path.join(ICONS_DIR, "ellipsis.svg"))
 settings_icon = QgsApplication.getThemeIcon("/processingAlgorithm.svg")
+add_icon = QIcon(os.path.join(ICONS_DIR, "add.svg"))
 
-
-def get_safe_icon(standard_pixmap):
-    """Safely get a standard icon, with fallback to a blank QIcon"""
-    app = QApplication.instance()
-    if app and app.style():
-        return app.style().standardIcon(standard_pixmap)
-    return QIcon()  # Return empty icon as fallback
-
-
-# Use the safe function
-dir_icon = get_safe_icon(QStyle.StandardPixmap.SP_DirIcon)
-file_icon = get_safe_icon(QStyle.StandardPixmap.SP_FileIcon)
-download_icon = get_safe_icon(QStyle.StandardPixmap.SP_DialogSaveButton)
-trash_icon = get_safe_icon(QStyle.StandardPixmap.SP_TrashIcon)
+copy_icon = QIcon(os.path.join(ICONS_DIR, "copy.svg"))
+download_icon = QIcon(os.path.join(ICONS_DIR, "download.svg"))
+edit_icon = QIcon(os.path.join(ICONS_DIR, "edit.svg"))
+dir_icon = QIcon(os.path.join(ICONS_DIR, "folder.svg"))
+history_icon = QIcon(os.path.join(ICONS_DIR, "history.svg"))
+link_icon = QIcon(os.path.join(ICONS_DIR, "link.svg"))
+style_icon = QIcon(os.path.join(ICONS_DIR, "style.svg"))
+trash_icon = QIcon(os.path.join(ICONS_DIR, "trash.svg"))
+upload_icon = QIcon(os.path.join(ICONS_DIR, "upload.svg"))
+wms_icon = QIcon(os.path.join(ICONS_DIR, "wms.svg"))
+new_icon = QIcon(os.path.join(ICONS_DIR, "new.svg"))

@@ -8,6 +8,18 @@ from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.icons import (
+    copy_icon,
+    dir_icon,
+    download_icon,
+    edit_icon,
+    history_icon,
+    link_icon,
+    style_icon,
+    trash_icon,
+    upload_icon,
+    wms_icon,
+)
 from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
 
 
@@ -18,7 +30,6 @@ class FileAction(Enum):
     DOWNLOAD_RESULTS = "Download"
     OPEN_IN_FILE_BROWSER = "Open in local folder"
     OPEN_IN_BROWSER = "Open in web viewer"
-    COPY_WMS_URL = "Copy WMS url"
     # Actions related to viewing or modifying files on Rana
     SAVE_REVISION = "Save new revision"
     SAVE_STYLING = "Save style"
@@ -57,22 +68,13 @@ class FileAction(Enum):
         return _TOOLTIPS.get(self, "")
 
     @property
-    def icon_path(self) -> str:
-        """Return the QGIS theme icon path for this action."""
-        return _ICON_PATHS.get(self, "")
-
-    @property
     def icon(self) -> QIcon:
         """Return the QIcon for this action."""
-        path = self.icon_path
-        if path:
-            return QgsApplication.getThemeIcon(path)
-        return QIcon()
+        return _ICONS.get(self, QIcon())
 
 
 _TOOLTIPS = {
     FileAction.DOWNLOAD_RESULTS: ("Download results and open in Rana Results Analysis"),
-    FileAction.COPY_WMS_URL: "Copy WMS URL to clipboard",
     FileAction.SAVE_REVISION: (
         "Save your local changes as a new revision to this schematisation"
     ),
@@ -87,23 +89,22 @@ _TOOLTIPS = {
     FileAction.OPEN_WMS: "Retrieve WMS url and open layer in QGIS",
 }
 
-_ICON_PATHS = {
-    FileAction.OPEN_IN_QGIS: "/mActionSharingImport.svg",
-    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg",
-    FileAction.DOWNLOAD_RESULTS: "/mActionSharingImport.svg",
-    FileAction.OPEN_IN_FILE_BROWSER: "/mActionFileOpen.svg",
-    FileAction.OPEN_IN_BROWSER: "/mActionLink.svg",
-    FileAction.COPY_WMS_URL: "/mActionEditCopy.svg",
-    FileAction.SAVE_REVISION: "/mActionSharingExport.svg",
-    FileAction.SAVE_STYLING: "/propertyicons/symbology.svg",
-    FileAction.UPLOAD_FILE: "/mActionSharingExport.svg",
-    FileAction.EXPORT_GPKG: "/mActionEditCopy.svg",
-    FileAction.VIEW_REVISIONS: "/mActionHistory.svg",
-    FileAction.HISTORY: "/mActionHistory.svg",
-    FileAction.RENAME: "/mActionChangeLabelProperties.svg",
-    FileAction.DELETE: "/mActionDeleteSelected.svg",
-    FileAction.REMOVE_FROM_PROJECT: "/mActionDeleteSelected.svg",
-    FileAction.OPEN_WMS: "/mActionAddWmsLayer.svg",
+_ICONS = {
+    FileAction.OPEN_IN_QGIS: download_icon,
+    FileAction.OPEN_WMS: wms_icon,
+    FileAction.DOWNLOAD_RESULTS: download_icon,
+    FileAction.OPEN_IN_FILE_BROWSER: dir_icon,
+    FileAction.OPEN_IN_BROWSER: link_icon,
+    FileAction.SAVE_REVISION: upload_icon,
+    FileAction.SAVE_STYLING: style_icon,
+    FileAction.UPLOAD_FILE: upload_icon,
+    FileAction.EXPORT_GPKG: copy_icon,
+    FileAction.VIEW_REVISIONS: history_icon,
+    FileAction.HISTORY: history_icon,
+    FileAction.RENAME: edit_icon,
+    FileAction.DELETE: trash_icon,
+    FileAction.REMOVE_FROM_PROJECT: trash_icon,
+    FileAction.OPEN_WMS: wms_icon,
 }
 
 
@@ -131,6 +132,7 @@ def get_file_actions_by_data_type(data_type: str) -> List[FileAction]:
     if data_type in ["vector", "raster"]:
         actions.append(FileAction.UPLOAD_FILE)
         actions.append(FileAction.SAVE_STYLING)
+        actions.append(FileAction.OPEN_IN_BROWSER)
     elif data_type == "threedi_schematisation":
         # Schematisation are not deleted, therefore replace DELETE with REMOVE_FROM_PROJECT
         actions = [FileAction.REMOVE_FROM_PROJECT] + actions[1:]
@@ -148,7 +150,6 @@ def get_scenario_actions(
         actions.append(FileAction.DOWNLOAD_RESULTS)
         if meta["simulation"]["software"]["id"] == "3Di":
             actions.append(FileAction.OPEN_WMS)
-            actions.append(FileAction.COPY_WMS_URL)
         # Add open in file browser to any file type that can be opened
         # Actual check for file availibility will be done downstream
         actions.append(FileAction.OPEN_IN_FILE_BROWSER)

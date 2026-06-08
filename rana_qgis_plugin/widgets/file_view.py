@@ -345,7 +345,6 @@ class FileView(QWidget):
         for action in (
             FileAction.OPEN_IN_FILE_BROWSER,
             FileAction.OPEN_IN_BROWSER,
-            FileAction.COPY_WMS_URL,
             FileAction.EXPORT_GPKG,
         ):
             if action in self._active_actions:
@@ -376,12 +375,6 @@ class FileView(QWidget):
                 menu_action.triggered.connect(lambda _: self.open_in_file_browser())
             elif action == FileAction.OPEN_IN_BROWSER:
                 menu_action.triggered.connect(lambda _: self.open_in_browser())
-            elif action == FileAction.COPY_WMS_URL:
-                menu_action.triggered.connect(
-                    lambda _: copy_wms_url_to_clipboard(
-                        self.selected_file, self.communication
-                    )
-                )
             elif action == FileAction.EXPORT_GPKG:
                 menu_action.triggered.connect(
                     lambda _: self.file_signals.export_gpkg_requested.emit(
@@ -470,6 +463,8 @@ class FileView(QWidget):
                 return f"EPSG:{dem['epsg_code']}"
         elif meta and meta.get("extent"):
             return meta["extent"].get("crs")
+        elif meta and meta.get("grid"):
+            return meta["grid"].get("crs")
         return None
 
     @staticmethod
@@ -525,7 +520,9 @@ class FileView(QWidget):
         # line 2: user icon - user name - commit msg - time
         # Note that the avatar is not automatically refreshed!
 
-        if selected_file["data_type"] == "threedi_schematisation":
+        if selected_file["data_type"] == "threedi_schematisation" and (
+            self.schematisation is not None
+        ):
             schematisation = self.schematisation
             last_rev = schematisation["latest_revision"]
             rana_user = get_user({"search": last_rev["commit_user"]})
@@ -535,10 +532,9 @@ class FileView(QWidget):
                     + "_"
                     + last_rev["commit_last_name"],
                     "given_name": last_rev["commit_first_name"],
-                    "family_name": last_rev_["commit_last_name"],
+                    "family_name": last_rev["commit_last_name"],
                 }
             msg = last_rev["commit_message"]
-            self.communication.log_info(f"{schematisation['latest_revision']}")
             last_modified = format_activity_timestamp_str(last_rev["commit_date"])
         else:
             rana_user = selected_file["user"]

@@ -21,6 +21,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.UPLOAD_FILE,
                 FileAction.SAVE_STYLING,
                 FileAction.OPEN_IN_FILE_BROWSER,
+                FileAction.OPEN_IN_BROWSER,
             },
         ),
         (
@@ -32,6 +33,7 @@ from rana_qgis_plugin.widgets.utils_file_action import (
                 FileAction.UPLOAD_FILE,
                 FileAction.SAVE_STYLING,
                 FileAction.OPEN_IN_FILE_BROWSER,
+                FileAction.OPEN_IN_BROWSER,
             },
         ),
         (
@@ -127,7 +129,6 @@ def test_get_file_actions_by_data_type_threedi_schematisation(
             {
                 FileAction.DOWNLOAD_RESULTS,
                 FileAction.OPEN_WMS,
-                FileAction.COPY_WMS_URL,
                 FileAction.OPEN_IN_FILE_BROWSER,
             },
             "3di_simulation",

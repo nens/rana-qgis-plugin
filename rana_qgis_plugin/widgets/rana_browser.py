@@ -175,6 +175,7 @@ class RanaBrowser(QWidget):
         corner_layout = QHBoxLayout(corner)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(2)
+        # TODO: This should be encapsulated.
         corner_layout.addWidget(self.files_browser.select_btn)
         corner_layout.addWidget(refresh_btn)
         self.project_widget.setCornerWidget(corner)
@@ -491,6 +492,8 @@ class RanaBrowser(QWidget):
     def show_project_data(self, parent, index):
         self.rana_browser.setCurrentIndex(1)
         parent.setCurrentIndex(index)
+        if parent is self.rana_files:
+            self.files_browser.select_btn.setVisible(index == 0)
 
     def show_processes_overview(self):
         if self.rana_browser.currentIndex() != 1:

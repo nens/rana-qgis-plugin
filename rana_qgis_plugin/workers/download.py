@@ -466,9 +466,6 @@ class SchematisationGeopackageDownloader(BaseDownloader):
     def _upgrade_schematisation(self, schematisation_filepath: Path) -> Optional[Path]:
         # Assert signals are set properly
         assert self.progress_signal is not None, "progress signal not set"
-        progress_callback = lambda progress_value, message: self.progress_signal.emit(
-            int(progress_value), message
-        )
         assert self.warning_signal is not None, "warning signal not set"
         try:
             from threedi_schema import ThreediDatabase, errors
@@ -495,7 +492,11 @@ class SchematisationGeopackageDownloader(BaseDownloader):
                 schema.upgrade(
                     backup=False,
                     epsg_code_override=srid,
-                    progress_func=progress_callback,
+                    # Do not bridge threedi-schema progress callbacks to Qt here.
+                    # Most likely the previous callback (and signal) is still in the
+                    # global logger handler (in threedi-schema). It should be removed at
+                    # the end of ModelSchema.upgrade()
+                    progress_func=None,
                 )
             if w:
                 for warning in w:
