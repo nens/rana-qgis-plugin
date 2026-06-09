@@ -16,15 +16,11 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from threedi_mi_utils.constants import PROGRESS_COLOR_FAILED
-
-from rana_qgis_plugin.communication import ColoredProgressBar
+from threedi_mi_utils.ui import ColoredProgressBar
 
 
 class ProcessProgressBar(ColoredProgressBar):
     """Progress bar that colors based on job status: blue=running/cancelling, green=finished, red=crashed."""
-
-    COLOR_FAILED = PROGRESS_COLOR_FAILED
 
     def set_status(self, status):
         if status == "completed":
@@ -32,11 +28,7 @@ class ProcessProgressBar(ColoredProgressBar):
         elif status in ["scheduled", "pending", "paused", "cancelling", "running"]:
             color = self.COLOR_RUNNING
         else:
-            color = self.COLOR_FAILED
-            self.setStyleSheet(
-                f"QProgressBar::chunk {{ background-color: {color}; }}"
-                f"QProgressBar {{ background-color: {color}; }}"
-            )
+            self.set_failed()
             return
         self.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
 
