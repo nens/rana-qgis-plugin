@@ -6,6 +6,7 @@ History
 -------------------
 
 - Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
+- Remove unnecessary back and next buttons from upload schematisation wizard (nens/rana#4408)
 
 
 1.2.13 (2026-06-01)
