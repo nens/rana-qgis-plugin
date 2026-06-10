@@ -5,6 +5,7 @@ History
 1.2.14 (unreleased)
 -------------------
 
+- Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
 - Remove unnecessary back and next buttons from upload schematisation wizard (nens/rana#4408)
 
 
@@ -38,6 +39,7 @@ History
 - Schematisation revision can now also be loaded by right-clicking on event column in Revisions View (#405)
 - Add "Open in Web Viewer" options to vectors and rasters (#4341)
 - Auto-refresh is now suspended when a file is being renamed in the Files view (nens/rana#4372)
+
 
 1.2.12 (2026-05-06)
 -------------------
