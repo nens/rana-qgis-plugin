@@ -120,8 +120,6 @@ class LayerManager(QObject):
         # Check whether result and gridadmin exist in the target folder
         result_path = Path(local_file_path).joinpath("results_3di.nc")
         admin_path = Path(local_file_path).joinpath("gridadmin.h5")
-        waterdepth_path = Path(local_file_path).joinpath("max_waterdepth.tif")
-        file_name = Path(file["id"]).name
         if result_path.exists() and admin_path.exists():
             if hasattr(ra_tool, "load_result"):
                 if self.communication.ask(
@@ -142,43 +140,6 @@ class LayerManager(QObject):
                             raise
                     if not ra_tool.dockwidget.isVisible():
                         ra_tool.toggle_results_manager.run()  # also does some initialisation
-                    if waterdepth_path.exists():
-                        # construct waterdepth parents based on metadata
-                        waterdepth_parents = [project]
-                        file_descriptor = get_tenant_file_descriptor(
-                            file["descriptor_id"]
-                        )
-                        layer_name = "max wd"
-                        if file_descriptor and file_descriptor.get("meta"):
-                            meta = file_descriptor["meta"]
-                            rev_name = meta.get("schematisation", {}).get("name")
-                            if rev_name:
-                                waterdepth_parents.append(rev_name)
-                            waterdepth_parents.append("Waterdepth")
-                            sim_name = meta.get("simulation", {}).get("name")
-                            if sim_name:
-                                layer_name += f" {sim_name}"
-                                # waterdepth_parents.append(sim_name)
-
-                        layer = self._create_and_add_layer(
-                            QgsRasterLayer,
-                            layer_args=[str(waterdepth_path), layer_name, "gdal"],
-                            parents=waterdepth_parents,
-                        )
-                        if layer:
-                            # we only download non-temporal rasters, so always pick the first band
-                            layer.loadNamedStyle(str(STYLE_DIR / "water_depth.qml"))
-                            if hasattr(layer.renderer(), "setBand"):
-                                layer.renderer().setBand(1)
-                            self._unlock_layer(layer)
-                            self.communication.bar_info(
-                                f"Added water depth layer for {file_name}"
-                                + (
-                                    f" to group {'/'.join(waterdepth_parents)}."
-                                    if waterdepth_parents
-                                    else "."
-                                )
-                            )
             else:
                 self.communication.show_warn(
                     "Cannot add results as layer without Rana Results Analysis plugin"
