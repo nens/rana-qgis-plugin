@@ -4,8 +4,7 @@ History
 
 1.2.14 (unreleased)
 -------------------
-
-- Nothing changed yet.
+- Fix problem with last_schematiation_dir that caused downstream crashes when selected schematisation (nens/rana-qgis-plugin#409)
 
 
 1.2.13 (2026-06-01)

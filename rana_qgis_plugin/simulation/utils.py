@@ -933,7 +933,9 @@ def download_required_files(
             downloaded_geopackage_filepath = expected_geopackage_path
         sleep(1)
         settings = QSettings()
-        settings.setValue("threedi/last_schematisation_folder", schematisation_db_dir)
+        settings.setValue(
+            "threedi/last_schematisation_folder", str(schematisation_db_dir)
+        )
 
         return (
             local_schematisation,
