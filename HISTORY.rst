@@ -2,12 +2,17 @@ History
 =======
 
 
-1.2.14 (unreleased)
+1.2.15 (unreleased)
 -------------------
 
 - Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
 - Remove unnecessary back and next buttons from upload schematisation wizard (nens/rana#4408)
 - Remove adding max waterdepth which is now handled by the results analysis plugin (nens/rana#4349)
+
+
+1.2.14 (2026-06-17)
+-------------------
+- Fix problem with last_schematiation_dir that caused downstream crashes when selected schematisation (nens/rana-qgis-plugin#409)
 
 
 1.2.13 (2026-06-01)
