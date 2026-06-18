@@ -1,4 +1,4 @@
-from qgis.PyQt.QtCore import QModelIndex, QSize, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
@@ -32,6 +32,7 @@ from rana_qgis_plugin.widgets.utils_qviews import update_width_with_wrapping
 
 class PublicationsBrowser(QWidget):
     publication_selected = pyqtSignal(str)
+    publication_filters_updated = pyqtSignal(dict)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -40,6 +41,7 @@ class PublicationsBrowser(QWidget):
         self.setup_ui()
         self.row_map = {}
         self.project = {}
+        self._pending_full_refresh = False
         # TODO: pagination
 
     def update_project(self, project: dict):
@@ -52,14 +54,15 @@ class PublicationsBrowser(QWidget):
     def setup_ui(self):
         self.filter_bar = FilterBar(
             filters=[
-                TextFilterConfig(key="name", placeholder="🔍 Search by name"),
+                TextFilterConfig(key="name", placeholder="Search by name"),
                 ComboFilterConfig(
                     key="who", placeholder="All contributors", dynamic=True
                 ),
             ],
             parent=self,
         )
-        self.filter_bar.filters_changed.connect(self._apply_filters)
+        self.filter_bar.filters_changed.connect(self._on_filters_changed)
+        self.filter_bar.filters_changed.connect(self.publication_filters_updated)
         self.publications_model = QStandardItemModel()
         self.publications_model.setSortRole(Qt.ItemDataRole.UserRole)
         self.publications_tv = QTreeView()
@@ -135,14 +138,16 @@ class PublicationsBrowser(QWidget):
         return [name_item, who_item, created_at_item, last_modified_item]
 
     def add_items(self, publication_list: list[dict]):
+        if self._pending_full_refresh:
+            self.publications_model.removeRows(0, self.publications_model.rowCount())
+            self.row_map.clear()
+            self._pending_full_refresh = False
         for publication in publication_list:
             self.publications_model.appendRow(self.make_items(publication))
             self.row_map[publication["id"]] = self.publications_model.rowCount() - 1
-        # Let first column stretch and resize the others to contents
         self.apply_current_sort()
         self.update_width()
         self._repopulate_who_combo()
-        self._apply_filters(self.filter_bar.get_filters())
 
     def find_row_by_publication_id(self, publication_id: str):
         for row in range(self.publications_model.rowCount()):
@@ -162,7 +167,6 @@ class PublicationsBrowser(QWidget):
             self.publications_model.setItem(row, i, updated_item)
         self.apply_current_sort()
         self.update_width()
-        self._apply_filters(self.filter_bar.get_filters())
 
     def apply_current_sort(self):
         header = self.publications_tv.header()
@@ -184,19 +188,8 @@ class PublicationsBrowser(QWidget):
     def update_width(self):
         update_width_with_wrapping(self.publications_tv, self.publications_model, 0)
 
-    def _apply_filters(self, filters: dict):
-        name = filters.get("name", "").lower()
-        who = filters.get("who")
-        root = self.publications_model.invisibleRootItem()
-        for row in range(root.rowCount()):
-            name_item = root.child(row, 0)
-            who_item = root.child(row, 1)
-            pub_name = name_item.text().lower()
-            contributors = who_item.data(Qt.ItemDataRole.UserRole) or []
-            visible = (not name or name in pub_name) and (
-                not who or any(c["id"] == who for c in contributors)
-            )
-            self.publications_tv.setRowHidden(row, QModelIndex(), not visible)
+    def _on_filters_changed(self, _filters: dict):
+        self._pending_full_refresh = True
 
     def _repopulate_who_combo(self):
         seen = {}

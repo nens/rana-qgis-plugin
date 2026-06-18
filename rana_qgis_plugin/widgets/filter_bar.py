@@ -59,7 +59,7 @@ class FilterBar(QWidget):
                 widget = DebouncedSearchBox(
                     delay_ms=400,
                     placeholder=config.placeholder,
-                    show_search_icon=False,
+                    show_search_icon=True,
                 )
                 widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
                 widget.searchChanged.connect(self._emit_changed)
@@ -81,16 +81,21 @@ class FilterBar(QWidget):
                     for label, data in config.items:
                         widget.addItem(label, userData=data)
                     widget.setCurrentIndex(-1)
-                widget.currentIndexChanged.connect(self._emit_changed)
+                widget.activated.connect(self._emit_changed)
                 self._combos[config.key] = widget
                 layout.addWidget(widget, stretch=1)
 
         self.setLayout(layout)
 
     def _on_combo_text_changed(self, combo: QComboBox, text: str):
-        """Reset combo selection when the text field is cleared."""
+        """Reset combo selection and emit when the text field is cleared."""
         if not text:
+            was_selected = combo.currentIndex() != -1
+            combo.blockSignals(True)
             combo.setCurrentIndex(-1)
+            combo.blockSignals(False)
+            if was_selected:
+                self._emit_changed()
 
     def _emit_changed(self, _=None):
         self.filters_changed.emit(self.get_filters())

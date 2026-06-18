@@ -2000,6 +2000,48 @@ class Loader(QObject):
     def update_project_publications(self):
         self.persistent_scheduler.run_task_by_type(PublicationMonitorWorker)
 
+    @pyqtSlot(dict)
+    def update_publication_monitor_filters(self, filters: dict):
+        """Update publication monitor filter params and trigger an immediate re-fetch."""
+        params = {}
+        if filters.get("name"):
+            params["search"] = filters["name"]
+        if filters.get("who"):
+            params["created_by"] = filters["who"]
+        worker = next(
+            (
+                t.worker
+                for t in self.persistent_scheduler.tasks
+                if isinstance(t.worker, PublicationMonitorWorker)
+            ),
+            None,
+        )
+        if worker:
+            worker.set_filters(params)
+        self.persistent_scheduler.run_task_by_type(PublicationMonitorWorker)
+
+    @pyqtSlot(dict)
+    def update_job_monitor_filters(self, filters: dict):
+        """Update job monitor filter params and trigger an immediate re-fetch."""
+        params = {}
+        if filters.get("name"):
+            params["search"] = filters["name"]
+        if filters.get("who"):
+            params["created_by"] = filters["who"]
+        if filters.get("status"):
+            params["status"] = filters["status"]
+        worker = next(
+            (
+                t.worker
+                for t in self.persistent_scheduler.tasks
+                if isinstance(t.worker, ProjectJobMonitorWorker)
+            ),
+            None,
+        )
+        if worker:
+            worker.set_filters(params)
+        self.persistent_scheduler.run_task_by_type(ProjectJobMonitorWorker)
+
     @pyqtSlot()
     def run_all_persistent_tasks(self):
         self.persistent_scheduler.run_all_tasks()

@@ -150,7 +150,7 @@ class FilesBrowser(QWidget):
     def setup_ui(self):
         self.filter_bar = FilterBar(
             filters=[
-                TextFilterConfig(key="name", placeholder="🔍 Search by filename"),
+                TextFilterConfig(key="name", placeholder="Search by filename"),
                 ComboFilterConfig(key="type", placeholder="All types", dynamic=True),
             ],
             parent=self,

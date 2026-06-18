@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QModelIndex, QSize, Qt, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import (
     QStandardItem,
     QStandardItemModel,
@@ -93,6 +93,7 @@ class JobData:
 
 class ProcessesBrowser(QWidget):
     cancel_simulation = pyqtSignal(int)
+    job_filters_updated = pyqtSignal(dict)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -106,6 +107,7 @@ class ProcessesBrowser(QWidget):
         self.row_map = {}
         self.cancelled_sim_map: dict[int, JobData] = {}
         self.project = {}
+        self._pending_full_refresh = False
 
     def update_project(self, project: dict):
         self.processes_model.removeRows(0, self.processes_model.rowCount())
@@ -117,7 +119,7 @@ class ProcessesBrowser(QWidget):
     def setup_ui(self):
         self.filter_bar = FilterBar(
             filters=[
-                TextFilterConfig(key="name", placeholder="🔍 Search by name"),
+                TextFilterConfig(key="name", placeholder="Search by name"),
                 ComboFilterConfig(
                     key="who", placeholder="All contributors", dynamic=True
                 ),
@@ -140,7 +142,8 @@ class ProcessesBrowser(QWidget):
             ],
             parent=self,
         )
-        self.filter_bar.filters_changed.connect(self._apply_filters)
+        self.filter_bar.filters_changed.connect(self._on_filters_changed)
+        self.filter_bar.filters_changed.connect(self.job_filters_updated)
         self.processes_model = QStandardItemModel()
         self.processes_tv = QTreeView()
         self.processes_tv.setRootIsDecorated(False)
@@ -224,8 +227,6 @@ class ProcessesBrowser(QWidget):
         self.row_map[job.id] = 0
         self.processes_tv.setIndexWidget(name_item.index(), name_link)
         self.processes_tv.resizeColumnToContents(0)
-        self._repopulate_who_combo()
-        self._reapply_filters()
 
     def on_simulation_cancel_requested(self, job):
         # store cancellation related data on the fly to prevent a lot of bookkeeping
@@ -262,12 +263,6 @@ class ProcessesBrowser(QWidget):
                 f"color: {self.processes_tv.palette().text().color().name()}"
             )
 
-    def add_items(self, job_list: list[dict]):
-        for job in reversed(job_list):
-            self.add_item(JobData.from_job_dict(job))
-        for col in range(self.processes_model.columnCount()):
-            self.processes_tv.resizeColumnToContents(col)
-
     def update_job_state(self, job_dict: dict):
         self.update_state_for_job(JobData.from_job_dict(job_dict))
 
@@ -295,27 +290,20 @@ class ProcessesBrowser(QWidget):
         name_item = self.processes_model.item(row, 0)
         name_item.setData(job, Qt.ItemDataRole.UserRole)
         self.update_job_link(self.processes_tv.indexWidget(name_item.index()), job)
-        self._reapply_filters()
 
-    def _apply_filters(self, filters: dict):
-        name = filters.get("name", "").lower()
-        who = filters.get("who")
-        status = filters.get("status")
-        root = self.processes_model.invisibleRootItem()
-        for row in range(root.rowCount()):
-            name_item = root.child(row, 0)
-            job: JobData = name_item.data(Qt.ItemDataRole.UserRole)
-            if job is None:
-                continue
-            visible = (
-                (not name or name in job.name.lower())
-                and (not who or job.user["id"] == who)
-                and (not status or job.status == status)
-            )
-            self.processes_tv.setRowHidden(row, QModelIndex(), not visible)
+    def _on_filters_changed(self, _filters: dict):
+        self._pending_full_refresh = True
 
-    def _reapply_filters(self):
-        self._apply_filters(self.filter_bar.get_filters())
+    def add_items(self, job_list: list[dict]):
+        if self._pending_full_refresh:
+            self.processes_model.removeRows(0, self.processes_model.rowCount())
+            self.row_map.clear()
+            self._pending_full_refresh = False
+        for job in reversed(job_list):
+            self.add_item(JobData.from_job_dict(job))
+        for col in range(self.processes_model.columnCount()):
+            self.processes_tv.resizeColumnToContents(col)
+        self._repopulate_who_combo()
 
     def _repopulate_who_combo(self):
         seen = {}
