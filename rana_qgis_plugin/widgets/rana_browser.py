@@ -83,6 +83,8 @@ class RanaBrowser(QWidget):
     project_changed = pyqtSignal(str)
     run_persistent_tasks = pyqtSignal()
     update_project_publications = pyqtSignal()
+    update_job_filters = pyqtSignal(dict)
+    update_publication_filters = pyqtSignal(dict)
     batch_delete = pyqtSignal(dict, list)
     batch_download = pyqtSignal(dict, list)
 
@@ -241,6 +243,10 @@ class RanaBrowser(QWidget):
         self.project_job_updated.connect(self.processes_browser.update_job_state)
         self.project_publication_added.connect(self.publications_browser.add_items)
         self.project_publication_updated.connect(self.publications_browser.update_item)
+        self.processes_browser.job_filters_updated.connect(self.update_job_filters)
+        self.publications_browser.publication_filters_updated.connect(
+            self.update_publication_filters
+        )
         # Connect refresh buttons
         self.projects_browser.refresh_btn.clicked.connect(self.refresh_projects_browser)
         refresh_btn.clicked.connect(self.refresh_project_widget)

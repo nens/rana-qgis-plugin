@@ -352,6 +352,12 @@ class RanaQgisPlugin:
             self.rana_browser.update_project_publications.connect(
                 self.loader.update_project_publications
             )
+            self.rana_browser.update_job_filters.connect(
+                self.loader.update_job_monitor_filters
+            )
+            self.rana_browser.update_publication_filters.connect(
+                self.loader.update_publication_monitor_filters
+            )
             self.rana_browser.processes_browser.cancel_simulation.connect(
                 self.loader.cancel_simulation
             )

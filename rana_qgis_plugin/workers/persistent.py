@@ -100,10 +100,24 @@ class ProjectJobMonitorWorker(QObject):
         super().__init__(parent)
         self.active_jobs = {}
         self.project_id = project_id
+        self._filters = {}
         self._stop_flag = False
 
+    def set_filters(self, filters: dict):
+        """Update filter params and reset job cache to force a full refresh.
+
+        Note: called from the main thread while run() executes in a QThreadPool
+        thread. This is safe in practice because run_task_by_type is called
+        immediately after set_filters, and QThreadPool serialises runnables for
+        the same worker. A concurrent timer-triggered run() could read a
+        partially updated state, but the worst case is one stale fetch that
+        gets corrected on the next scheduled run.
+        """
+        self._filters = filters
+        self.active_jobs = {}
+
     def run(self):
-        response = get_project_jobs(self.project_id)
+        response = get_project_jobs(self.project_id, params=self._filters)
         if not response:
             return
         current_jobs = response["items"]
@@ -133,11 +147,21 @@ class PublicationMonitorWorker(QObject):
         super().__init__(parent)
         self.monitored_publications = {}
         self.project_id = project_id
+        self._filters = {}
         self._stop_flag = False
+
+    def set_filters(self, filters: dict):
+        """Update filter params and reset publication cache to force a full refresh.
+
+        Note: called from the main thread while run() executes in a QThreadPool
+        thread. See ProjectJobMonitorWorker.set_filters for threading notes.
+        """
+        self._filters = filters
+        self.monitored_publications = {}
 
     def run(self):
         try:
-            response = get_project_publications(self.project_id)
+            response = get_project_publications(self.project_id, params=self._filters)
         except Exception as e:
             self.failed.emit(str(e))
             return
