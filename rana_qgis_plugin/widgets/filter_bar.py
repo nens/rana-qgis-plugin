@@ -38,6 +38,8 @@ class FilterBar(QWidget):
     Emits filters_changed(dict) whenever any filter value changes.
     The dict keys match the filter config keys; text filters return str,
     combo filters return the selected userData value (or None if unselected).
+    Each combo shows a clear (×) action inside the line edit when a value
+    is selected, allowing the user to reset back to no filter.
     """
 
     filters_changed = pyqtSignal(dict)
@@ -77,25 +79,58 @@ class FilterBar(QWidget):
                     widget.lineEdit().textChanged.connect(
                         lambda text, w=widget: self._on_combo_text_changed(w, text)
                     )
+                    # Add a clear action inside the line edit
+                    clear_action = widget.lineEdit().addAction(
+                        QIcon(":images/themes/default/mIconClearText.svg"),
+                        widget.lineEdit().TrailingPosition,
+                    )
+                    clear_action.setVisible(False)
+                    clear_action.triggered.connect(
+                        lambda checked, w=widget: self._clear_combo(w)
+                    )
+                    widget.lineEdit().setProperty("clear_action", clear_action)
                 if not config.dynamic:
                     for label, data in config.items:
                         widget.addItem(label, userData=data)
                     widget.setCurrentIndex(-1)
-                widget.activated.connect(self._emit_changed)
+                widget.activated.connect(self._on_combo_activated)
                 self._combos[config.key] = widget
                 layout.addWidget(widget, stretch=1)
 
         self.setLayout(layout)
 
     def _on_combo_text_changed(self, combo: QComboBox, text: str):
-        """Reset combo selection and emit when the text field is cleared."""
+        """Reset combo selection when the text field is cleared."""
         if not text:
             was_selected = combo.currentIndex() != -1
             combo.blockSignals(True)
             combo.setCurrentIndex(-1)
             combo.blockSignals(False)
+            self._update_clear_action(combo)
             if was_selected:
                 self._emit_changed()
+
+    def _on_combo_activated(self, index: int):
+        """Handle explicit item selection; update clear button visibility."""
+        combo = self.sender()
+        if combo:
+            self._update_clear_action(combo)
+        self._emit_changed()
+
+    def _update_clear_action(self, combo: QComboBox):
+        """Show clear button only when a real item (not placeholder) is selected."""
+        if combo.lineEdit():
+            clear_action = combo.lineEdit().property("clear_action")
+            if clear_action:
+                clear_action.setVisible(combo.currentIndex() != -1)
+
+    def _clear_combo(self, combo: QComboBox):
+        """Clear combo selection and emit filters_changed."""
+        combo.blockSignals(True)
+        combo.setCurrentIndex(-1)
+        combo.blockSignals(False)
+        self._update_clear_action(combo)
+        self._emit_changed()
 
     def _emit_changed(self, _=None):
         self.filters_changed.emit(self.get_filters())
@@ -124,6 +159,7 @@ class FilterBar(QWidget):
             if data == prev_data and prev_data is not None:
                 new_index = i
         combo.setCurrentIndex(new_index)
+        self._update_clear_action(combo)
         combo.blockSignals(False)
 
     def update_combo_avatar(self, key: str, user_id: str, avatar):
@@ -144,4 +180,5 @@ class FilterBar(QWidget):
             widget.blockSignals(True)
             widget.setCurrentIndex(-1)
             widget.blockSignals(False)
+            self._update_clear_action(widget)
         self._emit_changed()
