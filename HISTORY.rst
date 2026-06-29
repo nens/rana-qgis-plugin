@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.15 (unreleased)
+1.2.15 (2026-06-29)
 -------------------
 
 - Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
