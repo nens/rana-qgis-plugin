@@ -513,18 +513,24 @@ def start_tenant_process(communication: UICommunication, process_id, params: dic
 
 
 def start_file_upload(project_id: str, params: dict):
+    """Initiate a file upload.
+
+    Returns:
+        Tuple of (response, error_body). On success, response is the parsed JSON dict and
+        error_body is None. On failure, response is None and error_body is the parsed error
+        JSON dict (or None if the response body was not parseable).
+    """
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/upload"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.post(params=params)
+    status, _ = network_manager.post(params=params)
 
     if status:
-        response = network_manager.content
-        return response
+        return network_manager.content, None
     else:
-        return None
+        return None, network_manager.content
 
 
 def finish_file_upload(project_id: str, payload: dict):

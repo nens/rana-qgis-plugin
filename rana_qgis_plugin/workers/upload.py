@@ -81,7 +81,7 @@ class FileUploadWorker(QThread):
         try:
             self.progress.emit(progress_start, "")
             # Step 1: POST request to initiate the upload
-            upload_response = start_file_upload(
+            upload_response, _error = start_file_upload(
                 self.project["id"], {"path": online_path}
             )
             if not upload_response:
