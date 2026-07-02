@@ -155,4 +155,14 @@ def _create_interval_data(data):
         if i < len(data) - 1:
             result.append([value, rgba])
 
+    # In order to fix an issue with Lizards colormap regarding the first item, we
+    # prepend the styling with a dummy item with the same color as the first.
+    if len(result) > 3:
+        first_value = result[0][0]
+        first_color = result[0][1]
+        # Note that the next bin starts at entry 3
+        third_value = result[2][0]
+        diff = third_value - first_value
+        result.insert(0, [first_value - diff, first_color])
+
     return result
