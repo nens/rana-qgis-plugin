@@ -829,35 +829,12 @@ class Loader(QObject):
         sender.deleteLater()
         # setup upload worker
         local_path = sender.downloader.downloaded_file_path
-        online_path = Path(online_dir).joinpath(local_path.name).as_posix()
-        file = get_tenant_project_file(project["id"], {"path": online_path})
-        if file:
-            user = file.get("user") or {}
-            if not user or "given_name" not in user or "family_name" not in user:
-                created_by = "unknown"
-            else:
-                created_by = f"{user['given_name']} {user['family_name']}"
-            created_at = convert_timestamp_str_to_local_time(file["last_modified"])
-            if self.communication.ask(
-                self.parent(),
-                "File already exists",
-                f"File {local_path.name} at {online_path} was already created at {created_at} by {created_by}. Do you want to replace is?",
-            ):
-                self.file_upload_worker = ExistingFileUploadWorker(
-                    project, file, local_path
-                )
-                self.file_upload_worker.file_overwrite = True
-                worker = self.file_upload_worker
-            else:
-                self.communication.clear_message_bar()
-                self.file_upload_failed.emit("")
-                return
-        else:
-            self.new_file_upload_worker = FileUploadWorker(
-                project, [local_path], online_dir
-            )
-            worker = self.new_file_upload_worker
+        self.new_file_upload_worker = FileUploadWorker(
+            project, [local_path], online_dir, ask_overwrite_permission=True
+        )
+        worker = self.new_file_upload_worker
 
+        worker.conflict.connect(self.handle_file_conflict)
         worker.failed.connect(self.on_file_upload_failed)
         worker.failed.connect(lambda error: self.file_upload_failed.emit(error))
         worker.progress.connect(self.on_file_upload_progress)
@@ -1403,16 +1380,10 @@ class Loader(QObject):
             lambda msg: self.communication.show_warn(msg)
         )
 
-    def handle_file_conflict(self):
-        warn_and_ask_msg = (
-            "The file has been modified on the server since it was last downloaded.\n"
-            "Do you want to overwrite the server copy with the local copy?"
-        )
-        file_overwrite = self.communication.ask(
-            self.parent(), "File conflict", warn_and_ask_msg
-        )
+    def handle_file_conflict(self, message: str):
         sender = self.sender()
         assert isinstance(sender, QThread)
+        file_overwrite = self.communication.ask(self.parent(), "File conflict", message)
         sender.file_overwrite = file_overwrite
 
     @cleanup_sender
