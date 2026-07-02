@@ -38,12 +38,24 @@ from rana_qgis_plugin.widgets.filter_bar import (
 )
 from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
-# Maps column index to API order_by field name
-_ORDERING_FIELDS = {
-    0: "name",
-    2: "updated_at",
-    3: "created_at",
+# Maps column index to the project dict key used for client-side sorting
+_SORT_KEYS = {
+    0: lambda p: (p["name"] or "").lower(),
+    2: lambda p: p["last_activity"] or "",
+    3: lambda p: p["created_at"] or "",
 }
+
+
+class _ManuallyOrderedModel(QStandardItemModel):
+    """QStandardItemModel whose sort() is a no-op.
+
+    Row order is managed manually (client-side sort + repopulate), so Qt must
+    never reorder rows. The sort indicator on the header still updates visually
+    because QHeaderView manages it independently of the model's sort() method.
+    """
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder):
+        pass  # row order is managed by _sort_and_display
 
 
 class ProjectsBrowser(QWidget):
@@ -59,9 +71,11 @@ class ProjectsBrowser(QWidget):
         self.project = None
         self.avatar_cache = avatar_cache
         self.current_page = 1
-        self.items_per_page = 100
+        self.items_per_page = 20
         self._total_projects = 0
-        self._ordering = "-updated_at"  # default sort: last activity descending
+        self._sort_column = 2  # default: last activity
+        self._sort_order = Qt.SortOrder.DescendingOrder
+        self._all_projects: list = []
         self.setup_ui()
         self._fetch_and_populate()
 
@@ -86,7 +100,7 @@ class ProjectsBrowser(QWidget):
         )
         self.filter_bar.filters_changed.connect(self._on_filters_changed)
         # Create tree view with project files and model
-        self.projects_model = QStandardItemModel()
+        self.projects_model = _ManuallyOrderedModel()
         self.projects_tv = QTreeView()
         self.projects_tv.setRootIsDecorated(False)
         self.projects_tv.setModel(self.projects_model)
@@ -157,14 +171,10 @@ class ProjectsBrowser(QWidget):
         empty_label.hide()
         return empty_label
 
-    def _build_params(self) -> dict:
-        """Build API query params from current filter, sort and page state."""
+    def _build_filter_params(self) -> dict:
+        """Build API filter params (no sort/pagination — those are client-side)."""
         filters = self.filter_bar.get_filters()
-        params = {
-            "limit": self.items_per_page,
-            "offset": (self.current_page - 1) * self.items_per_page,
-            "order_by": self._ordering,
-        }
+        params = {}
         if filters.get("name"):
             params["search"] = filters["name"]
         if filters.get("who"):
@@ -172,55 +182,67 @@ class ProjectsBrowser(QWidget):
         return params
 
     def _fetch_and_populate(self):
-        """Fetch the current page from the API and populate the model."""
-        response = get_tenant_projects(self.communication, params=self._build_params())
-        projects = response.get("items", [])
-        self._total_projects = response.get("total", 0)
+        """Fetch all matching projects from the API, then sort and display."""
+        response = get_tenant_projects(
+            self.communication, params=self._build_filter_params()
+        )
+        self._all_projects = response.get("items", [])
+        self.current_page = 1
+        self._sort_and_display()
+
+    def _sort_and_display(self):
+        """Sort the in-memory project list and display the current page slice."""
+        key_fn = _SORT_KEYS.get(self._sort_column)
+        if key_fn:
+            descending = self._sort_order == Qt.SortOrder.DescendingOrder
+            sorted_projects = sorted(self._all_projects, key=key_fn, reverse=descending)
+        else:
+            sorted_projects = self._all_projects
+
+        self._total_projects = len(sorted_projects)
+        start = (self.current_page - 1) * self.items_per_page
+        page_projects = sorted_projects[start : start + self.items_per_page]
+
         self.projects_model.removeRows(0, self.projects_model.rowCount())
-        if not projects:
+        if not page_projects:
             self.empty_label.show()
             self.update_pagination()
             return
         self.empty_label.hide()
-        for project in projects:
+        for project in page_projects:
             self.projects_model.invisibleRootItem().appendRow(
                 self.process_project_item(project)
             )
-        # Re-apply sort so Qt view matches API order (block signal to prevent re-fetch)
+        # Update sort indicator without re-triggering the signal
         header = self.projects_tv.header()
         header.blockSignals(True)
-        self.projects_tv.sortByColumn(
-            header.sortIndicatorSection(), header.sortIndicatorOrder()
-        )
+        header.setSortIndicator(self._sort_column, self._sort_order)
         header.blockSignals(False)
-        for i in range(self.projects_tv.header().count()):
+        for i in range(header.count()):
             self.projects_tv.resizeColumnToContents(i)
         self.projects_tv.setColumnWidth(0, 300)
-        self.populate_contributors(projects)
+        self.populate_contributors(self._all_projects)
         self.update_pagination()
         self.projects_refreshed.emit()
-        # Trigger avatar loading for contributors on this page
         all_users = [
             contributor
-            for project in projects
+            for project in page_projects
             for contributor in project.get("contributors", [])
         ]
         self.users_refreshed.emit(all_users)
 
     def _on_filters_changed(self, _filters: dict):
-        self.current_page = 1
         self._fetch_and_populate()
 
     def _on_sort_changed(self, column_index: int, order: Qt.SortOrder):
-        field = _ORDERING_FIELDS.get(column_index)
-        if field is None:
+        if column_index not in _SORT_KEYS:
             return  # contributors column not sortable
-        self._ordering = f"-{field}" if order == Qt.SortOrder.DescendingOrder else field
+        self._sort_column = column_index
+        self._sort_order = order
         self.current_page = 1
-        self._fetch_and_populate()
+        self._sort_and_display()
 
     def refresh(self):
-        self.current_page = 1
         self._fetch_and_populate()
 
     def show_context_menu(self, position):
@@ -324,7 +346,7 @@ class ProjectsBrowser(QWidget):
 
     def change_page(self, increment: int):
         self.current_page += increment
-        self._fetch_and_populate()
+        self._sort_and_display()
 
     def to_previous_page(self):
         self.change_page(-1)

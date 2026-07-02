@@ -186,26 +186,18 @@ def get_tenant_details(communication: UICommunication):
 
 
 def get_tenant_projects(communication: UICommunication, params: Optional[dict] = None):
-    """Fetch tenant projects.
+    """Fetch all tenant projects matching the given filter params.
 
     Args:
         communication: UI communication handler for error reporting.
-        params: Optional query params. Supports: search, project_user_id,
-            ordering, limit, offset. Defaults to limit=1000 when not provided.
+        params: Optional filter params. Supports: search, project_user_id.
     """
-    authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects"
-    if params is None:
-        params = {"limit": 1000}
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        return network_manager.content
-    else:
-        communication.show_error(f"Failed to get projects: {error}")
+    try:
+        return paginated_fetch(url, limit=100, params=params or {})
+    except Exception as e:
+        communication.show_error(f"Failed to get projects: {e}")
         return {"items": [], "total": 0}
 
 
