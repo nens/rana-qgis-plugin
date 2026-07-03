@@ -185,22 +185,20 @@ def get_tenant_details(communication: UICommunication):
         return {}
 
 
-def get_tenant_projects(communication: UICommunication):
-    authcfg_id = get_authcfg_id()
+def get_tenant_projects(communication: UICommunication, params: Optional[dict] = None):
+    """Fetch all tenant projects matching the given filter params.
+
+    Args:
+        communication: UI communication handler for error reporting.
+        params: Optional filter params. Supports: search, project_user_id.
+    """
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects"
-    params = {"limit": 1000}
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get projects: {error}")
-        return []
+    try:
+        return paginated_fetch(url, limit=100, params=params or {})
+    except Exception as e:
+        communication.show_error(f"Failed to get projects: {e}")
+        return {"items": [], "total": 0}
 
 
 def get_tenant_project_files(
@@ -750,24 +748,42 @@ def get_user(params: dict):
     return user_info[0]
 
 
-def get_project_jobs(project_id: str):
+def get_project_jobs(project_id: str, params: Optional[dict] = None):
+    """Fetch jobs for a project.
+
+    Args:
+        project_id: The project to fetch jobs for.
+        params: Optional additional query params. Supports: search,
+            created_by, status. Merged with default project_id and limit.
+    """
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    params = {"project_id": project_id, "limit": 100}
+    merged = {"project_id": project_id, "limit": 100}
+    if params:
+        merged.update(params)
     url = f"{api_url()}/tenants/{tenant}/jobs"
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
+    status, error = network_manager.fetch(merged)
     if status:
         return network_manager.content
     else:
         return None
 
 
-def get_project_publications(project_id: str):
+def get_project_publications(project_id: str, params: Optional[dict] = None):
+    """Fetch publications for a project.
+
+    Args:
+        project_id: The project to fetch publications for.
+        params: Optional additional query params. Supports: search,
+            created_by. Merged with default project_id.
+    """
     tenant = get_tenant_id()
-    params = {"project_id": project_id}
+    merged = {"project_id": project_id}
+    if params:
+        merged.update(params)
     url = f"{api_url()}/tenants/{tenant}/publications"
-    return paginated_fetch(url, 100, params)
+    return paginated_fetch(url, 100, merged)
 
 
 def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional[str]:

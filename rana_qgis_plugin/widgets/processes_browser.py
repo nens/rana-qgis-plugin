@@ -39,6 +39,11 @@ from rana_qgis_plugin.utils.time import (
     convert_to_numeric_timestamp,
     get_timestamp_as_numeric_item,
 )
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
 from rana_qgis_plugin.widgets.utils_delegates import (
     ContributorAvatarsDelegate,
     WordWrapDelegate,
@@ -90,6 +95,7 @@ class JobData:
 
 class ProcessesBrowser(QWidget):
     cancel_simulation = pyqtSignal(int)
+    job_filters_updated = pyqtSignal(dict)
 
     def __init__(self, communication, avatar_cache, parent=None):
         super().__init__(parent)
@@ -103,19 +109,50 @@ class ProcessesBrowser(QWidget):
         self.row_map = {}
         self.cancelled_sim_map: dict[int, JobData] = {}
         self.project = {}
+        self._pending_full_refresh = False
 
     def update_project(self, project: dict):
         self.processes_model.removeRows(0, self.processes_model.rowCount())
         self.row_map.clear()
         self.project = project
+        self.filter_bar.reset()
+        self.filter_bar.set_combo_items("who", [])
 
     def setup_ui(self):
+        self.filter_bar = FilterBar(
+            filters=[
+                TextFilterConfig(key="name", placeholder="Search by name"),
+                ComboFilterConfig(
+                    key="who", placeholder="All contributors", dynamic=True
+                ),
+                ComboFilterConfig(
+                    key="status",
+                    placeholder="All statuses",
+                    dynamic=False,
+                    items=[
+                        ("Scheduled", "scheduled"),
+                        ("Pending", "pending"),
+                        ("Running", "running"),
+                        ("Completed", "completed"),
+                        ("Failed", "failed"),
+                        ("Cancelled", "cancelled"),
+                        ("Crashed", "crashed"),
+                        ("Paused", "paused"),
+                        ("Cancelling", "cancelling"),
+                    ],
+                ),
+            ],
+            parent=self,
+        )
+        self.filter_bar.filters_changed.connect(self._on_filters_changed)
+        self.filter_bar.filters_changed.connect(self.job_filters_updated)
         self.processes_model = QStandardItemModel()
         self.processes_tv = QTreeView()
         self.processes_tv.setRootIsDecorated(False)
         self.processes_tv.setModel(self.processes_model)
         self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
         layout = QVBoxLayout(self)
+        layout.addWidget(self.filter_bar)
         layout.addWidget(self.processes_tv)
         self.setLayout(layout)
         # create root items, they will be added on populating
@@ -136,6 +173,7 @@ class ProcessesBrowser(QWidget):
 
     def add_item(self, job):
         name_item = QStandardItem()
+        name_item.setData(job, Qt.ItemDataRole.UserRole)
         # Create QLabel to display a link as a typical html link
         name_link = QLabel("")
         self.update_job_link(name_link, job)
@@ -194,8 +232,7 @@ class ProcessesBrowser(QWidget):
             self.row_map[id] += 1
         self.row_map[job.id] = 0
         self.processes_tv.setIndexWidget(name_item.index(), name_link)
-        for col in range(self.processes_model.columnCount()):
-            self.processes_tv.resizeColumnToContents(col)
+        self.processes_tv.resizeColumnToContents(0)
 
     def on_simulation_cancel_requested(self, job):
         # store cancellation related data on the fly to prevent a lot of bookkeeping
@@ -232,12 +269,6 @@ class ProcessesBrowser(QWidget):
                 f"color: {self.processes_tv.palette().text().color().name()}"
             )
 
-    def add_items(self, job_list: list[dict]):
-        for job in reversed(job_list):
-            self.add_item(JobData.from_job_dict(job))
-        for col in range(self.processes_model.columnCount()):
-            self.processes_tv.resizeColumnToContents(col)
-
     def update_job_state(self, job_dict: dict):
         self.update_state_for_job(JobData.from_job_dict(job_dict))
 
@@ -263,4 +294,37 @@ class ProcessesBrowser(QWidget):
             status_layout.itemAt(1).widget().deleteLater()
             status_layout.removeItem(status_layout.itemAt(1))
         name_item = self.processes_model.item(row, 0)
+        name_item.setData(job, Qt.ItemDataRole.UserRole)
         self.update_job_link(self.processes_tv.indexWidget(name_item.index()), job)
+
+    def _on_filters_changed(self, _filters: dict):
+        self._pending_full_refresh = True
+
+    def add_items(self, job_list: list[dict]):
+        if self._pending_full_refresh:
+            self.processes_model.removeRows(0, self.processes_model.rowCount())
+            self.row_map.clear()
+            self._pending_full_refresh = False
+        for job in reversed(job_list):
+            self.add_item(JobData.from_job_dict(job))
+        for col in range(self.processes_model.columnCount()):
+            self.processes_tv.resizeColumnToContents(col)
+        self._repopulate_who_combo()
+
+    def _repopulate_who_combo(self):
+        seen = {}
+        root = self.processes_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            name_item = root.child(row, 0)
+            job: JobData = name_item.data(Qt.ItemDataRole.UserRole)
+            if job and job.user["id"] not in seen:
+                seen[job.user["id"]] = job.user
+        items = [
+            (
+                f"{u['given_name']} {u['family_name']}",
+                u["id"],
+                self.avatar_cache.get_avatar_for_user(u),
+            )
+            for u in seen.values()
+        ]
+        self.filter_bar.set_combo_items("who", items)
