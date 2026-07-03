@@ -68,8 +68,8 @@ from rana_qgis_plugin.utils.time import (
 from rana_qgis_plugin.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
-    copy_wms_url_to_clipboard,
     get_file_actions,
+    retrieve_url,
 )
 from rana_qgis_plugin.widgets.utils_icons import (
     get_icon_from_theme_as_pixmap,
@@ -769,15 +769,9 @@ class FileView(QWidget):
         self.update_file_action_buttons(selected_file)
 
     def open_in_browser(self):
-        # skip if there is no file, wrong data type is selected, or there is no schematsiation
-        if (
-            (not self.selected_file)
-            or (self.selected_file.get("data_type") != "threedi_schematisation")
-            or (not self.schematisation)
-            or (not self.schematisation.get("management_url"))
-        ):
-            return
-        QDesktopServices.openUrl(QUrl(self.schematisation["management_url"]))
+        url = retrieve_url(self.selected_file, self.project, self.communication)
+        if url:
+            QDesktopServices.openUrl(url)
 
     def open_in_file_browser(self):
         """Open the local path of the selected file in the OS file explorer."""

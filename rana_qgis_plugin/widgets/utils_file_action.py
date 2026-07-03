@@ -1,8 +1,7 @@
 from enum import Enum
 from typing import List, Optional
 
-from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QObject, pyqtSignal
+from qgis.PyQt.QtCore import QObject, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QApplication
 
@@ -20,7 +19,12 @@ from rana_qgis_plugin.icons import (
     upload_icon,
     wms_icon,
 )
-from rana_qgis_plugin.utils.api import FileDescriptorStatus, get_tenant_file_descriptor
+from rana_qgis_plugin.utils.api import (
+    FileDescriptorStatus,
+    get_tenant_file_descriptor,
+    get_threedi_schematisation,
+)
+from rana_qgis_plugin.utils.settings import base_url, get_tenant_id
 
 
 class FileAction(Enum):
@@ -180,6 +184,26 @@ def copy_wms_url_to_clipboard(file: dict, communication=None):
             communication.bar_info("WMS URL copied to clipboard.")
     elif communication:
         communication.show_warn("No WMS URL available for this file.")
+
+
+def retrieve_url(selected_item: dict, project: dict, communication) -> QUrl:
+    if selected_item.get("data_type") == "threedi_schematisation":
+        schematisation = get_threedi_schematisation(
+            communication, selected_item["descriptor_id"]
+        )
+        if not schematisation or not schematisation.get("management_url"):
+            return None
+        return QUrl(schematisation["management_url"])
+    elif selected_item.get("data_type") in ["vector", "raster"]:
+        link = f"{base_url()}/{get_tenant_id()}/projects/{project['slug']}?tab=1&"
+        file_id = selected_item.get("id")
+        if "/" in file_id:
+            path = file_id.rsplit("/", 1)[0]
+            fileName = file_id.rsplit("/", 1)[1]
+            link = link + f"path={path.replace('/', ',')}&fileName={fileName}"
+        else:
+            link = link + f"fileName={file_id}"
+    return QUrl(link)
 
 
 class FileActionSignals(QObject):
