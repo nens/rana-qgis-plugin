@@ -2,13 +2,19 @@ History
 =======
 
 
-1.2.15 (unreleased)
+1.2.16 (unreleased)
+-------------------
+
+- Add filters for relevant columns to all list views (nens/rana#3947)
+
+
+1.2.15 (2026-06-29)
 -------------------
 
 - Set custom colors for the progress bar (nens/rana-qgis-plugin#294)
 - Remove unnecessary back and next buttons from upload schematisation wizard (nens/rana#4408)
 - Remove adding max waterdepth which is now handled by the results analysis plugin (nens/rana#4349)
-- Add filters for relevant columns to all list views (nens/rana#3947)
+- Added process name table to Processes table and improved names of tracker processes (#295)
 
 
 1.2.14 (2026-06-17)

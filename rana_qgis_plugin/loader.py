@@ -1080,7 +1080,7 @@ class Loader(QObject):
                 "inherit_from_previous_model": True,
                 "inherit_from_previous_revision": inherit_from_previous_revision,
             },
-            "name": f"model_tracker_{schematisation['name']}_rev{revision_id}",
+            "name": f"{schematisation['name']}_rev{revision_id}",
         }
         _ = start_tenant_process(self.communication, track_process, params)
         self.model_created.emit()
@@ -1105,7 +1105,7 @@ class Loader(QObject):
                         "id": f"{output_file_path}{sim.simulation.name}_{sim.simulation.id}_results.zip"
                     }
                 },
-                "name": f"simulation_tracker_{sim.simulation.name}",
+                "name": f"{sim.simulation.name}",
             }
             _ = start_tenant_process(self.communication, track_process, params)
 

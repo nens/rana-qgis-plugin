@@ -60,6 +60,7 @@ class JobData:
     progress: int
     max_progress: int
     process_id: int | None
+    process_name: str | None
     inputs: dict
 
     def progress_str(self):
@@ -85,6 +86,7 @@ class JobData:
                 progress=int(100 * job["state"]["progress"]),
                 max_progress=100,
                 process_id=job["process"].get("id") if job["process"] else None,
+                process_name=job["process"].get("name") if job["process"] else None,
                 inputs=job["inputs"],
             )
         except Exception as e:
@@ -155,10 +157,10 @@ class ProcessesBrowser(QWidget):
         self.setLayout(layout)
         # create root items, they will be added on populating
         self.processes_model.setHorizontalHeaderLabels(
-            ["Name", "Who", "Started", "Status"]
+            ["Name", "Process name", "Who", "Started", "Status"]
         )
         avatar_delegate = ContributorAvatarsDelegate(self.processes_tv)
-        self.processes_tv.setItemDelegateForColumn(1, avatar_delegate)
+        self.processes_tv.setItemDelegateForColumn(2, avatar_delegate)
         name_delegate = WordWrapDelegate(self.processes_tv)
         self.processes_tv.setItemDelegateForColumn(0, name_delegate)
         self.processes_tv.setWordWrap(True)
@@ -176,6 +178,10 @@ class ProcessesBrowser(QWidget):
         name_link = QLabel("")
         self.update_job_link(name_link, job)
         name_link.setToolTip(job.name)
+
+        process_name_item = QStandardItem()
+        process_name_item.setText(str(job.process_name))
+
         who_item = QStandardItem()
         who_item.setData(
             [
@@ -219,7 +225,7 @@ class ProcessesBrowser(QWidget):
         status_container = QWidget()
         status_container.setLayout(status_layout)
         status_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        row = [name_item, who_item, date_item, status_item]
+        row = [name_item, process_name_item, who_item, date_item, status_item]
         self.processes_model.insertRow(0, row)
         self.processes_tv.setIndexWidget(status_item.index(), status_container)
         for id in self.row_map:
@@ -270,7 +276,7 @@ class ProcessesBrowser(QWidget):
         row = self.row_map.get(job.id, -1)
         if row < 0:
             return
-        status_item = self.processes_model.item(row, 3)
+        status_item = self.processes_model.item(row, 4)
         status_item.setData(job.status, Qt.ItemDataRole.UserRole)
         # retrieve progress bar and cancel button, and update their status
         status_layout = self.processes_tv.indexWidget(status_item.index()).layout()
