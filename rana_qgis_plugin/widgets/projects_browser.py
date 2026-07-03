@@ -71,7 +71,7 @@ class ProjectsBrowser(QWidget):
         self.project = None
         self.avatar_cache = avatar_cache
         self.current_page = 1
-        self.items_per_page = 20
+        self.items_per_page = 100
         self._total_projects = 0
         self._sort_column = 2  # default: last activity
         self._sort_order = Qt.SortOrder.DescendingOrder

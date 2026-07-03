@@ -1,13 +1,9 @@
-from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
-    QHBoxLayout,
     QHeaderView,
-    QLabel,
-    QProgressBar,
     QPushButton,
     QSizePolicy,
-    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -42,7 +38,6 @@ class PublicationsBrowser(QWidget):
         self.row_map = {}
         self.project = {}
         self._pending_full_refresh = False
-        # TODO: pagination
 
     def update_project(self, project: dict):
         self.publications_model.removeRows(0, self.publications_model.rowCount())
