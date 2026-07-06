@@ -10,6 +10,7 @@ History
 - Fixed bug that raster bin styling did not take first bin into account (nens/rana#4521)
 - Schematisation is first committed, then added to rana (nens/rana#4584)
 
+- Added workflow dispatch
 
 1.2.15 (2026-06-29)
 -------------------
