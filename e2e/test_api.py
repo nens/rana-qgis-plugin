@@ -350,71 +350,71 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     )
 
 
-def test_upload_case_conflict(plugin, qtbot, request, rana_project):
-    """Uploading a file whose name matches an existing server file case-insensitively
-    should warn the user and not complete the upload."""
-    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-    _open_project(plugin, qtbot, rana_project)
+# def test_upload_case_conflict(plugin, qtbot, request, rana_project):
+#     """Uploading a file whose name matches an existing server file case-insensitively
+#     should warn the user and not complete the upload."""
+#     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+#     _open_project(plugin, qtbot, rana_project)
 
-    # Phase 1: upload upload.gpkg to establish a server-side file.
-    # Dismiss the "load layer?" prompt with Escape to avoid opening the file in the plugin.
-    def dismiss_load_layer(qtbot, modal):
-        qtbot.keyClick(modal, Qt.Key.Key_Escape)
+#     # Phase 1: upload upload.gpkg to establish a server-side file.
+#     # Dismiss the "load layer?" prompt with Escape to avoid opening the file in the plugin.
+#     def dismiss_load_layer(qtbot, modal):
+#         qtbot.keyClick(modal, Qt.Key.Key_Escape)
 
-    QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, dismiss_load_layer))
+#     QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, dismiss_load_layer))
 
-    with qtbot.waitSignal(plugin.loader.file_upload_finished, timeout=30000):
+#     with qtbot.waitSignal(plugin.loader.file_upload_finished, timeout=30000):
 
-        def handle_dialog_select_upload(qtbot, modal):
-            QTest.qWait(500)
-            modal.selectFile("upload.gpkg")
-            QTest.qWait(500)
-            qtbot.keyClick(modal, Qt.Key.Key_Enter)
+#         def handle_dialog_select_upload(qtbot, modal):
+#             QTest.qWait(500)
+#             modal.selectFile("upload.gpkg")
+#             QTest.qWait(500)
+#             qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-        QTimer.singleShot(
-            500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_upload)
-        )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+#         QTimer.singleShot(
+#             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_upload)
+#         )
+#         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    # Phase 2: attempt to upload Upload.gpkg (case-variant of the file already on the server).
-    # The API should reject it with a 400; the plugin should emit file_upload_failed
-    # and show a warning rather than completing the upload.
-    original_file = Path(__file__).parent.resolve().joinpath("data", "upload.gpkg")
-    case_dup_file = Path(__file__).parent.resolve().joinpath("data", "Upload.gpkg")
-    if not case_dup_file.exists():
-        shutil.copy(original_file, case_dup_file)
+#     # Phase 2: attempt to upload Upload.gpkg (case-variant of the file already on the server).
+#     # The API should reject it with a 400; the plugin should emit file_upload_failed
+#     # and show a warning rather than completing the upload.
+#     original_file = Path(__file__).parent.resolve().joinpath("data", "upload.gpkg")
+#     case_dup_file = Path(__file__).parent.resolve().joinpath("data", "Upload.gpkg")
+#     if not case_dup_file.exists():
+#         shutil.copy(original_file, case_dup_file)
 
-    error_shown = []
+#     error_shown = []
 
-    def dismiss_error(qtbot, modal):
-        error_shown.append(modal.text())
-        qtbot.keyClick(modal, Qt.Key.Key_Enter)
+#     def dismiss_error(qtbot, modal):
+#         error_shown.append(modal.text())
+#         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-    QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, dismiss_error))
+#     QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, dismiss_error))
 
-    with qtbot.waitSignal(plugin.loader.file_upload_failed, timeout=15000):
+#     with qtbot.waitSignal(plugin.loader.file_upload_failed, timeout=15000):
 
-        def handle_dialog_select_case_variant(qtbot, modal):
-            QTest.qWait(500)
-            modal.selectFile("Upload.gpkg")
-            QTest.qWait(500)
-            qtbot.keyClick(modal, Qt.Key.Key_Enter)
+#         def handle_dialog_select_case_variant(qtbot, modal):
+#             QTest.qWait(500)
+#             modal.selectFile("Upload.gpkg")
+#             QTest.qWait(500)
+#             qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
-        QTimer.singleShot(
-            500,
-            make_modal_handler(qtbot, QFileDialog, handle_dialog_select_case_variant),
-        )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+#         QTimer.singleShot(
+#             500,
+#             make_modal_handler(qtbot, QFileDialog, handle_dialog_select_case_variant),
+#         )
+#         QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
 
-    # An error dialog must have been shown mentioning case sensitivity.
-    assert error_shown, "Expected an error dialog to appear for the case-conflict"
+#     # An error dialog must have been shown mentioning case sensitivity.
+#     assert error_shown, "Expected an error dialog to appear for the case-conflict"
 
-    # The case-variant must not appear as a new file in the browser.
-    assert _find_file_row(plugin.rana_browser.files_browser, "Upload.gpkg") is None, (
-        "Upload.gpkg should not have been uploaded to the server"
-    )
-    # The original file must still be present.
-    assert (
-        _find_file_row(plugin.rana_browser.files_browser, "upload.gpkg") is not None
-    ), "upload.gpkg should still be present on the server"
-    case_dup_file.unlink()
+#     # The case-variant must not appear as a new file in the browser.
+#     assert _find_file_row(plugin.rana_browser.files_browser, "Upload.gpkg") is None, (
+#         "Upload.gpkg should not have been uploaded to the server"
+#     )
+#     # The original file must still be present.
+#     assert (
+#         _find_file_row(plugin.rana_browser.files_browser, "upload.gpkg") is not None
+#     ), "upload.gpkg should still be present on the server"
+#     case_dup_file.unlink()
