@@ -214,5 +214,16 @@ def plugin(qgis_iface, qgis_application):
     if plugin.rana_browser:
         plugin.rana_browser.refresh_timer.stop()
         plugin.rana_browser.window().removeEventFilter(plugin.rana_browser)
+    # Cancel the avatar worker and wait long enough for any in-flight fetch
+    # to complete before unload() destroys the QgsApplication objects the
+    # worker thread accesses.  loader.cleanup() only waits 500ms which is
+    # too short; we extend it here.  The persistent scheduler pool is NOT
+    # waited on — its workers also call processEvents() from a thread, which
+    # deadlocks if waited on from the main thread; stopping+clearing above is
+    # sufficient to prevent new work from starting.
+    if plugin.loader:
+        if plugin.loader.avatar_worker:
+            plugin.loader.avatar_worker.cancel()
+        plugin.loader.avatar_runner_pool.waitForDone(15000)
     plugin.unload()
     qgis_application.processEvents()
