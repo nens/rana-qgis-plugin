@@ -94,6 +94,12 @@ def rana_project(plugin, login):
     plugin.rana_browser.refresh()
     print(result)
     yield result["name"]
+    # Stop the auto-refresh timer before the delete_project() network call.
+    # delete_project() spins QCoreApplication.processEvents() while waiting
+    # for the reply; if the timer fires during that spin it starts a nested
+    # fetch_and_populate() which can deadlock with the outer processEvents()
+    # loop.
+    plugin.rana_browser.refresh_timer.stop()
     delete_project(result["id"])
 
 
