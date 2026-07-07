@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
 from qgis.gui import QgsLayerTreeMapCanvasBridge, QgsMapCanvas, QgsMessageBar
-from qgis.PyQt.QtCore import QSettings
+from qgis.PyQt.QtCore import QSettings, QThread
 from qgis.PyQt.QtWidgets import (
     QMainWindow,
     QMenu,
@@ -81,6 +81,14 @@ def qgis_application() -> QgsApplication:
     yield qgs
 
     qgs.processEvents()
+    # Give any worker threads that escaped cleanup()'s 500ms waitForDone a
+    # moment to finish before the QgsApplication is destroyed.  We pump
+    # events rather than sleeping so Qt can deliver the replies that unblock
+    # those threads.  100ms repeated 5 times matches the original
+    # processEvents() behaviour while providing a wider safety margin.
+    for _ in range(5):
+        QThread.msleep(100)
+        qgs.processEvents()
     qgs.exitQgis()
 
 
@@ -200,16 +208,11 @@ def plugin(qgis_iface, qgis_application):
     plugin.initGui()
     yield plugin
 
-    plugin.unload()
-    # Process any queued cancel signals before waiting
-    qgis_application.processEvents()
-    # Wait for background threads to finish before QGIS teardown.
-    # loader.cleanup() uses waitForDone(500) which is too short when a
-    # network request is in-flight. We wait here with a longer timeout so
-    # the worker thread is guaranteed dead before exitQgis() runs, avoiding
-    # a segfault or hang caused by the thread accessing a destroyed
-    # QgsApplication.
+    # Stop the persistent scheduler timer and drain its task queue before
+    # unload so no new network requests are dispatched into worker threads
+    # during teardown.
     if plugin.loader:
-        plugin.loader.avatar_runner_pool.waitForDone(15000)
-        plugin.loader.persistent_scheduler.thread_pool.waitForDone(15000)
+        plugin.loader.persistent_scheduler.stop()
+        plugin.loader.persistent_scheduler.clear()
+    plugin.unload()
     qgis_application.processEvents()
