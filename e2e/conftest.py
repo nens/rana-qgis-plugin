@@ -214,5 +214,10 @@ def plugin(qgis_iface, qgis_application):
     if plugin.loader:
         plugin.loader.persistent_scheduler.stop()
         plugin.loader.persistent_scheduler.clear()
+    # Stop the auto-refresh timer before unload destroys the widgets it
+    # accesses.  Without this, the processEvents() calls below can fire the
+    # timer against already-deleted Qt objects.
+    if plugin.rana_browser:
+        plugin.rana_browser.refresh_timer.stop()
     plugin.unload()
     qgis_application.processEvents()
