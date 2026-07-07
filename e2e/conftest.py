@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
 from qgis.gui import QgsLayerTreeMapCanvasBridge, QgsMapCanvas, QgsMessageBar
-from qgis.PyQt.QtCore import QSettings, QThread
+from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import (
     QMainWindow,
     QMenu,
@@ -81,14 +81,6 @@ def qgis_application() -> QgsApplication:
     yield qgs
 
     qgs.processEvents()
-    # Give any worker threads that escaped cleanup()'s 500ms waitForDone a
-    # moment to finish before the QgsApplication is destroyed.  We pump
-    # events rather than sleeping so Qt can deliver the replies that unblock
-    # those threads.  100ms repeated 5 times matches the original
-    # processEvents() behaviour while providing a wider safety margin.
-    for _ in range(5):
-        QThread.msleep(100)
-        qgs.processEvents()
     qgs.exitQgis()
 
 
@@ -214,10 +206,13 @@ def plugin(qgis_iface, qgis_application):
     if plugin.loader:
         plugin.loader.persistent_scheduler.stop()
         plugin.loader.persistent_scheduler.clear()
-    # Stop the auto-refresh timer before unload destroys the widgets it
-    # accesses.  Without this, the processEvents() calls below can fire the
-    # timer against already-deleted Qt objects.
+    # Stop the auto-refresh timer and remove the window event filter before
+    # unload.  Both can trigger auto_refresh() -> fetch_and_populate() ->
+    # NetworkManager.fetch() during any processEvents() spin, including the
+    # one inside delete_project() in rana_project teardown.  Removing the
+    # filter also prevents WindowActivate events from firing during teardown.
     if plugin.rana_browser:
         plugin.rana_browser.refresh_timer.stop()
+        plugin.rana_browser.window().removeEventFilter(plugin.rana_browser)
     plugin.unload()
     qgis_application.processEvents()
