@@ -350,7 +350,6 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     )
 
 
-@pytest.mark.skip(reason="Fails on CI")
 def test_upload_case_conflict(plugin, qtbot, request, rana_project):
     """Uploading a file whose name matches an existing server file case-insensitively
     should warn the user and not complete the upload."""
