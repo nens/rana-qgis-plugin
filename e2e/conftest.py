@@ -201,4 +201,15 @@ def plugin(qgis_iface, qgis_application):
     yield plugin
 
     plugin.unload()
+    # Process any queued cancel signals before waiting
+    qgis_application.processEvents()
+    # Wait for background threads to finish before QGIS teardown.
+    # loader.cleanup() uses waitForDone(500) which is too short when a
+    # network request is in-flight. We wait here with a longer timeout so
+    # the worker thread is guaranteed dead before exitQgis() runs, avoiding
+    # a segfault or hang caused by the thread accessing a destroyed
+    # QgsApplication.
+    if plugin.loader:
+        plugin.loader.avatar_runner_pool.waitForDone(15000)
+        plugin.loader.persistent_scheduler.thread_pool.waitForDone(15000)
     qgis_application.processEvents()
