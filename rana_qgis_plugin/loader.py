@@ -206,7 +206,9 @@ class Loader(QObject):
             if self.avatar_worker is not None:
                 self.avatar_worker.cancel()
             self.avatar_runner_pool.clear()
-            self.avatar_runner_pool.waitForDone(5000)  # not so short grace period (ms)
+            self.avatar_runner_pool.waitForDone(
+                15000
+            )  # > request transfer timeout (10s)
 
     def __del__(self):
         self.cleanup()

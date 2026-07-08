@@ -62,7 +62,7 @@ class PersistentTaskScheduler:
         self.timer.stop()
         self.clear()
         self.thread_pool.clear()
-        self.thread_pool.waitForDone(5000)
+        self.thread_pool.waitForDone(15000)  # > request transfer timeout (10s)
 
     def clear(self):
         self.tasks = []
