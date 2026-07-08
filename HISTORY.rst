@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.16 (unreleased)
+1.2.16 (2026-07-08)
 -------------------
 
 - Add filters for relevant columns to all list views (nens/rana#3947)
