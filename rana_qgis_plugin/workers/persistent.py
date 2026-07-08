@@ -60,6 +60,9 @@ class PersistentTaskScheduler:
 
     def stop(self):
         self.timer.stop()
+        self.clear()
+        self.thread_pool.clear()
+        self.thread_pool.waitForDone(5000)
 
     def clear(self):
         self.tasks = []

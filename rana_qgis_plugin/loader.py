@@ -202,7 +202,6 @@ class Loader(QObject):
 
     def cleanup(self):
         self.persistent_scheduler.stop()
-        self.persistent_scheduler.clear()
         if self.avatar_runner_pool is not None:
             if self.avatar_worker is not None:
                 self.avatar_worker.cancel()
