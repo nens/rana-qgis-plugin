@@ -277,6 +277,9 @@ class RanaQgisPlugin:
         QgsApplication.processingRegistry().removeProvider(self.provider)
         menu = self.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
         menu.clear()
+        if self.rana_browser:
+            self.rana_browser.refresh_timer.stop()
+            self.rana_browser.window().removeEventFilter(self.rana_browser)
         self.iface.removeToolBarIcon(self.action)
         if self.dock_widget:
             self.iface.removeDockWidget(self.dock_widget)
