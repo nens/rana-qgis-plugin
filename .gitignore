@@ -26,7 +26,6 @@ symbology-style.db
 specs/
 docs/
 AGENTS.md
-doc/
 # IDE / local dev
 .envrc
 .idea/
