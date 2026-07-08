@@ -94,6 +94,12 @@ def rana_project(plugin, login):
     plugin.rana_browser.refresh()
     print(result)
     yield result["name"]
+    # Disable auto-refresh triggers before delete_project() to prevent a
+    # nested fetch_and_populate() from firing inside delete_project()'s
+    # processEvents() spin loop.  plugin fixture teardown does the same but
+    # runs after this fixture, so we must do it here first.
+    plugin.rana_browser.refresh_timer.stop()
+    plugin.rana_browser.window().removeEventFilter(plugin.rana_browser)
     delete_project(result["id"])
 
 
@@ -350,7 +356,6 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     )
 
 
-@pytest.mark.skip(reason="Fails on CI")
 def test_upload_case_conflict(plugin, qtbot, request, rana_project):
     """Uploading a file whose name matches an existing server file case-insensitively
     should warn the user and not complete the upload."""
