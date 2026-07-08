@@ -200,21 +200,5 @@ def plugin(qgis_iface, qgis_application):
     plugin.initGui()
     yield plugin
 
-    # if plugin.loader:
-    # Stop the persistent scheduler timer and drain its task queue before
-    # unload so no new network requests are dispatched into worker threads
-    # during teardown.
-    # plugin.loader.persistent_scheduler.stop()
-    # plugin.loader.persistent_scheduler.clear()
-    # Cancel the avatar worker and wait long enough for any in-flight fetch
-    # to complete before unload() destroys the QgsApplication objects the
-    # worker thread accesses.
-    # if plugin.loader.avatar_worker:
-    #     plugin.loader.avatar_worker.cancel()
-    # plugin.loader.avatar_runner_pool.waitForDone(15000)
-    # Stop the auto-refresh timer and remove the window event filter before unload
-    # if plugin.rana_browser:
-    #     plugin.rana_browser.refresh_timer.stop()
-    #     plugin.rana_browser.window().removeEventFilter(plugin.rana_browser)
     plugin.unload()
     qgis_application.processEvents()
