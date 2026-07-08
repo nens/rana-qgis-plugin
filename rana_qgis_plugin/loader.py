@@ -1574,12 +1574,25 @@ class Loader(QObject):
             self.communication.bar_warning(
                 "Revision creation failed; please create one manually later in the Rana browser"
             )
+            self.schematisation_upload_failed.emit()
+            return
         else:
             paths = get_paths_from_geopackage(db_path)
+            # save_initial_revision triggers on_initial_schematisation_revision_upload_finished
             self.save_initial_revision(
-                project, new_schematisation, local_schematisation, paths
+                project, new_schematisation, local_schematisation, paths, rana_path
             )
 
+        load_local_schematisation(
+            communication=self.communication,
+            local_schematisation=local_schematisation.wip_revision,
+            action=BuildOptionActions.CREATED,
+        )
+
+    @pyqtSlot(dict, dict, str)
+    def on_initial_schematisation_revision_upload_finished(
+        self, new_schematisation, project, rana_path
+    ):
         if rana_path:
             file_path = rana_path + new_schematisation.name
         else:
@@ -1604,11 +1617,6 @@ class Loader(QObject):
             )
             return
         self.schematisation_upload_finished.emit()
-        load_local_schematisation(
-            communication=self.communication,
-            local_schematisation=local_schematisation.wip_revision,
-            action=BuildOptionActions.CREATED,
-        )
 
     @pyqtSlot(dict, dict)
     def upload_new_schematisation_to_rana(self, project, selected_item):
@@ -1866,9 +1874,9 @@ class Loader(QObject):
             clear_msg_bar=True,
         )
 
-    @pyqtSlot(dict, dict, dict, dict, dict)
+    @pyqtSlot(dict, dict, dict, dict, dict, str)
     def save_initial_revision(
-        self, project, schematisation, local_schematisation, raster_paths
+        self, project, schematisation, local_schematisation, raster_paths, rana_path
     ):
         raster_dir = local_schematisation.wip_revision.raster_dir
 
@@ -1934,7 +1942,9 @@ class Loader(QObject):
         )
 
         upload_worker.signals.thread_finished.connect(
-            self.schematisation_upload_finished
+            lambda: self.on_initial_schematisation_revision_upload_finished(
+                schematisation, project, rana_path
+            )
         )
         upload_worker.signals.upload_failed.connect(
             self.on_schematisation_upload_failed
