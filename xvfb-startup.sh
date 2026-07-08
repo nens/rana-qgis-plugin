@@ -22,9 +22,15 @@ EXIT_CODE=$?   # Capture the exit code of pytest
 
 # Stop ffmpeg, x11vnc and xvfb cleanly
 kill -INT $FFMPEG_PROC
-wait $FFMPEG_PROC
-kill $X11VNC_PROC
-kill $XVFB_PROC
+# Wait up to 10 seconds for ffmpeg to finalize, then force kill
+for i in $(seq 1 10); do
+    kill -0 $FFMPEG_PROC 2>/dev/null || break
+    sleep 1
+done
+kill -9 $FFMPEG_PROC 2>/dev/null
+wait $FFMPEG_PROC 2>/dev/null
+kill $X11VNC_PROC 2>/dev/null
+kill $XVFB_PROC 2>/dev/null
 
 # Exit the container with pytest's exit code
 exit $EXIT_CODE
