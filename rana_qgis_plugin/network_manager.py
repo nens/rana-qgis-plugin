@@ -1,4 +1,6 @@
+import configparser
 import json
+import os
 import urllib.parse
 from typing import Optional
 
@@ -15,6 +17,37 @@ from qgis.PyQt.QtNetwork import (
     QNetworkReply,
     QNetworkRequest,
 )
+
+from rana_qgis_plugin.utils.settings import base_url
+
+
+def _get_plugin_version() -> str:
+    """Read the plugin version from metadata.txt."""
+    metadata_path = os.path.join(os.path.dirname(__file__), "metadata.txt")
+    config = configparser.ConfigParser()
+    config.read(metadata_path)
+    return config.get("general", "version", fallback="unknown")
+
+
+PLUGIN_USER_AGENT = f"rana_plugin/{_get_plugin_version()}"
+
+
+def _append_user_agent(request):
+    """Request preprocessor that appends the plugin UA to QGIS's User-Agent.
+    QGIS overwrites the User-Agent header in QgsNetworkAccessManager.createRequest(),
+    so we must use a preprocessor (which runs after) to append our own identifier.
+    Only applied to requests targeting the Rana API.
+    """
+    url = request.url().toString()
+    if not url.startswith(base_url()):
+        return
+    existing_ua = bytes(request.rawHeader(b"User-Agent")).decode("utf-8")
+    request.setRawHeader(
+        b"User-Agent", f"{existing_ua} {PLUGIN_USER_AGENT}".encode("utf-8")
+    )
+
+
+_preprocessor_id = QgsNetworkAccessManager.setRequestPreprocessor(_append_user_agent)
 
 
 class NetworkManager(object):

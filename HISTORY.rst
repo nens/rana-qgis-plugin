@@ -5,7 +5,7 @@ History
 1.2.17 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Append plugin version to "user_agent" in requests for improved logging (#338)
 
 
 1.2.16 (2026-07-08)
