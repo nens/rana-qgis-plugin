@@ -18,8 +18,6 @@ from qgis.PyQt.QtNetwork import (
     QNetworkRequest,
 )
 
-from rana_qgis_plugin.utils.settings import base_url
-
 
 def _get_plugin_version() -> str:
     """Read the plugin version from metadata.txt."""
@@ -38,10 +36,18 @@ def _append_user_agent(request):
     so we must use a preprocessor (which runs after) to append our own identifier.
     Only applied to requests targeting the Rana API.
     """
-    url = request.url().toString()
-    if not url.startswith(base_url()):
+    try:
+        from rana_qgis_plugin.utils.settings import base_url
+
+        url = request.url().toString()
+        if not url.startswith(base_url()):
+            return
+    except Exception:
         return
     existing_ua = bytes(request.rawHeader(b"User-Agent")).decode("utf-8")
+    if PLUGIN_USER_AGENT in existing_ua:
+        return
+
     request.setRawHeader(
         b"User-Agent", f"{existing_ua} {PLUGIN_USER_AGENT}".encode("utf-8")
     )
