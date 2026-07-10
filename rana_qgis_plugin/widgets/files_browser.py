@@ -111,7 +111,7 @@ class FileBrowserModel(QStandardItemModel):
         # Sort directories always by name (col 1), files by the requested column
         directories.sort(
             key=lambda x: x[1],
-            reverse=(order == Qt.SortOrder.DescendingOrder),
+            reverse=(column == 1 and order == Qt.SortOrder.DescendingOrder),
         )
         files.sort(key=lambda x: x[1], reverse=(order == Qt.SortOrder.DescendingOrder))
         # Always add directories first, then files
