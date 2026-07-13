@@ -6,7 +6,7 @@ History
 -------------------
 
 - Append plugin version to "user_agent" in requests for improved logging (#338)
-
+- Fixed default ordering of folders in FilesBrowser (nens/rana#4574)
 
 1.2.16 (2026-07-08)
 -------------------
