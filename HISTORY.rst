@@ -7,6 +7,7 @@ History
 
 - Append plugin version to "user_agent" in requests for improved logging (#338)
 - Fixed default ordering of folders in FilesBrowser (nens/rana#4574)
+- Fixed bug that only last entry of initial concentrations allows upload (nens/rana#4622)
 
 1.2.16 (2026-07-08)
 -------------------

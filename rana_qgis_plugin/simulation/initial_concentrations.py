@@ -109,7 +109,7 @@ class Initial1DConcentrationsWidget(QWidget):
             cbo_online_file.setObjectName(f"cbo_online_file_1d_{name}")
             cbo_online_file.setFont(QFont("Segoe UI", 10))
             rb_online_file.toggled.connect(
-                lambda checked: cbo_online_file.setEnabled(checked)
+                lambda checked, cbo=cbo_online_file: cbo.setEnabled(checked)
             )
 
             # Local csv upload widget
@@ -130,9 +130,9 @@ class Initial1DConcentrationsWidget(QWidget):
             btn_browse_local_file.setEnabled(not is_online_file_available)
             btn_browse_local_file.setObjectName(f"btn_browse_local_file_{name}")
             rb_local_file.toggled.connect(
-                lambda checked: (
-                    le_local_file.setEnabled(checked),
-                    btn_browse_local_file.setEnabled(checked),
+                lambda checked, le=le_local_file, btn=btn_browse_local_file: (
+                    le.setEnabled(checked),
+                    btn.setEnabled(checked),
                 )
             )
             button_layout = QHBoxLayout(self)
@@ -288,7 +288,7 @@ class Initial2DConcentrationsWidget(QWidget):
             cbo_online_raster.setObjectName(f"cbo_online_raster_{name}")
             cbo_online_raster.setFont(QFont("Segoe UI", 10))
             rb_online_raster.toggled.connect(
-                lambda checked: cbo_online_raster.setEnabled(checked)
+                lambda checked, cbo=cbo_online_raster: cbo.setEnabled(checked)
             )
 
             # Local raster upload widget
@@ -307,9 +307,9 @@ class Initial2DConcentrationsWidget(QWidget):
             btn_browse_local_raster.setObjectName(f"btn_browse_local_raster_{name}")
             btn_browse_local_raster.setFont(QFont("Segoe UI", 10))
             rb_local_raster.toggled.connect(
-                lambda checked: (
-                    cbo_local_raster.setEnabled(checked),
-                    btn_browse_local_raster.setEnabled(checked),
+                lambda checked, cbo=cbo_local_raster, btn=btn_browse_local_raster: (
+                    cbo.setEnabled(checked),
+                    btn.setEnabled(checked),
                 )
             )
 
