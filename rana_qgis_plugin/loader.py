@@ -267,7 +267,7 @@ class Loader(QObject):
                 title="Confirm download",
                 question=f"You are about to download {self.batch_file_download_worker.nof_files} files. Do you want to proceed?",
             )
-            if confirm_dialog == QMessageBox.No:
+            if confirm_dialog == QMessageBox.StandardButton.No:
                 self.communication.clear_message_bar()
                 self.file_download_failed.emit("")
                 return
@@ -976,7 +976,7 @@ class Loader(QObject):
             schematisation["schematisation"]["id"],
             self.parent(),
         )
-        if template_dialog.exec() == QDialog.Rejected:
+        if template_dialog.exec() == QDialog.DialogCode.Rejected:
             self.simulation_wizard_cancelled.emit()
             return
 
@@ -1000,7 +1000,7 @@ class Loader(QObject):
             api=tc,
             parent=self.parent(),
         )
-        if simulation_init_wizard.exec() == QDialog.Rejected:
+        if simulation_init_wizard.exec() == QDialog.DialogCode.Rejected:
             self.simulation_wizard_cancelled.emit()
             return
         layer_parents = (
@@ -1037,7 +1037,7 @@ class Loader(QObject):
                 self.simulation_started_failed
             )
 
-            if simulation_wizard.exec() == QDialog.Rejected:
+            if simulation_wizard.exec() == QDialog.DialogCode.Rejected:
                 self.simulation_wizard_cancelled.emit()
 
     def start_model_tracker_process(
@@ -1764,7 +1764,7 @@ class Loader(QObject):
         if schema_gpkg_loaded is False:
             question = "Warning: the revision you are about to upload is not loaded in the Rana Schematisation Editor. Do you want to continue?"
             if not self.communication.ask(
-                self.parent(), "Warning", question, QMessageBox.Warning
+                self.parent(), "Warning", question, QMessageBox.Icon.Warning
             ):
                 self.schematisation_upload_cancelled.emit()
                 return

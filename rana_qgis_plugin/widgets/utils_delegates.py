@@ -13,16 +13,16 @@ class WordWrapDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         options = QStyleOptionViewItem(option)
         self.initStyleOption(options, index)
-        options.features |= QStyleOptionViewItem.WrapText
+        options.features |= QStyleOptionViewItem.ViewItemFeature.WrapText
         style = (
             QApplication.style() if options.widget is None else options.widget.style()
         )
-        style.drawControl(QStyle.CE_ItemViewItem, options, painter)
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, options, painter)
 
     def sizeHint(self, option, index):
         options = QStyleOptionViewItem(option)
         self.initStyleOption(options, index)
-        options.features |= QStyleOptionViewItem.WrapText
+        options.features |= QStyleOptionViewItem.ViewItemFeature.WrapText
 
         # Calculate required size with wrapping
         doc = QTextDocument()
@@ -34,10 +34,10 @@ class WordWrapDelegate(QStyledItemDelegate):
 
     def helpEvent(self, event, view, option, index):
         """Handle tooltip events to show the full text when hovering."""
-        if not event or not view or event.type() != QEvent.ToolTip:
+        if not event or not view or event.type() != QEvent.Type.ToolTip:
             return super().helpEvent(event, view, option, index)
 
-        text = index.data(Qt.DisplayRole)
+        text = index.data(Qt.ItemDataRole.DisplayRole)
         if not text:
             return super().helpEvent(event, view, option, index)
 

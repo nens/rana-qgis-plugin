@@ -213,7 +213,7 @@ class RanaBrowser(QWidget):
         self.logo_label.installEventFilter(self)
         self.window().installEventFilter(self)
         top_layout.addWidget(self.breadcrumbs_manager)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         top_layout.addItem(spacer)
         top_layout.addWidget(self.logo_label)
         # Add components to the layout
@@ -222,7 +222,7 @@ class RanaBrowser(QWidget):
         layout.addWidget(self.rana_browser)
         self.setLayout(layout)
         self.resize(800, self.height())
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         # Connect avatar_cache
         # Note that avatar_cache is only linked to the projects_browser because for now
@@ -509,10 +509,10 @@ class RanaBrowser(QWidget):
         self.rana_processes.setCurrentIndex(0)
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.MouseButtonPress and obj == self.logo_label:
+        if event.type() == QEvent.Type.MouseButtonPress and obj == self.logo_label:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
-        elif event.type() == QEvent.WindowActivate:
+        elif event.type() == QEvent.Type.WindowActivate:
             # prevent multiple events on window activation to cause multiple refresh actions
             if time.time() - self.last_refresh_time > 0.1:
                 self.auto_refresh()

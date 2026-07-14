@@ -59,7 +59,7 @@ def convert_vectorfile_to_geopackage(
         layer, gpkg_path, QgsProject.instance().transformContext(), options
     )
 
-    if error[0] != QgsVectorFileWriter.NoError:
+    if error[0] != QgsVectorFileWriter.WriterError.NoError:
         raise Exception(error)
 
     # Explicitly embed the style in the geopackage

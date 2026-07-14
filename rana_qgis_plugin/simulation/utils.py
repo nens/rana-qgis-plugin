@@ -50,9 +50,9 @@ class TreeViewLogger(object):
         self.model = QStandardItemModel()
         self.tree_view.setModel(self.model)
         self.levels_colors = {
-            LogLevels.INFO.value: QColor(Qt.black),
+            LogLevels.INFO.value: QColor(Qt.GlobalColor.black),
             LogLevels.WARNING.value: QColor(229, 144, 80),
-            LogLevels.ERROR.value: QColor(Qt.red),
+            LogLevels.ERROR.value: QColor(Qt.GlobalColor.red),
             LogLevels.FUTURE_ERROR.value: QColor(102, 51, 153),
         }
         self.initialize_view()

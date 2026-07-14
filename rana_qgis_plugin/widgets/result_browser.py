@@ -75,7 +75,7 @@ class ResultBrowser(QDialog):
                 bottom=-1000000.0,
                 top=1000000.0,
                 decimals=1,
-                notation=QDoubleValidator.StandardNotation,
+                notation=QDoubleValidator.Notation.StandardNotation,
             )
         )
         self.pixelsize_box.setValidator(
@@ -83,7 +83,7 @@ class ResultBrowser(QDialog):
                 bottom=0.00001,
                 top=1000000.00000,
                 decimals=5,
-                notation=QDoubleValidator.StandardNotation,
+                notation=QDoubleValidator.Notation.StandardNotation,
             )
         )
 
@@ -174,15 +174,15 @@ class ResultBrowser(QDialog):
             icon_label.setPixmap(
                 QIcon(":/images/themes/default/mIconWarning.svg").pixmap(16, 16)
             )
-            icon_label.setAlignment(Qt.AlignVCenter)
+            icon_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             warning_label = QLabel(
                 "Post-processing results are not available because they are still being processed."
             )
-            warning_label.setTextFormat(Qt.RichText)
+            warning_label.setTextFormat(Qt.TextFormat.RichText)
             warning_layout = QHBoxLayout()
             warning_layout.addWidget(icon_label)
             warning_layout.addWidget(warning_label)
-            warning_layout.setAlignment(Qt.AlignVCenter)
+            warning_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             layout.addLayout(warning_layout)
             # disable raster settings
             self.no_data_box.setEnabled(False)

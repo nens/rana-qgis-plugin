@@ -252,7 +252,7 @@ class FilesBrowser(QWidget):
         self.btn_stack.addWidget(select_page)
         self.btn_stack.setSizePolicy(
             self.btn_stack.sizePolicy().horizontalPolicy(),
-            QSizePolicy.Fixed,
+            QSizePolicy.Policy.Fixed,
         )
         layout = QVBoxLayout(self)
         layout.addWidget(self.filter_bar)

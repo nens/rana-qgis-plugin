@@ -245,7 +245,7 @@ class PublicationView(QWidget):
         self.general_box.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
         )
-        self.general_box.setAlignment(Qt.AlignTop)
+        self.general_box.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.general_box.setContentsMargins(0, 0, 0, 0)
         self.maps_box = QgsCollapsibleGroupBox("Maps")
         self.maps_box.setSizePolicy(
@@ -254,12 +254,12 @@ class PublicationView(QWidget):
 
         self.maps_model = QStandardItemModel()
         self.maps_tv = ContentAwareTreeView()
-        self.maps_tv.setEditTriggers(QTreeView.NoEditTriggers)
+        self.maps_tv.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self.maps_tv.setModel(self.maps_model)
         self.maps_tv.setUniformRowHeights(True)
-        self.maps_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.maps_tv.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.maps_tv.setSortingEnabled(False)
-        self.maps_tv.header().setSectionResizeMode(QHeaderView.Interactive)
+        self.maps_tv.header().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.maps_tv.header().setSectionsMovable(False)
         self.maps_tv.header().setStretchLastSection(False)
         self.maps_model.setColumnCount(3)
@@ -280,7 +280,7 @@ class PublicationView(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(collapsible_container)
-        scroll_area.setAlignment(Qt.AlignTop)
+        scroll_area.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         button_layout = QHBoxLayout()
         btn_open = QPushButton("Open all maps")
@@ -416,7 +416,7 @@ class PublicationView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         frame = QFrame()
-        frame.setFrameStyle(QFrame.NoFrame)
+        frame.setFrameStyle(QFrame.Shape.NoFrame)
         frame_layout = QVBoxLayout(frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.setSpacing(0)
@@ -429,7 +429,7 @@ class PublicationView(QWidget):
             frame_layout.setSpacing(0)
             if framed_layout != contents[-1]:
                 line = QFrame()
-                line.setFrameStyle(QFrame.HLine | QFrame.Sunken)
+                line.setFrameStyle(QFrame.Shape.HLine | QFrame.Shadow.Sunken)
                 frame_layout.addWidget(line)
         # assign existing layout to temporary widget
         # this will be deleted once the scope of this method is over
@@ -510,7 +510,7 @@ class PublicationView(QWidget):
             open_btn = QPushButton(open_label)
             open_btn.setIcon(open_icon)
             open_btn.setToolTip(open_tooltip)
-            open_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            open_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
             if self._open_btn_width is None:
                 self._open_btn_width = open_btn.sizeHint().width()
             open_btn.setFixedWidth(self._open_btn_width)
@@ -532,7 +532,7 @@ class PublicationView(QWidget):
             save_btn = QPushButton(save_label)
             save_btn.setIcon(FileAction.SAVE_STYLING.icon)
             save_btn.setToolTip(save_tooltip)
-            save_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            save_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
             if self._save_btn_width is None:
                 self._save_btn_width = save_btn.sizeHint().width()
             save_btn.setFixedWidth(self._save_btn_width)
@@ -558,7 +558,7 @@ class PublicationView(QWidget):
 
     def update_style_ids(self, item, is_root=False):
         if item.rowCount() == 0:
-            layer_item = item.data(Qt.UserRole)
+            layer_item = item.data(Qt.ItemDataRole.UserRole)
             tree_in_maps = layer_item.parents[1:] + [layer_item.name]
             node = find_publication_map_layer_from_tree(
                 self.current_version, tree_in_maps
@@ -588,7 +588,7 @@ class PublicationView(QWidget):
                 if data_type in ["scenario", "vector"]:
                     tooltip = map_item.file["id"]
                 layer_item = QStandardItem(layer_icon, map_item.name)
-                layer_item.setData(map_item, Qt.UserRole)
+                layer_item.setData(map_item, Qt.ItemDataRole.UserRole)
                 if tooltip:
                     layer_item.setToolTip(tooltip)
                 parent_item.appendRow(
@@ -598,7 +598,7 @@ class PublicationView(QWidget):
                 self.add_buttons_to_row(btn_container, parent_item)
             elif isinstance(map_item, FolderItemData):
                 folder_item = QStandardItem(map_item.name)
-                folder_item.setData(map_item, Qt.UserRole)
+                folder_item.setData(map_item, Qt.ItemDataRole.UserRole)
                 parent_item.appendRow([folder_item, QStandardItem(), QStandardItem()])
                 btn_container = self.get_button_container(map_item)
                 self.add_buttons_to_row(btn_container, parent_item)
@@ -643,7 +643,7 @@ class PublicationView(QWidget):
             bold_font.setBold(True)
             name_item.setFont(bold_font)
             self.maps_model.appendRow([name_item, QStandardItem(), QStandardItem()])
-            name_item.setData(map_item, Qt.UserRole)
+            name_item.setData(map_item, Qt.ItemDataRole.UserRole)
             btn_container = self.get_button_container(map_item, is_map=True)
             self.add_buttons_to_row(btn_container)
             self.add_map_layers(name_item, map_item.sub_items)

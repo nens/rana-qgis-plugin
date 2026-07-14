@@ -147,11 +147,11 @@ class ModelDeletionDialog(uicls, basecls):
         ):
             id_item = QStandardItem(str(sim_model.id))
             name_item = QStandardItem(sim_model.name)
-            name_item.setData(sim_model, role=Qt.UserRole)
+            name_item.setData(sim_model, role=Qt.ItemDataRole.UserRole)
             schema_item = QStandardItem(sim_model.schematisation_name)
             rev_number = sim_model.revision_number
             rev_item = QStandardItem(rev_number)
-            rev_item.setData(int(rev_number), role=Qt.DisplayRole)
+            rev_item.setData(int(rev_number), role=Qt.ItemDataRole.DisplayRole)
             created_by_item = QStandardItem(sim_model.user)
             created_on = sim_model.revision_commit_date.split("T")[0]
             created_on_datetime = QDateTime.fromString(created_on, "yyyy-MM-dd")

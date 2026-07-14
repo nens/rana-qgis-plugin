@@ -81,7 +81,7 @@ def canvas_to_image(canvas) -> QImage:
     job.start()
     job.waitForFinished()
 
-    return job.renderedImage().convertToFormat(QImage.Format_ARGB32)
+    return job.renderedImage().convertToFormat(QImage.Format.Format_ARGB32)
 
 
 def images_equal(img1: QImage, img2: QImage) -> bool:
@@ -104,7 +104,7 @@ def images_equal(img1: QImage, img2: QImage) -> bool:
     return True
 
 
-def press_button_with_moderator(qtbot, modal, key, moderator_key=Qt.Key_Shift):
+def press_button_with_moderator(qtbot, modal, key, moderator_key=Qt.Key.Key_Shift):
     """Click the moderator and target key. Useful for navigating dialogs with
     keyboard shortcuts that require a modifier key, such as Shift+Tab."""
     # Note that Qt only picks up a key_moderator combination when there is a small pause between

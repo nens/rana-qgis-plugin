@@ -120,7 +120,7 @@ class NewSchematisationWizard(QWizard):
 
     def __init__(self, threedi_api, working_dir, communication, organisations):
         super().__init__()
-        self.setWizardStyle(QWizard.ClassicStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
         self.working_dir = working_dir
         self.threedi_api = threedi_api
         self.tc = ThreediCalls(threedi_api)
@@ -139,14 +139,14 @@ class NewSchematisationWizard(QWizard):
         self.addPage(self.schematisation_name_page)
         self.addPage(self.schematisation_explain_page)
         self.addPage(self.schematisation_settings_page)
-        self.setButtonText(QWizard.FinishButton, "Create schematisation")
-        self.finish_btn = self.button(QWizard.FinishButton)
+        self.setButtonText(QWizard.WizardButton.FinishButton, "Create schematisation")
+        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
         self.finish_btn.clicked.connect(self.create_schematisation)
-        self.cancel_btn = self.button(QWizard.CancelButton)
+        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
         self.cancel_btn.clicked.connect(self.cancel_wizard)
         self.setWindowTitle("New schematisation")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setOption(QWizard.HaveNextButtonOnLastPage, False)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setOption(QWizard.WizardOption.HaveNextButtonOnLastPage, False)
         self.resize(
             QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))
         )
@@ -258,7 +258,7 @@ class UploadExistingSchematisationWizard(QWizard):
         self, threedi_api, working_dir, communication, organisations, gpkg_path
     ):
         super().__init__()
-        self.setWizardStyle(QWizard.ClassicStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
         self.working_dir = working_dir
         self.threedi_api = threedi_api
         self.tc = ThreediCalls(threedi_api)
@@ -273,15 +273,15 @@ class UploadExistingSchematisationWizard(QWizard):
         )
         self.schematisation_name_page.setFinalPage(True)
         self.addPage(self.schematisation_name_page)
-        self.setButtonText(QWizard.FinishButton, "Create schematisation")
-        self.finish_btn = self.button(QWizard.FinishButton)
+        self.setButtonText(QWizard.WizardButton.FinishButton, "Create schematisation")
+        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
         self.finish_btn.clicked.connect(self.create_schematisation)
-        self.cancel_btn = self.button(QWizard.CancelButton)
+        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
         self.cancel_btn.clicked.connect(self.cancel_wizard)
         self.setWindowTitle("Upload existing schematisation")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setButtonLayout(
-            [QWizard.Stretch, QWizard.FinishButton, QWizard.CancelButton]
+            [QWizard.WizardButton.Stretch, QWizard.WizardButton.FinishButton, QWizard.WizardButton.CancelButton]
         )
         self.resize(
             QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))

@@ -16,17 +16,17 @@ def get_user_image_from_initials(initials: str) -> QPixmap:
 
     size = 32  # Size of the icon
     pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
+    pixmap.fill(Qt.GlobalColor.transparent)
 
     painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
     # Determine colors based on theme
     theme_background_color = QApplication.palette().window().color()
     theme_text_color = QApplication.palette().text().color()
 
     # Draw circular background
-    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setBrush(theme_background_color)
     painter.setPen(theme_text_color)
     painter.drawEllipse(QRectF(0, 0, size, size))
@@ -37,7 +37,7 @@ def get_user_image_from_initials(initials: str) -> QPixmap:
     font = painter.font()
     font.setPointSize(14)
     painter.setFont(font)
-    painter.drawText(text_rect, Qt.AlignCenter, initials)
+    painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, initials)
 
     painter.end()
 
@@ -49,7 +49,7 @@ def create_user_image(image):
     pixmap = QPixmap.fromImage(image)
     # Scale maintaining aspect ratio
     scaled_pixmap = pixmap.scaled(
-        size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+        size, size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation
     )
 
     # Calculate offsets to center the image
@@ -58,7 +58,7 @@ def create_user_image(image):
 
     # Create the target rounded pixmap
     rounded = QPixmap(size, size)
-    rounded.fill(Qt.transparent)
+    rounded.fill(Qt.GlobalColor.transparent)
 
     # Create a path for circular mask
     path = QPainterPath()
@@ -66,7 +66,7 @@ def create_user_image(image):
 
     # Paint the original pixmap with circular mask
     painter = QPainter(rounded)
-    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setClipPath(path)
 
     # Draw the pixmap from the calculated offset position
