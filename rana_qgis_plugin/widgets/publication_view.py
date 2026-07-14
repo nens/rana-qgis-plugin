@@ -257,7 +257,9 @@ class PublicationView(QWidget):
         self.maps_tv.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self.maps_tv.setModel(self.maps_model)
         self.maps_tv.setUniformRowHeights(True)
-        self.maps_tv.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.maps_tv.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.maps_tv.setSortingEnabled(False)
         self.maps_tv.header().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.maps_tv.header().setSectionsMovable(False)

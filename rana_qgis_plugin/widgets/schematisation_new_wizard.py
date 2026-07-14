@@ -281,7 +281,11 @@ class UploadExistingSchematisationWizard(QWizard):
         self.setWindowTitle("Upload existing schematisation")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setButtonLayout(
-            [QWizard.WizardButton.Stretch, QWizard.WizardButton.FinishButton, QWizard.WizardButton.CancelButton]
+            [
+                QWizard.WizardButton.Stretch,
+                QWizard.WizardButton.FinishButton,
+                QWizard.WizardButton.CancelButton,
+            ]
         )
         self.resize(
             QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))

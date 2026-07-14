@@ -121,7 +121,9 @@ class SchematisationSettingsWidget(QWidget):
         super().__init__(parent)
         self.setup_ui()
 
-        self.crs.setOptionVisible(QgsProjectionSelectionWidget.CrsOption.DefaultCrs, False)
+        self.crs.setOptionVisible(
+            QgsProjectionSelectionWidget.CrsOption.DefaultCrs, False
+        )
         self.use_1d_flow_group.toggled.connect(self.on_1d_flow_toggled)
         self.use_2d_flow_group.toggled.connect(self.on_2d_flow_toggled)
         self.dem_file.fileChanged.connect(self.on_dem_file_change)
@@ -365,7 +367,9 @@ class SchematisationSettingsWidget(QWidget):
 
         main_layout.addWidget(self.simulation_settings, 4, 0)
 
-        spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        spacer = QSpacerItem(
+            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+        )
         main_layout.addItem(spacer, 5, 0)
 
     def on_1d_flow_toggled(self, on):

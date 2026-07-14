@@ -237,7 +237,9 @@ class CheckModelWidget(uicls_check_page, basecls_check_page):
             if migration_succeed and len(migration_feedback_msg) > 0:
                 self.communication.show_info(migration_feedback_msg)
                 QgsMessageLog.logMessage(
-                    migration_feedback_msg, level=Qgis.MessageLevel.Warning, tag="Messages"
+                    migration_feedback_msg,
+                    level=Qgis.MessageLevel.Warning,
+                    tag="Messages",
                 )
             elif not migration_succeed:
                 self.communication.show_error(migration_feedback_msg, self)
@@ -570,11 +572,15 @@ class SelectFilesWidget(uicls_files_page, basecls_files_page):
                 status = file_state["status"]
                 widget.show()
                 name_label = QLabel(name)
-                name_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+                name_label.setSizePolicy(
+                    QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+                )
                 widget_layout.addWidget(name_label, current_main_layout_row, 0)
 
                 status_label = QLabel(status.value)
-                status_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+                status_label.setSizePolicy(
+                    QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+                )
                 widget_layout.addWidget(status_label, current_main_layout_row, 1)
 
                 empty_label = QLabel()

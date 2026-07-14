@@ -85,7 +85,9 @@ class SchematisationNameWidget(QWidget):
         # Grid layout
         gridLayout = QGridLayout(self)
         gridLayout.addItem(
-            QSpacerItem(20, 25, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed), 0, 0
+            QSpacerItem(20, 25, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed),
+            0,
+            0,
         )
 
         # Schematisation name label
@@ -104,7 +106,9 @@ class SchematisationNameWidget(QWidget):
 
         # Description input
         self.le_description = QLineEdit()
-        self.le_description.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.le_description.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.le_description.setMinimumSize(0, 25)
         self.le_description.setPlaceholderText(
             "Concise description of your schematisation (optional)"
@@ -114,7 +118,9 @@ class SchematisationNameWidget(QWidget):
         gridLayout.addWidget(QLabel("Tags:"), 4, 0)
 
         self.le_tags = QLineEdit()
-        self.le_tags.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.le_tags.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.le_tags.setMinimumSize(0, 25)
         self.le_tags.setPlaceholderText("Comma-separated tags (optional)")
         gridLayout.addWidget(self.le_tags, 4, 2)
@@ -137,7 +143,11 @@ class SchematisationNameWidget(QWidget):
             self.cbo_organisations.hide()
 
         gridLayout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding), 6, 0
+            QSpacerItem(
+                20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+            ),
+            6,
+            0,
         )
 
     def populate_organisations(self):

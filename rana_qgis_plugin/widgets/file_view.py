@@ -218,7 +218,9 @@ class FileView(QWidget):
         self.files_table.setModel(self.files_model)
         self.files_model.setColumnCount(3)
         self.files_model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
-        self.files_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.files_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         files_layout = QVBoxLayout()
         files_layout.addWidget(self.files_table)
         self.files_box.setLayout(files_layout)
@@ -254,9 +256,13 @@ class FileView(QWidget):
         )
         self.btn_show_revisions = btn_show_revisions
         self.btn_show_revisions.setMinimumSize(self.btn_show_revisions.sizeHint())
-        self.btn_show_revisions.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.btn_show_revisions.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self.btn_show_revisions.hide()
-        self.btn_stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.btn_stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
         button_layout.addWidget(self.btn_stack)
         self.file_action_btn_dict = self.get_file_action_buttons()
         file_action_btn_layout = QHBoxLayout()
@@ -267,7 +273,9 @@ class FileView(QWidget):
         # Match height of the other action buttons, keep width fixed
         reference_btn = next(iter(self.file_action_btn_dict.values()))
         self.btn_ellipsis.setFixedHeight(reference_btn.sizeHint().height())
-        self.btn_ellipsis.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.btn_ellipsis.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
         file_action_btn_layout.addWidget(self.btn_ellipsis)
 
         # Put scroll area in layout
@@ -513,7 +521,9 @@ class FileView(QWidget):
             else ""
         )
         self.filename_edit.setText(filename)
-        self.filename_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.filename_edit.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.filename_edit.adjustSize()
 
         rows.append([file_icon_label, self.filename_edit, QLabel(size_str)])
@@ -548,7 +558,9 @@ class FileView(QWidget):
             self.avatar_cache.get_avatar_for_user(rana_user)
         )
         msg_label = QLabel(msg)
-        msg_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        msg_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored
+        )
 
         msg_label.setWordWrap(True)
         rows.append(

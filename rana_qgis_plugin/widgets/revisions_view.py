@@ -45,7 +45,9 @@ class RevisionsView(QWidget):
     def setup_ui(self):
         self.revisions_table = QTableView()
         self.revisions_table.setSortingEnabled(True)
-        self.revisions_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        self.revisions_table.setSelectionBehavior(
+            QTableView.SelectionBehavior.SelectRows
+        )
         self.revisions_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
@@ -269,13 +271,17 @@ class RevisionsView(QWidget):
             for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 3):
                 if btn_data:
                     btn = QPushButton(btn_data.label)
-                    btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+                    btn.setSizePolicy(
+                        QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+                    )
                     btn.clicked.connect(btn_data.func)
                     btn.setEnabled(btn_data.enabled)
                     if btn_data.tooltip:
                         btn.setToolTip(btn_data.tooltip)
                     container = QWidget()
-                    container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+                    container.setSizePolicy(
+                        QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+                    )
                     layout = QVBoxLayout(container)
                     layout.setContentsMargins(0, 0, 0, 0)
                     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)

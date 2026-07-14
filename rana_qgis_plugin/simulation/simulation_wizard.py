@@ -4008,7 +4008,9 @@ class SimulationWizard(QWizard):
         self.summary_page = SummaryPage(self, initial_conditions=init_conditions)
         self.addPage(self.summary_page)
         self.currentIdChanged.connect(self.page_changed)
-        self.setButtonText(QWizard.WizardButton.FinishButton, "Start simulation in Rana")
+        self.setButtonText(
+            QWizard.WizardButton.FinishButton, "Start simulation in Rana"
+        )
         self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
         self.finish_btn.clicked.connect(self.run_new_simulation)
         self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
@@ -4050,7 +4052,9 @@ class SimulationWizard(QWizard):
                 page_step_labels.append(label)
             for page_label in page_step_labels:
                 wizard_steps_layout.addWidget(page_label)
-            spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+            spacer = QSpacerItem(
+                20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+            )
             wizard_steps_layout.addItem(spacer)
 
     def page_changed(self):
@@ -5060,7 +5064,8 @@ class SimulationWizard(QWizard):
                 self.potential_breaches_layer = potential_breaches_layer
                 set_named_style(self.potential_breaches_layer, "Potential breach.qml")
                 self.potential_breaches_layer.setFlags(
-                    QgsMapLayer.LayerFlag.Searchable | QgsMapLayer.LayerFlag.Identifiable
+                    QgsMapLayer.LayerFlag.Searchable
+                    | QgsMapLayer.LayerFlag.Identifiable
                 )
                 self.layer_manager.add_layer(
                     self.potential_breaches_layer, self.layer_parents
@@ -5073,7 +5078,8 @@ class SimulationWizard(QWizard):
                 self.flowlines_layer = flowlines_layer
                 set_named_style(self.flowlines_layer, "1D2D flowline.qml")
                 self.flowlines_layer.setFlags(
-                    QgsMapLayer.LayerFlag.Searchable | QgsMapLayer.LayerFlag.Identifiable
+                    QgsMapLayer.LayerFlag.Searchable
+                    | QgsMapLayer.LayerFlag.Identifiable
                 )
                 self.layer_manager.add_layer(self.flowlines_layer, self.layer_parents)
             else:

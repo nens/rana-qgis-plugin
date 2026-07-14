@@ -165,10 +165,16 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setItemDelegateForColumn(0, name_delegate)
         self.processes_tv.setWordWrap(True)
         self.processes_tv.setUniformRowHeights(False)
-        self.processes_tv.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.processes_tv.header().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.processes_tv.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.processes_tv.header().setSectionResizeMode(
+            QHeaderView.ResizeMode.Interactive
+        )
         self.processes_tv.header().setStretchLastSection(True)
-        self.processes_tv.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.processes_tv.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
         self.processes_tv.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
 
     def add_item(self, job):
@@ -224,7 +230,9 @@ class ProcessesBrowser(QWidget):
         status_layout.addStretch(1)
         status_container = QWidget()
         status_container.setLayout(status_layout)
-        status_container.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        status_container.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
         row = [name_item, process_name_item, who_item, date_item, status_item]
         self.processes_model.insertRow(0, row)
         self.processes_tv.setIndexWidget(status_item.index(), status_container)

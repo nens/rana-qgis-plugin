@@ -1,3 +1,4 @@
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QFont
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -8,7 +9,6 @@ from qgis.PyQt.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-from qgis.PyQt.QtCore import Qt, QTimer
 
 
 class ErrorDialog(QDialog):
@@ -24,7 +24,8 @@ class ErrorDialog(QDialog):
         error_label = QLabel(error_message)
         error_label.setWordWrap(True)
         error_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
         )
         error_label.setCursor(Qt.CursorShape.IBeamCursor)
         main_layout.addWidget(error_label)

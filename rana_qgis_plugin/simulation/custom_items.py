@@ -62,7 +62,9 @@ class SimulationProgressDelegate(QStyledItemDelegate):
         palette = pbar.palette
         palette.setColor(QPalette.ColorRole.Highlight, pbar_color)
         pbar.palette = palette
-        QApplication.style().drawControl(QStyle.ControlElement.CE_ProgressBar, pbar, painter)
+        QApplication.style().drawControl(
+            QStyle.ControlElement.CE_ProgressBar, pbar, painter
+        )
 
 
 class DownloadProgressDelegate(QStyledItemDelegate):
@@ -97,7 +99,9 @@ class DownloadProgressDelegate(QStyledItemDelegate):
         palette = pbar.palette
         palette.setColor(QPalette.ColorRole.Highlight, pbar_color)
         pbar.palette = palette
-        QApplication.style().drawControl(QStyle.ControlElement.CE_ProgressBar, pbar, painter)
+        QApplication.style().drawControl(
+            QStyle.ControlElement.CE_ProgressBar, pbar, painter
+        )
 
 
 class FilteredComboBox(QComboBox):
@@ -109,11 +113,17 @@ class FilteredComboBox(QComboBox):
         self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
         self.setEditable(True)
         self.filter_proxy_model = QSortFilterProxyModel(self)
-        self.filter_proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.filter_proxy_model.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.filter_proxy_model.setFilterCaseSensitivity(
+            Qt.CaseSensitivity.CaseInsensitive
+        )
+        self.filter_proxy_model.setSortCaseSensitivity(
+            Qt.CaseSensitivity.CaseInsensitive
+        )
         self.filter_proxy_model.setSourceModel(self.model())
         self.completer = QCompleter(self.filter_proxy_model, self)
-        self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
+        self.completer.setCompletionMode(
+            QCompleter.CompletionMode.UnfilteredPopupCompletion
+        )
         self.setCompleter(self.completer)
         self.setMinimumSize(150, 25)
         self.setFont(QFont("Segoe UI", 10))

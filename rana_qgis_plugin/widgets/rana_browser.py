@@ -213,7 +213,9 @@ class RanaBrowser(QWidget):
         self.logo_label.installEventFilter(self)
         self.window().installEventFilter(self)
         top_layout.addWidget(self.breadcrumbs_manager)
-        spacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        spacer = QSpacerItem(
+            40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
         top_layout.addItem(spacer)
         top_layout.addWidget(self.logo_label)
         # Add components to the layout

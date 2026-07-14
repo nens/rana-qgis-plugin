@@ -63,17 +63,23 @@ class FilterBar(QWidget):
                     placeholder=config.placeholder,
                     show_search_icon=True,
                 )
-                widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+                widget.setSizePolicy(
+                    QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+                )
                 widget.searchChanged.connect(self._emit_changed)
                 self._line_edits[config.key] = widget
                 layout.addWidget(widget, stretch=1)
             elif isinstance(config, ComboFilterConfig):
                 widget = QComboBox()
-                widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+                widget.setSizePolicy(
+                    QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+                )
                 widget.setMinimumWidth(0)
                 widget.setEditable(True)
                 widget.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-                widget.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+                widget.completer().setCaseSensitivity(
+                    Qt.CaseSensitivity.CaseInsensitive
+                )
                 if widget.lineEdit():
                     widget.lineEdit().setPlaceholderText(config.placeholder)
                     widget.lineEdit().textChanged.connect(

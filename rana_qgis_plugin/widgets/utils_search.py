@@ -35,7 +35,8 @@ class DebouncedSearchBox(QLineEdit):
         self.setPlaceholderText(placeholder)
         if show_search_icon:
             self.addAction(
-                QIcon(":images/themes/default/mIconZoom.svg"), QLineEdit.ActionPosition.LeadingPosition
+                QIcon(":images/themes/default/mIconZoom.svg"),
+                QLineEdit.ActionPosition.LeadingPosition,
             )
 
         # Clear button -- visible only when there is text

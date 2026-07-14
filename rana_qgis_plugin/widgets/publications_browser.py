@@ -73,7 +73,9 @@ class PublicationsBrowser(QWidget):
         self.publications_tv.setItemDelegateForColumn(0, name_delegate)
         self.publications_tv.setWordWrap(True)
         self.publications_tv.setUniformRowHeights(False)
-        self.publications_tv.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.publications_tv.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.publications_tv.setSortingEnabled(True)
         header = self.publications_tv.header()
         header.setSectionsMovable(False)

@@ -53,7 +53,9 @@ def _click_all_checkboxes(files_browser, qtbot):
         rect = files_browser.files_tv.visualRect(checkbox_index)
         assert rect.isValid(), f"Invalid rect for checkbox at row {row}"
         qtbot.mouseClick(
-            files_browser.files_tv.viewport(), Qt.MouseButton.LeftButton, pos=rect.center()
+            files_browser.files_tv.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=rect.center(),
         )
         QTest.qWait(200)
 
@@ -215,7 +217,9 @@ def test_upload(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_file)
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # Wait for layer to appear on canvas
     qtbot.waitUntil(
@@ -275,7 +279,9 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_file)
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # Wait for the load-layer message box to be dismissed before proceeding
     qtbot.waitUntil(
@@ -380,7 +386,9 @@ def test_upload_case_conflict(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_upload)
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # Phase 2: attempt to upload Upload.gpkg (case-variant of the file already on the server).
     # The API should reject it with a 400; the plugin should emit file_upload_failed
@@ -410,7 +418,9 @@ def test_upload_case_conflict(plugin, qtbot, request, rana_project):
             500,
             make_modal_handler(qtbot, QFileDialog, handle_dialog_select_case_variant),
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # An error dialog must have been shown mentioning case sensitivity.
     assert error_shown, "Expected an error dialog to appear for the case-conflict"

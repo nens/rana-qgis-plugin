@@ -49,7 +49,10 @@ def create_user_image(image):
     pixmap = QPixmap.fromImage(image)
     # Scale maintaining aspect ratio
     scaled_pixmap = pixmap.scaled(
-        size, size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation
+        size,
+        size,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
     )
 
     # Calculate offsets to center the image

@@ -28,7 +28,11 @@ class SchematisationExplainWidget(QWidget):
         gridLayout = QGridLayout(self)
 
         description_label = QLabel()
-        description_label.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        description_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeading
+            | Qt.AlignmentFlag.AlignLeft
+            | Qt.AlignmentFlag.AlignTop
+        )
         description_label.setWordWrap(True)
 
         description_label.setText("""
@@ -56,5 +60,9 @@ class SchematisationExplainWidget(QWidget):
         gridLayout.addWidget(description_label, 0, 0)
 
         gridLayout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding), 1, 0
+            QSpacerItem(
+                20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+            ),
+            1,
+            0,
         )
