@@ -659,7 +659,7 @@ def add_threedi_schematisation(
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.post(
+    status = network_manager.post(
         params={"schematisation_id": schematisation_id, "path": path}
     )
 
@@ -667,7 +667,6 @@ def add_threedi_schematisation(
         response = network_manager.content
         return response
     else:
-        communication.show_error(f"Failed to add schematisation: {error}")
         return None
 
 

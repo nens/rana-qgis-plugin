@@ -15,8 +15,6 @@ History
 - Add filters for relevant columns to all list views (nens/rana#3947)
 - Fixed bug that web browser is not opened when "Open Web Viewer" is pressed in File view (nens/rana#4577)
 - Fixed bug that raster bin styling did not take first bin into account (nens/rana#4521)
-- Schematisation is first committed, then added to rana (nens/rana#4584)
-
 - Added workflow dispatch
 
 1.2.15 (2026-06-29)
