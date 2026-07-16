@@ -8,6 +8,7 @@ History
 - Append plugin version to "user_agent" in requests for improved logging (#338)
 - Fixed default ordering of folders in FilesBrowser (nens/rana#4574)
 - Fixed bug that only last entry of initial concentrations allows upload (nens/rana#4622)
+- Reverted: Schematisation is first committed, then added to rana (nens/rana#4584)
 
 1.2.16 (2026-07-08)
 -------------------
@@ -16,6 +17,7 @@ History
 - Fixed bug that web browser is not opened when "Open Web Viewer" is pressed in File view (nens/rana#4577)
 - Fixed bug that raster bin styling did not take first bin into account (nens/rana#4521)
 - Added workflow dispatch
+- Schematisation is first committed, then added to rana (nens/rana#4584)
 
 1.2.15 (2026-06-29)
 -------------------
