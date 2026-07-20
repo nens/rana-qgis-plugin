@@ -53,7 +53,9 @@ def _click_all_checkboxes(files_browser, qtbot):
         rect = files_browser.files_tv.visualRect(checkbox_index)
         assert rect.isValid(), f"Invalid rect for checkbox at row {row}"
         qtbot.mouseClick(
-            files_browser.files_tv.viewport(), Qt.LeftButton, pos=rect.center()
+            files_browser.files_tv.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=rect.center(),
         )
         QTest.qWait(200)
 
@@ -84,7 +86,7 @@ def _find_project_row(project_browser, project_name):
 def login(plugin, qtbot):
     """Open the Rana browser and select the first project."""
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    QTest.mouseClick(rana_tool_button, Qt.MouseButton.LeftButton)
 
 
 @pytest.fixture(scope="function")
@@ -108,7 +110,7 @@ def test_smoke(plugin, qtbot, request):
 
     assert not plugin.dock_widget
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    QTest.mouseClick(rana_tool_button, Qt.MouseButton.LeftButton)
     QTest.qWait(1000)
     assert plugin.dock_widget.isVisible()
 
@@ -133,7 +135,7 @@ def test_login_logout(plugin, request):
 
     # Step 1: Click toolbar button to trigger login
     rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
+    QTest.mouseClick(rana_tool_button, Qt.MouseButton.LeftButton)
     QTest.qWait(1000)
 
     # Verify logged-in state
@@ -149,7 +151,7 @@ def test_login_logout(plugin, request):
     menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
     QTest.qWait(100)
     action_rect = menu.actionGeometry(logout_action)
-    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
+    QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=action_rect.center())
     QTest.qWait(500)
 
     # Verify logged-out state
@@ -175,7 +177,7 @@ def test_login_logout(plugin, request):
     menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
     QTest.qWait(100)
     action_rect = menu.actionGeometry(login_action)
-    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
+    QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=action_rect.center())
     QTest.qWait(1000)
 
     # Verify logged-in state again
@@ -196,7 +198,7 @@ def test_upload(plugin, qtbot, request, rana_project):
         # Note that this might not work for native widgets (in that case
         # dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True) should be set)
         QTest.qWait(1000)
-        press_button_with_moderator(qtbot, modal, Qt.Key_Tab)
+        press_button_with_moderator(qtbot, modal, Qt.Key.Key_Tab)
         QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
@@ -215,7 +217,9 @@ def test_upload(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_file)
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # Wait for layer to appear on canvas
     qtbot.waitUntil(
@@ -244,8 +248,8 @@ def test_upload(plugin, qtbot, request, rana_project):
     assert not expected_image.isNull(), "Expected image failed to load"
     actual_image = canvas_to_image(plugin.iface.mapCanvas())
     assert images_equal(
-        expected_image.convertToFormat(QImage.Format_ARGB32),
-        actual_image.convertToFormat(QImage.Format_ARGB32),
+        expected_image.convertToFormat(QImage.Format.Format_ARGB32),
+        actual_image.convertToFormat(QImage.Format.Format_ARGB32),
     )
 
 
@@ -256,7 +260,7 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
 
     def handle_dialog_load_layer(qtbot, modal):
         QTest.qWait(1000)
-        press_button_with_moderator(qtbot, modal, Qt.Key_Tab)
+        press_button_with_moderator(qtbot, modal, Qt.Key.Key_Tab)
         QTest.qWait(1000)
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
@@ -275,7 +279,9 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_file)
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # Wait for the load-layer message box to be dismissed before proceeding
     qtbot.waitUntil(
@@ -303,7 +309,7 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
 
     # Toggle select mode
     files_browser = plugin.rana_browser.files_browser
-    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    QTest.mouseClick(files_browser.select_btn, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
 
     # Select all files by clicking each checkbox
@@ -319,16 +325,16 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QMessageBox, dismiss_download_msg)
         )
-        QTest.mouseClick(files_browser.btn_download_selected, Qt.LeftButton)
+        QTest.mouseClick(files_browser.btn_download_selected, Qt.MouseButton.LeftButton)
 
     QTest.qWait(500)
     local_path = get_local_file_path(plugin.rana_browser.project["slug"], "upload.gpkg")
     assert os.path.exists(local_path), f"Downloaded file not found at {local_path}"
 
     # Toggle select mode off and on to clear all checkboxes
-    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    QTest.mouseClick(files_browser.select_btn, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: not files_browser.select_btn.isChecked(), timeout=5000)
-    QTest.mouseClick(files_browser.select_btn, Qt.LeftButton)
+    QTest.mouseClick(files_browser.select_btn, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: files_browser.select_btn.isChecked(), timeout=5000)
 
     # Verify all checkboxes are unchecked
@@ -344,10 +350,10 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     def confirm_delete(qtbot, modal):
         yes_button = modal.button(QMessageBox.StandardButton.Yes)
         if yes_button:
-            QTest.mouseClick(yes_button, Qt.LeftButton)
+            QTest.mouseClick(yes_button, Qt.MouseButton.LeftButton)
 
     QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, confirm_delete))
-    QTest.mouseClick(files_browser.btn_delete_selected, Qt.LeftButton)
+    QTest.mouseClick(files_browser.btn_delete_selected, Qt.MouseButton.LeftButton)
     QTest.qWait(1000)
 
     # Verify file is gone from the list
@@ -380,7 +386,9 @@ def test_upload_case_conflict(plugin, qtbot, request, rana_project):
         QTimer.singleShot(
             500, make_modal_handler(qtbot, QFileDialog, handle_dialog_select_upload)
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # Phase 2: attempt to upload Upload.gpkg (case-variant of the file already on the server).
     # The API should reject it with a 400; the plugin should emit file_upload_failed
@@ -410,7 +418,9 @@ def test_upload_case_conflict(plugin, qtbot, request, rana_project):
             500,
             make_modal_handler(qtbot, QFileDialog, handle_dialog_select_case_variant),
         )
-        QTest.mouseClick(plugin.rana_browser.files_browser.btn_upload, Qt.LeftButton)
+        QTest.mouseClick(
+            plugin.rana_browser.files_browser.btn_upload, Qt.MouseButton.LeftButton
+        )
 
     # An error dialog must have been shown mentioning case sensitivity.
     assert error_shown, "Expected an error dialog to appear for the case-conflict"

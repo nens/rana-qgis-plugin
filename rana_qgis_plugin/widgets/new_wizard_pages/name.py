@@ -27,7 +27,7 @@ class SchematisationNamePage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField(
             "schematisation_name*", self.main_widget.le_schematisation_name
         )
@@ -85,7 +85,9 @@ class SchematisationNameWidget(QWidget):
         # Grid layout
         gridLayout = QGridLayout(self)
         gridLayout.addItem(
-            QSpacerItem(20, 25, QSizePolicy.Minimum, QSizePolicy.Fixed), 0, 0
+            QSpacerItem(20, 25, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed),
+            0,
+            0,
         )
 
         # Schematisation name label
@@ -94,7 +96,7 @@ class SchematisationNameWidget(QWidget):
         # Schematisation name input
         self.le_schematisation_name = QLineEdit()
         self.le_schematisation_name.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Preferred
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         self.le_schematisation_name.setMaxLength(80)
         self.le_schematisation_name.setPlaceholderText("Name your schematisation")
@@ -104,7 +106,9 @@ class SchematisationNameWidget(QWidget):
 
         # Description input
         self.le_description = QLineEdit()
-        self.le_description.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.le_description.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.le_description.setMinimumSize(0, 25)
         self.le_description.setPlaceholderText(
             "Concise description of your schematisation (optional)"
@@ -114,7 +118,9 @@ class SchematisationNameWidget(QWidget):
         gridLayout.addWidget(QLabel("Tags:"), 4, 0)
 
         self.le_tags = QLineEdit()
-        self.le_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.le_tags.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.le_tags.setMinimumSize(0, 25)
         self.le_tags.setPlaceholderText("Comma-separated tags (optional)")
         gridLayout.addWidget(self.le_tags, 4, 2)
@@ -137,7 +143,11 @@ class SchematisationNameWidget(QWidget):
             self.cbo_organisations.hide()
 
         gridLayout.addItem(
-            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 6, 0
+            QSpacerItem(
+                20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+            ),
+            6,
+            0,
         )
 
     def populate_organisations(self):

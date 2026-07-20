@@ -44,7 +44,7 @@ def get_name_wkt_pairs(
         geom = feature.geometry()
 
         # Convert curves to linear
-        geom = geom.convertToType(QgsWkbTypes.PolygonGeometry, True)
+        geom = geom.convertToType(QgsWkbTypes.GeometryType.PolygonGeometry, True)
         for i, geom_part in enumerate(geom.parts()):
             geom_part.transform(transform)
             wkt = geom_part.asWkt()
@@ -102,7 +102,7 @@ class SimulateWithRainZonesAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.SIMULATION_TEMPLATE_ID,
                 "Simulation template ID",
-                type=QgsProcessingParameterNumber.Integer,
+                type=QgsProcessingParameterNumber.Type.Integer,
             )
         )
 
@@ -114,7 +114,7 @@ class SimulateWithRainZonesAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.POLYGON_LAYER,
                 "Rain zones",
-                [QgsProcessing.TypeVectorPolygon],
+                [QgsProcessing.SourceType.TypeVectorPolygon],
             )
         )
 
@@ -123,7 +123,7 @@ class SimulateWithRainZonesAlgorithm(QgsProcessingAlgorithm):
                 self.POLYGON_NAME_FIELD,
                 "Name field",
                 parentLayerParameterName=self.POLYGON_LAYER,
-                type=QgsProcessingParameterField.String,
+                type=QgsProcessingParameterField.DataType.String,
             )
         )
 
@@ -208,7 +208,7 @@ class SimulateWithDWFLabellingAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.SIMULATION_TEMPLATE_ID,
                 "Simulation template ID",
-                type=QgsProcessingParameterNumber.Integer,
+                type=QgsProcessingParameterNumber.Type.Integer,
             )
         )
 

@@ -150,7 +150,7 @@ class ProcessesBrowser(QWidget):
         self.processes_tv = QTreeView()
         self.processes_tv.setRootIsDecorated(False)
         self.processes_tv.setModel(self.processes_model)
-        self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
+        self.processes_tv.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         layout = QVBoxLayout(self)
         layout.addWidget(self.filter_bar)
         layout.addWidget(self.processes_tv)
@@ -165,11 +165,17 @@ class ProcessesBrowser(QWidget):
         self.processes_tv.setItemDelegateForColumn(0, name_delegate)
         self.processes_tv.setWordWrap(True)
         self.processes_tv.setUniformRowHeights(False)
-        self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.processes_tv.header().setSectionResizeMode(QHeaderView.Interactive)
+        self.processes_tv.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.processes_tv.header().setSectionResizeMode(
+            QHeaderView.ResizeMode.Interactive
+        )
         self.processes_tv.header().setStretchLastSection(True)
-        self.processes_tv.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
+        self.processes_tv.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.processes_tv.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
 
     def add_item(self, job):
         name_item = QStandardItem()
@@ -211,7 +217,7 @@ class ProcessesBrowser(QWidget):
         cancel_button.setIcon(QgsApplication.getThemeIcon("mTaskCancel.svg"))
         cancel_button.setIconSize(QSize(16, 16))
         cancel_button.setAutoRaise(True)
-        cancel_button.setAttribute(Qt.WA_TranslucentBackground)
+        cancel_button.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         cancel_button.hide()
         # connect cancel button to canceling a simulation
         if job.process_id == self.proces_map["simulation_tracker"]:
@@ -224,7 +230,9 @@ class ProcessesBrowser(QWidget):
         status_layout.addStretch(1)
         status_container = QWidget()
         status_container.setLayout(status_layout)
-        status_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        status_container.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
         row = [name_item, process_name_item, who_item, date_item, status_item]
         self.processes_model.insertRow(0, row)
         self.processes_tv.setIndexWidget(status_item.index(), status_container)

@@ -45,14 +45,16 @@ class RevisionsView(QWidget):
     def setup_ui(self):
         self.revisions_table = QTableView()
         self.revisions_table.setSortingEnabled(True)
-        self.revisions_table.setSelectionBehavior(QTableView.SelectRows)
-        self.revisions_table.setSelectionMode(QTableView.SingleSelection)
+        self.revisions_table.setSelectionBehavior(
+            QTableView.SelectionBehavior.SelectRows
+        )
+        self.revisions_table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.revisions_table.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.revisions_table.verticalHeader().hide()
         self.revisions_model = QStandardItemModel()
         self.revisions_table.setModel(self.revisions_model)
         self.revisions_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
+            QHeaderView.ResizeMode.Stretch
         )
         self.revisions_table.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
@@ -269,13 +271,17 @@ class RevisionsView(QWidget):
             for col_idx, btn_data in enumerate([sim_btn_data, model_btn_data], 3):
                 if btn_data:
                     btn = QPushButton(btn_data.label)
-                    btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                    btn.setSizePolicy(
+                        QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+                    )
                     btn.clicked.connect(btn_data.func)
                     btn.setEnabled(btn_data.enabled)
                     if btn_data.tooltip:
                         btn.setToolTip(btn_data.tooltip)
                     container = QWidget()
-                    container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                    container.setSizePolicy(
+                        QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+                    )
                     layout = QVBoxLayout(container)
                     layout.setContentsMargins(0, 0, 0, 0)
                     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -291,6 +297,6 @@ class RevisionsView(QWidget):
             resize_columns = [0]
         for col_idx in resize_columns:
             self.revisions_table.horizontalHeader().setSectionResizeMode(
-                col_idx, QHeaderView.ResizeToContents
+                col_idx, QHeaderView.ResizeMode.ResizeToContents
             )
         self.ready.emit()

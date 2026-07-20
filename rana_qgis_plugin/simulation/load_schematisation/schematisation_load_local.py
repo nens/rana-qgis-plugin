@@ -55,20 +55,20 @@ class SchematisationLoad(uicls, basecls):
         wip_revision = local_schematisation.wip_revision
         if wip_revision is not None:
             number_item = QStandardItem(str(wip_revision.number))
-            number_item.setData(wip_revision, role=Qt.UserRole)
+            number_item.setData(wip_revision, role=Qt.ItemDataRole.UserRole)
             subdir_item = QStandardItem(wip_revision.sub_dir)
             self.tv_revisions_model.appendRow([number_item, subdir_item])
         for revision_number, local_revision in sorted(
             local_schematisation.revisions.items(), key=lambda x: x[0], reverse=True
         ):
             number_item = QStandardItem(str(revision_number))
-            number_item.setData(local_revision, role=Qt.UserRole)
+            number_item.setData(local_revision, role=Qt.ItemDataRole.UserRole)
             subdir_item = QStandardItem(local_revision.sub_dir)
             self.tv_revisions_model.appendRow([number_item, subdir_item])
         if self.tv_revisions_model.rowCount() > 0:
             row_idx = self.tv_revisions_model.index(0, 0)
             self.revisions_tv.selectionModel().setCurrentIndex(
-                row_idx, QItemSelectionModel.ClearAndSelect
+                row_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect
             )
         self.toggle_load_local_schematisation()
 
@@ -86,7 +86,7 @@ class SchematisationLoad(uicls, basecls):
         if index.isValid():
             current_row = index.row()
             name_item = self.tv_revisions_model.item(current_row, 0)
-            local_revision = name_item.data(Qt.UserRole)
+            local_revision = name_item.data(Qt.ItemDataRole.UserRole)
         else:
             local_revision = None
         return local_revision

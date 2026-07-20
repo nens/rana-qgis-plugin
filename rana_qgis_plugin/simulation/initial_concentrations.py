@@ -94,7 +94,9 @@ class Initial1DConcentrationsWidget(QWidget):
             groupbox.setCheckable(True)
             groupbox.setChecked(False)
             groupbox.setObjectName(f"gb_initial_concentrations_1d_{name}")
-            groupbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            groupbox.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
 
             # Online file upload widget
             is_online_file_available = True if self.online_files else False
@@ -103,7 +105,9 @@ class Initial1DConcentrationsWidget(QWidget):
             rb_online_file.setChecked(is_online_file_available)
             rb_online_file.setFont(QFont("Segoe UI", 10))
             rb_online_file.setMinimumSize(300, rb_online_file.height())
-            rb_online_file.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            rb_online_file.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
             cbo_online_file = QComboBox(self)
             cbo_online_file.setEnabled(is_online_file_available)
             cbo_online_file.setObjectName(f"cbo_online_file_1d_{name}")
@@ -115,7 +119,9 @@ class Initial1DConcentrationsWidget(QWidget):
             # Local csv upload widget
             rb_local_file = QRadioButton("Upload CSV", self)
             rb_local_file.setObjectName(f"rb_local_file_{name}")
-            rb_local_file.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            rb_local_file.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
             rb_local_file.setMinimumSize(300, rb_local_file.height())
             rb_local_file.setChecked(not is_online_file_available)
             rb_local_file.setFont(QFont("Segoe UI", 10))
@@ -275,7 +281,9 @@ class Initial2DConcentrationsWidget(QWidget):
             groupbox.setCheckable(True)
             groupbox.setChecked(False)
             groupbox.setObjectName(f"gb_initial_concentrations_2d_{name}")
-            groupbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            groupbox.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
 
             # Online raster upload widget
             is_online_raster_available = True if self.rasters else False
@@ -297,7 +305,7 @@ class Initial2DConcentrationsWidget(QWidget):
             rb_local_raster.setChecked(not is_online_raster_available)
             rb_local_raster.setFont(QFont("Segoe UI", 10))
             cbo_local_raster = QgsMapLayerComboBox()
-            cbo_local_raster.setFilters(QgsMapLayerProxyModel.RasterLayer)
+            cbo_local_raster.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
             cbo_local_raster.setEnabled(not is_online_raster_available)
             cbo_local_raster.setObjectName(f"cbo_local_raster_{name}")
             cbo_local_raster.setFont(QFont("Segoe UI", 10))

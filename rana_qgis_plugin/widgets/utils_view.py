@@ -118,13 +118,13 @@ class CheckableHeaderView(QHeaderView):
 
         opt = QStyleOptionViewItem()
         opt.rect = rect
-        opt.state = QStyle.State_Enabled
+        opt.state = QStyle.StateFlag.State_Enabled
         if self._check_state == Qt.CheckState.Checked:
-            opt.state |= QStyle.State_On
+            opt.state |= QStyle.StateFlag.State_On
         elif self._check_state == Qt.CheckState.PartiallyChecked:
-            opt.state |= QStyle.State_NoChange
+            opt.state |= QStyle.StateFlag.State_NoChange
         else:
-            opt.state |= QStyle.State_Off
+            opt.state |= QStyle.StateFlag.State_Off
         # Use QApplication.style() (the raw application style) to match exactly
         # how QStyledItemDelegate draws row checkboxes.
         QApplication.style().drawPrimitive(

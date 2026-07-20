@@ -167,7 +167,7 @@ class ProjectsBrowser(QWidget):
             self.projects_tv.viewport(),
         )
         empty_label.setOpenExternalLinks(True)
-        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_label.hide()
         return empty_label
 

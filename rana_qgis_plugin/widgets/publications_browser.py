@@ -63,7 +63,7 @@ class PublicationsBrowser(QWidget):
         self.publications_tv = QTreeView()
         self.publications_tv.setRootIsDecorated(False)
         self.publications_tv.setModel(self.publications_model)
-        self.publications_tv.setEditTriggers(QTreeView.NoEditTriggers)
+        self.publications_tv.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
         self.publications_model.setHorizontalHeaderLabels(
             ["Name", "Who", "Created at", "Last modified"]
         )
@@ -73,7 +73,9 @@ class PublicationsBrowser(QWidget):
         self.publications_tv.setItemDelegateForColumn(0, name_delegate)
         self.publications_tv.setWordWrap(True)
         self.publications_tv.setUniformRowHeights(False)
-        self.publications_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.publications_tv.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.publications_tv.setSortingEnabled(True)
         header = self.publications_tv.header()
         header.setSectionsMovable(False)
@@ -81,7 +83,7 @@ class PublicationsBrowser(QWidget):
         header.setSortIndicatorShown(True)
         header.setStretchLastSection(False)
         header.setSortIndicator(3, Qt.SortOrder.DescendingOrder)
-        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.publications_tv.sortByColumn(3, Qt.SortOrder.DescendingOrder)
         create_publication_btn = QPushButton(
             "Create publication (opens Rana in web browser)"

@@ -325,7 +325,7 @@ class SubstancesWidget(uicls_substances, basecls_substances):
             self.NUMERICAL_DIFFUSION_LIMITER_COLUMN,
             EnumDelegate(self.tw_substances, numerical_diffusion_limiter_to_int.keys()),
         )
-        self.tw_substances.setEditTriggers(QTableView.AllEditTriggers)
+        self.tw_substances.setEditTriggers(QTableView.EditTrigger.AllEditTriggers)
 
     def prepopulate_substances_table(self, substances):
         self.tw_substances.setRowCount(0)
@@ -963,8 +963,8 @@ class InitialConditionsWidget(uicls_initial_conds, basecls_initial_conds):
         self.gb_1d.setChecked(False)
         self.gb_2d.setChecked(False)
         self.gb_groundwater.setChecked(False)
-        self.cbo_2d_local_raster.setFilters(QgsMapLayerProxyModel.RasterLayer)
-        self.cbo_gw_local_raster.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        self.cbo_2d_local_raster.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
+        self.cbo_gw_local_raster.setFilters(QgsMapLayerProxyModel.Filter.RasterLayer)
         self.btn_browse_2d_local_raster.clicked.connect(
             partial(self.browse_for_local_raster, self.cbo_2d_local_raster)
         )
@@ -2859,7 +2859,7 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.setLayout(QHBoxLayout())
             name_label = QLabel(name, self)
             name_label.setFixedWidth(200)
-            name_label.setFont(QFont("Segoe UI", 10, QFont.Normal))
+            name_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
             self.layout().addWidget(name_label)
             self.line_edit = QLineEdit(str(value), self)
             # Connect signal to signal
@@ -2870,7 +2870,7 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.layout().addWidget(self.line_edit)
             self.unit_label = QLabel(unit, self)
             self.unit_label.setFixedWidth(30)
-            self.unit_label.setFont(QFont("Segoe UI", 10, QFont.Normal))
+            self.unit_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
             self.layout().addWidget(self.unit_label)
 
         def set_unit_label(self, label: str) -> None:
@@ -3237,7 +3237,7 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
         ]
 
         wq_validator = QDoubleValidator(0.0, 100.0, 14, self)
-        wq_validator.setNotation(QDoubleValidator.ScientificNotation)
+        wq_validator.setNotation(QDoubleValidator.Notation.ScientificNotation)
         self.time_step_2.setValidator(wq_validator)
         self.time_step_2.setText(QLocale().toString(1.0))
         self.min_time_step_2.setValidator(wq_validator)
@@ -3644,7 +3644,7 @@ class NamePage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField("simulation_name*", self.main_widget.le_sim_name)
         self.adjustSize()
 
@@ -3661,7 +3661,7 @@ class SimulationDurationPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3677,7 +3677,7 @@ class SubstancesPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3693,7 +3693,7 @@ class BoundaryConditionsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
     def validatePage(self):
@@ -3741,7 +3741,7 @@ class StructureControlsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3759,12 +3759,12 @@ class InitialConditionsPage(QWizardPage):
         # Create a scroll area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameStyle(QScrollArea.NoFrame)
+        self.scroll_area.setFrameStyle(QScrollArea.Shape.NoFrame)
         self.scroll_area.setWidget(self.main_widget)
         layout = QGridLayout()
         layout.addWidget(self.scroll_area)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3780,7 +3780,7 @@ class LateralsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3796,7 +3796,7 @@ class DWFPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField("dwf_upload*", self.main_widget.dwf_upload)
         self.adjustSize()
 
@@ -3813,7 +3813,7 @@ class BreachesPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3831,7 +3831,7 @@ class PrecipitationPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3847,7 +3847,7 @@ class WindPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3863,7 +3863,7 @@ class SettingsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3879,7 +3879,7 @@ class SavedStatePage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField("saved_state_name*", self.main_widget.le_saved_state_name)
         self.adjustSize()
 
@@ -3896,7 +3896,7 @@ class LizardPostProcessingPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3912,7 +3912,7 @@ class SummaryPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3938,7 +3938,7 @@ class SimulationWizard(QWizard):
     ):
         super().__init__(parent)
         self.settings = QSettings()
-        self.setWizardStyle(QWizard.ClassicStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
         self.threedi_api = threedi_api
         self.communication = communication
         self.current_model = current_model
@@ -4008,14 +4008,16 @@ class SimulationWizard(QWizard):
         self.summary_page = SummaryPage(self, initial_conditions=init_conditions)
         self.addPage(self.summary_page)
         self.currentIdChanged.connect(self.page_changed)
-        self.setButtonText(QWizard.FinishButton, "Start simulation in Rana")
-        self.finish_btn = self.button(QWizard.FinishButton)
+        self.setButtonText(
+            QWizard.WizardButton.FinishButton, "Start simulation in Rana"
+        )
+        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
         self.finish_btn.clicked.connect(self.run_new_simulation)
-        self.cancel_btn = self.button(QWizard.CancelButton)
+        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
         self.cancel_btn.clicked.connect(self.cancel_wizard)
         self.new_simulations = []
         self.setWindowTitle("New simulation")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.resize(self.settings.value("threedi/wizard_size", QSize(1000, 750)))
         self.first_simulation = init_conditions.simulations_list[0]
         self.init_conditions = init_conditions
@@ -4038,7 +4040,7 @@ class SimulationWizard(QWizard):
             for other_page_id, other_page in self.wizard_pages_mapping.items():
                 label = QLabel()
                 label.setFont(font)
-                label.setTextFormat(Qt.RichText)
+                label.setTextFormat(Qt.TextFormat.RichText)
                 if page_id > other_page_id:
                     label.setText(f"✓ {other_page.STEP_NAME}")
                 elif page_id < other_page_id:
@@ -4050,7 +4052,9 @@ class SimulationWizard(QWizard):
                 page_step_labels.append(label)
             for page_label in page_step_labels:
                 wizard_steps_layout.addWidget(page_label)
-            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            spacer = QSpacerItem(
+                20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+            )
             wizard_steps_layout.addItem(spacer)
 
     def page_changed(self):
@@ -5060,7 +5064,8 @@ class SimulationWizard(QWizard):
                 self.potential_breaches_layer = potential_breaches_layer
                 set_named_style(self.potential_breaches_layer, "Potential breach.qml")
                 self.potential_breaches_layer.setFlags(
-                    QgsMapLayer.Searchable | QgsMapLayer.Identifiable
+                    QgsMapLayer.LayerFlag.Searchable
+                    | QgsMapLayer.LayerFlag.Identifiable
                 )
                 self.layer_manager.add_layer(
                     self.potential_breaches_layer, self.layer_parents
@@ -5073,7 +5078,8 @@ class SimulationWizard(QWizard):
                 self.flowlines_layer = flowlines_layer
                 set_named_style(self.flowlines_layer, "1D2D flowline.qml")
                 self.flowlines_layer.setFlags(
-                    QgsMapLayer.Searchable | QgsMapLayer.Identifiable
+                    QgsMapLayer.LayerFlag.Searchable
+                    | QgsMapLayer.LayerFlag.Identifiable
                 )
                 self.layer_manager.add_layer(self.flowlines_layer, self.layer_parents)
             else:

@@ -42,13 +42,15 @@ class SchematisationBrowser(QDialog):
         self.search_le.searchChanged.connect(self.populate_table)
 
         layout.addWidget(self.search_le, 0, 0)
-        spacer = QSpacerItem(60, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacer = QSpacerItem(
+            60, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
         layout.addItem(spacer, 0, 1, 1, 2)
 
         self.table = QTableWidget(self)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SingleSelection)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
         self.table.setColumnCount(3)
         self.table.verticalHeader().setVisible(False)
@@ -61,7 +63,9 @@ class SchematisationBrowser(QDialog):
         cancel_button.clicked.connect(self.reject)
         cancel_button.setMaximumWidth(100)
 
-        spacer = QSpacerItem(60, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacer = QSpacerItem(
+            60, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
         layout.addItem(spacer, 2, 1)
 
         self.ok_button = QPushButton("Ok", self)

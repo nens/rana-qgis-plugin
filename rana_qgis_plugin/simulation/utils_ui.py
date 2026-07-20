@@ -71,7 +71,7 @@ def scan_widgets_parameters(
     for widget in main_widget.children():
         obj_name = widget.objectName()
         if remove_postfix:
-            result = re.match("^(.+)(_\d+)$", obj_name)
+            result = re.match(r"^(.+)(_\d+)$", obj_name)
             if result is not None:
                 obj_name = result.group(1)
 
@@ -360,7 +360,7 @@ class NumericDelegate(QItemDelegate):
     def createEditor(self, parent: QWidget, option, index) -> QWidget:
         editor = QLineEdit(parent)
         validator = QDoubleValidator(0.0, 999999999.0, 10, parent)
-        validator.setNotation(QDoubleValidator.StandardNotation)
+        validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         editor.setValidator(validator)
         return editor
 

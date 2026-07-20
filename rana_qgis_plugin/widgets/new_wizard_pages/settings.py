@@ -39,11 +39,11 @@ class SchematisationSettingsPage(QWizardPage):
         self.communication = communication
         self.main_widget = SchematisationSettingsWidget(self)
         self.settings_are_valid = False
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def validatePage(self):
         """Overriding page validation logic."""
@@ -54,7 +54,7 @@ class SchematisationSettingsPage(QWizardPage):
         if (
             not crs.isValid()
             or crs.isGeographic()
-            or crs.mapUnits() != QgsUnitTypes.DistanceMeters
+            or crs.mapUnits() != QgsUnitTypes.DistanceUnit.DistanceMeters
         ):
             self.settings_are_valid = False
             warning_messages.append(
@@ -121,7 +121,9 @@ class SchematisationSettingsWidget(QWidget):
         super().__init__(parent)
         self.setup_ui()
 
-        self.crs.setOptionVisible(QgsProjectionSelectionWidget.DefaultCrs, False)
+        self.crs.setOptionVisible(
+            QgsProjectionSelectionWidget.CrsOption.DefaultCrs, False
+        )
         self.use_1d_flow_group.toggled.connect(self.on_1d_flow_toggled)
         self.use_2d_flow_group.toggled.connect(self.on_2d_flow_toggled)
         self.dem_file.fileChanged.connect(self.on_dem_file_change)
@@ -130,7 +132,7 @@ class SchematisationSettingsWidget(QWidget):
         self.setWindowTitle("Setting")
 
         palette = QPalette()
-        palette.setColor(QPalette.Button, QColor(255, 255, 255))
+        palette.setColor(QPalette.ColorRole.Button, QColor(255, 255, 255))
         self.setPalette(palette)
 
         main_layout = QGridLayout(self)
@@ -365,7 +367,9 @@ class SchematisationSettingsWidget(QWidget):
 
         main_layout.addWidget(self.simulation_settings, 4, 0)
 
-        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        spacer = QSpacerItem(
+            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+        )
         main_layout.addItem(spacer, 5, 0)
 
     def on_1d_flow_toggled(self, on):

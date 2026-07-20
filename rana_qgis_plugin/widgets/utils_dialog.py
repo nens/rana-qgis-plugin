@@ -1,5 +1,6 @@
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import (
+from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtGui import QFont
+from qgis.PyQt.QtWidgets import (
     QApplication,
     QDialog,
     QHBoxLayout,
@@ -8,7 +9,6 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-from qgis.PyQt.QtCore import Qt, QTimer
 
 
 class ErrorDialog(QDialog):
@@ -24,9 +24,10 @@ class ErrorDialog(QDialog):
         error_label = QLabel(error_message)
         error_label.setWordWrap(True)
         error_label.setTextInteractionFlags(
-            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
         )
-        error_label.setCursor(Qt.IBeamCursor)
+        error_label.setCursor(Qt.CursorShape.IBeamCursor)
         main_layout.addWidget(error_label)
 
         # Traceback text box with monospace font
@@ -36,13 +37,13 @@ class ErrorDialog(QDialog):
         # Set monospace font
         font = QFont("Monospace")  # Use system monospace font
         font.setStyleHint(
-            QFont.Monospace
+            QFont.StyleHint.Monospace
         )  # Fallback to any monospace if specific one not available
         font.setFixedPitch(True)
         trace_text.setFont(font)
 
         # Preserve formatting
-        trace_text.setLineWrapMode(QTextEdit.NoWrap)
+        trace_text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         trace_text.setText(trace)
 
         main_layout.addWidget(trace_text)
