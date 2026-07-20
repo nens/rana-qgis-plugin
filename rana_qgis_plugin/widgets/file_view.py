@@ -125,6 +125,7 @@ def make_label(
     expanding: bool = False,
     word_wrap: bool = False,
 ) -> QLabel:
+    # TODO: reconsider tooltips
     """Create a QLabel from a FieldValue, with red styling if errored."""
     text = str(field_value.value) if field_value.value is not None else "N/A"
     if bold:
@@ -132,7 +133,7 @@ def make_label(
     label = QLabel(text)
     if field_value.error:
         label.setStyleSheet("color: rgba(255, 0, 0, 255);")
-        label.setToolTip(field_value.error_msg)
+        label.setToolTip("could not retrieve value")
     if expanding:
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
     if word_wrap:
@@ -946,10 +947,7 @@ class FileView(QWidget):
         if selected_file.get("data_type") == "threedi_schematisation" and (
             has_3di_authcfg()
         ):
-            # schematisation = get_threedi_schematisation(
-            #     self.communication, selected_file["descriptor_id"]
-            # )
-            schematisation = None
+            schematisation = self.schematisation
             if schematisation:
                 revision = schematisation["latest_revision"]
                 self.btn_stack.show()
