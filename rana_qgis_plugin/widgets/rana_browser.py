@@ -12,6 +12,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtSvg import QSvgWidget
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QSizePolicy,
     QSpacerItem,
@@ -91,6 +92,7 @@ class RanaBrowser(QWidget):
     def __init__(self, communication: UICommunication):
         super().__init__()
         self.last_refresh_time = time.time()
+        self.externally_deactivated = False
         self.communication = communication
         self.avatar_cache = AvatarCache(communication)
         self.setup_ui()
@@ -512,11 +514,17 @@ class RanaBrowser(QWidget):
         if event.type() == QEvent.MouseButtonPress and obj == self.logo_label:
             link = base_url()
             QDesktopServices.openUrl(QUrl(link))
+        elif event.type() == QEvent.WindowDeactivate:
+            # only mark as externally deactivated when focus moves outside the application
+            if QApplication.activeWindow() is None:
+                self.externally_deactivated = True
         elif event.type() == QEvent.WindowActivate:
-            # prevent multiple events on window activation to cause multiple refresh actions
-            if time.time() - self.last_refresh_time > 0.1:
-                self.auto_refresh()
-                self.run_persistent_tasks.emit()
+            # only refresh when returning from an external application, not from internal dialogs
+            if self.externally_deactivated:
+                self.externally_deactivated = False
+                if time.time() - self.last_refresh_time > 0.1:
+                    self.auto_refresh()
+                    self.run_persistent_tasks.emit()
         return False
 
     @pyqtSlot()
