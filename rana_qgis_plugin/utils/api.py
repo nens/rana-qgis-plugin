@@ -638,6 +638,7 @@ def get_schematisations(communication, icontains=""):
 
 
 def get_threedi_schematisation(communication: UICommunication, descriptor_id: str):
+    # TODO consider different way of handeling failues
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
