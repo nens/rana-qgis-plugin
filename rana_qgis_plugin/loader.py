@@ -415,7 +415,9 @@ class Loader(QObject):
             try:
                 schematisation = get_threedi_schematisation(file["descriptor_id"])
             except FetchError as e:
-                self.communication.show_error("Failed to retrieve schematisation from Rana")
+                self.communication.show_error(
+                    "Failed to retrieve schematisation from Rana"
+                )
                 self.communication.log_err(f"Failed to retrieve schematisation: {e}")
                 self.file_download_finished.emit(None)
                 return
@@ -523,7 +525,9 @@ class Loader(QObject):
                 try:
                     threedi_schema = get_threedi_schematisation(file["descriptor_id"])
                 except FetchError as e:
-                    self.communication.log_err(f"Failed to retrieve schematisation: {e}")
+                    self.communication.log_err(
+                        f"Failed to retrieve schematisation: {e}"
+                    )
                     skipped_files.append(
                         (file["id"], "failed to retrieve schematisation info")
                     )

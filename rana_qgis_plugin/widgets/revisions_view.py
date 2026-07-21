@@ -170,9 +170,13 @@ class RevisionsView(QWidget):
         ) and has_3di_authcfg():
             # retrieve schematisation and revisions
             try:
-                schematisation = get_threedi_schematisation(selected_file["descriptor_id"])
+                schematisation = get_threedi_schematisation(
+                    selected_file["descriptor_id"]
+                )
             except FetchError as e:
-                self.communication.show_error("Failed to retrieve schematisation from Rana")
+                self.communication.show_error(
+                    "Failed to retrieve schematisation from Rana"
+                )
                 self.communication.log_err(f"Failed to retrieve schematisation: {e}")
                 return
             threedi_api = get_threedi_api()
