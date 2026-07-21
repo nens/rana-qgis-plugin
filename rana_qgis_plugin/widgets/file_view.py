@@ -815,11 +815,9 @@ class FileView(QWidget):
                 ),
                 InfoRow(
                     "Latest revision is simulation ready",
-                    FieldValue.from_dict(
-                        vars(self.latest_revision_model)
-                        if self.latest_revision_model
-                        else None,
-                        "is_simulation_ready",
+                    FieldValue(
+                        value=self.latest_revision_model is not None,
+                        error=(not self.schematisation),
                     ),
                 ),
                 InfoRow(
