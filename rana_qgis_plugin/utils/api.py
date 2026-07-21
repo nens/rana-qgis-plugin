@@ -638,9 +638,14 @@ def get_schematisations(communication, icontains=""):
 
 
 def get_threedi_schematisation(descriptor_id: str):
+    authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
-    raise FetchError("always raise for testing", url, {})
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.fetch()
+    if status:
+        return network_manager.content
+    raise FetchError(f"Failed to retrieve schematisation: {error}", url, {})
 
 
 def add_threedi_schematisation(
