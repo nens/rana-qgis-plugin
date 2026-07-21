@@ -771,9 +771,7 @@ class Loader(QObject):
     @pyqtSlot(dict, dict, int)
     def create_schematisation_revision_3di_model(self, project, file, revision_id=None):
         # Retrieve schematisation info
-        schematisation = get_threedi_schematisation(
-            self.communication, file["descriptor_id"]
-        )
+        schematisation = get_threedi_schematisation(file["descriptor_id"])
         if not revision_id:
             revision_id = schematisation["latest_revision"]["id"]
         self.start_model_tracker_process(
@@ -782,9 +780,13 @@ class Loader(QObject):
 
     @pyqtSlot(dict, dict)
     def export_schematisation_from_file(self, project: dict, file: dict):
-        schematisation = get_threedi_schematisation(
-            self.communication, file["descriptor_id"]
-        )
+        try:
+            schematisation = get_threedi_schematisation(file["descriptor_id"])
+        except FetchError as e:
+            self.communication.show_error("Failed to retrieve schematisation from Rana")
+            self.communication.log_err(f"Failed to retrieve schematisation: {e}")
+            self.export_gpkg_finished.emit()
+            return
         revision = schematisation["latest_revision"]
         self.export_schematisation_revision(
             project, file, schematisation["schematisation"], revision
@@ -889,9 +891,7 @@ class Loader(QObject):
     def delete_schematisation_revision_3di_model(self, file, revision_id):
         tc = ThreediCalls(get_threedi_api())
         # Retrieve schematisation info
-        schematisation = get_threedi_schematisation(
-            self.communication, file["descriptor_id"]
-        )
+        schematisation = get_threedi_schematisation(file["descriptor_id"])
         # Make sure the revision has a model that can be deleted
         revision = tc.fetch_schematisation_revision(
             schematisation["schematisation"]["id"], revision_id
@@ -936,9 +936,7 @@ class Loader(QObject):
             return
 
         # Retrieve schematisation info
-        schematisation = get_threedi_schematisation(
-            self.communication, file["descriptor_id"]
-        )
+        schematisation = get_threedi_schematisation(file["descriptor_id"])
 
         # Pick latest revision if no revision is provided
         if revision_id:
@@ -1665,9 +1663,7 @@ class Loader(QObject):
         if file["data_type"] != "threedi_schematisation":
             return
 
-        rana_schematisation = get_threedi_schematisation(
-            self.communication, file["descriptor_id"]
-        )
+        rana_schematisation = get_threedi_schematisation(file["descriptor_id"])
 
         threedi_api = get_threedi_api()
         tc = ThreediCalls(threedi_api)
