@@ -6,6 +6,7 @@ History
 -------------------
 
 - Prevent auto-refresh on closing dialogs, wizards, etc in qgis
+- Prevent crashes on loading file view with missing data (nens/rana#4676)
 
 
 1.2.17 (2026-07-16)

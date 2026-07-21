@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from qgis.core import QgsApplication
 from qgis.gui import QgsCollapsibleGroupBox
@@ -37,6 +37,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
@@ -78,6 +79,73 @@ from rana_qgis_plugin.widgets.utils_icons import (
 
 
 @dataclass
+class FieldValue:
+    """A field value that knows whether it was successfully resolved.
+
+    Use ``from_dict`` or ``from_call`` to construct instances so that missing
+    data is captured as an error rather than raising an exception.
+    """
+
+    value: Any = None
+    error: bool = False
+    error_msg: str = ""
+
+    @staticmethod
+    def from_dict(d: Optional[dict], key: str, default: Any = None) -> "FieldValue":
+        """Safely extract *key* from *d*.
+
+        Returns an errored ``FieldValue`` when *d* is ``None`` or *key* is absent.
+        """
+        if d is None:
+            return FieldValue(value=default, error=True, error_msg="Source unavailable")
+        if key not in d:
+            return FieldValue(
+                value=default, error=True, error_msg=f"Missing key: {key}"
+            )
+        return FieldValue(value=d[key])
+
+    @staticmethod
+    def from_call(
+        fn: Callable, communication: "UICommunication", *args, **kwargs
+    ) -> "FieldValue":
+        """Call *fn* and wrap the result.
+
+        Returns an errored ``FieldValue`` when *fn* raises or returns ``None``.
+        Logs the error via *communication* on failure.
+        """
+        try:
+            result = fn(*args, **kwargs)
+        except Exception as e:
+            communication.log_err(f"FieldValue.from_call: {fn.__name__} raised: {e}")
+            return FieldValue(value=None, error=True, error_msg=str(e))
+        if result is None:
+            return FieldValue(value=None, error=True)
+        return FieldValue(value=result)
+
+
+def make_label(
+    field_value: FieldValue,
+    bold: bool = False,
+    expanding: bool = False,
+    word_wrap: bool = False,
+) -> QLabel:
+    """Create a QLabel from a FieldValue, with red styling if errored."""
+    text = str(field_value.value) if field_value.value is not None else "N/A"
+    if bold:
+        text = f"<b>{text}</b>"
+    label = QLabel(text)
+    if field_value.error:
+        label.setStyleSheet("color: rgba(255, 0, 0, 255);")
+        if field_value.error_msg:
+            label.setToolTip("Data could not be retrieved; check log for details")
+    if expanding:
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
+    if word_wrap:
+        label.setWordWrap(True)
+    return label
+
+
+@dataclass
 class InfoRow:
     key: str
     value: Any
@@ -105,6 +173,23 @@ class InfoRow:
         return self.get_label_widget(self.key, self.key_tooltip, self.color, parent)
 
     def get_value_widget(self, parent) -> QLabel:
+        if isinstance(self.value, FieldValue):
+            v = self.value.value
+            if v is None:
+                str_value = "N/A"
+            elif isinstance(v, datetime):
+                str_value = format_activity_timestamp(v)
+            elif isinstance(v, bool):
+                str_value = "Yes" if v else "No"
+            else:
+                str_value = str(v)
+            color = self.color or (QColor(255, 0, 0) if self.value.error else None)
+            tooltip = self.value_tooltip or (
+                "Data could not be retrieved; check log for details"
+                if self.value.error and self.value.error_msg
+                else None
+            )
+            return self.get_label_widget(str_value, tooltip, color, parent)
         if isinstance(self.value, datetime):
             str_value = format_activity_timestamp(self.value)
         elif self.value is None:
@@ -166,7 +251,7 @@ class FileView(QWidget):
                 self.threedi_objects["schematisation"] = get_threedi_schematisation(
                     self.communication, self.selected_file["descriptor_id"]
                 )
-            return self.threedi_objects["schematisation"]
+            return self.threedi_objects["schematisation"] or {}
         return {}
 
     @property
@@ -174,6 +259,8 @@ class FileView(QWidget):
         if (
             self.selected_file["data_type"] != "threedi_schematisation"
         ) or not has_3di_authcfg():
+            return None
+        if not self.schematisation:
             return None
         if "model" not in self.threedi_objects:
             revision = self.schematisation.get("latest_revision")
@@ -520,41 +607,65 @@ class FileView(QWidget):
         # line 2: user icon - user name - commit msg - time
         # Note that the avatar is not automatically refreshed!
 
+        msg_fv = FieldValue(value="")
         if selected_file["data_type"] == "threedi_schematisation" and (
             self.schematisation is not None
         ):
-            schematisation = self.schematisation
-            last_rev = schematisation["latest_revision"]
-            rana_user = get_user({"search": last_rev["commit_user"]})
+            last_rev = self.schematisation.get("latest_revision") or {}
+            commit_user_fv = FieldValue.from_dict(last_rev, "commit_user")
+            rana_user = (
+                get_user({"search": commit_user_fv.value})
+                if not commit_user_fv.error
+                else None
+            )
             if not rana_user:
+                given_fv = FieldValue.from_dict(
+                    last_rev, "commit_first_name", default=""
+                )
+                family_fv = FieldValue.from_dict(
+                    last_rev, "commit_last_name", default=""
+                )
                 rana_user = {
-                    "id": last_rev["commit_first_name"]
-                    + "_"
-                    + last_rev["commit_last_name"],
-                    "given_name": last_rev["commit_first_name"],
-                    "family_name": last_rev["commit_last_name"],
+                    "id": f"{given_fv.value}_{family_fv.value}",
+                    "given_name": given_fv.value,
+                    "family_name": family_fv.value,
                 }
-            msg = last_rev["commit_message"]
-            last_modified = format_activity_timestamp_str(last_rev["commit_date"])
+            msg_fv = FieldValue.from_dict(last_rev, "commit_message", default="")
+            last_modified_fv = FieldValue.from_dict(last_rev, "commit_date", default="")
+            last_modified = (
+                format_activity_timestamp_str(last_modified_fv.value)
+                if not last_modified_fv.error
+                else ""
+            )
         else:
             rana_user = selected_file["user"]
-            descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
-            msg = descriptor.get("description")
+            descriptor_fv = FieldValue.from_call(
+                get_tenant_file_descriptor,
+                self.communication,
+                selected_file["descriptor_id"],
+            )
+            msg_fv = FieldValue.from_dict(
+                descriptor_fv.value, "description", default=""
+            )
             last_modified = format_activity_timestamp_str(
                 selected_file["last_modified"]
             )
-        username = rana_user["given_name"] + " " + rana_user["family_name"]
+
+        given_fv = FieldValue.from_dict(rana_user, "given_name", default="")
+        family_fv = FieldValue.from_dict(rana_user, "family_name", default="")
+        username_fv = FieldValue(
+            value=f"{given_fv.value} {family_fv.value}".strip() or None,
+            error=given_fv.error or family_fv.error,
+            error_msg=given_fv.error_msg or family_fv.error_msg,
+        )
         user_icon_label = get_icon_label(
             self.avatar_cache.get_avatar_for_user(rana_user)
         )
-        msg_label = QLabel(msg)
-        msg_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
-
-        msg_label.setWordWrap(True)
+        msg_label = make_label(msg_fv, expanding=True, word_wrap=True)
         rows.append(
             [
                 user_icon_label,
-                QLabel(f"<b>{username}</b>"),
+                make_label(username_fv, bold=True),
                 msg_label,
                 QLabel(last_modified),
             ]
@@ -578,14 +689,23 @@ class FileView(QWidget):
         self.general_box.setLayout(layout)
 
     def update_more_box(self, selected_file):
-        descriptor = get_tenant_file_descriptor(selected_file["descriptor_id"])
+        descriptor_fv = FieldValue.from_call(
+            get_tenant_file_descriptor,
+            self.communication,
+            selected_file["descriptor_id"],
+        )
+        descriptor = descriptor_fv.value
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
 
-        status = descriptor.get("status", {})
+        status = descriptor.get("status", {}) if descriptor else {}
         message_i18n = status.get("message_i18n", {})
         status_msg = message_i18n.get("msg") if message_i18n else None
-        revision = self.schematisation.get("latest_revision", {})
+        revision = (
+            self.schematisation.get("latest_revision", {})
+            if self.schematisation
+            else {}
+        )
         crs_str = self._get_crs_str(data_type, meta, revision)
         status_enum = FileDescriptorStatus.from_fd_response(descriptor)
         details = [
@@ -603,73 +723,118 @@ class FileView(QWidget):
         if data_type != "threedi_schematisation":
             details.append(InfoRow("Storage", display_bytes(selected_file["size"])))
         if data_type == "scenario" and meta:
-            simulation = meta["simulation"]
-            schematisation = meta["schematisation"]
-            interval = simulation["interval"]
+            simulation_fv = FieldValue.from_dict(meta, "simulation")
+            schematisation_fv = FieldValue.from_dict(meta, "schematisation")
+            simulation = simulation_fv.value or {}
+            schematisation = schematisation_fv.value or {}
+
+            interval = simulation.get("interval")
             if interval:
                 start = parse_timestamp_str(interval[0])
                 end = parse_timestamp_str(interval[1])
             else:
                 start = None
                 end = None
+
+            software_fv = FieldValue.from_dict(simulation, "software")
+            software = software_fv.value or {}
+
             details += [
-                InfoRow("Simulation name", simulation["name"]),
-                InfoRow("Simulation ID", simulation["id"]),
-                InfoRow("Schematisation name", schematisation["name"]),
-                InfoRow("Schematisation ID", schematisation["id"]),
-                InfoRow("Schematisation version", schematisation["version"]),
-                InfoRow("Revision ID", schematisation["revision_id"]),
-                InfoRow("Model ID", schematisation["model_id"]),
-                InfoRow("Model software", simulation["software"]["id"]),
-                InfoRow("Software version", simulation["software"]["version"]),
+                InfoRow("Simulation name", FieldValue.from_dict(simulation, "name")),
+                InfoRow("Simulation ID", FieldValue.from_dict(simulation, "id")),
+                InfoRow(
+                    "Schematisation name", FieldValue.from_dict(schematisation, "name")
+                ),
+                InfoRow(
+                    "Schematisation ID", FieldValue.from_dict(schematisation, "id")
+                ),
+                InfoRow(
+                    "Schematisation version",
+                    FieldValue.from_dict(schematisation, "version"),
+                ),
+                InfoRow(
+                    "Revision ID", FieldValue.from_dict(schematisation, "revision_id")
+                ),
+                InfoRow("Model ID", FieldValue.from_dict(schematisation, "model_id")),
+                InfoRow("Model software", FieldValue.from_dict(software, "id")),
+                InfoRow("Software version", FieldValue.from_dict(software, "version")),
                 InfoRow("Start", start),
                 InfoRow("End", end),
             ]
         if data_type == "threedi_schematisation":
-            schematisation = self.schematisation.get("schematisation", {})
+            schematisation = (
+                self.schematisation.get("schematisation", {})
+                if self.schematisation
+                else {}
+            )
+            given_fv = FieldValue.from_dict(
+                schematisation, "created_by_first_name", default=""
+            )
+            family_fv = FieldValue.from_dict(
+                schematisation, "created_by_last_name", default=""
+            )
+            created_by = f"{given_fv.value} {family_fv.value}".strip() or None
+            created_by_fv = FieldValue(
+                value=created_by,
+                error=given_fv.error or family_fv.error,
+                error_msg=given_fv.error_msg or family_fv.error_msg,
+            )
+            schematisation_meta = schematisation.get("meta") or {}
+            schematisation_timestamp_fv = FieldValue.from_dict(
+                schematisation, "created"
+            )
+            if not schematisation_timestamp_fv.error:
+                schematisation_timestamp_fv.value = parse_timestamp_str(
+                    schematisation_timestamp_fv.value
+                )
             details += [
-                InfoRow("Schematisation name", schematisation.get("name")),
-                InfoRow("Schematisation ID", schematisation.get("id")),
+                InfoRow(
+                    "Schematisation name", FieldValue.from_dict(schematisation, "name")
+                ),
+                InfoRow(
+                    "Schematisation ID", FieldValue.from_dict(schematisation, "id")
+                ),
                 InfoRow(
                     "Schematisation description",
-                    schematisation.get("meta", {}).get("description")
-                    if schematisation.get("meta")
-                    else None,
+                    FieldValue.from_dict(schematisation_meta, "description"),
                 ),
-                InfoRow(
-                    "Schematisation created by",
-                    schematisation.get("created_by_first_name")
-                    + " "
-                    + schematisation.get("created_by_last_name"),
-                ),
-                InfoRow(
-                    "Schematisation created on",
-                    parse_timestamp_str(schematisation.get("created")),
-                ),
+                InfoRow("Schematisation created by", created_by_fv),
+                InfoRow("Schematisation created on", schematisation_timestamp_fv),
                 InfoRow(
                     "Schematisation tags",
-                    "; ".join(schematisation.get("tags"))
-                    if schematisation.get("tags")
-                    else "",
+                    FieldValue(value="; ".join(schematisation["tags"]))
+                    if "tags" in schematisation
+                    else FieldValue.from_dict(schematisation, "tags"),
                 ),
-                InfoRow("Latest revision ID", revision.get("id")),
-                InfoRow("Latest revision number", revision.get("number")),
-                InfoRow("Latest revision valid", revision.get("is_valid", False)),
+                InfoRow("Latest revision ID", FieldValue.from_dict(revision, "id")),
+                InfoRow(
+                    "Latest revision number", FieldValue.from_dict(revision, "number")
+                ),
+                InfoRow(
+                    "Latest revision valid", FieldValue.from_dict(revision, "is_valid")
+                ),
                 InfoRow(
                     "Latest revision is simulation ready",
-                    self.latest_revision_model is not None,
+                    FieldValue(
+                        value=self.latest_revision_model is not None,
+                        error=(not self.schematisation),
+                    ),
                 ),
                 InfoRow(
                     "Node count",
-                    self.latest_revision_model.nodes_count
+                    FieldValue(
+                        value=self.latest_revision_model.nodes_count,
+                    )
                     if self.latest_revision_model
-                    else "",
+                    else FieldValue(error=True),
                 ),
                 InfoRow(
                     "Line count",
-                    self.latest_revision_model.lines_count
+                    FieldValue(
+                        value=self.latest_revision_model.lines_count,
+                    )
                     if self.latest_revision_model
-                    else "",
+                    else FieldValue(error=True),
                 ),
             ]
 
@@ -749,9 +914,7 @@ class FileView(QWidget):
         if selected_file.get("data_type") == "threedi_schematisation" and (
             has_3di_authcfg()
         ):
-            schematisation = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
+            schematisation = self.schematisation
             if schematisation:
                 revision = schematisation["latest_revision"]
                 self.btn_stack.show()
