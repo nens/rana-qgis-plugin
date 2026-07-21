@@ -52,10 +52,11 @@ def test_field_value_from_call_raises():
     assert "something went wrong" in fv.error_msg
 
 
-def test_field_value_from_call_logs_on_none():
+def test_field_value_from_call_returns_error_on_none():
     comm = make_comm()
-    FieldValue.from_call(lambda: None, comm)
-    comm.log_err.assert_called_once()
+    result = FieldValue.from_call(lambda: None, comm)
+    assert result.error is True
+    comm.log_err.assert_not_called()
 
 
 def test_field_value_from_call_logs_on_exception():

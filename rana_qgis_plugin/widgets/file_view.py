@@ -243,7 +243,7 @@ class FileView(QWidget):
                 self.threedi_objects["schematisation"] = get_threedi_schematisation(
                     self.communication, self.selected_file["descriptor_id"]
                 )
-            return self.threedi_objects["schematisation"]
+            return self.threedi_objects["schematisation"] or {}
         return {}
 
     @property
@@ -252,7 +252,7 @@ class FileView(QWidget):
             self.selected_file["data_type"] != "threedi_schematisation"
         ) or not has_3di_authcfg():
             return None
-        if self.schematisation is None:
+        if not self.schematisation:
             return None
         if "model" not in self.threedi_objects:
             revision = self.schematisation.get("latest_revision")
@@ -599,6 +599,7 @@ class FileView(QWidget):
         # line 2: user icon - user name - commit msg - time
         # Note that the avatar is not automatically refreshed!
 
+        msg_fv = FieldValue(value="")
         if selected_file["data_type"] == "threedi_schematisation" and (
             self.schematisation is not None
         ):
@@ -806,8 +807,12 @@ class FileView(QWidget):
                 ),
                 InfoRow(
                     "Latest revision is simulation ready",
-                    FieldValue.from_dict(revision, "is_simulation_ready"),
-                    # self.latest_revision_model is not None,
+                    FieldValue.from_dict(
+                        vars(self.latest_revision_model)
+                        if self.latest_revision_model
+                        else None,
+                        "is_simulation_ready",
+                    ),
                 ),
                 InfoRow(
                     "Node count",
