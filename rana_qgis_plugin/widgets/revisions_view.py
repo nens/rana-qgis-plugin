@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
+    FetchError,
     get_tenant_project_file_history,
     get_threedi_schematisation,
 )
@@ -168,9 +169,12 @@ class RevisionsView(QWidget):
             selected_file.get("data_type") == "threedi_schematisation"
         ) and has_3di_authcfg():
             # retrieve schematisation and revisions
-            schematisation = get_threedi_schematisation(
-                self.communication, selected_file["descriptor_id"]
-            )
+            try:
+                schematisation = get_threedi_schematisation(selected_file["descriptor_id"])
+            except FetchError as e:
+                self.communication.show_error("Failed to retrieve schematisation from Rana")
+                self.communication.log_err(f"Failed to retrieve schematisation: {e}")
+                return
             threedi_api = get_threedi_api()
             tc = ThreediCalls(threedi_api)
             revisions = tc.fetch_schematisation_revisions(

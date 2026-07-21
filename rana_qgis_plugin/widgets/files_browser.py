@@ -560,9 +560,8 @@ class FilesBrowser(QWidget):
         try:
             schematisation = get_threedi_schematisation(file["descriptor_id"])
         except FetchError as e:
-            self.communication.show_error(
-                f"Failed to retrieve schematisation: {e}"
-            )
+            self.communication.show_error("Failed to retrieve schematisation from Rana")
+            self.communication.log_err(f"Failed to retrieve schematisation: {e}")
             return None
         latest_revision = schematisation.get("latest_revision")
         if not latest_revision:
