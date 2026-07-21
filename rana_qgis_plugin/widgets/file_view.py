@@ -174,7 +174,15 @@ class InfoRow:
 
     def get_value_widget(self, parent) -> QLabel:
         if isinstance(self.value, FieldValue):
-            str_value = str(self.value.value) if self.value.value is not None else "N/A"
+            v = self.value.value
+            if v is None:
+                str_value = "N/A"
+            elif isinstance(v, datetime):
+                str_value = format_activity_timestamp(v)
+            elif isinstance(v, bool):
+                str_value = "Yes" if v else "No"
+            else:
+                str_value = str(v)
             color = self.color or (QColor(255, 0, 0) if self.value.error else None)
             tooltip = self.value_tooltip or (
                 "Data could not be retrieved; check log for details"
@@ -794,7 +802,7 @@ class FileView(QWidget):
                 InfoRow("Schematisation created on", schematisation_timestamp_fv),
                 InfoRow(
                     "Schematisation tags",
-                    FieldValue(value="; ".join(schematisation["tags"]) or None)
+                    FieldValue(value="; ".join(schematisation["tags"]))
                     if "tags" in schematisation
                     else FieldValue.from_dict(schematisation, "tags"),
                 ),
