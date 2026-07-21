@@ -47,6 +47,7 @@ from rana_qgis_plugin.simulation.utils_ui import get_filepath
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils.api import (
     ConflictError,
+    FetchError,
     add_threedi_schematisation,
     create_folder,
     delete_tenant_project_directory,
@@ -411,25 +412,26 @@ class Loader(QObject):
             thread_worker.wait()
         # Schematisation link files need async download; redirect to dedicated handler
         if file["data_type"] == "threedi_schematisation":
-            schematisation = get_threedi_schematisation(
-                self.communication, file["descriptor_id"]
-            )
-            if schematisation:
-                revision = schematisation["latest_revision"]
-                if not revision:
-                    self.communication.show_warn(
-                        "Cannot open a schematisation without a revision."
-                    )
-                    self.file_download_finished.emit(None)
-                    return
-                self.open_schematisation_with_revision(
-                    project,
-                    revision,
-                    schematisation["schematisation"],
-                    source_file=file,
-                )
-            else:
+            try:
+                schematisation = get_threedi_schematisation(file["descriptor_id"])
+            except FetchError as e:
+                self.communication.show_error("Failed to retrieve schematisation from Rana")
+                self.communication.log_err(f"Failed to retrieve schematisation: {e}")
                 self.file_download_finished.emit(None)
+                return
+            revision = schematisation["latest_revision"]
+            if not revision:
+                self.communication.show_warn(
+                    "Cannot open a schematisation without a revision."
+                )
+                self.file_download_finished.emit(None)
+                return
+            self.open_schematisation_with_revision(
+                project,
+                revision,
+                schematisation["schematisation"],
+                source_file=file,
+            )
             return
         open_file_via_layer_manager(project, file, local_file_path, layer_manager)
         # When opening a file via the file view of file browser, signal that the file is openend
@@ -518,13 +520,10 @@ class Loader(QObject):
                     )
                     skipped_files.append((file["id"], "working directory not set"))
                     continue
-                threedi_schema = get_threedi_schematisation(
-                    self.communication, file["descriptor_id"]
-                )
-                if not threedi_schema:
-                    self.communication.log_warn(
-                        f"Skipping schematisation {file['id']}: failed to retrieve schematisation info."
-                    )
+                try:
+                    threedi_schema = get_threedi_schematisation(file["descriptor_id"])
+                except FetchError as e:
+                    self.communication.log_err(f"Failed to retrieve schematisation: {e}")
                     skipped_files.append(
                         (file["id"], "failed to retrieve schematisation info")
                     )
