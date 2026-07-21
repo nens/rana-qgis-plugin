@@ -1,6 +1,13 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 from rana_qgis_plugin.widgets.file_view import FieldValue
+
+
+def make_comm():
+    comm = MagicMock()
+    return comm
 
 
 @pytest.mark.parametrize(
@@ -29,7 +36,8 @@ def test_field_value_from_dict(dict_data, key, exp_error, exp_val):
     ],
 )
 def test_field_value_from_call(func, exp_error, exp_val):
-    fv = FieldValue.from_call(func)
+    comm = make_comm()
+    fv = FieldValue.from_call(func, comm)
     assert fv.error is exp_error
     assert fv.value == exp_val
 
@@ -38,6 +46,29 @@ def test_field_value_from_call_raises():
     def boom():
         raise RuntimeError("something went wrong")
 
-    fv = FieldValue.from_call(boom)
+    comm = make_comm()
+    fv = FieldValue.from_call(boom, comm)
     assert fv.error is True
     assert "something went wrong" in fv.error_msg
+
+
+def test_field_value_from_call_logs_on_none():
+    comm = make_comm()
+    FieldValue.from_call(lambda: None, comm)
+    comm.log_err.assert_called_once()
+
+
+def test_field_value_from_call_logs_on_exception():
+    def boom():
+        raise RuntimeError("oops")
+
+    comm = make_comm()
+    FieldValue.from_call(boom, comm)
+    comm.log_err.assert_called_once()
+
+
+def test_field_value_from_call_no_log_on_success():
+    comm = make_comm()
+    FieldValue.from_call(lambda: {"ok": True}, comm)
+    comm.log_err.assert_not_called()
+    comm.log_warn.assert_not_called()

@@ -105,17 +105,21 @@ class FieldValue:
         return FieldValue(value=d[key])
 
     @staticmethod
-    def from_call(fn: Callable, *args, **kwargs) -> "FieldValue":
+    def from_call(
+        fn: Callable, communication: "UICommunication", *args, **kwargs
+    ) -> "FieldValue":
         """Call *fn* and wrap the result.
 
         Returns an errored ``FieldValue`` when *fn* raises or returns ``None``.
+        Logs the error via *communication* on failure.
         """
         try:
             result = fn(*args, **kwargs)
         except Exception as e:
+            communication.log_err(f"FieldValue.from_call: {fn.__name__} raised: {e}")
             return FieldValue(value=None, error=True, error_msg=str(e))
         if result is None:
-            return FieldValue(value=None, error=True, error_msg="API returned None")
+            return FieldValue(value=None, error=True)
         return FieldValue(value=result)
 
 
@@ -125,7 +129,6 @@ def make_label(
     expanding: bool = False,
     word_wrap: bool = False,
 ) -> QLabel:
-    # TODO: reconsider tooltips
     """Create a QLabel from a FieldValue, with red styling if errored."""
     text = str(field_value.value) if field_value.value is not None else "N/A"
     if bold:
@@ -133,33 +136,13 @@ def make_label(
     label = QLabel(text)
     if field_value.error:
         label.setStyleSheet("color: rgba(255, 0, 0, 255);")
-        label.setToolTip("could not retrieve value")
+        if field_value.error_msg:
+            label.setToolTip("Data could not be retrieved; check log for details")
     if expanding:
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
     if word_wrap:
         label.setWordWrap(True)
     return label
-
-
-def log_field_errors(
-    communication: UICommunication,
-    context: str,
-    fields: list,
-) -> None:
-    """Log field resolution errors via UICommunication.
-
-    API failures (FieldValue.from_call) are logged at error level;
-    missing dict keys (FieldValue.from_dict) at warning level.
-    """
-    for name, fv in fields:
-        if not fv.error:
-            continue
-        msg = f"{context}: {name} — {fv.error_msg}"
-        communication.log_info(msg)
-        if "API" in fv.error_msg or "returned None" in fv.error_msg:
-            communication.log_err(msg)
-        else:
-            communication.log_warn(msg)
 
 
 @dataclass
@@ -194,7 +177,9 @@ class InfoRow:
             str_value = str(self.value.value) if self.value.value is not None else "N/A"
             color = self.color or (QColor(255, 0, 0) if self.value.error else None)
             tooltip = self.value_tooltip or (
-                self.value.error_msg if self.value.error else None
+                "Data could not be retrieved; check log for details"
+                if self.value.error and self.value.error_msg
+                else None
             )
             return self.get_label_widget(str_value, tooltip, color, parent)
         if isinstance(self.value, datetime):
@@ -253,7 +238,6 @@ class FileView(QWidget):
 
     @property
     def schematisation(self) -> dict:
-        # TODO: elf.threedi_objects["schematisation"] is not cleared properly!
         if self.selected_file["data_type"] == "threedi_schematisation":
             if not "schematisation" in self.threedi_objects:
                 self.threedi_objects["schematisation"] = get_threedi_schematisation(
@@ -615,7 +599,6 @@ class FileView(QWidget):
         # line 2: user icon - user name - commit msg - time
         # Note that the avatar is not automatically refreshed!
 
-        field_errors = []
         if selected_file["data_type"] == "threedi_schematisation" and (
             self.schematisation is not None
         ):
@@ -638,16 +621,8 @@ class FileView(QWidget):
                     "given_name": given_fv.value,
                     "family_name": family_fv.value,
                 }
-                field_errors += [
-                    ("commit_first_name", given_fv),
-                    ("commit_last_name", family_fv),
-                ]
             msg_fv = FieldValue.from_dict(last_rev, "commit_message", default="")
             last_modified_fv = FieldValue.from_dict(last_rev, "commit_date", default="")
-            field_errors += [
-                ("commit_message", msg_fv),
-                ("commit_date", last_modified_fv),
-            ]
             last_modified = (
                 format_activity_timestamp_str(last_modified_fv.value)
                 if not last_modified_fv.error
@@ -656,17 +631,16 @@ class FileView(QWidget):
         else:
             rana_user = selected_file["user"]
             descriptor_fv = FieldValue.from_call(
-                get_tenant_file_descriptor, selected_file["descriptor_id"]
+                get_tenant_file_descriptor,
+                self.communication,
+                selected_file["descriptor_id"],
             )
             msg_fv = FieldValue.from_dict(
                 descriptor_fv.value, "description", default=""
             )
-            field_errors += [("descriptor", descriptor_fv), ("description", msg_fv)]
             last_modified = format_activity_timestamp_str(
                 selected_file["last_modified"]
             )
-
-        log_field_errors(self.communication, "FileView general", field_errors)
 
         given_fv = FieldValue.from_dict(rana_user, "given_name", default="")
         family_fv = FieldValue.from_dict(rana_user, "family_name", default="")
@@ -706,16 +680,14 @@ class FileView(QWidget):
         self.general_box.setLayout(layout)
 
     def update_more_box(self, selected_file):
-        self.communication.log_info("update more box")
         descriptor_fv = FieldValue.from_call(
-            get_tenant_file_descriptor, selected_file["descriptor_id"]
+            get_tenant_file_descriptor,
+            self.communication,
+            selected_file["descriptor_id"],
         )
         descriptor = descriptor_fv.value
-        self.communication.log_info(f"{descriptor=}")
         meta = descriptor.get("meta") if descriptor else None
         data_type = selected_file.get("data_type")
-
-        field_errors = [("descriptor", descriptor_fv)]
 
         status = descriptor.get("status", {}) if descriptor else {}
         message_i18n = status.get("message_i18n", {})
@@ -746,10 +718,6 @@ class FileView(QWidget):
             schematisation_fv = FieldValue.from_dict(meta, "schematisation")
             simulation = simulation_fv.value or {}
             schematisation = schematisation_fv.value or {}
-            field_errors += [
-                ("simulation", simulation_fv),
-                ("schematisation", schematisation_fv),
-            ]
 
             interval = simulation.get("interval")
             if interval:
@@ -761,7 +729,6 @@ class FileView(QWidget):
 
             software_fv = FieldValue.from_dict(simulation, "software")
             software = software_fv.value or {}
-            field_errors.append(("software", software_fv))
 
             details += [
                 InfoRow("Simulation name", FieldValue.from_dict(simulation, "name")),
@@ -786,7 +753,6 @@ class FileView(QWidget):
                 InfoRow("End", end),
             ]
         if data_type == "threedi_schematisation":
-            self.communication.log_info(f"schematisation data")
             schematisation = (
                 self.schematisation.get("schematisation", {})
                 if self.schematisation
@@ -804,10 +770,6 @@ class FileView(QWidget):
                 error=given_fv.error or family_fv.error,
                 error_msg=given_fv.error_msg or family_fv.error_msg,
             )
-            field_errors += [
-                ("created_by_first_name", given_fv),
-                ("created_by_last_name", family_fv),
-            ]
             schematisation_meta = schematisation.get("meta") or {}
             schematisation_timestamp_fv = FieldValue.from_dict(
                 schematisation, "created"
@@ -853,9 +815,7 @@ class FileView(QWidget):
                         value=self.latest_revision_model.nodes_count,
                     )
                     if self.latest_revision_model
-                    else FieldValue(
-                        error=True, error_msg="No revision model available"
-                    ),
+                    else FieldValue(error=True),
                 ),
                 InfoRow(
                     "Line count",
@@ -863,13 +823,9 @@ class FileView(QWidget):
                         value=self.latest_revision_model.lines_count,
                     )
                     if self.latest_revision_model
-                    else FieldValue(
-                        error=True, error_msg="No revision model available"
-                    ),
+                    else FieldValue(error=True),
                 ),
             ]
-
-        log_field_errors(self.communication, "FileView more", field_errors)
 
         # Refresh contents of general box
         container = QWidget(self.more_box)
