@@ -40,6 +40,7 @@ from rana_qgis_plugin.icons import (
     upload_icon,
 )
 from rana_qgis_plugin.utils.api import (
+    FetchError,
     get_tenant_file_descriptor,
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -556,10 +557,12 @@ class FilesBrowser(QWidget):
         """Resolve the local revision directory for a schematisation file."""
         if not working_dir:
             return None
-        schematisation = get_threedi_schematisation(
-            self.communication, file["descriptor_id"]
-        )
-        if not schematisation:
+        try:
+            schematisation = get_threedi_schematisation(file["descriptor_id"])
+        except FetchError as e:
+            self.communication.show_error(
+                f"Failed to retrieve schematisation: {e}"
+            )
             return None
         latest_revision = schematisation.get("latest_revision")
         if not latest_revision:
