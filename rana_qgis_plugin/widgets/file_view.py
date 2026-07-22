@@ -41,6 +41,7 @@ from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
+    FetchError,
     FileDescriptorStatus,
     get_tenant_file_descriptor,
     get_tenant_project_file,
@@ -248,10 +249,17 @@ class FileView(QWidget):
     def schematisation(self) -> dict:
         if self.selected_file["data_type"] == "threedi_schematisation":
             if not "schematisation" in self.threedi_objects:
-                self.threedi_objects["schematisation"] = get_threedi_schematisation(
-                    self.communication, self.selected_file["descriptor_id"]
-                )
-            return self.threedi_objects["schematisation"] or {}
+                try:
+                    self.threedi_objects["schematisation"] = get_threedi_schematisation(
+                        self.selected_file["descriptor_id"]
+                    )
+                except FetchError as e:
+                    self.communication.log_err(
+                        f"Failed to retrieve schematisation: {e}"
+                    )
+                    # Store empty dict on failure, widget refresh will re-attempt
+                    self.threedi_objects["schematisation"] = {}
+            return self.threedi_objects["schematisation"]
         return {}
 
     @property

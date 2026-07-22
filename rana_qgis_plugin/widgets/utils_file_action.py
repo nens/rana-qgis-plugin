@@ -20,6 +20,7 @@ from rana_qgis_plugin.icons import (
     wms_icon,
 )
 from rana_qgis_plugin.utils.api import (
+    FetchError,
     FileDescriptorStatus,
     get_tenant_file_descriptor,
     get_threedi_schematisation,
@@ -188,10 +189,13 @@ def copy_wms_url_to_clipboard(file: dict, communication=None):
 
 def retrieve_url(selected_item: dict, project: dict, communication) -> QUrl:
     if selected_item.get("data_type") == "threedi_schematisation":
-        schematisation = get_threedi_schematisation(
-            communication, selected_item["descriptor_id"]
-        )
-        if not schematisation or not schematisation.get("management_url"):
+        try:
+            schematisation = get_threedi_schematisation(selected_item["descriptor_id"])
+        except FetchError as e:
+            communication.show_error("Failed to retrieve schematisation from Rana")
+            communication.log_err(f"Failed to retrieve schematisation: {e}")
+            return None
+        if not schematisation.get("management_url"):
             return None
         return QUrl(schematisation["management_url"])
     elif selected_item.get("data_type") in ["vector", "raster"]:
