@@ -47,8 +47,9 @@ from rana_qgis_plugin.simulation.utils_ui import get_filepath
 from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWorker
 from rana_qgis_plugin.utils.api import (
     ConflictError,
-    FetchError,
+    RanaFetchError,
     add_threedi_schematisation,
+    copy_threedi_schematisation,
     create_folder,
     delete_tenant_project_directory,
     delete_tenant_project_file,
@@ -414,7 +415,7 @@ class Loader(QObject):
         if file["data_type"] == "threedi_schematisation":
             try:
                 schematisation = get_threedi_schematisation(file["descriptor_id"])
-            except FetchError as e:
+            except RanaFetchError as e:
                 self.communication.show_error(
                     "Failed to retrieve schematisation from Rana"
                 )
@@ -524,7 +525,7 @@ class Loader(QObject):
                     continue
                 try:
                     threedi_schema = get_threedi_schematisation(file["descriptor_id"])
-                except FetchError as e:
+                except RanaFetchError as e:
                     self.communication.log_err(
                         f"Failed to retrieve schematisation: {e}"
                     )
@@ -786,7 +787,7 @@ class Loader(QObject):
     def export_schematisation_from_file(self, project: dict, file: dict):
         try:
             schematisation = get_threedi_schematisation(file["descriptor_id"])
-        except FetchError as e:
+        except RanaFetchError as e:
             self.communication.show_error("Failed to retrieve schematisation from Rana")
             self.communication.log_err(f"Failed to retrieve schematisation: {e}")
             self.export_gpkg_finished.emit()
@@ -1532,8 +1533,7 @@ class Loader(QObject):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_schematisation = dialog.selected_schematisation
             assert selected_schematisation
-            add_threedi_schematisation(
-                self.communication,
+            copy_threedi_schematisation(
                 project["id"],
                 selected_schematisation["id"],
                 selected_file["id"] + selected_schematisation["name"],

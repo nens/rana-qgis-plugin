@@ -20,8 +20,8 @@ from rana_qgis_plugin.icons import (
     wms_icon,
 )
 from rana_qgis_plugin.utils.api import (
-    FetchError,
     FileDescriptorStatus,
+    RanaFetchError,
     get_tenant_file_descriptor,
     get_threedi_schematisation,
 )
@@ -191,7 +191,7 @@ def retrieve_url(selected_item: dict, project: dict, communication) -> QUrl:
     if selected_item.get("data_type") == "threedi_schematisation":
         try:
             schematisation = get_threedi_schematisation(selected_item["descriptor_id"])
-        except FetchError as e:
+        except RanaFetchError as e:
             communication.show_error("Failed to retrieve schematisation from Rana")
             communication.log_err(f"Failed to retrieve schematisation: {e}")
             return None

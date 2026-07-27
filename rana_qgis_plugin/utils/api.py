@@ -17,7 +17,15 @@ class UserInfo(TypedDict):
     email: str
 
 
-class FetchError(Exception):
+class RanaFetchError(Exception):
+    def __init__(self, msg: str, url: str, params: dict):
+        self.msg = msg
+        self.url = url
+        self.params = params
+        super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
+
+
+class RanaPostError(Exception):
     def __init__(self, msg: str, url: str, params: dict):
         self.msg = msg
         self.url = url
@@ -92,7 +100,7 @@ def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
         return network_manager.content
     else:
         # Raise when fetch failed, error should be handled downstream
-        raise FetchError(error, url, params)
+        raise RanaFetchError(error, url, params)
 
 
 def single_fetch(
@@ -217,7 +225,7 @@ def get_tenant_project_files(
                 break
             params["cursor"] = response["next"]
         return files
-    except FetchError as e:
+    except RanaFetchError as e:
         communication.show_error(f"Failed to get files: {e}")
         return []
 
@@ -373,7 +381,7 @@ def get_tenant_file_url(project_id: str, params: dict):
         response = network_manager.content
         return response.get("url")
     else:
-        raise FetchError(msg, url, params)
+        raise RanaFetchError(msg, url, params)
 
 
 def get_tenant_file_descriptor(descriptor_id: str):
@@ -645,7 +653,24 @@ def get_threedi_schematisation(descriptor_id: str):
     status, error = network_manager.fetch()
     if status:
         return network_manager.content
-    raise FetchError(f"Failed to retrieve schematisation: {error}", url, {})
+    raise RanaFetchError(f"Failed to retrieve schematisation: {error}", url, {})
+
+
+def copy_threedi_schematisation(project_id: str, schematisation_id: str, path: str):
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = (
+        f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations/copy"
+    )
+    network_manager = NetworkManager(url, authcfg_id)
+    params = {"schematisation_id": schematisation_id, "path": path}
+    status, error = network_manager.post(params)
+    # TODO test errors
+    status = False
+    if status:
+        return network_manager.content
+    else:
+        raise RanaPostError(msg="Failed to copy schematisation", url=url, params=params)
 
 
 def add_threedi_schematisation(
@@ -654,7 +679,6 @@ def add_threedi_schematisation(
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
-
     network_manager = NetworkManager(url, authcfg_id)
     status = network_manager.post(
         params={"schematisation_id": schematisation_id, "path": path}

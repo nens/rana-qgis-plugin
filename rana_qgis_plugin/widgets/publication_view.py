@@ -34,7 +34,7 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
     get_publication_details,
     get_publication_version_details,
     get_publication_version_files,
@@ -323,7 +323,7 @@ class PublicationView(QWidget):
             self.current_version = get_publication_version_details(
                 self.publication["id"], latest=True
             )
-        except FetchError as e:
+        except RanaFetchError as e:
             # FetchError is raised when the publication version cannot be retrieved
             self.communication.log_warn(str(e))
             self.current_version = None
