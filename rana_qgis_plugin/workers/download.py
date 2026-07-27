@@ -428,13 +428,13 @@ class SchematisationGeopackageDownloader(BaseDownloader):
         super().download_file(signals, download_file)
 
     def postprocess(self):
-        # Extract schematisation from zip
         zip_file = self.download_context.local_file_path
-        if zip_file.suffix == ".zip":
+        # Extract schematisation from zipped archive
+        # If the downloaded file is not a zip, we assume it is already a geopackage and skip extraction
+        if zipfile.is_zipfile(zip_file):
             with zipfile.ZipFile(zip_file, "r") as zip_ref:
                 zip_ref.extractall(self.download_context.local_dir)
-        zip_file.unlink()
-
+            zip_file.unlink()
         # Assert that there is only one file in the directory
         extracted_files = list(self.download_context.local_dir.iterdir())
         assert len(extracted_files) == 1, (
