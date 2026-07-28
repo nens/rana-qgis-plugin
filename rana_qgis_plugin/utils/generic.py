@@ -1,14 +1,12 @@
 import math
 import os
-import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs, urlparse
-from uuid import uuid4
 
 from osgeo import gdal
 from qgis.core import QgsProject, QgsVectorLayer
-from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
 from threedi_mi_utils import (
     LocalRevision,
@@ -16,12 +14,12 @@ from threedi_mi_utils import (
     list_local_schematisations,
 )
 
-from rana_qgis_plugin.auth_3di import get_3di_auth
+from rana_qgis_plugin.legacy.auth_3di import get_3di_auth
 from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
-from rana_qgis_plugin.utils.settings import get_hcc_url_override, rana_cache_dir
+from rana_qgis_plugin.utils.settings import get_hcc_url_override
 
 
 def get_threedi_api():

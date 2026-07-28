@@ -1,0 +1,36 @@
+from qgis.PyQt.QtCore import (
+    QObject,
+    QRunnable,
+    pyqtSignal,
+)
+
+from rana_qgis_plugin.legacy.widgets.utils_avatars import get_avatar
+
+
+# We need a separate signals class since QRunnable cannot have signals
+class AvatarWorkerSignals(QObject):
+    finished = pyqtSignal()
+    avatar_ready = pyqtSignal(str, "QPixmap")
+
+
+class AvatarWorker(QRunnable):
+    def __init__(self, communication, users: list[dict]):
+        super().__init__()
+        self.communication = communication
+        self.users = users
+        self.signals = AvatarWorkerSignals()
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        for user in self.users:
+            if self._cancelled:
+                break
+            new_avatar = get_avatar(
+                user, self.communication, create_from_initials=False
+            )
+            if new_avatar:
+                self.signals.avatar_ready.emit(user["id"], new_avatar)
+        self.signals.finished.emit()

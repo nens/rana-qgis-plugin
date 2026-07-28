@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from rana_qgis_plugin.widgets.file_view import FieldValue
+from rana_qgis_plugin.legacy.widgets.file_view import FieldValue
 
 
 def make_comm():
