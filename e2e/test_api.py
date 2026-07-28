@@ -17,9 +17,9 @@ from e2e.test_utils import (
     make_modal_handler,
     press_button_with_moderator,
 )
-from rana_qgis_plugin.auth import get_authcfg_id
-from rana_qgis_plugin.auth_3di import set_3di_auth
 from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
+from rana_qgis_plugin.legacy.auth import get_authcfg_id
+from rana_qgis_plugin.legacy.auth_3di import set_3di_auth
 from rana_qgis_plugin.utils.api import (
     create_project,
     delete_project,
@@ -279,9 +279,11 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
 
     # Wait for the load-layer message box to be dismissed before proceeding
     qtbot.waitUntil(
-        lambda: not isinstance(
-            QApplication.activeModalWidget() or QApplication.activeWindow(),
-            QMessageBox,
+        lambda: (
+            not isinstance(
+                QApplication.activeModalWidget() or QApplication.activeWindow(),
+                QMessageBox,
+            )
         ),
         timeout=30000,
     )

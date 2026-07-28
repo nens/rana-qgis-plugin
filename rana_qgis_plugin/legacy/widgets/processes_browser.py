@@ -1,0 +1,330 @@
+from dataclasses import dataclass
+
+from qgis.core import QgsApplication
+from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtGui import (
+    QStandardItem,
+    QStandardItemModel,
+)
+from qgis.PyQt.QtWidgets import (
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QSizePolicy,
+    QToolButton,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
+from threedi_mi_utils.ui import ColoredProgressBar
+
+
+class ProcessProgressBar(ColoredProgressBar):
+    """Progress bar that colors based on job status: blue=running/cancelling, green=finished, red=crashed."""
+
+    def set_status(self, status):
+        if status == "completed":
+            color = self.COLOR_FINISHED
+        elif status in ["scheduled", "pending", "paused", "cancelling", "running"]:
+            color = self.COLOR_RUNNING
+        else:
+            self.set_failed()
+            return
+        self.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
+
+
+from rana_qgis_plugin.legacy.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
+from rana_qgis_plugin.legacy.widgets.utils_delegates import (
+    ContributorAvatarsDelegate,
+    WordWrapDelegate,
+)
+from rana_qgis_plugin.utils.api import get_process_id_for_tag, get_tenant_id
+from rana_qgis_plugin.utils.settings import base_url
+from rana_qgis_plugin.utils.time import (
+    convert_to_numeric_timestamp,
+    get_timestamp_as_numeric_item,
+)
+
+
+@dataclass
+class JobData:
+    id: int
+    name: str
+    user: str
+    created: str
+    status: str
+    progress: int
+    max_progress: int
+    process_id: int | None
+    process_name: str | None
+    inputs: dict
+
+    def progress_str(self):
+        return f"{self.status} ({self.progress}%)"
+
+    @property
+    def created_timestamp(self):
+        return convert_to_numeric_timestamp(self.created)
+
+    @property
+    def user_name(self):
+        return self.user["given_name"] + " " + self.user["family_name"]
+
+    @classmethod
+    def from_job_dict(cls, job: dict):
+        try:
+            return cls(
+                id=job["id"],
+                name=job["name"],
+                user=job["creator"],
+                created=job["created_at"],
+                status=job["state"]["type"],
+                progress=int(100 * job["state"]["progress"]),
+                max_progress=100,
+                process_id=job["process"].get("id") if job["process"] else None,
+                process_name=job["process"].get("name") if job["process"] else None,
+                inputs=job["inputs"],
+            )
+        except Exception as e:
+            raise e
+
+
+class ProcessesBrowser(QWidget):
+    cancel_simulation = pyqtSignal(int)
+    job_filters_updated = pyqtSignal(dict)
+
+    def __init__(self, communication, avatar_cache, parent=None):
+        super().__init__(parent)
+        self.communication = communication
+        self.avatar_cache = avatar_cache
+        self.setup_ui()
+        self.proces_map = {
+            process_tag: get_process_id_for_tag(self.communication, process_tag)
+            for process_tag in ["model_tracker", "simulation_tracker"]
+        }
+        self.row_map = {}
+        self.cancelled_sim_map: dict[int, JobData] = {}
+        self.project = {}
+        self._pending_full_refresh = False
+
+    def update_project(self, project: dict):
+        self.processes_model.removeRows(0, self.processes_model.rowCount())
+        self.row_map.clear()
+        self.project = project
+        self.filter_bar.reset()
+        self.filter_bar.set_combo_items("who", [])
+
+    def setup_ui(self):
+        self.filter_bar = FilterBar(
+            filters=[
+                TextFilterConfig(key="name", placeholder="Search by name"),
+                ComboFilterConfig(
+                    key="who", placeholder="All contributors", dynamic=True
+                ),
+                ComboFilterConfig(
+                    key="status",
+                    placeholder="All statuses",
+                    dynamic=False,
+                    items=[
+                        ("Scheduled", "scheduled"),
+                        ("Pending", "pending"),
+                        ("Running", "running"),
+                        ("Completed", "completed"),
+                        ("Failed", "failed"),
+                        ("Cancelled", "cancelled"),
+                        ("Crashed", "crashed"),
+                        ("Paused", "paused"),
+                        ("Cancelling", "cancelling"),
+                    ],
+                ),
+            ],
+            parent=self,
+        )
+        self.filter_bar.filters_changed.connect(self._on_filters_changed)
+        self.filter_bar.filters_changed.connect(self.job_filters_updated)
+        self.processes_model = QStandardItemModel()
+        self.processes_tv = QTreeView()
+        self.processes_tv.setRootIsDecorated(False)
+        self.processes_tv.setModel(self.processes_model)
+        self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.filter_bar)
+        layout.addWidget(self.processes_tv)
+        self.setLayout(layout)
+        # create root items, they will be added on populating
+        self.processes_model.setHorizontalHeaderLabels(
+            ["Name", "Process name", "Who", "Started", "Status"]
+        )
+        avatar_delegate = ContributorAvatarsDelegate(self.processes_tv)
+        self.processes_tv.setItemDelegateForColumn(2, avatar_delegate)
+        name_delegate = WordWrapDelegate(self.processes_tv)
+        self.processes_tv.setItemDelegateForColumn(0, name_delegate)
+        self.processes_tv.setWordWrap(True)
+        self.processes_tv.setUniformRowHeights(False)
+        self.processes_tv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.processes_tv.header().setSectionResizeMode(QHeaderView.Interactive)
+        self.processes_tv.header().setStretchLastSection(True)
+        self.processes_tv.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.processes_tv.setEditTriggers(QTreeView.NoEditTriggers)
+
+    def add_item(self, job):
+        name_item = QStandardItem()
+        name_item.setData(job, Qt.ItemDataRole.UserRole)
+        # Create QLabel to display a link as a typical html link
+        name_link = QLabel("")
+        self.update_job_link(name_link, job)
+        name_link.setToolTip(job.name)
+
+        process_name_item = QStandardItem()
+        process_name_item.setText(str(job.process_name))
+
+        who_item = QStandardItem()
+        who_item.setData(
+            [
+                {
+                    "id": job.user["id"],
+                    "name": job.user_name,
+                    "avatar": self.avatar_cache.get_avatar_for_user(job.user),
+                }
+            ],
+            Qt.ItemDataRole.UserRole,
+        )
+        date_item = get_timestamp_as_numeric_item(job.created)
+        status_item = QStandardItem()
+        status_item.setData(job.status, Qt.ItemDataRole.UserRole)
+        # Create the progress bar and cancel button
+        progress_bar = ProcessProgressBar()
+        progress_bar.setFixedWidth(160)
+        self.update_pb_progress(progress_bar, job)
+        progress_bar.setTextVisible(True)
+        status_layout = QHBoxLayout()
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(4)
+        status_layout.addWidget(progress_bar)
+        # Add hidden cancel button
+        cancel_button = QToolButton()
+        cancel_button.setToolTip("cancel simulation")
+        cancel_button.setIcon(QgsApplication.getThemeIcon("mTaskCancel.svg"))
+        cancel_button.setIconSize(QSize(16, 16))
+        cancel_button.setAutoRaise(True)
+        cancel_button.setAttribute(Qt.WA_TranslucentBackground)
+        cancel_button.hide()
+        # connect cancel button to canceling a simulation
+        if job.process_id == self.proces_map["simulation_tracker"]:
+            cancel_button.clicked.connect(
+                lambda _: self.on_simulation_cancel_requested(job)
+            )
+            if job.status == "running":
+                cancel_button.show()
+        status_layout.addWidget(cancel_button)
+        status_layout.addStretch(1)
+        status_container = QWidget()
+        status_container.setLayout(status_layout)
+        status_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        row = [name_item, process_name_item, who_item, date_item, status_item]
+        self.processes_model.insertRow(0, row)
+        self.processes_tv.setIndexWidget(status_item.index(), status_container)
+        for id in self.row_map:
+            self.row_map[id] += 1
+        self.row_map[job.id] = 0
+        self.processes_tv.setIndexWidget(name_item.index(), name_link)
+        self.processes_tv.resizeColumnToContents(0)
+
+    def on_simulation_cancel_requested(self, job):
+        # store cancellation related data on the fly to prevent a lot of bookkeeping
+        self.cancelled_sim_map[job.inputs["simulation_id"]] = job
+        # start cancel via Rana
+        self.cancel_simulation.emit(job.inputs["simulation_id"])
+        # wait for the signal to update the UI via on_simulation_cancelled
+
+    @pyqtSlot(int)
+    def on_simulation_cancelled(self, simulation_id: int):
+        job = self.cancelled_sim_map.get(simulation_id, None)
+        if job:
+            job.status = "cancelling"
+            self.update_state_for_job(job)
+
+    @staticmethod
+    def update_pb_progress(progress_bar, job):
+        progress_bar.setValue(job.progress)
+        progress_bar.setMaximum(job.max_progress)
+        progress_bar.setFormat(job.progress_str())
+        progress_bar.set_status(job.status)
+
+    def update_job_link(self, link_label, job):
+        if job.process_id:
+            job_url = f"{base_url()}/{get_tenant_id()}/projects/{self.project['slug']}?tab=2&job={job.id}"
+            link_label.setText(f'<a href="{job_url}">{job.name}</a>')
+            link_label.setOpenExternalLinks(True)  # This makes the link clickable
+            # use default styling
+            link_label.setStyleSheet("")
+        else:
+            link_label.setText(job.name)
+            # set style of items without link to match the treeview styling
+            link_label.setStyleSheet(
+                f"color: {self.processes_tv.palette().text().color().name()}"
+            )
+
+    def update_job_state(self, job_dict: dict):
+        self.update_state_for_job(JobData.from_job_dict(job_dict))
+
+    def update_state_for_job(self, job):
+        row = self.row_map.get(job.id, -1)
+        if row < 0:
+            return
+        status_item = self.processes_model.item(row, 4)
+        status_item.setData(job.status, Qt.ItemDataRole.UserRole)
+        # retrieve progress bar and cancel button, and update their status
+        status_layout = self.processes_tv.indexWidget(status_item.index()).layout()
+        progress_bar = status_layout.itemAt(0).widget()
+        cancel_button = status_layout.itemAt(1).widget()
+        self.update_pb_progress(progress_bar, job)
+        if (
+            job.process_id == self.proces_map["simulation_tracker"]
+            and job.status == "running"
+        ):
+            cancel_button.show()
+        else:
+            cancel_button.hide()
+        if status_layout.count() == 2 and job.status != "running":
+            status_layout.itemAt(1).widget().deleteLater()
+            status_layout.removeItem(status_layout.itemAt(1))
+        name_item = self.processes_model.item(row, 0)
+        name_item.setData(job, Qt.ItemDataRole.UserRole)
+        self.update_job_link(self.processes_tv.indexWidget(name_item.index()), job)
+
+    def _on_filters_changed(self, _filters: dict):
+        self._pending_full_refresh = True
+
+    def add_items(self, job_list: list[dict]):
+        if self._pending_full_refresh:
+            self.processes_model.removeRows(0, self.processes_model.rowCount())
+            self.row_map.clear()
+            self._pending_full_refresh = False
+        for job in reversed(job_list):
+            self.add_item(JobData.from_job_dict(job))
+        for col in range(self.processes_model.columnCount()):
+            self.processes_tv.resizeColumnToContents(col)
+        self._repopulate_who_combo()
+
+    def _repopulate_who_combo(self):
+        seen = {}
+        root = self.processes_model.invisibleRootItem()
+        for row in range(root.rowCount()):
+            name_item = root.child(row, 0)
+            job: JobData = name_item.data(Qt.ItemDataRole.UserRole)
+            if job and job.user["id"] not in seen:
+                seen[job.user["id"]] = job.user
+        items = [
+            (
+                f"{u['given_name']} {u['family_name']}",
+                u["id"],
+                self.avatar_cache.get_avatar_for_user(u),
+            )
+            for u in seen.values()
+        ]
+        self.filter_bar.set_combo_items("who", items)

@@ -1,0 +1,341 @@
+from pathlib import Path
+from typing import Optional
+
+from qgis.core import (
+    QgsDataSourceUri,
+    QgsMapLayer,
+    QgsProject,
+    QgsRasterLayer,
+    QgsVectorLayer,
+)
+from qgis.PyQt.QtCore import (
+    QObject,
+    QSettings,
+)
+
+from rana_qgis_plugin.legacy.auth import get_authcfg_id
+from rana_qgis_plugin.legacy.simulation.utils import (
+    BuildOptionActions,
+    load_local_schematisation,
+)
+from rana_qgis_plugin.utils.api import (
+    get_tenant_file_descriptor,
+)
+from rana_qgis_plugin.utils.qgis import (
+    get_qml_name_for_layer,
+    get_threedi_results_analysis_tool_instance,
+)
+from rana_qgis_plugin.utils.scenario import get_is_3di_simulation
+
+
+class LayerManager(QObject):
+    # NOTE: not really sure why this is a class, there is barely any state
+    def __init__(self, communication, parent):
+        super().__init__(parent)
+        self.communication = communication
+        self.project_inst = QgsProject.instance()
+        self.root = self.project_inst.layerTreeRoot()
+
+    def add_from_file(self, project_name, local_file_path: str, file: dict):
+        raise NotImplementedError
+
+    def _add_layer_from_raster_file(
+        self,
+        local_file_path: str,
+        file: dict,
+        parents: list,
+        display_name: Optional[str] = None,
+    ):
+        file_name = Path(file["id"]).name
+        layer = self._create_and_add_layer(
+            QgsRasterLayer,
+            parents=parents,
+            layer_args=[local_file_path, display_name or file_name],
+        )
+        if layer:
+            self._unlock_layer(layer)
+            self.communication.bar_info(
+                f"Added layer {file_name}"
+                + (f" to group {'/'.join(parents)}." if parents else ".")
+            )
+        else:
+            self.communication.show_warn(f"Failed to add layer {file_name}.")
+
+    def _add_all_layers_from_vector_file(
+        self, local_file_path: str, file: dict, parents: Optional[list[str]] = None
+    ):
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        file_name = Path(file["id"]).name
+        parents = parents + [file_name]
+        if descriptor["meta"] is None:
+            self.communication.show_warn(
+                f"No metadata found for {file_name}, processing probably has not finished yet."
+            )
+            return
+        layers = descriptor["meta"].get("layers", [])
+        if not layers:
+            self.communication.show_warn(f"No layers found in {file_name}.")
+            return
+        for file_layer in layers:
+            self._add_layers_from_vector_file(
+                file_layer["name"], local_file_path, file, parents=parents
+            )
+        self.communication.bar_info(
+            f"Added layers from {file_name}"
+            + (f" to group {'/'.join(parents)}." if parents else ".")
+        )
+
+    def _add_layers_from_vector_file(
+        self,
+        layer_name,
+        local_file_path: str,
+        file: dict,
+        parents: Optional[list[str]] = None,
+    ):
+        layer_uri = f"{local_file_path}|layername={layer_name}"
+        layer = self._create_and_add_layer(
+            QgsVectorLayer,
+            layer_args=[layer_uri, layer_name, "ogr"],
+            parents=parents,
+        )
+        if layer:
+            qml_path = Path(local_file_path).parent.joinpath(
+                get_qml_name_for_layer(layer_name)
+            )
+            if qml_path.exists():
+                layer.loadNamedStyle(str(qml_path))
+                layer.triggerRepaint()
+            self._unlock_layer(layer)
+        else:
+            self.communication.show_error(
+                f"Failed to add {layer_name} layer from: {Path(file['id']).name}"
+            )
+
+    def _add_layer_from_scenario(self, local_file_path: str, file: dict, project: str):
+        # if zip file, do nothing, else try to load in results analysis
+        if local_file_path.endswith(".zip"):
+            return
+        ra_tool = get_threedi_results_analysis_tool_instance()
+        # Check whether result and gridadmin exist in the target folder
+        result_path = Path(local_file_path).joinpath("results_3di.nc")
+        admin_path = Path(local_file_path).joinpath("gridadmin.h5")
+        if result_path.exists() and admin_path.exists():
+            if hasattr(ra_tool, "load_result"):
+                if self.communication.ask(
+                    self.parent(),
+                    "Rana",
+                    "Do you want to add the results of this simulation to the current project so you can analyse them with Results Analysis?",
+                ):
+                    try:
+                        ra_tool.load_result(result_path, admin_path, project=project)
+                    except TypeError as e:
+                        if "project" in str(e):
+                            # Warn and fall back on old syntax and behavior
+                            self.communication.show_warn(
+                                "Rana results analysis is not up to date and therefore the results layers will not be organized by project. Please update the plugin."
+                            )
+                            ra_tool.load_result(result_path, admin_path)
+                        else:
+                            raise
+                    if not ra_tool.dockwidget.isVisible():
+                        ra_tool.toggle_results_manager.run()  # also does some initialisation
+            else:
+                self.communication.show_warn(
+                    "Cannot add results as layer without Rana Results Analysis plugin"
+                )
+
+    def add_layer(self, layer, parents: Optional[list[str]] = None):
+        root = self.root
+        if parents:
+            for parent in parents:
+                if not root.findGroup(parent):
+                    root = root.addGroup(parent)
+                else:
+                    root = root.findGroup(parent)
+        # Check if layer with same name and source already exists in root
+        child_layers = [
+            child.layer() for child in root.children() if hasattr(child, "layer")
+        ]
+        existing_layer = next(
+            (
+                child_layer
+                for child_layer in child_layers
+                if child_layer.name() == layer.name()
+                and child_layer.source() == layer.source()
+            ),
+            None,
+        )
+        insert_index = len(root.children())
+        # If the layer already exists, remove it first and then replace with the current layer
+        if existing_layer:
+            # Get the index of the existing layer before removing it
+            existing_node = root.findLayer(existing_layer.id())
+            if existing_node:
+                insert_index = existing_node.parent().children().index(existing_node)
+            self.project_inst.removeMapLayer(existing_layer.id())
+        self.project_inst.addMapLayer(layer, False)
+        root.insertLayer(insert_index, layer)
+
+    def _create_and_add_layer(
+        self, layer_class, parents: Optional[list[str]], layer_args: list
+    ) -> Optional[QgsMapLayer]:
+        layer = layer_class(*layer_args)
+        if layer.isValid():
+            self.add_layer(layer, parents)
+            return layer
+
+    def _unlock_layer(self, layer):
+        # Add the 'Removable' flag explicitly to prevent settings in the source from locking the layer'
+        current_flags = layer.flags()
+        new_flags = current_flags | QgsMapLayer.LayerFlag.Removable
+        layer.setFlags(new_flags)
+
+    def _add_wms_for_layer(self, layer, link, parents):
+        quri = QgsDataSourceUri()
+        quri.setParam("layers", layer["code"])
+        quri.setParam("styles", "")
+        quri.setParam("format", "image/png")
+        quri.setParam("url", link["href"])
+        # the wms provider will take care to expand authcfg URI parameter with credential
+        # just before setting the HTTP connection.
+        quri.setAuthConfigId(get_authcfg_id())
+        self._create_and_add_layer(
+            QgsRasterLayer,
+            parents=parents,
+            layer_args=[
+                bytes(quri.encodedUri()).decode(),
+                f"{layer['name']} ({layer['label']})",
+                "wms",
+            ],
+        )
+
+    def _add_from_wms(self, file: dict, layers: list, parents: list[str]):
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        wms_link = next(
+            (link for link in descriptor["links"] if link["rel"] == "wms"), None
+        )
+        if wms_link:
+            if len(layers) == 0:
+                self.communication.bar_info("No layers present in this file.")
+                return
+            for layer in layers:
+                self._add_wms_for_layer(layer, wms_link, parents=parents)
+            self.communication.bar_info(
+                f"Added layers from {Path(file['id']).name} to group {'/'.join(parents)}."
+            )
+        else:
+            self.communication.show_error(
+                f"Cannot add wms layer(s) from {Path(file['id']).name}"
+            )
+
+    def add_from_schematisation(
+        self,
+        project_name,
+        local_schematisation,
+        revision_number,
+        wip_replace_requested,
+        geopackage_filepath=None,
+    ):
+        """Open a previously downloaded schematisation in the schematisation editor."""
+        self.communication.clear_message_bar()
+        if not local_schematisation:
+            self.communication.log_warn("Unable to load local schematisation")
+            return
+
+        assert revision_number in local_schematisation.revisions
+        load_local_schematisation(
+            self.communication,
+            local_schematisation=local_schematisation.wip_revision
+            if wip_replace_requested
+            else local_schematisation.revisions[revision_number],
+            action=BuildOptionActions.DOWNLOADED,
+            custom_geopackage_filepath=geopackage_filepath,
+            parents=[project_name],
+        )
+        wip_revision = local_schematisation.wip_revision
+        if wip_revision is not None:
+            settings = QSettings("3di", "qgisplugin")
+            settings.setValue(
+                "last_used_geopackage_path", wip_revision.schematisation_dir
+            )
+
+
+class FileLayerManager(LayerManager):
+    def add_from_wms(self, project_name, file: dict):
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        parents = [project_name] + file["id"].split("/")
+        super()._add_from_wms(file, descriptor["meta"]["layers"], parents=parents)
+
+    def add_from_file(self, project_name, local_file_path: str, file: dict):
+        self.communication.clear_message_bar()
+        parents = [project_name] + file["id"].split("/")[:-1]
+        # Save the last modified date of the downloaded file in QSettings
+        last_modified_key = f"{project_name}/{file['id']}/last_modified"
+        QSettings().setValue(last_modified_key, file["last_modified"])
+        if file.get("data_type") == "scenario":
+            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+            if get_is_3di_simulation(descriptor):
+                self._add_layer_from_scenario(
+                    local_file_path, file, project=project_name
+                )
+        elif file.get("data_type") == "raster":
+            self._add_layer_from_raster_file(local_file_path, file, parents=parents)
+        elif file.get("data_type") == "vector":
+            self._add_all_layers_from_vector_file(
+                local_file_path, file, parents=parents
+            )
+
+
+class PublicationLayerManager(LayerManager):
+    def __init__(
+        self,
+        communication,
+        parent,
+        publication_tree: list[str],
+        display_name: str,
+        layer_in_file: Optional[str] = None,
+    ):
+        super().__init__(communication, parent)
+        self.publication_tree = publication_tree
+        self.display_name = display_name
+        self.layer_in_file = layer_in_file
+
+    def add_from_wms(self, project_name, file: dict):
+        parents = [project_name, "publications"] + self.publication_tree
+        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
+        # match layer_in_file to code to retrieve the full layer data
+        layer = next(
+            (
+                layer
+                for layer in descriptor["meta"]["layers"]
+                if layer["code"] == self.layer_in_file
+            ),
+            None,
+        )
+        if layer:
+            super()._add_from_wms(file, [layer], parents=parents)
+        else:
+            self.communication.show_error(f"Failed to add {self.display_name} from WMS")
+
+    def add_from_file(self, project_name, local_file_path: str, file: dict):
+        # Save the last modified date of the downloaded file in QSettings
+        parents = [project_name, "publications"] + self.publication_tree
+        last_modified_key = f"{project_name}/{file['id']}/last_modified"
+        QSettings().setValue(last_modified_key, file["last_modified"])
+        if file.get("data_type") == "scenario" and self.layer_in_file:
+            self.add_from_wms(project_name, file)
+        elif file.get("data_type") == "raster":
+            self._add_layer_from_raster_file(
+                local_file_path, file, parents=parents, display_name=self.display_name
+            )
+        elif file.get("data_type") == "vector" and self.layer_in_file:
+            self._add_layers_from_vector_file(
+                self.layer_in_file, local_file_path, file, parents=parents
+            )
+
+
+def open_file_via_layer_manager(
+    project: dict, file: dict, local_file_path: str, layer_manager: LayerManager
+):
+    if file["data_type"] in ["scenario", "vector", "raster"]:
+        layer_manager.add_from_file(project["name"], local_file_path, file)
