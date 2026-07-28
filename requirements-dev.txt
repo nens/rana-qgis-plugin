@@ -1,2 +1,5 @@
 pytest
 pytest-qt
+mypy
+qgis-stubs
+PyQt6-stubs
