@@ -9,6 +9,7 @@ History
 - Prevent crashes on loading file view with missing data (nens/rana#4676)
 - Properly handle failure to retrieve schematisation from Rana (nens/rana-qgis-plugin#430)
 - Add missing mapbox styling (used for gpkg export) for culvert, exchange_line and potential_breach (nens/rana#4606)
+- Handle schematisations where sqlite endpoint does not return a zip (nens/rana#4720)
 
 
 1.2.17 (2026-07-16)
