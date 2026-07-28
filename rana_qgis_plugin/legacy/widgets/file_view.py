@@ -36,9 +36,9 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
 from rana_qgis_plugin.legacy.auth_3di import has_3di_authcfg
-from rana_qgis_plugin.legacy.communication import UICommunication
 from rana_qgis_plugin.legacy.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,

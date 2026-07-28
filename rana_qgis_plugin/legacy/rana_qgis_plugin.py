@@ -18,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QSizePolicy,
 )
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import (
     PLUGIN_NAME,
     RANA_CLENUP_CACHE_ON_CLOSE_ENTRY,
@@ -25,7 +26,6 @@ from rana_qgis_plugin.constant import (
 from rana_qgis_plugin.icons import login_icon, logout_icon, rana_icon, settings_icon
 from rana_qgis_plugin.legacy.auth import get_authcfg_id, remove_authcfg, setup_oauth2
 from rana_qgis_plugin.legacy.auth_3di import remove_3di_auth, setup_3di_auth
-from rana_qgis_plugin.legacy.communication import UICommunication
 from rana_qgis_plugin.legacy.loader import Loader
 from rana_qgis_plugin.legacy.widgets.about_rana_dialog import AboutRanaDialog
 from rana_qgis_plugin.legacy.widgets.rana_browser import RanaBrowser

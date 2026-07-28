@@ -17,8 +17,8 @@ from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import bypass_max_path_limit, list_local_schematisations
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY, SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.legacy.communication import UICommunication
 from rana_qgis_plugin.legacy.layer_manager import (
     FileLayerManager,
     PublicationLayerManager,
