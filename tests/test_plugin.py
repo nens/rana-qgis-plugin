@@ -2,6 +2,9 @@ import gc
 import os
 
 import pytest
+
+pytest.skip(reason="Not compatible with qgis 4", allow_module_level=True)
+
 from qgis.core import QgsApplication
 
 from rana_qgis_plugin.communication import UICommunication

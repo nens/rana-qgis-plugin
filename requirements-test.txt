@@ -21,3 +21,4 @@ annotated_types
 bridgestyle
 freezegun
 mistune
+six
