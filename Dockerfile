@@ -1,5 +1,6 @@
-FROM qgis/qgis:3.40
+FROM qgis/qgis:4.2
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-setuptools \
     python3-pyqt5.qtwebsockets \
     xvfb \
     xauth \
