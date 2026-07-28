@@ -7,7 +7,7 @@ pytest.skip(reason="Not compatible with qgis 4", allow_module_level=True)
 
 from qgis.core import QgsApplication
 
-from rana_qgis_plugin.legacy.communication import UICommunication
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.legacy.widgets.rana_browser import RanaBrowser
 
 

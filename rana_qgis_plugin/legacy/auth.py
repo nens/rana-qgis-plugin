@@ -4,13 +4,13 @@ import re
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
     COGNITO_TOKEN_ENDPOINT,
     RANA_AUTHCFG_ENTRY,
     RANA_SETTINGS_ENTRY,
 )
-from rana_qgis_plugin.legacy.communication import UICommunication
 from rana_qgis_plugin.network_manager import NetworkManager
 from rana_qgis_plugin.utils.settings import (
     api_url,

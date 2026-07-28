@@ -45,6 +45,6 @@ def classFactory(iface):  # pylint: disable=invalid-name
     """
     check_dependency_loader()
 
-    from rana_qgis_plugin.legacy.rana_qgis_plugin import RanaQgisPlugin
+    from rana_qgis_plugin.rana_qgis_plugin import RanaQgisPlugin
 
     return RanaQgisPlugin(iface)

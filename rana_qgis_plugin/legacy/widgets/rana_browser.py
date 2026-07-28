@@ -23,11 +23,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.icons import (
     ICONS_DIR,
     refresh_icon,
 )
-from rana_qgis_plugin.legacy.communication import UICommunication
 from rana_qgis_plugin.legacy.widgets.breadcrumbs import (
     BreadcrumbsManager,
     FilesBreadcrumbsWidget,
