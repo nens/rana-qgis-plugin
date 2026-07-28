@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Any, Optional
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
@@ -12,7 +13,7 @@ from qgis.core import (
 from qgis.utils import plugins
 
 
-def get_plugin_instance(plugin_name):
+def get_plugin_instance(plugin_name: str) -> Any:
     """Return given plugin name instance."""
     try:
         plugin_instance = plugins[plugin_name]
@@ -21,11 +22,13 @@ def get_plugin_instance(plugin_name):
     return plugin_instance
 
 
-def get_threedi_results_analysis_tool_instance():
+def get_threedi_results_analysis_tool_instance() -> Any:
     return get_plugin_instance("threedi_results_analysis")
 
 
-def is_loaded_in_schematisation_editor(local_schematisation_gpkg):
+def is_loaded_in_schematisation_editor(
+    local_schematisation_gpkg: Optional[str],
+) -> Optional[bool]:
     """Check if local schematisation revision is loaded in the Schematisation Editor."""
     if local_schematisation_gpkg is None:
         return None
@@ -56,7 +59,10 @@ def convert_vectorfile_to_geopackage(
     gpkg_path = str(Path(vector_path).with_suffix(".gpkg"))
 
     error = QgsVectorFileWriter.writeAsVectorFormatV3(
-        layer, gpkg_path, QgsProject.instance().transformContext(), options
+        layer,
+        gpkg_path,
+        QgsProject.instance().transformContext(),  # type: ignore[union-attr]
+        options,  # type: ignore[union-attr]
     )
 
     if error[0] != QgsVectorFileWriter.NoError:

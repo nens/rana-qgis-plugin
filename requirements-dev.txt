@@ -3,3 +3,5 @@ pytest-qt
 mypy
 qgis-stubs
 PyQt6-stubs
+types-requests
+types-python-dateutil

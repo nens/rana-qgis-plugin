@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, cast
 
 
 class DataType(Enum):
@@ -12,7 +12,7 @@ class DataType(Enum):
     @classmethod
     def from_value(cls, value: str) -> Optional["DataType"]:
         if value in cls._value2member_map_:
-            return cls._value2member_map_[value]
+            return cast("DataType", cls._value2member_map_[value])
         return None
 
 
@@ -36,6 +36,6 @@ class LocalPublicationFileData(RanaPublicationFileData):
 
     @staticmethod
     def from_file_data(
-        local_path, file_data: RanaPublicationFileData
+        local_path: str, file_data: RanaPublicationFileData
     ) -> "LocalPublicationFileData":
         return LocalPublicationFileData(local_path=local_path, **file_data.__dict__)

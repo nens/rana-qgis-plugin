@@ -11,5 +11,5 @@ repos:
   rev: v1.16.0
   hooks:
     - id: mypy
-      additional_dependencies: [qgis-stubs, PyQt6-stubs]
+      additional_dependencies: [qgis-stubs, PyQt6-stubs, types-requests, types-python-dateutil]
       pass_filenames: false

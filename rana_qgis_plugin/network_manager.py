@@ -2,10 +2,11 @@ import configparser
 import json
 import os
 import urllib.parse
-from typing import Optional
+from typing import Any, Optional
 
-from qgis.core import (
+from qgis.core import (  # type: ignore[attr-defined]
     QgsApplication,
+    QgsAuthManager,
     QgsNetworkAccessManager,
     QgsProcessingException,
 )
@@ -59,20 +60,22 @@ _preprocessor_id = QgsNetworkAccessManager.setRequestPreprocessor(_append_user_a
 class NetworkManager(object):
     """Network manager class for handling network requests."""
 
-    def __init__(self, url: str, auth_cfg: str = None):
-        self._network_manager = QgsNetworkAccessManager.instance()
+    def __init__(self, url: str, auth_cfg: Optional[str] = None):
+        self._network_manager: QgsNetworkAccessManager = (  # type: ignore[assignment]
+            QgsNetworkAccessManager.instance()  # type: ignore[assignment]
+        )
         # Don't follow redirects automatically
         self._network_manager.setRedirectPolicy(
             QNetworkRequest.RedirectPolicy.ManualRedirectPolicy
         )
-        self._auth_manager = QgsApplication.authManager()
+        self._auth_manager: QgsAuthManager = QgsApplication.authManager()  # type: ignore[assignment]
         self._network_finished = False
         self._network_timeout = False
         self._url = url
-        self._reply = None
+        self._reply: QNetworkReply = None  # type: ignore[assignment]
         self._auth_cfg = auth_cfg
         self._content = None
-        self._request = None
+        self._request: QNetworkRequest = None  # type: ignore[assignment]
         self.last_http_status = None
 
         if auth_cfg:
@@ -81,7 +84,7 @@ class NetworkManager(object):
                 raise QgsProcessingException("Authorization not configured!")
 
     @property
-    def content(self):
+    def content(self) -> Any:
         return self._content
 
     @property
@@ -92,23 +95,27 @@ class NetworkManager(object):
     def network_timeout(self):
         return self._network_timeout
 
-    def fetch(self, params: dict = None):
+    def fetch(self, params: Optional[dict] = None) -> tuple[bool, str | None]:
         self.prepare_request(params)
-        self._reply = self._network_manager.get(self._request)
+        self._reply = self._network_manager.get(self._request)  # type: ignore[assignment]
         return self.process_request()
 
-    def post(self, params: dict = None, payload: dict = {}):
+    def post(
+        self, params: Optional[dict] = None, payload: Optional[dict] = None
+    ) -> tuple[bool, str | None]:
         self.prepare_request(params)
         self._reply = self._network_manager.post(
-            self._request, json.dumps(payload).encode("utf-8")
-        )
+            self._request, json.dumps(payload or {}).encode("utf-8")
+        )  # type: ignore[assignment]
         return self.process_request()
 
-    def put(self, params: dict = None, payload: dict = None):
+    def put(
+        self, params: Optional[dict] = None, payload: Optional[dict] = None
+    ) -> tuple[bool, str | None]:
         self.prepare_request(params)
         self._reply = self._network_manager.put(
             self._request, json.dumps(payload).encode("utf-8")
-        )
+        )  # type: ignore[assignment]
         return self.process_request()
 
     def get_multipart_for_files(self, files: list):
@@ -135,12 +142,12 @@ class NetworkManager(object):
 
     def post_multipart(
         self,
-        params: dict = None,
-        files: list = None,
+        params: Optional[dict] = None,
+        files: Optional[list] = None,
         multipart_data: Optional[dict] = None,
-    ):
+    ) -> tuple[bool, str | None]:
         self.prepare_request(params)
-        multipart = self.get_multipart_for_files(files)
+        multipart = self.get_multipart_for_files(files)  # type: ignore[arg-type]
         if multipart_data:
             for field_name, field_value in multipart_data.items():
                 field_part = QHttpPart()
@@ -155,30 +162,32 @@ class NetworkManager(object):
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
         # Remove the content-type header from prepare_request
         self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
-        self._reply = self._network_manager.post(self._request, multipart)
+        self._reply = self._network_manager.post(self._request, multipart)  # type: ignore[assignment]
         multipart.setParent(self._reply)  # Delete multipart with reply
         return self.process_request()
 
-    def put_multipart(self, params: dict = None, files: dict = None):
+    def put_multipart(
+        self, params: Optional[dict] = None, files: Optional[dict] = None
+    ) -> tuple[bool, str | None]:
         self.prepare_request(params)
-        multipart = self.get_multipart_for_files(files)
+        multipart = self.get_multipart_for_files(files)  # type: ignore[arg-type]
         # Don't set ContentTypeHeader manually - multipart sets it with boundary
         # Remove the content-type header from prepare_request
         self._request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, None)
-        self._reply = self._network_manager.put(self._request, multipart)
+        self._reply = self._network_manager.put(self._request, multipart)  # type: ignore[assignment]
         multipart.setParent(self._reply)  # Delete multipart with reply
         return self.process_request()
 
-    def delete(self, params: dict = None):
+    def delete(self, params: Optional[dict] = None) -> tuple[bool, str | None]:
         self.prepare_request(params)
-        self._reply = self._network_manager.deleteResource(self._request)
+        self._reply = self._network_manager.deleteResource(self._request)  # type: ignore[assignment]
         return self.process_request()
 
-    def prepare_request(self, params: dict = None):
+    def prepare_request(self, params: Optional[dict] = None):
         # Initialize some properties again
         self._content = None
-        self._reply = None
-        self._request = None
+        self._reply = None  # type: ignore[assignment]
+        self._request = None  # type: ignore[assignment]
         self._network_finished = False
         self._network_timeout = False
 
@@ -192,7 +201,8 @@ class NetworkManager(object):
         if self._auth_cfg:
             self._auth_manager.updateNetworkRequest(self._request, self._auth_cfg)
 
-    def process_request(self):
+    def process_request(self) -> tuple[bool, str | None]:
+        assert self._reply is not None
         self._reply.finished.connect(self.fetch_finished)
         self._network_manager.requestTimedOut.connect(self.request_timeout)
 

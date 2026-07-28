@@ -5,8 +5,10 @@ Import colormaps from GeoStyler format.
 Copied from N&S colormaps library
 """
 
+from typing import Any
 
-def hex_to_rgba(hex_color, opacity=1.0):
+
+def hex_to_rgba(hex_color: str, opacity: float = 1.0) -> list[int]:
     """
     Convert hex color string to RGBA array.
 
@@ -35,7 +37,9 @@ def hex_to_rgba(hex_color, opacity=1.0):
         raise ValueError(f"Invalid hex color format: {hex_color}") from e
 
 
-def _extract_colormap_entries(raster_symbolizer):
+def _extract_colormap_entries(
+    raster_symbolizer: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str]:
     """
     Extract colormap entries and type from GeoStyler structure.
 
@@ -58,7 +62,7 @@ def _extract_colormap_entries(raster_symbolizer):
         raise KeyError("Invalid GeoStyler structure: missing required fields")
 
 
-def import_from_geostyler(raster_symbolizer):
+def import_from_geostyler(raster_symbolizer: dict[str, Any]) -> dict[str, Any]:
     """
     Import colormap from a Geostyler raster symbolizaer
 
@@ -107,7 +111,7 @@ def import_from_geostyler(raster_symbolizer):
     return result
 
 
-def _extract_labels(entries):
+def _extract_labels(entries: list[dict[str, Any]]) -> dict[str, list[Any]]:
     """
     Extract labels from colormap entries.
 
@@ -128,11 +132,11 @@ def _extract_labels(entries):
     return {}
 
 
-def _transform_color_entry(entry):
+def _transform_color_entry(entry: dict[str, Any]) -> list[Any]:
     return [entry["quantity"], hex_to_rgba(entry["color"], entry.get("opacity", 1.0))]
 
 
-def _create_interval_data(data):
+def _create_interval_data(data: list[list[Any]]) -> list[list[Any]]:
     """
     Create data for discrete interval colormap.
 

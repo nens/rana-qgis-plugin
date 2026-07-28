@@ -187,15 +187,15 @@ class ThreediCalls:
 
     def fetch_3di_models_with_count(
         self,
-        limit: int = None,
-        offset: int = None,
-        name_contains: str = None,
-        schematisation_name: str = None,
-        schematisation_owner: str = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        name_contains: Optional[str] = None,
+        schematisation_name: Optional[str] = None,
+        schematisation_owner: Optional[str] = None,
         show_valid_and_invalid: bool = False,
     ) -> Tuple[List[ThreediModel], int]:
         """Fetch 3Di models available for current user."""
-        params = {
+        params: dict[str, Any] = {
             "revision__schematisation__isnull": False,
             "is_valid": True,
             "disabled": False,
@@ -370,10 +370,10 @@ class ThreediCalls:
         return breaches
 
     def fetch_3di_model_point_potential_breach(
-        self, threedimodel_id: str, content_pk: int = None
+        self, threedimodel_id: str, content_pk: Optional[int] = None
     ) -> PotentialBreach:
         """Fetch a single potential breach at given connected_pnt_id."""
-        params = {"threedimodel_pk": threedimodel_id}
+        params: dict[str, Any] = {"threedimodel_pk": threedimodel_id}
         if content_pk is not None:
             params["connected_pnt_id"] = content_pk
         response = self.threedi_api.threedimodels_potentialbreaches_list(**params)
@@ -1212,13 +1212,13 @@ class ThreediCalls:
 
     def fetch_schematisations_with_count(
         self,
-        limit: int = None,
-        offset: int = None,
-        name_contains: str = None,
-        ordering: str = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        name_contains: Optional[str] = None,
+        ordering: Optional[str] = None,
     ) -> Tuple[List[Schematisation], int]:
         """Get list of the schematisations with count."""
-        params = {}
+        params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
@@ -1262,8 +1262,8 @@ class ThreediCalls:
         self,
         schematisation_pk: int,
         committed: bool = True,
-        limit: int = None,
-        offset: int = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> Tuple[List[SchematisationRevision], int]:
         """Get list of the schematisation revisions with count."""
         params = {}
@@ -1447,7 +1447,10 @@ class ThreediCalls:
         return simulation_templates_list
 
     def fetch_simulation_templates_with_count(
-        self, simulation_pk: int = None, limit: int = None, offset: int = None
+        self,
+        simulation_pk: Optional[int] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> Tuple[List[Template], int]:
         """Get list of the simulation templated with count."""
         params = {}

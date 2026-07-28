@@ -11,6 +11,7 @@ from threedi_mi_utils import (
     list_local_schematisations,
 )
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.utils.settings import rana_cache_dir
 
 
@@ -185,7 +186,7 @@ def get_local_results_dir_from_meta(meta: dict, working_dir: str) -> Optional[st
     )
 
 
-def cleanup_folder(folder: Path, communication) -> None:
+def cleanup_folder(folder: Path, communication: UICommunication) -> None:
     """Remove all contents of a folder, keeping the folder itself.
 
     Failures are logged via communication.log_warn and never raised.

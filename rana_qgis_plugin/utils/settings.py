@@ -14,7 +14,7 @@ from rana_qgis_plugin.constant import (
 )
 
 
-def initialize_settings():
+def initialize_settings() -> None:
     """Sets up the settings with default values"""
     settings = QgsSettings()
 
@@ -46,7 +46,7 @@ def initialize_settings():
     os.makedirs(settings.value("threedi/working_dir"), exist_ok=True)
 
 
-def set_tenant_id(tenant: str):
+def set_tenant_id(tenant: str) -> None:
     QgsSettings().setValue(RANA_TENANT_ENTRY, tenant)
 
 
@@ -54,7 +54,7 @@ def get_tenant_id() -> str:
     return QgsSettings().value(RANA_TENANT_ENTRY)
 
 
-def set_cognito_client_id(id: str):
+def set_cognito_client_id(id: str) -> None:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cognito_client_id", id)
 
 
@@ -62,7 +62,7 @@ def cognito_client_id() -> str:
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cognito_client_id")
 
 
-def set_cognito_client_id_native(id: str):
+def set_cognito_client_id_native(id: str) -> None:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native", id)
 
 
@@ -70,11 +70,11 @@ def cognito_client_id_native() -> str:
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native")
 
 
-def set_base_url(url: str):
+def set_base_url(url: str) -> None:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/base_url", url)
 
 
-def base_url():
+def base_url() -> str:
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/base_url")
 
 
@@ -84,19 +84,19 @@ def api_version_prefix() -> str:
     )
 
 
-def api_url():
+def api_url() -> str:
     return f"{base_url()}/{api_version_prefix()}"
 
 
-def logout_redirect_uri():
+def logout_redirect_uri() -> str:
     return f"{base_url()}/auth/callback/cognito/logout"
 
 
-def logout_redirect_uri_encoded():
-    return quote(logout_redirect_uri, safe="")
+def logout_redirect_uri_encoded() -> str:
+    return quote(logout_redirect_uri(), safe="")
 
 
-def logout_url():
+def logout_url() -> str:
     return f"{COGNITO_LOGOUT_ENDPOINT}?client_id={cognito_client_id()}&logout_uri={logout_redirect_uri_encoded()}"
 
 
@@ -105,18 +105,18 @@ def hcc_working_dir() -> str:
     return QgsSettings().value("threedi/working_dir")
 
 
-def set_hcc_working_dir(working_dir: str) -> str:
+def set_hcc_working_dir(working_dir: str) -> None:
     # Backwards compatible to older software
     QgsSettings().setValue("threedi/working_dir", working_dir)
     os.makedirs(hcc_working_dir(), exist_ok=True)
 
 
-def rana_cache_dir(return_default=True) -> Optional[str]:
-    default = str(Path.home() / "Rana") if return_default else None
+def rana_cache_dir() -> str:
+    default = str(Path.home() / "Rana")
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir", default)
 
 
-def set_rana_cache_dir(cache_dir: str) -> str:
+def set_rana_cache_dir(cache_dir: str) -> None:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cache_dir", cache_dir)
 
 

@@ -43,7 +43,7 @@ class UICommunication:
 
     def bar_info(self, msg, dur=5):
         """Showing info message bar."""
-        if self.iface is not None:
+        if self.message_bar is not None:
             self.message_bar.pushMessage(
                 self.context, msg, level=Qgis.MessageLevel.Info, duration=dur
             )
@@ -52,7 +52,7 @@ class UICommunication:
 
     def bar_warn(self, msg, dur=5):
         """Showing warning message bar."""
-        if self.iface is not None:
+        if self.message_bar is not None:
             self.message_bar.pushMessage(
                 self.context, msg, level=Qgis.MessageLevel.Warning, duration=dur
             )
@@ -61,7 +61,7 @@ class UICommunication:
 
     def bar_error(self, msg, dur=5):
         """Showing error message bar."""
-        if self.iface is not None:
+        if self.message_bar is not None:
             self.message_bar.pushMessage(
                 self.context, msg, level=Qgis.MessageLevel.Critical, duration=dur
             )

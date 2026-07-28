@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, TypedDict
+from typing import Any, Optional, TypedDict, cast
 
 import requests
 
@@ -42,7 +42,9 @@ class FileDescriptorStatus(Enum):
         status_dict = response.get("status") or {}
         if "id" in status_dict:
             if status_dict["id"] in cls._value2member_map_:
-                return cls._value2member_map_[status_dict["id"]]
+                return cast(
+                    "FileDescriptorStatus", cls._value2member_map_[status_dict["id"]]
+                )
         return cls.unknown
 
     @property
@@ -81,7 +83,7 @@ class ConflictError(Exception):
         super().__init__(msg)
 
 
-def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
+def simple_fetch(url: str, params: Optional[dict] = None) -> dict:
     """Run a simple fetch for any endpoint"""
     if params is None:
         params = {}
@@ -92,12 +94,12 @@ def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
         return network_manager.content
     else:
         # Raise when fetch failed, error should be handled downstream
-        raise FetchError(error, url, params)
+        raise FetchError(error or "", url, params)
 
 
 def single_fetch(
     url: str, limit: int, offset: int, params: Optional[dict] = None
-) -> Optional[dict]:
+) -> dict:
     """Perform a single fetch from a list endpoint."""
     if params is None:
         params = {}
@@ -110,6 +112,7 @@ def fetch_first(url: str, params: Optional[dict] = None) -> Optional[dict]:
     content = single_fetch(url, 1, 0, params)
     if len(content["items"]) == 1:
         return content["items"][0]
+    return None
 
 
 def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict:
@@ -121,20 +124,19 @@ def paginated_fetch(url: str, limit: int, params: Optional[dict] = None) -> dict
     full_response["items"] += response["items"]
     for offset in range(limit, response["total"], limit):
         response = single_fetch(url, limit, offset, params)
-        full_response["items"] += response.get("items")
+        full_response["items"] += response.get("items", [])
     return full_response
 
 
-def get_frontend_settings():
+def get_frontend_settings() -> dict:
     url = f"{api_url()}/frontend-settings"
     network_manager = NetworkManager(url, get_authcfg_id())
-    status, _ = network_manager.fetch()
+    status, error = network_manager.fetch()
 
     if status:
-        response = network_manager.content
-        return response
+        return network_manager.content
     else:
-        return None
+        raise FetchError(error or "", url, {})
 
 
 def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
@@ -152,7 +154,7 @@ def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
         return None
 
 
-def get_user_tenants(communication: UICommunication, user_id: str):
+def get_user_tenants(communication: UICommunication, user_id: str) -> list:
     authcfg_id = get_authcfg_id()
     url = f"{api_url()}/tenants"
     params = {"user_id": user_id}
@@ -169,7 +171,7 @@ def get_user_tenants(communication: UICommunication, user_id: str):
         return []
 
 
-def get_tenant_details(communication: UICommunication):
+def get_tenant_details(communication: UICommunication) -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}"
@@ -185,7 +187,9 @@ def get_tenant_details(communication: UICommunication):
         return {}
 
 
-def get_tenant_projects(communication: UICommunication, params: Optional[dict] = None):
+def get_tenant_projects(
+    communication: UICommunication, params: Optional[dict] = None
+) -> dict:
     """Fetch all tenant projects matching the given filter params.
 
     Args:
@@ -202,8 +206,8 @@ def get_tenant_projects(communication: UICommunication, params: Optional[dict] =
 
 
 def get_tenant_project_files(
-    communication: UICommunication, project_id: str, params: dict = None
-):
+    communication: UICommunication, project_id: str, params: Optional[dict] = None
+) -> list:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/ls"
     if params is None:
@@ -222,7 +226,7 @@ def get_tenant_project_files(
         return []
 
 
-def create_project(params: dict):
+def create_project(params: dict) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects"
@@ -237,7 +241,7 @@ def create_project(params: dict):
         return None
 
 
-def delete_project(project_id: str):
+def delete_project(project_id: str) -> bool:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}"
@@ -251,7 +255,7 @@ def delete_project(project_id: str):
         return False
 
 
-def delete_tenant_project_file(project_id: str, params: dict):
+def delete_tenant_project_file(project_id: str, params: dict) -> bool:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/delete"
@@ -265,7 +269,7 @@ def delete_tenant_project_file(project_id: str, params: dict):
         return False
 
 
-def create_tenant_project_directory(project_id: str, path: str):
+def create_tenant_project_directory(project_id: str, path: str) -> bool:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/create"
@@ -279,7 +283,7 @@ def create_tenant_project_directory(project_id: str, path: str):
         return False
 
 
-def delete_tenant_project_directory(project_id: str, params: dict):
+def delete_tenant_project_directory(project_id: str, params: dict) -> bool:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/delete"
@@ -331,7 +335,7 @@ def create_folder(project_id: str, params: dict) -> bool:
         return False
 
 
-def get_tenant_project_file(project_id: str, params: dict):
+def get_tenant_project_file(project_id: str, params: dict) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
@@ -346,7 +350,7 @@ def get_tenant_project_file(project_id: str, params: dict):
         return None
 
 
-def get_tenant_project_file_history(project_id: str, params: dict):
+def get_tenant_project_file_history(project_id: str, params: dict) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/history"
@@ -361,7 +365,7 @@ def get_tenant_project_file_history(project_id: str, params: dict):
         return None
 
 
-def get_tenant_file_url(project_id: str, params: dict):
+def get_tenant_file_url(project_id: str, params: dict) -> Optional[str]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/download"
@@ -373,15 +377,15 @@ def get_tenant_file_url(project_id: str, params: dict):
         response = network_manager.content
         return response.get("url")
     else:
-        raise FetchError(msg, url, params)
+        raise FetchError(msg or "", url, params)
 
 
-def get_tenant_file_descriptor(descriptor_id: str):
+def get_tenant_file_descriptor(descriptor_id: str) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.fetch()
+    status, _ = network_manager.fetch()
 
     if status:
         response = network_manager.content
@@ -390,7 +394,7 @@ def get_tenant_file_descriptor(descriptor_id: str):
         return None
 
 
-def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
+def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str) -> list:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/{view_type}"
@@ -407,10 +411,10 @@ def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str):
 def create_raster_tasks(
     descriptor_id: str,
     raster_id: str,
-    spatial_bounds,
+    spatial_bounds: Any,
     projection: str,
-    no_data: int = None,
-):
+    no_data: Optional[int] = None,
+) -> list:
     """
     Create Lizard raster tasks for a raster.
     Reimplemented code from https://github.com/nens/lizard-qgis-plugin
@@ -437,22 +441,22 @@ def create_raster_tasks(
     return raster_tasks
 
 
-def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict):
+def request_raster_generate(descriptor_id: str, raster_id: str, payload: dict) -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/raster/{raster_id}/task"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, _ = network_manager.post(payload=payload)
+    status, error = network_manager.post(payload=payload)
 
     if status:
         response = network_manager.content
         return response
     else:
-        raise Exception(network_manager.description())
+        raise Exception(error)
 
 
-def get_raster_file_link(descriptor_id: str, task_id: str):
+def get_raster_file_link(descriptor_id: str, task_id: str) -> Any:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = (
@@ -477,7 +481,7 @@ def get_raster_file_link(descriptor_id: str, task_id: str):
         raise Exception(f"Failed to retrieve raster: {error}")
 
 
-def get_tenant_processes(communication: UICommunication):
+def get_tenant_processes(communication: UICommunication) -> list:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes"
@@ -495,7 +499,9 @@ def get_tenant_processes(communication: UICommunication):
         return []
 
 
-def start_tenant_process(communication: UICommunication, process_id, params: dict):
+def start_tenant_process(
+    communication: UICommunication, process_id: str, params: dict
+) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes/{process_id}/execution"
@@ -510,7 +516,9 @@ def start_tenant_process(communication: UICommunication, process_id, params: dic
         return None
 
 
-def start_file_upload(project_id: str, params: dict):
+def start_file_upload(
+    project_id: str, params: dict
+) -> tuple[Optional[dict], Optional[dict]]:
     """Initiate a file upload.
 
     Returns:
@@ -531,7 +539,7 @@ def start_file_upload(project_id: str, params: dict):
         return None, network_manager.content
 
 
-def finish_file_upload(project_id: str, payload: dict):
+def finish_file_upload(project_id: str, payload: dict) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/upload"
@@ -543,7 +551,7 @@ def finish_file_upload(project_id: str, payload: dict):
     return None
 
 
-def upload_file_styling(descriptor_id: str, files):
+def upload_file_styling(descriptor_id: str, files: list) -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles"
@@ -553,10 +561,10 @@ def upload_file_styling(descriptor_id: str, files):
         response = network_manager.content
         return response
     else:
-        raise RanaUploadError(msg)
+        raise RanaUploadError(msg or "")
 
 
-def get_file_descriptor_style(descriptor_id: str, file_name: str):
+def get_file_descriptor_style(descriptor_id: str, file_name: str) -> Optional[bytes]:
     """Fetch style file for a file descriptor.
 
     Args:
@@ -586,7 +594,7 @@ def get_file_descriptor_style(descriptor_id: str, file_name: str):
 
 def get_publication_style(
     publication_id: str, style_id: str, publication_version: int, file_name: str
-):
+) -> Optional[bytes]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/styles/{style_id}/{file_name}"
@@ -618,10 +626,10 @@ def upload_publication_style(
         response = network_manager.content
         return response
     else:
-        raise RanaUploadError(msg)
+        raise RanaUploadError(msg or "")
 
 
-def get_schematisations(communication, icontains=""):
+def get_schematisations(communication: UICommunication, icontains: str = "") -> list:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/threedi-schematisations"
@@ -637,7 +645,7 @@ def get_schematisations(communication, icontains=""):
         return []
 
 
-def get_threedi_schematisation(descriptor_id: str):
+def get_threedi_schematisation(descriptor_id: str) -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/threedi-schematisation"
@@ -650,13 +658,13 @@ def get_threedi_schematisation(descriptor_id: str):
 
 def add_threedi_schematisation(
     communication: UICommunication, project_id: str, schematisation_id: str, path: str
-):
+) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.post(
+    status, _ = network_manager.post(
         params={"schematisation_id": schematisation_id, "path": path}
     )
 
@@ -669,7 +677,7 @@ def add_threedi_schematisation(
 
 def get_threedi_personal_api_key(
     communication: UICommunication, user_id: str
-) -> Optional[str]:
+) -> tuple[Optional[str], Optional[str]]:
     communication.clear_message_bar()
     communication.bar_info("Getting Rana personal API key ...")
     authcfg_id = get_authcfg_id()
@@ -728,9 +736,10 @@ def get_threedi_organisations() -> list[str]:
             uuid.replace("-", "")
             for uuid in network_manager.content["threedi_organisations"]
         ]
+    return []
 
 
-def get_user_image(communication: UICommunication, user_id):
+def get_user_image(communication: UICommunication, user_id: str) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"
@@ -743,7 +752,7 @@ def get_user_image(communication: UICommunication, user_id):
         return None
 
 
-def get_user(params: dict):
+def get_user(params: dict) -> Optional[dict]:
     url = f"{api_url()}/tenants/{get_tenant_id()}/users"
     user_info = simple_fetch(url, params)["items"]
     if len(user_info) != 1:
@@ -751,7 +760,7 @@ def get_user(params: dict):
     return user_info[0]
 
 
-def get_project_jobs(project_id: str, params: Optional[dict] = None):
+def get_project_jobs(project_id: str, params: Optional[dict] = None) -> Optional[dict]:
     """Fetch jobs for a project.
 
     Args:
@@ -773,7 +782,7 @@ def get_project_jobs(project_id: str, params: Optional[dict] = None):
         return None
 
 
-def get_project_publications(project_id: str, params: Optional[dict] = None):
+def get_project_publications(project_id: str, params: Optional[dict] = None) -> dict:
     """Fetch publications for a project.
 
     Args:
@@ -794,9 +803,10 @@ def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional
     for process in processes:
         if tag in process["tags"]:
             return process["id"]
+    return None
 
 
-def get_publication_details(publication_id: str):
+def get_publication_details(publication_id: str) -> Optional[dict]:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}"
     return simple_fetch(url)
@@ -811,7 +821,7 @@ def get_publication_version_details(
     return simple_fetch(url)
 
 
-def upload_publication_version(publication_id: str, publication_version: dict):
+def upload_publication_version(publication_id: str, publication_version: dict) -> dict:
     tenant = get_tenant_id()
     authcfg_id = get_authcfg_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions"
@@ -839,19 +849,23 @@ def upload_publication_version(publication_id: str, publication_version: dict):
                 )
             else:
                 created_at = "unknown"
-            raise ConflictError(msg=error, created_by=created_by, created_at=created_at)
+            raise ConflictError(
+                msg=error or "", created_by=created_by, created_at=created_at
+            )
         else:
             # Raise when upload failed, error should be handled downstream
             raise Exception(f"Failed to upload publication version: {error=}; {url=}")
 
 
-def get_publication_version_files(publication_id: str, version: int) -> list:
+def get_publication_version_files(publication_id: str, version: int) -> dict:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/publications/{publication_id}/versions/{version}/files"
     return paginated_fetch(url, 100)
 
 
-def get_project_file_details(project_id: str, file_path: str, file_ref: str):
+def get_project_file_details(
+    project_id: str, file_path: str, file_ref: str
+) -> Optional[dict]:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
     return simple_fetch(url, {"path": file_path, "ref": file_ref})
