@@ -66,6 +66,8 @@ class SettingsDialog(QDialog):
         files_group = QGroupBox("File storage", self)
         files_group.setLayout(QGridLayout())
         files_group.layout().addWidget(QLabel("Cache directory"), 0, 0)
+        # WARNING: rana_cache_dir() signature changed - return_default parameter removed.
+        # This code needs to be updated to work with the new behavior.
         self.cache_dir_le = QLineEdit(rana_cache_dir(return_default=False), files_group)
         files_group.layout().addWidget(self.cache_dir_le, 0, 1)
         cachedir_browse_pb = QPushButton("Browse", files_group)

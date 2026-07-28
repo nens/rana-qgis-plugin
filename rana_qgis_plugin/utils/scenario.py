@@ -1,5 +1,6 @@
 from copy import deepcopy
 from functools import cached_property
+from typing import Any, Optional
 
 from threedi_api_client.openapi import ApiException
 
@@ -50,7 +51,7 @@ class ScenarioInfo:
         if self.has_3di_simulation:
             self.set_simulation_info_from_threedi()
 
-    def set_simulation_info_from_threedi(self):
+    def set_simulation_info_from_threedi(self) -> None:
         """
         Ensure all simulation info is properly set and update missing information via threedi.
         If any information cannot be retrieved, set has_3di_simulation to False.
@@ -111,7 +112,7 @@ class ScenarioInfo:
             "id"
         ) is not None and get_lizard_ready_state_from_descriptor(self.descriptor)
 
-    def get_grid(self):
+    def get_grid(self) -> dict:
         return deepcopy(self.grid) or {}
 
     @cached_property
@@ -123,13 +124,13 @@ class ScenarioInfo:
         return []
 
     @cached_property
-    def grid(self):
+    def grid(self) -> dict:
         return self.meta.get("grid") or {}
 
     @cached_property
-    def crs(self):
+    def crs(self) -> Optional[Any]:
         return self.grid.get("crs")
 
     @cached_property
-    def pixel_size(self):
+    def pixel_size(self) -> float:
         return (self.grid.get("x") or {}).get("cell_size", 1)

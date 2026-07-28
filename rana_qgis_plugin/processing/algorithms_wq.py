@@ -147,7 +147,8 @@ class SimulateWithRainZonesAlgorithm(QgsProcessingAlgorithm):
             parameters, self.POLYGON_NAME_FIELD, context
         )
 
-        polygon_feature_layer.crs()
+        if polygon_feature_source is None or polygon_feature_layer is None:
+            raise Exception("Failed to load polygon layer")
 
         name_wkt_dict = get_name_wkt_pairs(
             features=polygon_feature_source,

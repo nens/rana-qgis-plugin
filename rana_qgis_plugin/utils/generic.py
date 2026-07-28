@@ -1,7 +1,7 @@
 import math
 import os
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from osgeo import gdal
@@ -22,7 +22,7 @@ from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
 from rana_qgis_plugin.utils.settings import get_hcc_url_override
 
 
-def get_threedi_api():
+def get_threedi_api() -> Any:
     _, personal_api_token = get_3di_auth()
     hcc_url = get_hcc_url_override() or get_frontend_settings()["hcc_url"]
     hcc_url = hcc_url.rstrip("/")
@@ -30,7 +30,7 @@ def get_threedi_api():
     return threedi_api
 
 
-def get_threedi_organisations(communication) -> list[str]:
+def get_threedi_organisations(communication: Any) -> list[str]:
     """Retrieve threedi organisations linked to rana tenant and fromat the uuids to match threedi-api"""
     return [
         org_id.replace("-", "")
@@ -64,7 +64,7 @@ def image_to_bytes(image: QImage) -> bytes:
 
 
 class NumericItem(QStandardItem):
-    def __lt__(self, other):
+    def __lt__(self, other: Any) -> bool:
         return self.data(Qt.ItemDataRole.UserRole) < other.data(
             Qt.ItemDataRole.UserRole
         )
@@ -83,7 +83,11 @@ def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     return path_params, query_params
 
 
-def split_scenario_extent(grid, resolution=None, max_pixel_count=1 * 10**8):
+def split_scenario_extent(
+    grid: dict[str, Any],
+    resolution: Optional[float] = None,
+    max_pixel_count: int = 1 * 10**8,
+) -> tuple[list[tuple[float, float, float, float]], float, float]:
     """
     Split raster task spatial bounds to fit in to maximum pixel count limit.
     Reimplemented code from https://github.com/nens/threedi-scenario-downloader
@@ -131,7 +135,9 @@ def split_scenario_extent(grid, resolution=None, max_pixel_count=1 * 10**8):
     return spatial_bounds
 
 
-def build_vrt(output_filepath, raster_filepaths, **vrt_options):
+def build_vrt(
+    output_filepath: str, raster_filepaths: list[str], **vrt_options: Any
+) -> None:
     """Build VRT for the list of rasters."""
     gdal.UseExceptions()
     options = gdal.BuildVRTOptions(**vrt_options)
@@ -160,8 +166,12 @@ def get_file_icon_name(data_type: str) -> str:
     return icon_map.get(data_type.lower(), "mIconFile.svg")
 
 
-def find_publication_map_layer_from_tree(publication_version: dict, tree: list[str]):
-    def traverse_layers(layers, path):
+def find_publication_map_layer_from_tree(
+    publication_version: dict[str, Any], tree: list[str]
+) -> Optional[dict[str, Any]]:
+    def traverse_layers(
+        layers: list[dict[str, Any]], path: list[str]
+    ) -> Optional[dict[str, Any]]:
         for layer in layers:
             if layer["name"] == path[0]:
                 if layer["type"] == "layer" and len(path) == 1:
@@ -192,7 +202,7 @@ def has_layers_loaded_from_dir(directory: str) -> bool:
     project = QgsProject.instance()
     normalized_dir = str(Path(directory).resolve())
 
-    for layer in project.mapLayers().values():
+    for layer in project.mapLayers().values():  # type: ignore[union-attr]
         if not hasattr(layer, "source"):
             continue
         source = layer.source()
@@ -226,7 +236,7 @@ def get_editable_layers_for_file(file_path: str) -> list[QgsVectorLayer]:
     project = QgsProject.instance()
     normalized_file_path = str(Path(file_path).resolve())
 
-    for layer in project.mapLayers().values():
+    for layer in project.mapLayers().values():  # type: ignore[union-attr]
         if not hasattr(layer, "isEditable"):
             continue
 
