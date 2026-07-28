@@ -30,3 +30,5 @@ AGENTS.md
 .envrc
 .idea/
 scripts/
+# UI dev environment local files (ignored except the placeholder)
+local_files/*

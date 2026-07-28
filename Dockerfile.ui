@@ -1,0 +1,24 @@
+FROM qgis/qgis:4.2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-setuptools \
+    python3-pip \
+    python3-h5py \
+    python3-pyqt5.qtwebsockets \
+    libgl1 \
+    libglx-mesa0 \
+    libgl1-mesa-dri \
+    libxrender1 \
+    libxext6 \
+    fontconfig \
+    dbus \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONPATH=/usr/share/qgis/python/:/usr/share/qgis/python/plugins:/usr/lib/python3/dist-packages/qgis:/usr/share/qgis/python/qgis:/root/.local/share/QGIS/QGIS4/profiles/default/python
+
+WORKDIR /workspace
+
+COPY ui-startup.sh /ui-startup.sh
+RUN sed -i 's/\r$//' /ui-startup.sh && chmod +x /ui-startup.sh
+
+ENTRYPOINT ["/ui-startup.sh"]

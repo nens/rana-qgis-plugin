@@ -1,0 +1,49 @@
+# docker-compose.ui.yml
+# Interactive QGIS 4.2 dev environment — renders natively on your host display.
+#
+# BEFORE FIRST RUN — allow the container to connect to your X server:
+#   xhost +local:docker
+# (run this once per login session, or add it to your ~/.profile)
+#
+# Build:
+#   docker compose -f docker-compose.ui.yml build
+#
+# Run:
+#   docker compose -f docker-compose.ui.yml up
+#
+# QGIS opens as a native window. Close it normally to stop the container.
+#
+# Live code reload:
+#   Edit plugin source on your host, then use the "Plugin Reloader" plugin
+#   inside QGIS to reload without restarting the container.
+#   Install Plugin Reloader via: Plugins → Manage and Install Plugins.
+#
+# Local files:
+#   Anything in ./local_files/ is available at ~/local_files inside the container.
+
+services:
+  qgis-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    # No ports needed — QGIS draws directly on the host display via X11
+    # Give QGIS enough time to flush settings to disk when closing normally
+    stop_grace_period: 10s
+    environment:
+      RANA_PAK: ${RANA_PAK:-}
+      DISPLAY: ${DISPLAY}           # pass through host display (e.g. :0)
+      XAUTHORITY: /tmp/.host-Xauth  # see volume below
+    volumes:
+      # X11 socket — lets the container render on your screen natively
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      # X authority (MIT-MAGIC-COOKIE) so the container is trusted
+      - ${XAUTHORITY:-~/.Xauthority}:/tmp/.host-Xauth:ro
+      # Plugin source — live edits reflected after plugin reload in QGIS
+      - .:/plugin_src:ro
+      # Persistent QGIS profile: settings (theme, etc.), installed plugins, projects
+      - qgis-ui-profile:/root/.local/share/QGIS/QGIS4/profiles/default
+      # Local files — mounted under ~ so they appear in the QGIS file browser
+      - ./local_files:/root/local_files
+
+volumes:
+  qgis-ui-profile:

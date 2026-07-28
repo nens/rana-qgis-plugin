@@ -125,6 +125,53 @@ use_plugin_excepthook=false
 to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
 
 
+## Interactive UI development with QGIS 4.2 on linux
+
+For manual testing and UI development, a separate Docker setup is available that runs QGIS 4.2 as a native window on your desktop.
+
+### Setup
+
+Allow local Docker containers to connect to your X server (once per login session):
+
+```bash
+xhost +local:docker
+```
+
+Build the image:
+
+```bash
+docker compose -f docker-compose.ui.yml build
+```
+
+### Starting QGIS
+
+```bash
+docker compose -f docker-compose.ui.yml up
+```
+
+QGIS opens as a normal window. Always close it via **File → Exit** so settings are flushed to disk.
+
+### Live plugin reload
+
+The plugin source is bind-mounted into the container. To pick up code changes without restarting:
+
+1. Install the **Plugin Reloader** plugin via Plugins → Manage and Install Plugins
+2. Configure it to reload `rana_qgis_plugin`
+3. Click reload after editing source files on the host
+
+### Local files
+
+Place any files you want to access from inside QGIS in `./local_files/` in the repo root. They appear at `~/local_files` inside the container and are visible in the QGIS file browser.
+
+### Resetting the profile
+
+The QGIS profile (settings, installed plugins) is stored in a Docker named volume `rana-qgis-plugin_qgis-ui-profile`. To start fresh:
+
+```bash
+docker compose -f docker-compose.ui.yml down
+docker volume rm rana-qgis-plugin_qgis-ui-profile
+```
+
 ## Releasing
 
 Make sure you have `zest.releaser` with `qgispluginreleaser` installed. The
