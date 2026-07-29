@@ -665,30 +665,32 @@ def copy_threedi_schematisation(project_id: str, schematisation_id: str, path: s
     network_manager = NetworkManager(url, authcfg_id)
     params = {"schematisation_id": schematisation_id, "path": path}
     status, error = network_manager.post(params)
-    # TODO test errors
-    status = False
     if status:
         return network_manager.content
     else:
         raise RanaPostError(msg="Failed to copy schematisation", url=url, params=params)
 
 
-def add_threedi_schematisation(
-    communication: UICommunication, project_id: str, schematisation_id: str, path: str
-):
+def create_rana_schematisation(project_id: str, path: str) -> Optional[dict]:
+    """Create a new schematisation in Rana and return the response dict.
+
+    The response contains ``schematisation_id`` (ThreeDi integer ID) which can
+    be used to fetch or update the schematisation via the ThreeDi API.
+
+    Returns the response dict on success.
+    """
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/schematisations"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.post(
-        params={"schematisation_id": schematisation_id, "path": path}
-    )
+    status = network_manager.post(params={"path": path})
 
     if status:
-        response = network_manager.content
-        return response
+        return network_manager.content
     else:
-        return None
+        raise RanaPostError(
+            msg=f"Failed to create schematisation", url=url, params={"path": path}
+        )
 
 
 def get_threedi_personal_api_key(

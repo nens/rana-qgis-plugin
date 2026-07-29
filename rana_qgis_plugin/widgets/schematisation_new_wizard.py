@@ -8,7 +8,7 @@ from qgis.core import QgsFeature
 from qgis.PyQt.QtCore import QSettings, QSize, Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QWizard
-from threedi_api_client.openapi import ApiException
+from threedi_api_client.openapi import ApiException, Schematisation
 from threedi_mi_utils import LocalSchematisation
 from threedi_schema import ThreediDatabase
 
@@ -21,6 +21,7 @@ from rana_qgis_plugin.simulation.utils import (
     geopackage_layer,
 )
 from rana_qgis_plugin.simulation.utils_ui import ensure_valid_schema
+from rana_qgis_plugin.utils.api import create_rana_schematisation
 from rana_qgis_plugin.widgets.new_wizard_pages.explain import (
     SchematisationExplainPage,
 )
@@ -92,19 +93,27 @@ def _check_name_available(name, working_dir, communication):
     return True
 
 
-def _create_schematisation_base(tc, working_dir, name, owner, tags, description):
-    """Create schematisation remotely and set up local directory structure.
+def _create_schematisation_base(
+    tc, working_dir, name, owner, tags, description, project_id, rana_path
+):
+    """Create schematisation via Rana, update its metadata via ThreeDi API, and set up local directory structure.
 
     Returns a tuple of (schematisation, local_schematisation, wip_revision).
+    Raises RanaPostError if the Rana schematisation creation fails.
     """
-    # TODO use Rana endpoint!
-
-    schematisation = tc.create_schematisation(
-        name,
-        owner,
-        tags=tags,
-        meta={"description": description},
-        threedimodel_limit=32767,  # maximum allowed by api
+    path = f"{rana_path}{name}" if rana_path else name
+    # First create the bare schematisation object via Rana
+    rana_response = create_rana_schematisation(project_id=project_id, path=path)
+    # Next we update the metadata direction in the threedi api
+    schematisation = tc.threedi_api.schematisations_partial_update(
+        id=rana_response["schematisation_id"],
+        data=Schematisation(
+            name=name,
+            owner=owner,
+            tags=tags,
+            meta={"description": description},
+            threedimodel_limit=32767,  # maximum allowed by api
+        ),
     )
     local_schematisation = LocalSchematisation(
         working_dir,
@@ -120,13 +129,23 @@ def _create_schematisation_base(tc, working_dir, name, owner, tags, description)
 class NewSchematisationWizard(QWizard):
     """New schematisation wizard."""
 
-    def __init__(self, threedi_api, working_dir, communication, organisations):
+    def __init__(
+        self,
+        threedi_api,
+        working_dir,
+        communication,
+        organisations,
+        project_id,
+        rana_path,
+    ):
         super().__init__()
         self.setWizardStyle(QWizard.ClassicStyle)
         self.working_dir = working_dir
         self.threedi_api = threedi_api
         self.tc = ThreediCalls(threedi_api)
         self.communication = communication
+        self.project_id = project_id
+        self.rana_path = rana_path
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
@@ -176,7 +195,14 @@ class NewSchematisationWizard(QWizard):
         try:
             schematisation, local_schematisation, wip_revision = (
                 _create_schematisation_base(
-                    self.tc, self.working_dir, name, owner, tags, description
+                    self.tc,
+                    self.working_dir,
+                    name,
+                    owner,
+                    tags,
+                    description,
+                    self.project_id,
+                    self.rana_path,
                 )
             )
 
@@ -257,7 +283,14 @@ class UploadExistingSchematisationWizard(QWizard):
     """Wizard for creating a new schematisation from an existing GeoPackage."""
 
     def __init__(
-        self, threedi_api, working_dir, communication, organisations, gpkg_path
+        self,
+        threedi_api,
+        working_dir,
+        communication,
+        organisations,
+        gpkg_path,
+        project_id,
+        rana_path,
     ):
         super().__init__()
         self.setWizardStyle(QWizard.ClassicStyle)
@@ -266,6 +299,8 @@ class UploadExistingSchematisationWizard(QWizard):
         self.tc = ThreediCalls(threedi_api)
         self.communication = communication
         self.gpkg_path = gpkg_path
+        self.project_id = project_id
+        self.rana_path = rana_path
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
@@ -310,7 +345,14 @@ class UploadExistingSchematisationWizard(QWizard):
 
             schematisation, local_schematisation, wip_revision = (
                 _create_schematisation_base(
-                    self.tc, self.working_dir, name, owner, tags, description
+                    self.tc,
+                    self.working_dir,
+                    name,
+                    owner,
+                    tags,
+                    description,
+                    self.project_id,
+                    self.rana_path,
                 )
             )
             geopackage_filepath = os.path.join(

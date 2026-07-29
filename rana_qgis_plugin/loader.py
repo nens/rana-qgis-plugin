@@ -48,7 +48,6 @@ from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWork
 from rana_qgis_plugin.utils.api import (
     ConflictError,
     RanaFetchError,
-    add_threedi_schematisation,
     copy_threedi_schematisation,
     create_folder,
     delete_tenant_project_directory,
@@ -1563,7 +1562,7 @@ class Loader(QObject):
             return None
         return threedi_api, organisations
 
-    def _finish_schematisation_upload(self, project, rana_path, wizard):
+    def _finish_schematisation_upload(self, project, wizard):
         """Handle the post-wizard flow common to both schematisation upload slots."""
         local_schematisation = wizard.new_local_schematisation
         new_schematisation = wizard.new_schematisation
@@ -1583,29 +1582,6 @@ class Loader(QObject):
                 project, new_schematisation, local_schematisation, paths
             )
 
-        if rana_path:
-            file_path = rana_path + new_schematisation.name
-        else:
-            file_path = new_schematisation.name
-        response = add_threedi_schematisation(
-            communication=self.communication,
-            project_id=project["id"],
-            schematisation_id=new_schematisation.id,
-            path=file_path,
-        )
-        if response:
-            message = (
-                f"Rana schematisation {new_schematisation.name} added to Rana project"
-            )
-            if rana_path:
-                message += f" in directory {rana_path}"
-            self.communication.bar_info(message)
-        else:
-            self.schematisation_upload_failed.emit()
-            self.communication.bar_error(
-                f"Could not add Rana schematisation {new_schematisation.name} to Rana project {project['name']}!"
-            )
-            return
         self.schematisation_upload_finished.emit()
         load_local_schematisation(
             communication=self.communication,
@@ -1624,13 +1600,18 @@ class Loader(QObject):
 
         work_dir = QSettings().value("threedi/working_dir", "")
         wizard = NewSchematisationWizard(
-            threedi_api, work_dir, self.communication, organisations
+            threedi_api,
+            work_dir,
+            self.communication,
+            organisations,
+            project["id"],
+            rana_path,
         )
         response = wizard.exec()
         if response != QDialog.DialogCode.Accepted:
             self.schematisation_upload_cancelled.emit()
             return
-        self._finish_schematisation_upload(project, rana_path, wizard)
+        self._finish_schematisation_upload(project, wizard)
 
     @pyqtSlot(dict, dict)
     def upload_existing_schematisation_to_rana(self, project, selected_item):
@@ -1654,13 +1635,19 @@ class Loader(QObject):
 
         work_dir = QSettings().value("threedi/working_dir", "")
         wizard = UploadExistingSchematisationWizard(
-            threedi_api, work_dir, self.communication, organisations, gpkg_path
+            threedi_api,
+            work_dir,
+            self.communication,
+            organisations,
+            gpkg_path,
+            project["id"],
+            rana_path,
         )
         response = wizard.exec()
         if response != QDialog.DialogCode.Accepted:
             self.schematisation_upload_cancelled.emit()
             return
-        self._finish_schematisation_upload(project, rana_path, wizard)
+        self._finish_schematisation_upload(project, wizard)
 
     @pyqtSlot(dict, dict)
     def save_revision(self, project, file):
