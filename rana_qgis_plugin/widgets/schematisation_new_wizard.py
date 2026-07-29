@@ -21,7 +21,7 @@ from rana_qgis_plugin.simulation.utils import (
     geopackage_layer,
 )
 from rana_qgis_plugin.simulation.utils_ui import ensure_valid_schema
-from rana_qgis_plugin.utils.api import create_rana_schematisation
+from rana_qgis_plugin.utils.api import RanaPostError, create_rana_schematisation
 from rana_qgis_plugin.widgets.new_wizard_pages.explain import (
     SchematisationExplainPage,
 )

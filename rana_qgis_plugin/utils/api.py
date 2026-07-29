@@ -668,7 +668,9 @@ def copy_threedi_schematisation(project_id: str, schematisation_id: str, path: s
     if status:
         return network_manager.content
     else:
-        raise RanaPostError(msg="Failed to copy schematisation", url=url, params=params)
+        raise RanaPostError(
+            msg="Failed to copy schematisation: {error}", url=url, params=params
+        )
 
 
 def create_rana_schematisation(project_id: str, path: str) -> Optional[dict]:
@@ -681,15 +683,17 @@ def create_rana_schematisation(project_id: str, path: str) -> Optional[dict]:
     """
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/schematisations"
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations"
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.post(params={"path": path})
+    status, error = network_manager.post(params={"path": path})
 
     if status:
         return network_manager.content
     else:
         raise RanaPostError(
-            msg=f"Failed to create schematisation", url=url, params={"path": path}
+            msg=f"Failed to create schematisation: {error}",
+            url=url,
+            params={"path": path},
         )
 
 
