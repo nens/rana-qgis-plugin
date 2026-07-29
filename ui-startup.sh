@@ -1,6 +1,21 @@
 #!/bin/bash
 set -e
 
+# ── DBus (required for QGIS master-password keyring) ─────────────────────────
+rm -f /run/dbus/pid
+mkdir -p /run/dbus
+dbus-daemon --system --fork || true
+eval "$(dbus-launch --sh-syntax)" || true
+export DBUS_SESSION_BUS_ADDRESS
+
+# ── xdg-open wrapper (opens OAuth2 URLs in Chrome inside the container) ───────
+cat > /usr/local/bin/xdg-open << 'XDGEOF'
+#!/bin/bash
+google-chrome --no-sandbox --no-first-run --no-default-browser-check \
+    --disable-gpu --disable-dev-shm-usage "$@"
+XDGEOF
+chmod +x /usr/local/bin/xdg-open
+
 # ── Plugin symlink ────────────────────────────────────────────────────────────
 # /plugin_src is the bind-mounted repo root. We symlink the plugin package into
 # the QGIS user plugins directory so QGIS loads it, and any code change on the

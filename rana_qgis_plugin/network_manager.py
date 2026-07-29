@@ -64,9 +64,9 @@ class NetworkManager(object):
         self._network_manager: QgsNetworkAccessManager = (  # type: ignore[assignment]
             QgsNetworkAccessManager.instance()  # type: ignore[assignment]
         )
-        # Don't follow redirects automatically
+        # Follow safe redirects (e.g. HTTP→HTTPS) automatically
         self._network_manager.setRedirectPolicy(
-            QNetworkRequest.RedirectPolicy.ManualRedirectPolicy
+            QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy
         )
         self._auth_manager: QgsAuthManager = QgsApplication.authManager()  # type: ignore[assignment]
         self._network_finished = False
@@ -248,7 +248,9 @@ class NetworkManager(object):
                 return status, description
 
             raw_content = self._reply.readAll()
-            content_type = self._reply.header(QNetworkRequest.ContentTypeHeader)
+            content_type = self._reply.header(
+                QNetworkRequest.KnownHeaders.ContentTypeHeader
+            )
             if content_type.startswith("application/json"):
                 json_doc = QJsonDocument.fromJson(raw_content)
                 if json_doc.isObject():

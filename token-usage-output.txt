@@ -1,0 +1,135 @@
+═══════════════════════════════════════════════════════════════════════════
+Token Analysis: Session ses_05376a225ffembbW0yHFaRiHH4
+Model: claude-sonnet-4.6
+═══════════════════════════════════════════════════════════════════════════
+
+TOKEN BREAKDOWN BY CATEGORY
+─────────────────────────────────────────────────────────────────────────
+Estimated using tokenizer analysis of message content:
+
+Input Categories:
+  USER      ██████████████████████████████        100.0% (53)
+
+  Subtotal: 53 estimated input tokens
+
+Output Categories:
+
+  Subtotal: 0 estimated output tokens
+
+Local Total: 53 tokens (estimated)
+
+TOOL USAGE BREAKDOWN
+─────────────────────────────────────────────────────────────────────────
+
+TOP CONTRIBUTORS
+─────────────────────────────────────────────────────────────────────────
+• User#1                       53 tokens (100.0%)
+
+═══════════════════════════════════════════════════════════════════════════
+MOST RECENT API CALL
+─────────────────────────────────────────────────────────────────────────
+
+Raw telemetry from last API response:
+  Input (fresh):              0 tokens
+  Cache read:                 0 tokens
+  Output:                     0 tokens
+  ─────────────────────────────────────
+  Total:                      0 tokens
+
+═══════════════════════════════════════════════════════════════════════════
+SESSION TOTALS (All 0 API calls)
+─────────────────────────────────────────────────────────────────────────
+
+Assistant messages observed: 1 (structural count)
+
+Total tokens processed across the entire session (for cost calculation):
+
+  Input tokens:               0 (fresh tokens across all calls)
+  Cache read:                 0 (cached tokens across all calls)
+  Cache write:                0 (tokens written to cache)
+  Output tokens:              0 (all model responses)
+  ─────────────────────────────────────
+  Session Total:              0 tokens (for billing)
+
+═══════════════════════════════════════════════════════════════════════════
+SESSION COST
+─────────────────────────────────────────────────────────────────────────
+
+Token usage breakdown:
+  Input tokens:               0
+  Output tokens:              0
+
+─────────────────────────────────────────────────────────────────────────
+ACTUAL COST (from API):  $0.0000
+
+Note: Actual cost is OpenCode-recorded provider cost. Estimates use live OpenCode model metadata when available, then bundled models.json pricing.
+
+══════════════════════════════════════════════════════════════════════════
+AVAILABLE SKILLS (always-available context)
+─────────────────────────────────────────────────────────────────────────
+
+These skills were recovered from the skill tool metadata available to this session.
+
+  Skill                  Description                                   Tokens
+  ───────────────────────────────────────────────────────────────────────
+  customize-opencode     Use ONLY when the user is editing or creatin…     ~97
+  ───────────────────────────────────────────────────────────────────────
+  Total: ~97 tokens (1 skills available)
+
+  Note: Full skill tool description is ~308 tokens (includes boilerplate).
+
+═══════════════════════════════════════════════════════════════════════════
+AVAILABLE SUBAGENTS (in task tool definition)
+─────────────────────────────────────────────────────────────────────────
+
+These subagents are embedded in the task tool description and consume tokens on every API call.
+
+  Subagent               Description                                        Tokens
+  ───────────────────────────────────────────────────────────────────────
+  general                General-purpose agent for researching complex que…     ~30
+  db-investigate         Database and ORM investigation specialist              ~11
+  utility                Lightweight helper for simple delivery tasks           ~10
+  docs-research          Documentation and API research                          ~9
+  explore                Fast repository exploration                             ~6
+  review                 Code review specialist                                  ~6
+  ───────────────────────────────────────────────────────────────────────
+  Total: ~72 tokens (6 subagents available)
+
+  Note: Full task tool description is ~601 tokens (includes instructions/examples).
+
+═══════════════════════════════════════════════════════════════════════════
+TOOL DEFINITION COSTS (Tokenized from OpenCode tool metadata)
+─────────────────────────────────────────────────────────────────────────
+
+  Tool                Est. Tokens   Args   Complexity
+  ───────────────────────────────────────────────────────────────────
+  bash                     ~1,418       4   simple
+  task                       ~869       5   simple
+  todowrite                  ~722       1   complex (arrays/objects)
+  edit                       ~506       4   simple
+  read                       ~475       3   simple
+  question                   ~474       1   complex (arrays/objects)
+  skill                      ~414       1   simple
+  token_export               ~399       9   simple
+  webfetch                   ~363       3   simple
+  grep                       ~347       3   simple
+  token_stats                ~335       9   simple
+  glob                       ~300       2   simple
+  write                      ~283       2   simple
+  tokenscope                 ~207       3   simple
+  token_history              ~193       4   simple
+  invalid                    ~112       2   simple
+  ───────────────────────────────────────────────────────────────────
+  Total:             ~      7,417 tokens (16 enabled tools)
+
+  Note: Tokenized from the current OpenCode tool descriptions and JSON schemas.
+        Provider-specific schema wrapping may still add small overhead.
+
+═══════════════════════════════════════════════════════════════════════════
+SUMMARY
+─────────────────────────────────────────────────────────────────────────
+
+                          Cost        Tokens          API Calls
+  Session:           $    0.0000             0             0
+
+═══════════════════════════════════════════════════════════════════════════

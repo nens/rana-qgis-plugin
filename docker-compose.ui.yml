@@ -26,13 +26,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ui
-    # No ports needed — QGIS draws directly on the host display via X11
+    # No ports needed for X11 display, but OAuth2 callback requires 7070
+    # to be reachable from the host browser after the identity provider redirect.
+    ports:
+      - "7070:7070"
     # Give QGIS enough time to flush settings to disk when closing normally
     stop_grace_period: 10s
     environment:
       RANA_PAK: ${RANA_PAK:-}
-      DISPLAY: ${DISPLAY}           # pass through host display (e.g. :0)
-      XAUTHORITY: /tmp/.host-Xauth  # see volume below
+      DISPLAY: ${DISPLAY}
+      XAUTHORITY: /tmp/.host-Xauth
+      XDG_CURRENT_DESKTOP: X-Generic
     volumes:
       # X11 socket — lets the container render on your screen natively
       - /tmp/.X11-unix:/tmp/.X11-unix:ro

@@ -1,29 +1,61 @@
-import os
+"""Rana QGIS plugin entrypoint."""
 
-from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from typing import Optional
+
+from qgis.core import (
+    Qgis,
+    QgsApplication,
+    QgsDataItem,
+    QgsDataItemProvider,
+)
 
 from rana_qgis_plugin.communication import UICommunication
+from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
+from rana_qgis_plugin.utils.settings import initialize_settings
 
 PLUGIN_NAME = "Rana"
-ICONS_DIR = os.path.join(os.path.dirname(__file__), "icons")
+
+
+class RanaDataItemProvider(QgsDataItemProvider):
+    """Registers the Rana root item in the QGIS Browser panel."""
+
+    def __init__(self, communication: UICommunication):
+        super().__init__()
+        self._communication = communication
+
+    def name(self) -> str:
+        return "Rana"
+
+    def capabilities(self) -> Qgis.DataItemProviderCapabilities:
+        return Qgis.DataItemProviderCapabilities(
+            Qgis.DataItemProviderCapability.NetworkSources
+        )
+
+    def createDataItem(
+        self, path: Optional[str], parentItem: Optional[QgsDataItem]
+    ) -> Optional[QgsDataItem]:
+        if parentItem is None:
+            return RanaRootDataItem(self._communication, parentItem)
+        return None
 
 
 class RanaQgisPlugin:
     def __init__(self, iface):
         self.iface = iface
-        self.toolbar = iface.addToolBar(PLUGIN_NAME)
-        rana_icon = QIcon(os.path.join(ICONS_DIR, "rana.svg"))
-        self.action = QAction(rana_icon, PLUGIN_NAME, iface.mainWindow())
         self.communication = UICommunication(iface, PLUGIN_NAME)
+        self._data_item_provider = RanaDataItemProvider(self.communication)
 
     def initGui(self):
-        self.action.triggered.connect(self.run)
-        self.toolbar.addAction(self.action)
+        initialize_settings()
+        app = QgsApplication.instance()
+        if app is not None:
+            registry = app.dataItemProviderRegistry()
+            if registry is not None:
+                registry.addProvider(self._data_item_provider)
 
     def unload(self):
-        self.toolbar.removeAction(self.action)
-        del self.toolbar
-
-    def run(self):
-        self.communication.show_info("Rana plugin stub is working!")
+        app = QgsApplication.instance()
+        if app is not None:
+            registry = app.dataItemProviderRegistry()
+            if registry is not None:
+                registry.removeProvider(self._data_item_provider)

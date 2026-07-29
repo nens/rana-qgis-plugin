@@ -2,7 +2,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rana_qgis_plugin.utils.settings import get_advanced_settings, get_hcc_url_override
+from rana_qgis_plugin.utils.settings import (
+    get_advanced_settings,
+    get_hcc_url_override,
+    set_base_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -75,3 +79,22 @@ def test_get_advanced_settings(hcc_url_value, excepthook_value, expected_dict):
 
         result = get_advanced_settings()
         assert result == expected_dict
+
+
+@pytest.mark.parametrize(
+    "input_url,expected_stored",
+    [
+        ("https://example.com", "https://example.com"),
+        ("https://example.com/", "https://example.com"),
+        ("https://example.com///", "https://example.com"),
+    ],
+    ids=["no_slash", "trailing_slash", "multiple_trailing_slashes"],
+)
+def test_set_base_url_strips_trailing_slash(input_url, expected_stored):
+    with patch("rana_qgis_plugin.utils.settings.QgsSettings") as mock_settings:
+        mock_instance = MagicMock()
+        mock_settings.return_value = mock_instance
+
+        set_base_url(input_url)
+
+        mock_instance.setValue.assert_called_once_with("Rana/base_url", expected_stored)
