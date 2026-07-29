@@ -97,6 +97,8 @@ def _create_schematisation_base(tc, working_dir, name, owner, tags, description)
 
     Returns a tuple of (schematisation, local_schematisation, wip_revision).
     """
+    # TODO use Rana endpoint!
+
     schematisation = tc.create_schematisation(
         name,
         owner,
