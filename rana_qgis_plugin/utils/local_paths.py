@@ -177,11 +177,11 @@ def get_local_results_dir_from_meta(meta: dict, working_dir: str) -> Optional[st
         return None
     return get_local_results_dir(
         working_dir,
-        schematisation_id,
+        schematisation_id,  # type: ignore[arg-type]
         schematisation_name,
-        revision_number,
-        simulation_name,
-        simulation_id,
+        revision_number,  # type: ignore[arg-type]
+        simulation_name,  # type: ignore[arg-type]
+        simulation_id,  # type: ignore[arg-type]
         create=False,
     )
 

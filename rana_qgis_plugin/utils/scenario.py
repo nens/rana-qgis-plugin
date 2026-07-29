@@ -69,7 +69,7 @@ class ScenarioInfo:
         tc = ThreediCalls(get_threedi_api())
         # threedi-api fails when the simulation cannot be found
         try:
-            simulation = tc.fetch_simulation(self.simulation_id)
+            simulation = tc.fetch_simulation(self.simulation_id)  # type: ignore[arg-type]
         except ApiException:
             self.has_3di_simulation = False
             return
@@ -119,7 +119,8 @@ class ScenarioInfo:
     def lizard_results(self) -> list:
         if self.has_lizard_results:
             return get_tenant_file_descriptor_view(
-                self.descriptor.get("id"), "lizard-scenario-results"
+                self.descriptor.get("id"),  # type: ignore[arg-type]
+                "lizard-scenario-results",
             )
         return []
 
