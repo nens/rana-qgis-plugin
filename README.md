@@ -71,25 +71,44 @@ these QGIS styles to Maplibre styles for the Rana Web client that is called
 ## Local development notes
 
 On Linux, local development happens with docker to make sure we're working in a nicely
-isolated environment. To start the development environment, run the following commands::
+isolated environment.
 
-    $ docker compose build
+### Building the Docker image
 
-The unit and e2e tests also run in this docker container. They can be started with 
+For QGIS 4.x (this branch):
 
-    $ docker compose run --rm qgis pytest -v tests
-    $ docker compose run --rm --service-ports qgis pytest -v e2e
-
-Note that the e2e tests require authentication, therefore use the following `docker-compose.override.yml`:
+```bash
+docker compose -f docker-compose.qgis4.yml build
 ```
+
+### Running tests
+
+Unit tests with QGIS 4.x:
+
+```bash
+docker compose -f docker-compose.qgis4.yml run --rm qgis pytest -v tests
+```
+
+E2E tests (requires authentication):
+
+```bash
+docker compose -f docker-compose.qgis4.yml run --rm --service-ports qgis pytest -v e2e
+```
+
+To run e2e tests, you need a `docker-compose.override.yml` with your personal access token:
+
+```yaml
 services:
   qgis:
     environment:
       RANA_PAK: "ENTER_YOUR_PERSONAL_ACCESS_TOKEN_HERE"
 ```
 
-Fuerhermore, note that the e2e tests can be visually inspected using `vncviewer`:
-    $ vncviewer localhost:5900
+Optionally, visually inspect e2e tests using `vncviewer`:
+
+```bash
+vncviewer localhost:5900
+```
 
 
 ## Development and test settings
