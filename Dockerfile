@@ -1,4 +1,5 @@
-FROM qgis/qgis:4.2
+ARG QGIS_VERSION=3.28
+FROM qgis/qgis:${QGIS_VERSION}
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     python3-pyqt5.qtwebsockets \

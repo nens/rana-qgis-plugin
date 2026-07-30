@@ -20,11 +20,11 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Build QGIS Docker image
-        run: docker compose build qgis
+        run: docker compose -f docker-compose.qgis4.yml build qgis
 
       - name: Run unit tests
         run: 
-          docker compose run --rm qgis pytest -v tests
+          docker compose -f docker-compose.qgis4.yml run --rm qgis pytest -v tests
 
 # Skip because they do not work with qgis 4.x
 #      - name: Run e2e
