@@ -1,10 +1,31 @@
 import time
 
-from qgis.core import QgsMapRendererParallelJob
-from qgis.PyQt.QtCore import QSize, Qt, QTimer
+from qgis.core import QgsDataItem, QgsMapRendererParallelJob
+from qgis.PyQt.QtCore import QPoint, QSize, Qt, QTimer
 from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QTreeView
+from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMenu, QTreeView
+
+
+def click_context_menu_action(qtbot, data_item: QgsDataItem, action_text: str) -> None:
+    """Build the context menu for a data item, show it, and click the named action.
+
+    This mimics exactly what the QGIS Browser panel does: it calls item.actions()
+    to populate a QMenu, then the user clicks an entry.
+    """
+    menu = QMenu()
+    for action in data_item.actions(menu):
+        menu.addAction(action)
+
+    target = next((a for a in menu.actions() if a.text() == action_text), None)
+    assert target is not None, f"Action '{action_text}' not found in context menu"
+
+    menu.show()
+    qtbot.waitExposed(menu)
+
+    action_rect = menu.actionGeometry(target)
+    qtbot.mouseClick(menu, Qt.MouseButton.LeftButton, pos=action_rect.center())
+    QTest.qWait(100)
 
 
 def make_modal_handler(qtbot, modal_type, action, timeout=30000, poll_interval=500):
@@ -104,13 +125,13 @@ def images_equal(img1: QImage, img2: QImage) -> bool:
     return True
 
 
-def press_button_with_moderator(qtbot, modal, key, moderator_key=Qt.Key_Shift):
-    """Click the moderator and target key. Useful for navigating dialogs with
-    keyboard shortcuts that require a modifier key, such as Shift+Tab."""
-    # Note that Qt only picks up a key_moderator combination when there is a small pause between
-    # press and release.
-    qtbot.keyPress(modal, moderator_key)
-    qtbot.keyPress(modal, key)
-    QTest.qWait(100)
-    qtbot.keyRelease(modal, key)
-    qtbot.keyRelease(modal, moderator_key)
+# def press_button_with_moderator(qtbot, modal, key, moderator_key=Qt.Key_Shift):
+#     """Click the moderator and target key. Useful for navigating dialogs with
+#     keyboard shortcuts that require a modifier key, such as Shift+Tab."""
+#     # Note that Qt only picks up a key_moderator combination when there is a small pause between
+#     # press and release.
+#     qtbot.keyPress(modal, moderator_key)
+#     qtbot.keyPress(modal, key)
+#     QTest.qWait(100)
+#     qtbot.keyRelease(modal, key)
+#     qtbot.keyRelease(modal, moderator_key)
