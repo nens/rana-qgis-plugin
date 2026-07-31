@@ -3,7 +3,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
-from qgis.gui import QgsLayerTreeMapCanvasBridge, QgsMapCanvas, QgsMessageBar
+from qgis.gui import (
+    QgsBrowserGuiModel,
+    QgsLayerTreeMapCanvasBridge,
+    QgsMapCanvas,
+    QgsMessageBar,
+)
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import (
     QMainWindow,
@@ -14,9 +19,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 import rana_qgis_plugin.utils.api as utils_api
-from rana_qgis_plugin.constant import RANA_SETTINGS_ENTRY
-from rana_qgis_plugin.legacy.auth_3di import set_3di_auth
-from rana_qgis_plugin.legacy.rana_qgis_plugin import RanaQgisPlugin
+from rana_qgis_plugin.constant import RANA_AUTHCFG_ENTRY, RANA_SETTINGS_ENTRY
+from rana_qgis_plugin.rana_qgis_plugin import RanaQgisPlugin
 from rana_qgis_plugin.utils.settings import (
     set_base_url,
     set_cleanup_cache_on_close,
@@ -26,19 +30,7 @@ from rana_qgis_plugin.utils.settings import (
 
 @pytest.fixture(autouse=True)
 def mock_get_user_info():
-    with patch("rana_qgis_plugin.rana_qgis_plugin.get_user_info") as mock:
-        mock.return_value = utils_api.UserInfo(
-            sub="test_user",
-            given_name="test",
-            family_name="user",
-            email="test_user@test.com",
-        )
-        yield
-
-
-@pytest.fixture(autouse=True)
-def mock_get_user_info_2():
-    with patch("rana_qgis_plugin.widgets.projects_browser.get_user_info") as mock:
+    with patch("rana_qgis_plugin.data_items.rana_item.get_user_info") as mock:
         mock.return_value = utils_api.UserInfo(
             sub="test_user",
             given_name="test",
@@ -50,7 +42,9 @@ def mock_get_user_info_2():
 
 @pytest.fixture(autouse=True)
 def mock_get_user_tenants():
-    with patch("rana_qgis_plugin.rana_qgis_plugin.get_user_tenants") as mock_tenants:
+    with patch(
+        "rana_qgis_plugin.data_items.rana_item.get_user_tenants"
+    ) as mock_tenants:
         mock_tenants.return_value = [
             {
                 "id": "rdc-e2e",
@@ -180,7 +174,6 @@ def plugin(qgis_iface, qgis_application):
     secret = os.getenv("RANA_PAK")
 
     set_base_url("https://test.ranawaterintelligence.com")
-    set_3di_auth("insert_test_api_key_here")
     set_tenant_id("rdc-e2e")
     # insert BASIC auth config for testing
     authcfg = QgsAuthMethodConfig()
@@ -193,12 +186,28 @@ def plugin(qgis_iface, qgis_application):
     auth_manager.storeAuthenticationConfig(authcfg)
     newAuthCfgId = authcfg.id()
     assert newAuthCfgId
+    QSettings().setValue(RANA_AUTHCFG_ENTRY, newAuthCfgId)
 
     set_cleanup_cache_on_close(False)
 
     plugin = RanaQgisPlugin(qgis_iface)
     plugin.initGui()
+
+    browser_model = QgsBrowserGuiModel()
+    browser_model.initialize()
+    qgis_application.processEvents()
+
+    rana_root_item = None
+    for i in range(browser_model.rowCount()):
+        idx = browser_model.index(i, 0)
+        if browser_model.data(idx) == "Rana":
+            rana_root_item = browser_model.dataItem(idx)
+            break
+    assert rana_root_item is not None, "Rana root item not found in browser model"
+    plugin.rana_root_item = rana_root_item
+
     yield plugin
 
+    browser_model.deleteLater()
     plugin.unload()
     qgis_application.processEvents()

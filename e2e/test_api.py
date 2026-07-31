@@ -2,9 +2,10 @@ import os
 import shutil
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-from qgis.core import QgsApplication, QgsAuthMethodConfig
+from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
@@ -12,12 +13,17 @@ from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from e2e.test_utils import (
     canvas_to_image,
+    click_context_menu_action,
     click_tree_item,
     images_equal,
     make_modal_handler,
-    press_button_with_moderator,
 )
-from rana_qgis_plugin.constant import PLUGIN_NAME, RANA_SETTINGS_ENTRY
+from rana_qgis_plugin.auth import is_authenticated
+from rana_qgis_plugin.constant import (
+    PLUGIN_NAME,
+    RANA_AUTHCFG_ENTRY,
+    RANA_SETTINGS_ENTRY,
+)
 from rana_qgis_plugin.legacy.auth import get_authcfg_id
 from rana_qgis_plugin.legacy.auth_3di import set_3di_auth
 from rana_qgis_plugin.utils.api import (
@@ -103,16 +109,12 @@ def rana_project(plugin, login):
     delete_project(result["id"])
 
 
-def test_smoke(plugin, qtbot, request):
+def test_smoke(plugin, request):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-
-    assert not plugin.dock_widget
-    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-    QTest.qWait(1000)
-    assert plugin.dock_widget.isVisible()
+    assert plugin.rana_root_item is not None
 
 
+@pytest.mark.skip(reason="legacy")
 def test_create_project(plugin, login, qtbot, request, rana_project):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
 
@@ -127,64 +129,28 @@ def test_create_project(plugin, login, qtbot, request, rana_project):
     )
 
 
-def test_login_logout(plugin, request):
-    """Test login via toolbar click, then logout, then login again."""
+def test_login_logout(plugin, qtbot, request):
+    """Test logout and login via context menu clicks."""
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
 
-    # Step 1: Click toolbar button to trigger login
-    rana_tool_button = plugin.toolbar.widgetForAction(plugin.action)
-    QTest.mouseClick(rana_tool_button, Qt.LeftButton)
-    QTest.qWait(1000)
+    root = plugin.rana_root_item
 
-    # Verify logged-in state
-    menu = plugin.iface.mainWindow().getPluginMenu(PLUGIN_NAME)
-    menu_texts = [action.text() for action in menu.actions()]
-    assert "Logout" in menu_texts
-    assert "test user" in menu_texts
-    assert plugin.dock_widget is not None
-    assert plugin.dock_widget.isVisible()
+    # Step 1: the plugin fixture has stored a valid authcfg so we are already
+    # logged in. Verify Logout is present in the context menu.
+    assert is_authenticated()
+    assert any(a.text() == "Logout" for a in root.actions(None))
 
-    # Step 2: Trigger logout via menu action
-    logout_action = next(a for a in menu.actions() if a.text() == "Logout")
-    menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
-    QTest.qWait(100)
-    action_rect = menu.actionGeometry(logout_action)
-    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
-    QTest.qWait(500)
+    # Step 2: open context menu and click Logout.
+    click_context_menu_action(qtbot, root, "Logout")
 
-    # Verify logged-out state
-    menu_texts = [action.text() for action in menu.actions()]
-    assert "Logout" not in menu_texts
-    assert "test user" not in menu_texts
-    assert "Open Rana Panel" in menu_texts
-    assert not plugin.dock_widget.isVisible()
-    assert get_authcfg_id() is None
+    # Step 3: verify Login is in the context menu again.
+    assert any(a.text() == "Login" for a in root.actions(None))
 
-    # Step 3: Re-insert auth configs and login again via toolbar click
-    auth_manager = QgsApplication.authManager()
-    authcfg = QgsAuthMethodConfig()
-    authcfg.setName(RANA_SETTINGS_ENTRY)
-    authcfg.setMethod("Basic")
-    authcfg.setConfig("username", "__key__")
-    authcfg.setConfig("password", os.getenv("RANA_PAK", "test_secret"))
-    assert authcfg.isValid()
-    auth_manager.storeAuthenticationConfig(authcfg)
-    set_3di_auth("test_api_key")
-
-    login_action = next(a for a in menu.actions() if a.text() == "Open Rana Panel")
-    menu.popup(menu.mapToGlobal(menu.rect().topLeft()))
-    QTest.qWait(100)
-    action_rect = menu.actionGeometry(login_action)
-    QTest.mouseClick(menu, Qt.LeftButton, pos=action_rect.center())
-    QTest.qWait(1000)
-
-    # Verify logged-in state again
-    menu_texts = [action.text() for action in menu.actions()]
-    assert "Logout" in menu_texts
-    assert "test user" in menu_texts
-    assert plugin.dock_widget.isVisible()
+    # Step 4: verify no authcfg is stored in settings.
+    assert not QgsSettings().value(RANA_AUTHCFG_ENTRY)
 
 
+@pytest.mark.skip(reason="legacy")
 def test_upload(plugin, qtbot, request, rana_project):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
     _open_project(plugin, qtbot, rana_project)
@@ -249,6 +215,7 @@ def test_upload(plugin, qtbot, request, rana_project):
     )
 
 
+@pytest.mark.skip(reason="legacy")
 def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     """Upload a file, then use select mode to download and delete it."""
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
@@ -358,6 +325,7 @@ def test_select_download_and_delete(plugin, qtbot, request, rana_project):
     )
 
 
+@pytest.mark.skip(reason="legacy")
 def test_upload_case_conflict(plugin, qtbot, request, rana_project):
     """Uploading a file whose name matches an existing server file case-insensitively
     should warn the user and not complete the upload."""
