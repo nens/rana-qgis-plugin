@@ -73,6 +73,7 @@ def cognito_client_id_native() -> str:
 def set_base_url(url: str):
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/base_url", url.rstrip("/"))
 
+
 def base_url():
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/base_url")
 
