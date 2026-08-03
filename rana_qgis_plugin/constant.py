@@ -22,4 +22,4 @@ SUPPORTED_DATA_TYPES = {
 }
 
 STYLE_DIR = Path(__file__).parent / "styles"
-ICONS_DIR = Path(__file__).parent.parent / "icons"
+ICONS_DIR = Path(__file__).parent / "icons"

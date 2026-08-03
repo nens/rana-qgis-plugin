@@ -67,10 +67,10 @@ class RanaRootDataItem(QgsDataItem):
             Qgis.BrowserItemType.Collection, parent, "Rana", "/Rana", "Rana"
         )
         self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
-        self._tenants: Optional[list] = None
-        self._update_tooltip()
+        self.tenants: Optional[list] = None
+        self.update_display()
         if is_authenticated():
-            self._restore_session()
+            self.restore_session()
         else:
             self.setState(Qgis.BrowserItemState.Populated)
 
@@ -91,32 +91,22 @@ class RanaRootDataItem(QgsDataItem):
             for p in response.get("items", [])
         ]
 
-    def _restore_session(self) -> None:
+    def restore_session(self) -> None:
         """Silently restore tenant list from a previous authenticated session."""
         user = get_user_info(self.communication)
         if user is not None:
-            self._tenants = get_user_tenants(self.communication, user["sub"])
-        self._update_tooltip()
+            self.tenants = get_user_tenants(self.communication, user["sub"])
+        self.update_display()
 
-    def _update_tooltip(self, signing_in: bool = False) -> None:
-        """Update the stored tooltip to reflect the current auth state."""
-        if signing_in:
-            tenant = get_tenant_id()
-            tooltip = (
-                f"Signing in to Rana (tenant: {tenant})…"
-                if tenant
-                else "Signing in to Rana…"
-            )
-        elif not is_authenticated():
-            tooltip = "Not signed in to Rana. Right-click to sign in."
+    def update_display(self) -> None:
+        if not is_authenticated():
+            self.setName("Rana")
         else:
             tenant_id = active_tenant()
-            tooltip = (
-                f"Signed in to Rana (tenant: {tenant_id})."
-                if tenant_id
-                else "Signed in to Rana."
-            )
-        self.setToolTip(tooltip)
+            if tenant_id:
+                self.setName(f"Rana [{tenant_id}]")
+            else:
+                self.setName("Rana")
 
     def actions(self, parent) -> list:
         """Return state-aware context menu actions."""
@@ -134,7 +124,7 @@ class RanaRootDataItem(QgsDataItem):
             refresh_action.setIcon(QIcon(str(ICONS_DIR / "refresh.svg")))
             refresh_action.triggered.connect(self.refresh)
             actions = [refresh_action, logout_action]
-            if self._tenants is not None and len(self._tenants) >= 2:
+            if self.tenants is not None and len(self.tenants) >= 2:
                 switch_action = QAction("Switch tenant", parent)
                 switch_action.triggered.connect(lambda: self.switch_tenant())
                 actions.append(switch_action)
@@ -149,8 +139,8 @@ class RanaRootDataItem(QgsDataItem):
         if dlg.exec() == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
             QgsSettings().remove(RANA_TENANT_ENTRY)
             clear_credentials()
-            self._tenants = None
-            self._update_tooltip()
+            self.tenants = None
+            self.update_display()
             self.refresh()
             if was_authenticated:
                 self.login()
@@ -211,7 +201,6 @@ class RanaRootDataItem(QgsDataItem):
         if not tenant_id:
             return False
 
-        self._update_tooltip(signing_in=True)
         self.refresh()
 
         try:
@@ -236,13 +225,13 @@ class RanaRootDataItem(QgsDataItem):
             user = get_user_info(self.communication)
             if user is None:
                 return False
-            self._tenants = get_user_tenants(self.communication, user["sub"])
+            self.tenants = get_user_tenants(self.communication, user["sub"])
 
             self.communication.log_info(f"Signed in to Rana (tenant: {tenant_id}).")
             return True
 
         finally:
-            self._update_tooltip()
+            self.update_display()
             self.refresh()
 
     def prompt_switch_tenant(self) -> Optional[str]:
@@ -255,7 +244,7 @@ class RanaRootDataItem(QgsDataItem):
 
         group = QButtonGroup(dlg)
         buttons: dict[QRadioButton, str] = {}
-        for tenant in self._tenants or []:
+        for tenant in self.tenants or []:
             tenant_id = tenant.get("id", "")
             label = f"{tenant.get('name', tenant_id).replace('&', '&&')} ({tenant_id})"
             btn = QRadioButton(label)
@@ -298,12 +287,12 @@ class RanaRootDataItem(QgsDataItem):
                 QgsSettings().setValue(RANA_AUTHCFG_ENTRY, snapshot_authcfg)
             if snapshot_tenant:
                 set_tenant_id(snapshot_tenant)
-            self._update_tooltip()
+            self.update_display()
             self.refresh()
 
     def logout(self, delete_config: bool = True) -> None:
         """Full logout: clear credentials and reset UI state."""
         clear_credentials(delete_config=delete_config)
-        self._tenants = None
-        self._update_tooltip()
+        self.tenants = None
+        self.update_display()
         self.refresh()
