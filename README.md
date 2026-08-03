@@ -78,7 +78,7 @@ isolated environment.
 For QGIS 4.x (this branch):
 
 ```bash
-docker compose -f docker-compose.qgis4.yml build
+docker compose build
 ```
 
 ### Running tests
@@ -86,13 +86,13 @@ docker compose -f docker-compose.qgis4.yml build
 Unit tests with QGIS 4.x:
 
 ```bash
-docker compose -f docker-compose.qgis4.yml run --rm qgis pytest -v tests
+docker compose run --rm qgis pytest -v tests
 ```
 
 E2E tests (requires authentication):
 
 ```bash
-docker compose -f docker-compose.qgis4.yml run --rm --service-ports qgis pytest -v e2e
+docker compose run --rm --service-ports qgis pytest -v e2e
 ```
 
 To run e2e tests, you need a `docker-compose.override.yml` with your personal access token:
