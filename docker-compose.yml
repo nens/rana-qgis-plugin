@@ -1,6 +1,9 @@
 services:
   qgis:
-    build: .
+    build:
+      context: .
+      args:
+        QGIS_VERSION: "4.2"
     ports:
       - "7070:7070"
       - "5900:5900" # x11vnc

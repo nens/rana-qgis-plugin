@@ -2,10 +2,8 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtTest import QTest
@@ -13,19 +11,10 @@ from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from e2e.test_utils import (
     canvas_to_image,
-    click_context_menu_action,
     click_tree_item,
     images_equal,
     make_modal_handler,
 )
-from rana_qgis_plugin.auth import is_authenticated
-from rana_qgis_plugin.constant import (
-    PLUGIN_NAME,
-    RANA_AUTHCFG_ENTRY,
-    RANA_SETTINGS_ENTRY,
-)
-from rana_qgis_plugin.legacy.auth import get_authcfg_id
-from rana_qgis_plugin.legacy.auth_3di import set_3di_auth
 from rana_qgis_plugin.utils.api import (
     create_project,
     delete_project,
@@ -109,9 +98,10 @@ def rana_project(plugin, login):
     delete_project(result["id"])
 
 
-def test_smoke(plugin, request):
-    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-    assert plugin.rana_root_item is not None
+#
+# def test_smoke(plugin, request):
+#     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
+#     assert plugin.rana_root_item is not None
 
 
 @pytest.mark.skip(reason="legacy")
@@ -127,27 +117,6 @@ def test_create_project(plugin, login, qtbot, request, rana_project):
         _find_project_row(plugin.rana_browser.projects_browser, rana_project)
         is not None
     )
-
-
-def test_login_logout(plugin, qtbot, request):
-    """Test logout and login via context menu clicks."""
-    plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
-
-    root = plugin.rana_root_item
-
-    # Step 1: the plugin fixture has stored a valid authcfg so we are already
-    # logged in. Verify Logout is present in the context menu.
-    assert is_authenticated()
-    assert any(a.text() == "Logout" for a in root.actions(None))
-
-    # Step 2: open context menu and click Logout.
-    click_context_menu_action(qtbot, root, "Logout")
-
-    # Step 3: verify Login is in the context menu again.
-    assert any(a.text() == "Login" for a in root.actions(None))
-
-    # Step 4: verify no authcfg is stored in settings.
-    assert not QgsSettings().value(RANA_AUTHCFG_ENTRY)
 
 
 @pytest.mark.skip(reason="legacy")

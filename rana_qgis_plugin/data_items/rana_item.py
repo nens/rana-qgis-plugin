@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from qgis.core import (
     Qgis,
     QgsDataItem,
+    QgsErrorItem,
     QgsSettings,
 )
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -32,22 +33,31 @@ from rana_qgis_plugin.auth import (
     is_authenticated,
 )
 from rana_qgis_plugin.constant import (
+    ICONS_DIR,
     RANA_AUTHCFG_ENTRY,
     RANA_SETTINGS_ENTRY,
     RANA_TENANT_ENTRY,
 )
-from rana_qgis_plugin.utils.api import get_user_info, get_user_tenants
+from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.utils.api import (
+    FetchError,
+    get_tenant_projects,
+    get_user_info,
+    get_user_tenants,
+)
 from rana_qgis_plugin.utils.settings import get_tenant_id, set_tenant_id
 from rana_qgis_plugin.widgets.settings_dialog import RanaSettingsDialog
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.communication import UICommunication
 
-_ICONS_DIR = Path(__file__).parent.parent / "icons"
-
 
 class RanaRootDataItem(QgsDataItem):
     """Root Browser item for Rana. Always visible; drives the auth flow."""
+
+    fetch_error_occurred = pyqtSignal(str)
+    connection_lost = pyqtSignal()
 
     def __init__(
         self, communication: UICommunication, parent: Optional[QgsDataItem] = None
@@ -56,15 +66,30 @@ class RanaRootDataItem(QgsDataItem):
         super().__init__(
             Qgis.BrowserItemType.Collection, parent, "Rana", "/Rana", "Rana"
         )
-        self.setState(Qgis.BrowserItemState.Populated)
-        self.setCapabilitiesV2(
-            Qgis.BrowserItemCapabilities(Qgis.BrowserItemCapability.Fast)
-        )
-        self.setIcon(QIcon(str(_ICONS_DIR / "rana.svg")))
+        self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
         self._tenants: Optional[list] = None
         self._update_tooltip()
         if is_authenticated():
             self._restore_session()
+        else:
+            self.setState(Qgis.BrowserItemState.Populated)
+
+    def createChildren(self) -> list:
+        """Fetch and return project items. Called by QGIS in a background thread."""
+        if not is_authenticated():
+            return []
+        try:
+            response = get_tenant_projects()
+        except NetworkUnavailableError:
+            self.connection_lost.emit()
+            return [QgsErrorItem(self, "No connection to Rana", self.path())]
+        except FetchError as e:
+            self.fetch_error_occurred.emit(str(e))
+            return [QgsErrorItem(self, "Failed to load projects", self.path())]
+        return [
+            RanaProjectDataItem(self, p["id"], p["name"], p.get("slug", ""))
+            for p in response.get("items", [])
+        ]
 
     def _restore_session(self) -> None:
         """Silently restore tenant list from a previous authenticated session."""
@@ -105,7 +130,10 @@ class RanaRootDataItem(QgsDataItem):
         settings_action.triggered.connect(lambda: self.open_settings())
 
         if is_authenticated():
-            actions = [logout_action]
+            refresh_action = QAction("Refresh", parent)
+            refresh_action.setIcon(QIcon(str(ICONS_DIR / "refresh.svg")))
+            refresh_action.triggered.connect(self.refresh)
+            actions = [refresh_action, logout_action]
             if self._tenants is not None and len(self._tenants) >= 2:
                 switch_action = QAction("Switch tenant", parent)
                 switch_action.triggered.connect(lambda: self.switch_tenant())

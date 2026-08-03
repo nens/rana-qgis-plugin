@@ -187,22 +187,18 @@ def get_tenant_details(communication: UICommunication) -> dict:
         return {}
 
 
-def get_tenant_projects(
-    communication: UICommunication, params: Optional[dict] = None
-) -> dict:
+def get_tenant_projects(params: Optional[dict] = None) -> dict:
     """Fetch all tenant projects matching the given filter params.
 
     Args:
-        communication: UI communication handler for error reporting.
         params: Optional filter params. Supports: search, project_user_id.
+
+    Raises:
+        FetchError: on network or API failure.
     """
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects"
-    try:
-        return paginated_fetch(url, limit=100, params=params or {})
-    except Exception as e:
-        communication.show_error(f"Failed to get projects: {e}")
-        return {"items": [], "total": 0}
+    return paginated_fetch(url, limit=100, params=params or {})
 
 
 def get_tenant_project_files(
