@@ -30,6 +30,21 @@ def _get_plugin_version() -> str:
 
 PLUGIN_USER_AGENT = f"rana_plugin/{_get_plugin_version()}"
 
+CONNECTIVITY_ERRORS = {
+    QNetworkReply.NetworkError.HostNotFoundError,
+    QNetworkReply.NetworkError.TimeoutError,
+    QNetworkReply.NetworkError.ConnectionRefusedError,
+    QNetworkReply.NetworkError.RemoteHostClosedError,
+    QNetworkReply.NetworkError.NetworkSessionFailedError,
+    QNetworkReply.NetworkError.UnknownNetworkError,
+}
+
+
+class NetworkUnavailableError(Exception):
+    """Raised when a request fails due to connectivity issues."""
+
+    pass
+
 
 def _append_user_agent(request):
     """Request preprocessor that appends the plugin UA to QGIS's User-Agent.
@@ -231,8 +246,12 @@ class NetworkManager(object):
                 return False, "Redirect response missing Location header"
 
         if self._reply.error() != QNetworkReply.NetworkError.NoError:
-            status = False
+            error_code = self._reply.error()
             description = self._reply.errorString()
+            self._reply.deleteLater()
+            if error_code in CONNECTIVITY_ERRORS:
+                raise NetworkUnavailableError(description)
+            status = False
             raw_content = self._reply.readAll()
             try:
                 self._content = json.loads(str(raw_content, "utf-8"))
