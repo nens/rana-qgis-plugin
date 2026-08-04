@@ -100,8 +100,7 @@ def set_hidden_projects(base_url: str, tenant_id: str, hidden_ids: set) -> None:
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
     key = f"{base_url.rstrip('/')}|{tenant_id}"
-    if hidden_ids:
-        data[key] = sorted(hidden_ids)
+    data[key] = sorted(hidden_ids)
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f)
