@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from qgis.PyQt.QtCore import QAbstractTableModel, QModelIndex, Qt
+from qgis.PyQt.QtCore import QAbstractTableModel, QModelIndex, QRect, Qt
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
-    QPushButton,
+    QStyle,
     QToolButton,
     QTreeView,
     QVBoxLayout,
@@ -44,7 +46,7 @@ _COL_CONTRIBUTORS = 2
 _COL_LAST_ACTIVITY = 3
 _COL_CREATED_AT = 4
 
-_HEADERS = ["Visible", "Project Name", "Contributors", "Last activity", "Created at"]
+_HEADERS = ["", "Project Name", "Contributors", "Last activity", "Created at"]
 
 _SORT_KEYS = {
     _COL_NAME: lambda p: (p["name"] or "").lower(),
@@ -183,6 +185,84 @@ class ProjectsModel(QAbstractTableModel):
         """Return IDs of all projects with visibility=False (including those not currently displayed)."""
         return {pid for pid, visible in self._visibility.items() if not visible}
 
+    def header_check_state(self) -> Qt.CheckState:
+        """Tri-state summary of visible rows: all checked, none checked, or mixed."""
+        if not self._rows:
+            return Qt.CheckState.Unchecked
+        states = {visible for _, visible in self._rows}
+        if states == {True}:
+            return Qt.CheckState.Checked
+        if states == {False}:
+            return Qt.CheckState.Unchecked
+        return Qt.CheckState.PartiallyChecked
+
+
+class VisibilityHeader(QHeaderView):
+    """Horizontal header that draws a tri-state checkbox in the visibility column.
+
+    Clicking the checkbox checks all visible rows when unchecked or partial,
+    and unchecks all when fully checked.
+    """
+
+    def __init__(self, model: ProjectsModel, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self._model = model
+        self._checkbox = QCheckBox(self)
+        self._checkbox.setTristate(True)
+        self._checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._checkbox.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._model.dataChanged.connect(lambda *_: self._sync_checkbox_state())
+        self._model.modelReset.connect(self._sync_checkbox_state)
+        self.sectionResized.connect(lambda *_: self._position_checkbox())
+        self.sectionMoved.connect(lambda *_: self._position_checkbox())
+        self.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._sync_checkbox_state()
+
+    def _section_rect(self, logical_index: int) -> QRect:
+        """Return section geometry in header coordinates."""
+        return QRect(
+            self.sectionPosition(logical_index) - self.offset(),
+            0,
+            self.sectionSize(logical_index),
+            self.height(),
+        )
+
+    def _checkbox_rect(self) -> QRect:
+        """Return native checkbox geometry inside the visibility section."""
+        section_rect = self._section_rect(_COL_VISIBLE)
+        style = self.style()
+        hint = self._checkbox.sizeHint()
+        margin = style.pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 2
+        x = section_rect.x() + margin
+        y = section_rect.y() + (section_rect.height() - hint.height()) // 2
+        return QRect(x, y, hint.width(), hint.height())
+
+    def _position_checkbox(self):
+        if self.count() <= _COL_VISIBLE or self.isSectionHidden(_COL_VISIBLE):
+            self._checkbox.hide()
+            return
+        self._checkbox.setGeometry(self._checkbox_rect())
+        self._checkbox.show()
+
+    def _sync_checkbox_state(self):
+        self._checkbox.blockSignals(True)
+        self._checkbox.setCheckState(self._model.header_check_state())
+        self._checkbox.blockSignals(False)
+        self._position_checkbox()
+        self.viewport().update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self._position_checkbox()
+
+    def mousePressEvent(self, event):
+        logical = self.logicalIndexAt(event.pos())
+        if logical == _COL_VISIBLE and self._checkbox.geometry().contains(event.pos()):
+            current = self._model.header_check_state()
+            self._model.set_all_visible(current != Qt.CheckState.Checked)
+            return
+        super().mousePressEvent(event)
+
 
 class ProjectsSelectionDialog(QDialog):
     """Dialog that shows all tenant projects and lets the user toggle visibility."""
@@ -220,20 +300,17 @@ class ProjectsSelectionDialog(QDialog):
         self.refresh_btn.setIcon(refresh_icon)
         self.refresh_btn.clicked.connect(self.fetch_and_populate)
 
-        self.check_all_btn = QPushButton("Check all")
-        self.check_all_btn.clicked.connect(
-            lambda: self.projects_model.set_all_visible(True)
-        )
-        self.uncheck_all_btn = QPushButton("Uncheck all")
-        self.uncheck_all_btn.clicked.connect(
-            lambda: self.projects_model.set_all_visible(False)
-        )
+        self.check_all_btn = None  # replaced by header checkbox
+        self.uncheck_all_btn = None
 
         self.projects_tv = QTreeView()
         self.projects_tv.setRootIsDecorated(False)
         self.projects_tv.setModel(self.projects_model)
         self.projects_tv.setSortingEnabled(True)
         self.projects_tv.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+
+        visibility_header = VisibilityHeader(self.projects_model, self.projects_tv)
+        self.projects_tv.setHeader(visibility_header)
 
         header = self.projects_tv.header()
         header.setSortIndicatorShown(True)
@@ -255,8 +332,6 @@ class ProjectsSelectionDialog(QDialog):
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.filter_bar)
         top_layout.addWidget(self.refresh_btn)
-        top_layout.addWidget(self.check_all_btn)
-        top_layout.addWidget(self.uncheck_all_btn)
 
         button_box = QDialogButtonBox()
         button_box.setStandardButtons(
