@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from qgis.PyQt.QtCore import QObject, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 
-from rana_qgis_plugin.legacy.workers.avatars import AvatarWorker
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
+from rana_qgis_plugin.workers.avatars import AvatarWorker
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.communication import UICommunication
