@@ -33,21 +33,21 @@ class ProcessProgressBar(ColoredProgressBar):
         self.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
 
 
-from rana_qgis_plugin.legacy.widgets.utils_delegates import (
-    WordWrapDelegate,
-)
-from rana_qgis_plugin.utils.api import get_process_id_for_tag
-from rana_qgis_plugin.utils.settings import base_url, get_tenant_id
-from rana_qgis_plugin.utils.time import (
-    convert_to_numeric_timestamp,
-    get_timestamp_as_numeric_item,
-)
-from rana_qgis_plugin.widgets.filter_bar import (
+from rana_qgis_plugin.legacy.widgets.filter_bar import (
     ComboFilterConfig,
     FilterBar,
     TextFilterConfig,
 )
-from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
+from rana_qgis_plugin.legacy.widgets.utils_delegates import (
+    ContributorAvatarsDelegate,
+    WordWrapDelegate,
+)
+from rana_qgis_plugin.utils.api import get_process_id_for_tag, get_tenant_id
+from rana_qgis_plugin.utils.settings import base_url
+from rana_qgis_plugin.utils.time import (
+    convert_to_numeric_timestamp,
+    get_timestamp_as_numeric_item,
+)
 
 
 @dataclass

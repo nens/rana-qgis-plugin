@@ -11,11 +11,11 @@ from qgis.PyQt.QtWidgets import (
     QTableWidgetItem,
 )
 
+from rana_qgis_plugin.legacy.widgets.utils_search import DebouncedSearchBox
 from rana_qgis_plugin.utils.api import (
     get_schematisations,
 )
 from rana_qgis_plugin.utils.time import format_activity_timestamp_str
-from rana_qgis_plugin.widgets.filter_bar import DebouncedSearchBox
 
 
 class SchematisationBrowser(QDialog):

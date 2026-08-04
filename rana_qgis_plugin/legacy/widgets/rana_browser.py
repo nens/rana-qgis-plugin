@@ -40,6 +40,7 @@ from rana_qgis_plugin.legacy.widgets.projects_browser import ProjectsBrowser
 from rana_qgis_plugin.legacy.widgets.publication_view import PublicationView
 from rana_qgis_plugin.legacy.widgets.publications_browser import PublicationsBrowser
 from rana_qgis_plugin.legacy.widgets.revisions_view import RevisionsView
+from rana_qgis_plugin.legacy.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.legacy.widgets.utils_file_action import (
     FileActionSignals,
 )
@@ -47,7 +48,6 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_project_file,
 )
 from rana_qgis_plugin.utils.settings import base_url
-from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 
 
 class RanaBrowser(QWidget):
