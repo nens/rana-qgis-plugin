@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from qgis._core import QgsSettings
 from qgis.core import QgsApplication, QgsSettings
 
 from rana_qgis_plugin.constant import (
