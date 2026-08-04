@@ -153,7 +153,6 @@ class RanaRootDataItem(QgsDataItem):
     def open_settings(self) -> None:
         """Open the settings dialog; reset auth and re-login if the backend URL changed."""
         dlg = RanaSettingsDialog()
-        self.loader.avatar_updated.connect(dlg.update_avatar)
         was_authenticated = is_authenticated()
         if dlg.exec() == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
             QgsSettings().remove(RANA_TENANT_ENTRY)
