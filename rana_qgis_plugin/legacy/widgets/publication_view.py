@@ -49,14 +49,13 @@ from rana_qgis_plugin.utils.api import (
     get_publication_version_details,
     get_publication_version_files,
     get_tenant_file_descriptor,
-    get_tenant_id,
 )
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils.generic import (
     find_publication_map_layer_from_tree,
     get_file_icon_name,
 )
-from rana_qgis_plugin.utils.settings import base_url
+from rana_qgis_plugin.utils.settings import base_url, get_tenant_id
 from rana_qgis_plugin.utils.time import format_activity_timestamp_str
 
 

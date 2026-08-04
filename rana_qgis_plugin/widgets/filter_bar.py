@@ -1,16 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import (
-    QComboBox,
-    QHBoxLayout,
-    QSizePolicy,
-    QWidget,
-)
-
-from rana_qgis_plugin.legacy.widgets.utils_search import DebouncedSearchBox
+from qgis.PyQt.QtWidgets import QComboBox, QHBoxLayout, QLineEdit, QSizePolicy, QWidget
 
 
 @dataclass
@@ -63,17 +56,23 @@ class FilterBar(QWidget):
                     placeholder=config.placeholder,
                     show_search_icon=True,
                 )
-                widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+                widget.setSizePolicy(
+                    QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+                )
                 widget.searchChanged.connect(self._emit_changed)
                 self._line_edits[config.key] = widget
                 layout.addWidget(widget, stretch=1)
             elif isinstance(config, ComboFilterConfig):
                 widget = QComboBox()
-                widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+                widget.setSizePolicy(
+                    QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+                )
                 widget.setMinimumWidth(0)
                 widget.setEditable(True)
                 widget.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-                widget.completer().setCaseSensitivity(Qt.CaseInsensitive)
+                widget.completer().setCaseSensitivity(
+                    Qt.CaseSensitivity.CaseInsensitive
+                )
                 if widget.lineEdit():
                     widget.lineEdit().setPlaceholderText(config.placeholder)
                     widget.lineEdit().textChanged.connect(
@@ -82,7 +81,7 @@ class FilterBar(QWidget):
                     # Add a clear action inside the line edit
                     clear_action = widget.lineEdit().addAction(
                         QIcon(":images/themes/default/mIconClearText.svg"),
-                        widget.lineEdit().TrailingPosition,
+                        QLineEdit.ActionPosition.TrailingPosition,
                     )
                     clear_action.setVisible(False)
                     clear_action.triggered.connect(
@@ -182,3 +181,69 @@ class FilterBar(QWidget):
             widget.blockSignals(False)
             self._update_clear_action(widget)
         self._emit_changed()
+
+
+class DebouncedSearchBox(QLineEdit):
+    """
+    A search box with debounced search signal.
+    Emits searchChanged signal only after user stops typing for specified delay.
+    Includes a trailing clear button that fires searchChanged immediately.
+    """
+
+    # Custom signal that will be emitted when the debounced search should occur
+    searchChanged = pyqtSignal(str)
+
+    def __init__(
+        self,
+        parent=None,
+        delay_ms=1000,
+        min_chars=0,
+        placeholder="Search...",
+        show_search_icon=True,
+    ):
+        super().__init__(parent)
+
+        # Setup timer for debouncing
+        self._timer = QTimer()
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._on_timeout)
+
+        self.delay_ms = delay_ms
+        self.min_chars = min_chars
+
+        # Setup UI
+        self.setPlaceholderText(placeholder)
+        if show_search_icon:
+            self.addAction(
+                QIcon(":images/themes/default/mIconZoom.svg"),
+                QLineEdit.ActionPosition.LeadingPosition,
+            )
+
+        # Clear button -- visible only when there is text
+        self._clear_action = self.addAction(
+            QIcon(":images/themes/default/mIconClearText.svg"),
+            QLineEdit.ActionPosition.TrailingPosition,
+        )
+        self._clear_action.setVisible(False)
+        self._clear_action.triggered.connect(self._on_clear)
+
+        # Connect the text changed signal
+        self.textEdited.connect(self._on_text_edited)
+
+    def _on_text_edited(self, text):
+        """Handle text changes and apply debouncing."""
+        self._clear_action.setVisible(bool(text))
+        self._timer.stop()
+        if len(text) >= self.min_chars or len(text) == 0:
+            self._timer.start(self.delay_ms)
+
+    def _on_clear(self):
+        """Clear text and emit searchChanged immediately, bypassing debounce."""
+        self._timer.stop()
+        self.clear()
+        self._clear_action.setVisible(False)
+        self.searchChanged.emit("")
+
+    def _on_timeout(self):
+        """Emit the searchChanged signal with current text."""
+        self.searchChanged.emit(self.text())

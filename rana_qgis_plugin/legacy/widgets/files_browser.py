@@ -39,11 +39,6 @@ from rana_qgis_plugin.icons import (
     upload_icon,
 )
 from rana_qgis_plugin.legacy.auth_3di import has_3di_authcfg
-from rana_qgis_plugin.legacy.widgets.filter_bar import (
-    ComboFilterConfig,
-    FilterBar,
-    TextFilterConfig,
-)
 from rana_qgis_plugin.legacy.widgets.utils_file_action import (
     FileAction,
     FileActionSignals,
@@ -74,6 +69,11 @@ from rana_qgis_plugin.utils.local_paths import (
 )
 from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.time import get_timestamp_as_numeric_item
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
 
 # allow for using specific data just for sorting
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1

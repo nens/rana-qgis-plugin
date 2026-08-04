@@ -23,12 +23,6 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from rana_qgis_plugin.icons import refresh_icon
-from rana_qgis_plugin.legacy.widgets.filter_bar import (
-    ComboFilterConfig,
-    FilterBar,
-    TextFilterConfig,
-)
-from rana_qgis_plugin.legacy.widgets.utils_delegates import ContributorAvatarsDelegate
 from rana_qgis_plugin.utils.api import get_tenant_projects, get_user_info
 from rana_qgis_plugin.utils.generic import (
     NumericItem,
@@ -37,6 +31,12 @@ from rana_qgis_plugin.utils.settings import base_url, get_tenant_id
 from rana_qgis_plugin.utils.time import (
     get_timestamp_as_numeric_item,
 )
+from rana_qgis_plugin.widgets.filter_bar import (
+    ComboFilterConfig,
+    FilterBar,
+    TextFilterConfig,
+)
+from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
 # Maps column index to the project dict key used for client-side sorting
 _SORT_KEYS = {

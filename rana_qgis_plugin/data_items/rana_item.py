@@ -46,7 +46,13 @@ from rana_qgis_plugin.utils.api import (
     get_user_info,
     get_user_tenants,
 )
-from rana_qgis_plugin.utils.settings import get_tenant_id, set_tenant_id
+from rana_qgis_plugin.utils.settings import (
+    base_url,
+    get_hidden_projects,
+    get_tenant_id,
+    set_tenant_id,
+)
+from rana_qgis_plugin.widgets.projects_selection_dialog import ProjectsSelectionDialog
 from rana_qgis_plugin.widgets.settings_dialog import RanaSettingsDialog
 
 if TYPE_CHECKING:
@@ -86,9 +92,11 @@ class RanaRootDataItem(QgsDataItem):
         except FetchError as e:
             self.fetch_error_occurred.emit(str(e))
             return [QgsErrorItem(self, "Failed to load projects", self.path())]
+        hidden = get_hidden_projects(base_url(), get_tenant_id())
         return [
             RanaProjectDataItem(self, p["id"], p["name"], p.get("slug", ""))
             for p in response.get("items", [])
+            if p["id"] not in hidden
         ]
 
     def restore_session(self) -> None:
@@ -123,11 +131,16 @@ class RanaRootDataItem(QgsDataItem):
             refresh_action = QAction("Refresh", parent)
             refresh_action.setIcon(QIcon(str(ICONS_DIR / "refresh.svg")))
             refresh_action.triggered.connect(self.refresh)
+
+            select_projects_action = QAction("Select projects", parent)
+            select_projects_action.triggered.connect(self.open_projects_selection)
+
             actions = [refresh_action, logout_action]
             if self.tenants is not None and len(self.tenants) >= 2:
                 switch_action = QAction("Switch tenant", parent)
                 switch_action.triggered.connect(lambda: self.switch_tenant())
                 actions.append(switch_action)
+            actions.append(select_projects_action)
             actions.append(settings_action)
             return actions
         return [login_action, settings_action]
@@ -144,6 +157,12 @@ class RanaRootDataItem(QgsDataItem):
             self.refresh()
             if was_authenticated:
                 self.login()
+
+    def open_projects_selection(self) -> None:
+        """Open the project visibility selection dialog and refresh on close."""
+        dlg = ProjectsSelectionDialog(self.communication)
+        if dlg.exec() == ProjectsSelectionDialog.DialogCode.Accepted:
+            self.refresh()
 
     def prompt_tenant(self) -> Optional[str]:
         """Prompt the user to enter a tenant code. Returns tenant ID or None if cancelled."""

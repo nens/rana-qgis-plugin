@@ -5,8 +5,17 @@ import pytest
 from rana_qgis_plugin.utils.settings import (
     get_advanced_settings,
     get_hcc_url_override,
+    get_hidden_projects,
+    hide_project,
     set_base_url,
+    set_hidden_projects,
+    unhide_project,
 )
+
+BASE_URL = "https://www.ranawaterintelligence.com"
+TENANT = "tenant-uuid-123"
+OTHER_TENANT = "tenant-uuid-456"
+OTHER_BASE = "https://staging.rana.com"
 
 
 @pytest.mark.parametrize(
@@ -98,3 +107,46 @@ def test_set_base_url_strips_trailing_slash(input_url, expected_stored):
         set_base_url(input_url)
 
         mock_instance.setValue.assert_called_once_with("Rana/base_url", expected_stored)
+
+
+@pytest.fixture()
+def hidden_file(tmp_path):
+    """Patch hidden_projects_file() to use a temp path."""
+    rana_dir = tmp_path / "rana"
+    rana_dir.mkdir()
+    path = rana_dir / "hidden_projects.json"
+    with patch(
+        "rana_qgis_plugin.utils.settings.hidden_projects_file",
+        return_value=path,
+    ):
+        yield path
+
+
+def test_get_hidden_projects_missing_file(hidden_file):
+    assert get_hidden_projects(BASE_URL, TENANT) == set()
+
+
+def test_set_hidden_projects_unset(hidden_file):
+    assert get_hidden_projects(BASE_URL, TENANT) == set()
+
+
+def test_scopes_are_independent(hidden_file):
+    set_hidden_projects(BASE_URL, TENANT, {"proj-a"})
+    set_hidden_projects(BASE_URL, OTHER_TENANT, {"proj-b"})
+    set_hidden_projects(OTHER_BASE, TENANT, {"proj-c"})
+
+    assert get_hidden_projects(BASE_URL, TENANT) == {"proj-a"}
+    assert get_hidden_projects(BASE_URL, OTHER_TENANT) == {"proj-b"}
+    assert get_hidden_projects(OTHER_BASE, TENANT) == {"proj-c"}
+
+
+def test_hide_project(hidden_file):
+    hide_project(BASE_URL, TENANT, "proj-1")
+    hide_project(BASE_URL, TENANT, "proj-2")
+    assert get_hidden_projects(BASE_URL, TENANT) == {"proj-1", "proj-2"}
+
+
+def test_unhide_project(hidden_file):
+    set_hidden_projects(BASE_URL, TENANT, {"proj-1", "proj-2"})
+    unhide_project(BASE_URL, TENANT, "proj-1")
+    assert get_hidden_projects(BASE_URL, TENANT) == {"proj-2"}
