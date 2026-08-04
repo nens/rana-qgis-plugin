@@ -300,6 +300,16 @@ class ProjectsSelectionDialog(QDialog):
             self._has_fetched = True
             self.fetch_and_populate()
 
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            focused_widget = QApplication.focusWidget()
+            if focused_widget is not None and self.filter_bar.isAncestorOf(
+                focused_widget
+            ):
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
     def setup_ui(self):
         self.filter_bar = FilterBar(
             filters=[
