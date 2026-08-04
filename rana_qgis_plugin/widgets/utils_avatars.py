@@ -69,7 +69,7 @@ def create_user_image(image):
 
     # Paint the original pixmap with circular mask
     painter = QPainter(rounded)
-    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setClipPath(path)
 
     # Draw the pixmap from the calculated offset position

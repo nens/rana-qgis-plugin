@@ -10,7 +10,6 @@ from qgis.core import (
     QgsErrorItem,
     QgsSettings,
 )
-from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -25,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.auth import (
     active_tenant,
     clear_credentials,
@@ -57,18 +57,23 @@ from rana_qgis_plugin.widgets.settings_dialog import RanaSettingsDialog
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.communication import UICommunication
+    from rana_qgis_plugin.loader import Loader
 
 
 class RanaRootDataItem(QgsDataItem):
     """Root Browser item for Rana. Always visible; drives the auth flow."""
 
-    fetch_error_occurred = pyqtSignal(str)
-    connection_lost = pyqtSignal()
-
     def __init__(
-        self, communication: UICommunication, parent: Optional[QgsDataItem] = None
+        self,
+        communication: UICommunication,
+        loader: Loader,
+        error_signals: ApiErrorSignals,
+        parent: Optional[QgsDataItem] = None,
     ):
         self.communication = communication
+        self.loader = loader
+        self.error_signals = error_signals
+        self.projects_selection_dialog: Optional[ProjectsSelectionDialog] = None
         super().__init__(
             Qgis.BrowserItemType.Collection, parent, "Rana", "/Rana", "Rana"
         )
@@ -87,10 +92,10 @@ class RanaRootDataItem(QgsDataItem):
         try:
             response = get_tenant_projects()
         except NetworkUnavailableError:
-            self.connection_lost.emit()
+            self.error_signals.connection_lost.emit()
             return [QgsErrorItem(self, "No connection to Rana", self.path())]
         except FetchError as e:
-            self.fetch_error_occurred.emit(str(e))
+            self.error_signals.fetch_error_occurred.emit(str(e))
             return [QgsErrorItem(self, "Failed to load projects", self.path())]
         hidden = get_hidden_projects(base_url(), get_tenant_id())
         return [
@@ -148,6 +153,7 @@ class RanaRootDataItem(QgsDataItem):
     def open_settings(self) -> None:
         """Open the settings dialog; reset auth and re-login if the backend URL changed."""
         dlg = RanaSettingsDialog()
+        self.loader.avatar_updated.connect(dlg.update_avatar)
         was_authenticated = is_authenticated()
         if dlg.exec() == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
             QgsSettings().remove(RANA_TENANT_ENTRY)
@@ -160,9 +166,17 @@ class RanaRootDataItem(QgsDataItem):
 
     def open_projects_selection(self) -> None:
         """Open the project visibility selection dialog and refresh on close."""
-        dlg = ProjectsSelectionDialog(self.communication)
-        if dlg.exec() == ProjectsSelectionDialog.DialogCode.Accepted:
+        dlg = ProjectsSelectionDialog(
+            self.communication, self.loader, self.error_signals
+        )
+        self.projects_selection_dialog = dlg
+        dlg.finished.connect(self.on_projects_selection_finished)
+        dlg.open()
+
+    def on_projects_selection_finished(self, result: int) -> None:
+        if result == QDialog.DialogCode.Accepted:
             self.refresh()
+        self.projects_selection_dialog = None
 
     def prompt_tenant(self) -> Optional[str]:
         """Prompt the user to enter a tenant code. Returns tenant ID or None if cancelled."""

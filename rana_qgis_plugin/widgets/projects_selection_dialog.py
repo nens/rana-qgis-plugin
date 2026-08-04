@@ -20,8 +20,10 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.icons import refresh_icon
-from rana_qgis_plugin.utils.api import get_tenant_projects, get_user_info
+from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.utils.api import FetchError, get_tenant_projects, get_user_info
 from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
@@ -39,6 +41,7 @@ from rana_qgis_plugin.widgets.utils_delegates import ContributorAvatarsDelegate
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.communication import UICommunication
+    from rana_qgis_plugin.loader import Loader
 
 _COL_VISIBLE = 0
 _COL_NAME = 1
@@ -267,21 +270,35 @@ class VisibilityHeader(QHeaderView):
 class ProjectsSelectionDialog(QDialog):
     """Dialog that shows all tenant projects and lets the user toggle visibility."""
 
-    def __init__(self, communication: UICommunication, parent=None):
+    def __init__(
+        self,
+        communication: UICommunication,
+        loader: Loader,
+        error_signals: ApiErrorSignals,
+        parent=None,
+    ):
         super().__init__(parent)
         self.communication = communication
-        self.avatar_cache = AvatarCache(communication)
+        self.loader = loader
+        self.error_signals = error_signals
+        self.avatar_cache: AvatarCache = loader.avatar_cache
         self._sort_column = _COL_LAST_ACTIVITY
         self._sort_order = Qt.SortOrder.DescendingOrder
         self._all_projects: list[dict] = []
         self._hidden_ids: set = get_hidden_projects(base_url(), get_tenant_id())
         self._last_toggled_row: int | None = None
+        self._has_fetched = False
+        self.loader.avatar_updated.connect(self.on_avatar_updated)
         self.projects_model = ProjectsModel(self._hidden_ids)
-
         self.setWindowTitle("Select visible projects")
         self.resize(900, 600)
         self.setup_ui()
-        self.fetch_and_populate()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._has_fetched:
+            self._has_fetched = True
+            self.fetch_and_populate()
 
     def setup_ui(self):
         self.filter_bar = FilterBar(
@@ -361,7 +378,17 @@ class ProjectsSelectionDialog(QDialog):
 
     def fetch_and_populate(self):
         """Fetch matching projects from the API and load into the model."""
-        response = get_tenant_projects(params=self.build_filter_params())
+        try:
+            response = get_tenant_projects(params=self.build_filter_params())
+        except NetworkUnavailableError:
+            self.error_signals.connection_lost.emit()
+            self.reject()
+            return
+        except FetchError as e:
+            self.error_signals.fetch_error_occurred.emit(str(e))
+            self.reject()
+            return
+
         self._all_projects = self._with_contributors_data(response.get("items", []))
         self._last_toggled_row = None
         self.projects_model.load_projects(
@@ -370,6 +397,26 @@ class ProjectsSelectionDialog(QDialog):
         self.empty_label.setVisible(self.projects_model.rowCount() == 0)
         self.resize_columns()
         self.populate_contributors(self._all_projects)
+        all_contributors = {
+            c["id"]: c for p in self._all_projects for c in p.get("contributors", [])
+        }
+        self.loader.fetch_avatars(list(all_contributors.values()))
+
+    def on_avatar_updated(self, user_id: str, avatar: QPixmap) -> None:
+        """Refresh contributor data in rows and combo when a real avatar arrives."""
+        for project in self._all_projects:
+            for entry in project.get("_contributors_data", []):
+                if entry["id"] == user_id:
+                    entry["avatar"] = avatar
+        self.filter_bar.update_combo_avatar("who", user_id, avatar)
+        if self.projects_model.rowCount() > 0:
+            top = self.projects_model.index(0, _COL_CONTRIBUTORS)
+            bottom = self.projects_model.index(
+                self.projects_model.rowCount() - 1, _COL_CONTRIBUTORS
+            )
+            self.projects_model.dataChanged.emit(
+                top, bottom, [Qt.ItemDataRole.UserRole]
+            )
 
     def _with_contributors_data(self, projects: list[dict]) -> list[dict]:
         """Attach pre-built contributor display data to each project dict."""
@@ -458,11 +505,20 @@ class ProjectsSelectionDialog(QDialog):
         self.filter_bar.set_combo_items("who", combo_items)
 
     def accept(self):
-        # Projects shown in the current filtered view: take from model
-        # Projects not shown (filtered out): retain their original hidden state
+        self.disconnect_avatar_updated()
         shown_ids = {p["id"] for p in self._all_projects}
         preserved = self._hidden_ids - shown_ids
         set_hidden_projects(
             base_url(), get_tenant_id(), self.projects_model.hidden_ids() | preserved
         )
         super().accept()
+
+    def reject(self):
+        self.disconnect_avatar_updated()
+        super().reject()
+
+    def disconnect_avatar_updated(self):
+        try:
+            self.loader.avatar_updated.disconnect(self.on_avatar_updated)
+        except TypeError:
+            pass
