@@ -200,7 +200,7 @@ def plugin(qgis_iface, qgis_application):
     rana_root_item = None
     for i in range(browser_model.rowCount()):
         idx = browser_model.index(i, 0)
-        if browser_model.data(idx) == "Rana":
+        if browser_model.data(idx).startswith("Rana"):
             rana_root_item = browser_model.dataItem(idx)
             break
     assert rana_root_item is not None, "Rana root item not found in browser model"
