@@ -673,7 +673,9 @@ def copy_threedi_schematisation(project_id: str, schematisation_id: str, path: s
         )
 
 
-def create_rana_schematisation(project_id: str, path: str) -> Optional[dict]:
+def create_rana_schematisation(
+    project_id: str, path: str, desciption: Optional[str]
+) -> Optional[dict]:
     """Create a new schematisation in Rana and return the response dict.
 
     The response contains ``schematisation_id`` (ThreeDi integer ID) which can
@@ -685,7 +687,9 @@ def create_rana_schematisation(project_id: str, path: str) -> Optional[dict]:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations"
     network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.post(params={"path": path})
+    status, error = network_manager.post(
+        params={"path": path, "description": desciption}
+    )
 
     if status:
         return network_manager.content
