@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsMessageLog, QgsSettings
+from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
 
 from rana_qgis_plugin.constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
@@ -12,6 +12,7 @@ from rana_qgis_plugin.constant import (
     RANA_SETTINGS_ENTRY,
 )
 from rana_qgis_plugin.network_manager import NetworkManager
+from rana_qgis_plugin.utils.log import plugin_log_info, plugin_log_warn
 from rana_qgis_plugin.utils.settings import (
     api_url,
     cognito_client_id,
@@ -20,8 +21,6 @@ from rana_qgis_plugin.utils.settings import (
     set_cognito_client_id,
     set_cognito_client_id_native,
 )
-
-# TODO: find way to use communication class here instead of directly writing to QgsMessageLog
 
 
 def is_authenticated() -> bool:
@@ -78,7 +77,7 @@ def clear_credentials(delete_config: bool = True) -> None:
             auth_manager.removeAuthenticationConfig(authcfg_id)
 
     settings.remove(RANA_AUTHCFG_ENTRY)
-    QgsMessageLog.logMessage("Logged out from Rana.", "Rana")
+    plugin_log_info("Logged out from Rana.")
 
 
 def update_auth_settings(new_url: str) -> bool:
@@ -120,7 +119,7 @@ def fetch_identity_providers(tenant_id: str) -> Optional[list]:
     network_manager = NetworkManager(url)
     status, error = network_manager.fetch()
     if not status:
-        QgsMessageLog.logMessage(f"Failed to fetch identity providers: {error}", "Rana")
+        plugin_log_warn(f"Failed to fetch identity providers: {error}")
         return None
     response = network_manager.content
     if response is None:
@@ -137,7 +136,7 @@ def create_oauth2_config(provider: dict) -> Optional[str]:
     """
     auth_manager = QgsApplication.authManager()
     if auth_manager is None:
-        QgsMessageLog.logMessage("QgsAuthManager unavailable.", "Rana")
+        plugin_log_warn("QgsAuthManager unavailable.")
         return None
     auth_manager.setMasterPassword()
     is_sso = provider.get("type") != "rana"
@@ -167,7 +166,7 @@ def create_oauth2_config(provider: dict) -> Optional[str]:
     auth_manager.storeAuthenticationConfig(authcfg)
     new_id = authcfg.id()
     if not new_id:
-        QgsMessageLog.logMessage("Failed to create OAuth2 configuration.", "Rana")
+        plugin_log_warn("Failed to create OAuth2 configuration.")
         return None
 
     return new_id

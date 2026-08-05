@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from qgis.core import Qgis, QgsApplication, QgsMessageLog, QgsSettings
+from qgis.core import QgsApplication, QgsSettings
 
 from rana_qgis_plugin.constant import (
     COGNITO_LOGOUT_ENDPOINT,
@@ -13,6 +13,7 @@ from rana_qgis_plugin.constant import (
     RANA_SETTINGS_ENTRY,
     RANA_TENANT_ENTRY,
 )
+from rana_qgis_plugin.utils.log import plugin_log_warn
 
 
 def logout_redirect_uri() -> str:
@@ -90,19 +91,11 @@ def read_hidden_projects() -> dict[str, list[str]]:
         with path.open("r", encoding="utf-8") as file:
             data = json.load(file)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        QgsMessageLog.logMessage(
-            f"Could not read hidden projects from {path}: {error}",
-            "Rana",
-            Qgis.MessageLevel.Warning,
-        )
+        plugin_log_warn(f"Could not read hidden projects from {path}: {error}")
         return {}
 
     if not isinstance(data, dict):
-        QgsMessageLog.logMessage(
-            f"Ignoring invalid hidden projects data in {path}",
-            "Rana",
-            Qgis.MessageLevel.Warning,
-        )
+        plugin_log_warn(f"Ignoring invalid hidden projects data in {path}")
         return {}
 
     return {
