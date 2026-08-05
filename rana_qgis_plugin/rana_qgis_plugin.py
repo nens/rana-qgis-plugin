@@ -64,7 +64,7 @@ class RanaQgisPlugin(QObject):
         self.iface = iface
         self.communication = UICommunication(iface, PLUGIN_NAME)
         self.loader = Loader(self.communication)
-        self._data_item_provider = RanaDataItemProvider(self.communication, self.loader)
+        self.data_item_provider = RanaDataItemProvider(self.communication, self.loader)
         self._externally_deactivated = False
 
     def initGui(self):
@@ -73,7 +73,7 @@ class RanaQgisPlugin(QObject):
         if app is not None:
             registry = app.dataItemProviderRegistry()
             if registry is not None:
-                registry.addProvider(self._data_item_provider)
+                registry.addProvider(self.data_item_provider)
         self.iface.mainWindow().installEventFilter(self)
 
     def unload(self):
@@ -83,7 +83,7 @@ class RanaQgisPlugin(QObject):
         if app is not None:
             registry = app.dataItemProviderRegistry()
             if registry is not None:
-                registry.removeProvider(self._data_item_provider)
+                registry.removeProvider(self.data_item_provider)
 
     def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.Type.WindowDeactivate:
@@ -92,6 +92,6 @@ class RanaQgisPlugin(QObject):
         elif event.type() == QEvent.Type.WindowActivate:
             if self._externally_deactivated:
                 self._externally_deactivated = False
-                if self._data_item_provider.root_item is not None:
-                    self._data_item_provider.root_item.refresh()
+                if self.data_item_provider.root_item is not None:
+                    self.data_item_provider.root_item.refresh()
         return False
