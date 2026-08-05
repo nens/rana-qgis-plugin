@@ -4,12 +4,13 @@ from unittest.mock import Mock, patch
 import pytest
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
 from qgis.gui import (
+    QgsBrowserDockWidget,
     QgsBrowserGuiModel,
     QgsLayerTreeMapCanvasBridge,
     QgsMapCanvas,
     QgsMessageBar,
 )
-from qgis.PyQt.QtCore import QSettings
+from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtWidgets import (
     QMainWindow,
     QMenu,
@@ -30,7 +31,13 @@ from rana_qgis_plugin.utils.settings import (
 
 @pytest.fixture(autouse=True)
 def mock_get_user_info():
-    with patch("rana_qgis_plugin.data_items.rana_item.get_user_info") as mock:
+    with (
+        patch("rana_qgis_plugin.data_items.rana_item.get_user_info") as mock,
+        patch(
+            "rana_qgis_plugin.widgets.projects_selection_dialog.get_user_info",
+            new=mock,
+        ),
+    ):
         mock.return_value = utils_api.UserInfo(
             sub="test_user",
             given_name="test",
@@ -195,19 +202,32 @@ def plugin(qgis_iface, qgis_application):
 
     browser_model = QgsBrowserGuiModel()
     browser_model.initialize()
+    browser_dock = QgsBrowserDockWidget(
+        "Browser", browser_model, qgis_iface.mainWindow()
+    )
+    browser_model.setMapCanvas(qgis_iface.mapCanvas())
+    browser_model.setMessageBar(qgis_iface.messageBar())
+    qgis_iface.mainWindow().addDockWidget(
+        Qt.DockWidgetArea.LeftDockWidgetArea, browser_dock
+    )
+    browser_dock.setUserVisible(True)
     qgis_application.processEvents()
 
     rana_root_item = None
     for i in range(browser_model.rowCount()):
         idx = browser_model.index(i, 0)
-        if browser_model.data(idx) == "Rana":
+        if browser_model.data(idx).startswith("Rana"):
             rana_root_item = browser_model.dataItem(idx)
             break
     assert rana_root_item is not None, "Rana root item not found in browser model"
     plugin.rana_root_item = rana_root_item
+    plugin.browser_dock = browser_dock
+    plugin.browser_model = browser_model
 
     yield plugin
 
+    browser_dock.close()
+    browser_dock.deleteLater()
     browser_model.deleteLater()
     plugin.unload()
     qgis_application.processEvents()

@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
 )
 
-from rana_qgis_plugin.legacy.widgets.utils_avatars import get_avatar
+from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 
 
 # We need a separate signals class since QRunnable cannot have signals

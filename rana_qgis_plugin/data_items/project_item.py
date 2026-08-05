@@ -8,7 +8,7 @@ from qgis.PyQt.QtGui import QDesktopServices, QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.constant import ICONS_DIR
-from rana_qgis_plugin.utils.settings import base_url, get_tenant_id
+from rana_qgis_plugin.utils.settings import base_url, get_tenant_id, hide_project
 
 
 class RanaProjectDataItem(QgsDataItem):
@@ -32,4 +32,14 @@ class RanaProjectDataItem(QgsDataItem):
         open_action = QAction("Open project on web", parent)
         open_action.setIcon(QIcon(str(ICONS_DIR / "link.svg")))
         open_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
-        return [open_action]
+
+        hide_action = QAction("Don't show this project", parent)
+        hide_action.triggered.connect(self.hide_project)
+
+        return [open_action, hide_action]
+
+    def hide_project(self) -> None:
+        hide_project(base_url(), get_tenant_id(), self.project_id)
+        parent = self.parent()
+        if parent:
+            parent.refresh()

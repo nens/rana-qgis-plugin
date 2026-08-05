@@ -11,8 +11,10 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QEvent, QObject
 from qgis.PyQt.QtWidgets import QApplication
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
+from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.settings import initialize_settings
 
 PLUGIN_NAME = "Rana"
@@ -21,9 +23,11 @@ PLUGIN_NAME = "Rana"
 class RanaDataItemProvider(QgsDataItemProvider):
     """Registers the Rana root item in the QGIS Browser panel."""
 
-    def __init__(self, communication: UICommunication):
+    def __init__(self, communication: UICommunication, loader: Loader):
         super().__init__()
         self._communication = communication
+        self._loader = loader
+        self.error_signals = ApiErrorSignals()
         self.root_item: Optional[RanaRootDataItem] = None
 
     def name(self) -> str:
@@ -38,7 +42,9 @@ class RanaDataItemProvider(QgsDataItemProvider):
         self, path: Optional[str], parentItem: Optional[QgsDataItem]
     ) -> Optional[QgsDataItem]:
         if parentItem is None:
-            self.root_item = RanaRootDataItem(self._communication, parentItem)
+            self.root_item = RanaRootDataItem(
+                self._communication, self._loader, self.error_signals, parentItem
+            )
             self.connect_signals()
             return self.root_item
         return None
@@ -46,8 +52,8 @@ class RanaDataItemProvider(QgsDataItemProvider):
     def connect_signals(self) -> None:
         if self.root_item is None:
             return
-        self.root_item.fetch_error_occurred.connect(self._communication.show_error)
-        self.root_item.connection_lost.connect(
+        self.error_signals.fetch_error_occurred.connect(self._communication.show_error)
+        self.error_signals.connection_lost.connect(
             lambda: self._communication.bar_warn("No connection to Rana")
         )
 
@@ -57,7 +63,8 @@ class RanaQgisPlugin(QObject):
         super().__init__()
         self.iface = iface
         self.communication = UICommunication(iface, PLUGIN_NAME)
-        self._data_item_provider = RanaDataItemProvider(self.communication)
+        self.loader = Loader(self.communication)
+        self.data_item_provider = RanaDataItemProvider(self.communication, self.loader)
         self._externally_deactivated = False
 
     def initGui(self):
@@ -66,16 +73,17 @@ class RanaQgisPlugin(QObject):
         if app is not None:
             registry = app.dataItemProviderRegistry()
             if registry is not None:
-                registry.addProvider(self._data_item_provider)
+                registry.addProvider(self.data_item_provider)
         self.iface.mainWindow().installEventFilter(self)
 
     def unload(self):
         self.iface.mainWindow().removeEventFilter(self)
+        self.loader.shutdown()
         app = QgsApplication.instance()
         if app is not None:
             registry = app.dataItemProviderRegistry()
             if registry is not None:
-                registry.removeProvider(self._data_item_provider)
+                registry.removeProvider(self.data_item_provider)
 
     def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.Type.WindowDeactivate:
@@ -84,6 +92,6 @@ class RanaQgisPlugin(QObject):
         elif event.type() == QEvent.Type.WindowActivate:
             if self._externally_deactivated:
                 self._externally_deactivated = False
-                if self._data_item_provider.root_item is not None:
-                    self._data_item_provider.root_item.refresh()
+                if self.data_item_provider.root_item is not None:
+                    self.data_item_provider.root_item.refresh()
         return False
