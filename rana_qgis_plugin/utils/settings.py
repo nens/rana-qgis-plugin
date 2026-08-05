@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from qgis.core import QgsApplication, QgsSettings
+from qgis.core import Qgis, QgsApplication, QgsMessageLog, QgsSettings
 
 from rana_qgis_plugin.constant import (
     COGNITO_LOGOUT_ENDPOINT,
@@ -80,13 +80,44 @@ def hidden_projects_file() -> Path:
     return Path(QgsApplication.qgisSettingsDirPath()) / "rana" / "hidden_projects.json"
 
 
-def get_hidden_projects(base_url: str, tenant_id: str) -> set:
-    """Return the set of hidden project IDs for the given backend and tenant."""
+def read_hidden_projects() -> dict[str, list[str]]:
+    """Read the hidden-project store, returning an empty store if invalid."""
     path = hidden_projects_file()
     if not path.exists():
-        return set()
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+        return {}
+
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        QgsMessageLog.logMessage(
+            f"Could not read hidden projects from {path}: {error}",
+            "Rana",
+            Qgis.MessageLevel.Warning,
+        )
+        return {}
+
+    if not isinstance(data, dict):
+        QgsMessageLog.logMessage(
+            f"Ignoring invalid hidden projects data in {path}",
+            "Rana",
+            Qgis.MessageLevel.Warning,
+        )
+        return {}
+
+    return {
+        key: project_ids
+        for key, project_ids in data.items()
+        if isinstance(key, str)
+        and isinstance(project_ids, list)
+        and all(isinstance(project_id, str) for project_id in project_ids)
+    }
+
+
+def get_hidden_projects(base_url: str, tenant_id: str) -> set[str]:
+    """Return the set of hidden project IDs for the given backend and tenant."""
+    data = read_hidden_projects()
+    print(f"{data=}")
     return set(data.get(f"{base_url.rstrip('/')}|{tenant_id}", []))
 
 
@@ -94,12 +125,12 @@ def set_hidden_projects(base_url: str, tenant_id: str, hidden_ids: set) -> None:
     """Overwrite the hidden project IDs for the given backend and tenant."""
     path = hidden_projects_file()
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {}
-    if path.exists():
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+    data = read_hidden_projects()
     key = f"{base_url.rstrip('/')}|{tenant_id}"
-    data[key] = sorted(hidden_ids)
+    if hidden_ids:
+        data[key] = sorted(hidden_ids)
+    else:
+        data.pop(key, None)
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f)

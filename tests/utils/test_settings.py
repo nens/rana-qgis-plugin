@@ -7,6 +7,7 @@ from rana_qgis_plugin.utils.settings import (
     get_hcc_url_override,
     get_hidden_projects,
     hide_project,
+    read_hidden_projects,
     set_base_url,
     set_hidden_projects,
     unhide_project,
@@ -122,28 +123,80 @@ def hidden_file(tmp_path):
         yield path
 
 
-def test_get_hidden_projects_missing_file(hidden_file):
+def test_read_hidden_projects_missing_file(hidden_file):
+    assert read_hidden_projects() == {}
+
+
+def test_read_hidden_projects_unset():
+    assert read_hidden_projects() == {}
+
+
+@pytest.mark.parametrize(
+    "json_str,expected",
+    [
+        ('{"valid": ["project-1"]}', {"valid": ["project-1"]}),
+        ('"{invalid"', {}),
+        (
+            '{"valid": ["project-1"], "not-a-list": "project-2", "mixed": [1]}',
+            {"valid": ["project-1"]},
+        ),
+    ],
+)
+def test_read_hidden_projects_malformed(hidden_file, json_str, expected):
+    hidden_file.write_text(json_str, encoding="utf-8")
+    assert read_hidden_projects() == expected
+
+
+def test_invalid_hidden_projects_data_is_ignored(hidden_file):
+    hidden_file.write_text(
+        '{"valid": ["project-1"], "not-a-list": "project-2", "mixed": [1]}',
+        encoding="utf-8",
+    )
+    assert read_hidden_projects() == {"valid": ["project-1"]}
+
+
+def test_get_hidden_projects_missing_file():
     assert get_hidden_projects(BASE_URL, TENANT) == set()
 
 
-def test_set_hidden_projects_unset(hidden_file):
+def test_get_hidden_projects_unset():
     assert get_hidden_projects(BASE_URL, TENANT) == set()
+
+
+def test_get_hidden_projects(hidden_file):
+    hidden_file.write_text(
+        f'{{"{BASE_URL}|{TENANT}": ["project-1", "project-2"]}}', encoding="utf-8"
+    )
+    assert get_hidden_projects(BASE_URL, TENANT) == {"project-1", "project-2"}
+
+
+def test_set_hidden_projects_recovers_from_malformed_file(hidden_file):
+    hidden_file.write_text("{invalid", encoding="utf-8")
+    set_hidden_projects(BASE_URL, TENANT, {"project-1"})
+    assert get_hidden_projects(BASE_URL, TENANT) == {"project-1"}
+
+
+def test_set_hidden_projects_removes_empty_scope(hidden_file):
+    set_hidden_projects(BASE_URL, TENANT, {"project-1"})
+    set_hidden_projects(BASE_URL, TENANT, set())
+    assert get_hidden_projects(BASE_URL, TENANT) == set()
+
+
+def test_set_hidden_projects(hidden_file):
+    set_hidden_projects(BASE_URL, TENANT, {"project-1", "project-2"})
+    assert (
+        hidden_file.read_text(encoding="utf-8")
+        == f'{{"{BASE_URL}|{TENANT}": ["project-1", "project-2"]}}'
+    )
 
 
 def test_scopes_are_independent(hidden_file):
     set_hidden_projects(BASE_URL, TENANT, {"proj-a"})
     set_hidden_projects(BASE_URL, OTHER_TENANT, {"proj-b"})
     set_hidden_projects(OTHER_BASE, TENANT, {"proj-c"})
-
     assert get_hidden_projects(BASE_URL, TENANT) == {"proj-a"}
     assert get_hidden_projects(BASE_URL, OTHER_TENANT) == {"proj-b"}
     assert get_hidden_projects(OTHER_BASE, TENANT) == {"proj-c"}
-
-
-def test_hide_project(hidden_file):
-    hide_project(BASE_URL, TENANT, "proj-1")
-    hide_project(BASE_URL, TENANT, "proj-2")
-    assert get_hidden_projects(BASE_URL, TENANT) == {"proj-1", "proj-2"}
 
 
 def test_unhide_project(hidden_file):
