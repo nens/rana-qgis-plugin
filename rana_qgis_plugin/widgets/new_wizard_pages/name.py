@@ -18,7 +18,7 @@ from rana_qgis_plugin.simulation.utils_ui import (
 
 
 class SchematisationNamePage(QWizardPage):
-    """New schematisation name and tags definition page."""
+    """New schematisation name and description definition page."""
 
     def __init__(self, organisations, parent):
         super().__init__(parent)
@@ -34,7 +34,6 @@ class SchematisationNamePage(QWizardPage):
         self.registerField(
             "schematisation_description", self.main_widget.le_description
         )
-        self.registerField("schematisation_tags", self.main_widget.le_tags)
         self.registerField(
             "schematisation_organisation",
             self.main_widget.cbo_organisations,
@@ -58,14 +57,6 @@ class SchematisationNamePage(QWizardPage):
         return self.field("schematisation_description")
 
     @property
-    def tags(self):
-        """Schematisation tags as a list of stripped strings."""
-        raw = self.field("schematisation_tags")
-        if not raw:
-            return []
-        return [tag.strip() for tag in raw.split(",")]
-
-    @property
     def owner(self):
         """Unique ID of the selected organisation."""
         if len(self.organisations) > 1:
@@ -74,7 +65,7 @@ class SchematisationNamePage(QWizardPage):
 
 
 class SchematisationNameWidget(QWidget):
-    """Widget for the Schematisation Name and tags page."""
+    """Widget for the Schematisation Name and description page."""
 
     def __init__(self, organisations, parent):
         super().__init__(parent)
@@ -110,14 +101,6 @@ class SchematisationNameWidget(QWidget):
             "Concise description of your schematisation (optional)"
         )
         gridLayout.addWidget(self.le_description, 3, 2)
-
-        gridLayout.addWidget(QLabel("Tags:"), 4, 0)
-
-        self.le_tags = QLineEdit()
-        self.le_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.le_tags.setMinimumSize(0, 25)
-        self.le_tags.setPlaceholderText("Comma-separated tags (optional)")
-        gridLayout.addWidget(self.le_tags, 4, 2)
 
         organisations_label = QLabel("Rana Organisation:")
         self.cbo_organisations = QComboBox()

@@ -15,7 +15,7 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.auth_3di import has_3di_authcfg
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
     get_tenant_project_file_history,
     get_threedi_schematisation,
 )
@@ -173,7 +173,7 @@ class RevisionsView(QWidget):
                 schematisation = get_threedi_schematisation(
                     selected_file["descriptor_id"]
                 )
-            except FetchError as e:
+            except RanaFetchError as e:
                 self.communication.show_error(
                     "Failed to retrieve schematisation from Rana"
                 )

@@ -17,7 +17,15 @@ class UserInfo(TypedDict):
     email: str
 
 
-class FetchError(Exception):
+class RanaFetchError(Exception):
+    def __init__(self, msg: str, url: str, params: dict):
+        self.msg = msg
+        self.url = url
+        self.params = params
+        super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
+
+
+class RanaPostError(Exception):
     def __init__(self, msg: str, url: str, params: dict):
         self.msg = msg
         self.url = url
@@ -92,7 +100,7 @@ def simple_fetch(url: str, params: Optional[dict] = None) -> Optional[dict]:
         return network_manager.content
     else:
         # Raise when fetch failed, error should be handled downstream
-        raise FetchError(error, url, params)
+        raise RanaFetchError(error, url, params)
 
 
 def single_fetch(
@@ -217,7 +225,7 @@ def get_tenant_project_files(
                 break
             params["cursor"] = response["next"]
         return files
-    except FetchError as e:
+    except RanaFetchError as e:
         communication.show_error(f"Failed to get files: {e}")
         return []
 
@@ -373,7 +381,7 @@ def get_tenant_file_url(project_id: str, params: dict):
         response = network_manager.content
         return response.get("url")
     else:
-        raise FetchError(msg, url, params)
+        raise RanaFetchError(msg, url, params)
 
 
 def get_tenant_file_descriptor(descriptor_id: str):
@@ -645,26 +653,52 @@ def get_threedi_schematisation(descriptor_id: str):
     status, error = network_manager.fetch()
     if status:
         return network_manager.content
-    raise FetchError(f"Failed to retrieve schematisation: {error}", url, {})
+    raise RanaFetchError(f"Failed to retrieve schematisation: {error}", url, {})
 
 
-def add_threedi_schematisation(
-    communication: UICommunication, project_id: str, schematisation_id: str, path: str
-):
+def copy_threedi_schematisation(project_id: str, schematisation_id: str, path: str):
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
-    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/threedi-schematisations"
-
+    url = (
+        f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations/copy"
+    )
     network_manager = NetworkManager(url, authcfg_id)
-    status = network_manager.post(
-        params={"schematisation_id": schematisation_id, "path": path}
+    params = {"schematisation_id": schematisation_id, "path": path}
+    status, error = network_manager.post(params)
+    if status:
+        return network_manager.content
+    else:
+        raise RanaPostError(
+            msg=f"Failed to copy schematisation: {error}", url=url, params=params
+        )
+
+
+def create_rana_schematisation(
+    project_id: str, path: str, desciption: Optional[str]
+) -> Optional[dict]:
+    """Create a new schematisation in Rana and return the response dict.
+
+    The response contains ``schematisation_id`` (ThreeDi integer ID) which can
+    be used to fetch or update the schematisation via the ThreeDi API.
+
+    Returns the response dict on success.
+    """
+    authcfg_id = get_authcfg_id()
+    tenant = get_tenant_id()
+    url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations"
+    network_manager = NetworkManager(url, authcfg_id)
+    status, error = network_manager.post(
+        params={"path": path, "description": desciption}
     )
 
     if status:
-        response = network_manager.content
-        return response
+        return network_manager.content
     else:
-        return None
+        raise RanaPostError(
+            msg=f"Failed to create schematisation: {error}",
+            url=url,
+            params={"path": path},
+        )
 
 
 def get_threedi_personal_api_key(
