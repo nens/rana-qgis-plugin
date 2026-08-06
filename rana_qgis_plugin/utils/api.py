@@ -669,7 +669,7 @@ def copy_threedi_schematisation(project_id: str, schematisation_id: str, path: s
         return network_manager.content
     else:
         raise RanaPostError(
-            msg="Failed to copy schematisation: {error}", url=url, params=params
+            msg=f"Failed to copy schematisation: {error}", url=url, params=params
         )
 
 
