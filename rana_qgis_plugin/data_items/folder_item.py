@@ -8,6 +8,12 @@ from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.data_items.file_actions import (
+    FileAction,
+    create_separator,
+    get_action_tooltip,
+    get_folder_actions,
+)
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.icons import dir_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
@@ -63,10 +69,16 @@ class RanaFolderDataItem(QgsDataItem):
         return [self.create_child_item(item) for item in files]
 
     def actions(self, parent) -> list:
-        """Return a Refresh action scoped to this folder's children."""
-        refresh_action = QAction("Refresh", parent)
-        refresh_action.triggered.connect(self.refresh)
-        return [refresh_action]
+        """Return unconnected folder context-menu actions."""
+        actions = []
+        for action in get_folder_actions(is_root=not self.folder_path):
+            if action is FileAction.DELETE:
+                actions.append(create_separator(parent))
+            q_action = QAction(action.value, parent)
+            q_action.setIcon(action.icon)
+            q_action.setToolTip(get_action_tooltip(action))
+            actions.append(q_action)
+        return actions
 
     def create_child_item(self, item: dict) -> QgsDataItem:
         """Create a folder or file child item."""
