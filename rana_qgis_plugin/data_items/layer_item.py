@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from qgis.core import Qgis, QgsDataItem
+from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.utils.generic import get_file_icon_name
 
@@ -36,3 +38,7 @@ class RanaLayerDataItem(QgsDataItem):
             get_icon_from_theme(get_file_icon_name((geometry_type or "").lower()))
         )
         self.setState(Qgis.BrowserItemState.Populated)
+
+    def actions(self, parent) -> list:
+        """Return the unconnected Open in QGIS action."""
+        return [QAction(FileAction.OPEN_IN_QGIS.value, parent)]

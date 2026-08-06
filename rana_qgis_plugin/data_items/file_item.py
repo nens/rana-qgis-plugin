@@ -5,8 +5,15 @@ from __future__ import annotations
 from typing import Optional, cast
 
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
+from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.data_items.file_actions import (
+    FileAction,
+    create_separator,
+    get_action_tooltip,
+    get_file_actions,
+)
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
 from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
@@ -80,3 +87,15 @@ class RanaFileDataItem(QgsDataItem):
             )
             for layer in descriptor.get("layers", [])
         ]
+
+    def actions(self, parent) -> list:
+        """Return unconnected file context-menu actions."""
+        actions = []
+        for action in get_file_actions(self.data_type):
+            if action is FileAction.DELETE:
+                actions.append(create_separator(parent))
+            q_action = QAction(action.value, parent)
+            q_action.setIcon(action.icon)
+            q_action.setToolTip(get_action_tooltip(action))
+            actions.append(q_action)
+        return actions
