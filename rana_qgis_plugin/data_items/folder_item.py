@@ -8,6 +8,7 @@ from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.icons import dir_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import FetchError, get_tenant_project_files
@@ -68,7 +69,7 @@ class RanaFolderDataItem(QgsDataItem):
         return [refresh_action]
 
     def create_child_item(self, item: dict) -> QgsDataItem:
-        """Create a folder or file placeholder child item."""
+        """Create a folder or file child item."""
         is_directory = item["type"] == "directory"
         display_name = item["id"].rstrip("/").rsplit("/", 1)[-1]
         if is_directory:
@@ -76,20 +77,18 @@ class RanaFolderDataItem(QgsDataItem):
                 self,
                 self.project_id,
                 item["id"],
-                item["id"].rstrip("/").rsplit("/", 1)[-1],
+                display_name,
                 self.error_signals,
             )
-        child = QgsDataItem(
-            Qgis.BrowserItemType.Custom,
+        return RanaFileDataItem(
             self,
+            self.project_id,
+            item["id"],
             display_name,
-            f"{self.path()}/{item['id']}",
-            "Rana",
+            item.get("data_type", ""),
+            item.get("descriptor_id"),
+            self.error_signals,
         )
-        child.setIcon(dir_icon)
-        child.setSortKey(f"1:{display_name.lower()}")
-        child.setState(Qgis.BrowserItemState.Populated)
-        return child
 
 
 class RanaFilesDataItem(RanaFolderDataItem):
