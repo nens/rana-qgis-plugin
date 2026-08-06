@@ -71,7 +71,7 @@ from threedi_api_client.openapi import (
     ThreediModel,
     ThreediModelSavedState,
     ThreediModelTask,
-    TimedSavedStateUpdate,
+    TimedSavedState,
     TimedStructureControl,
     TimeseriesLateral,
     TimeseriesLocalRain,
@@ -816,7 +816,7 @@ class ThreediCalls:
 
     def create_simulation_saved_state_timed(
         self, simulation_pk: int, **data
-    ) -> TimedSavedStateUpdate:
+    ) -> TimedSavedState:
         """Add timed saved state to the given simulation."""
         saved_state = self.threedi_api.simulations_create_saved_states_timed_create(
             str(simulation_pk), data
