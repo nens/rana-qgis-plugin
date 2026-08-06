@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.18 (unreleased)
+1.2.18 (2026-08-06)
 -------------------
 
 - Prevent auto-refresh on closing dialogs, wizards, etc in qgis
