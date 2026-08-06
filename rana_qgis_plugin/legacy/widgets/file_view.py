@@ -51,8 +51,8 @@ from rana_qgis_plugin.legacy.widgets.utils_icons import (
 )
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
-    FetchError,
     FileDescriptorStatus,
+    RanaFetchError,
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_threedi_schematisation,
@@ -253,7 +253,7 @@ class FileView(QWidget):
                     self.threedi_objects["schematisation"] = get_threedi_schematisation(
                         self.selected_file["descriptor_id"]
                     )
-                except FetchError as e:
+                except RanaFetchError as e:
                     self.communication.log_err(
                         f"Failed to retrieve schematisation: {e}"
                     )

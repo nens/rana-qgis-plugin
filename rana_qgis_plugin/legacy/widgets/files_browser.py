@@ -56,7 +56,7 @@ from rana_qgis_plugin.legacy.widgets.utils_view import (
     ContentAwareTreeView,
 )
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
     get_tenant_file_descriptor,
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -559,7 +559,7 @@ class FilesBrowser(QWidget):
             return None
         try:
             schematisation = get_threedi_schematisation(file["descriptor_id"])
-        except FetchError as e:
+        except RanaFetchError as e:
             self.communication.log_err(f"Failed to retrieve schematisation: {e}")
             return None
         latest_revision = schematisation.get("latest_revision")

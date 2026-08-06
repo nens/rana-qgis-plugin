@@ -44,7 +44,7 @@ from rana_qgis_plugin.legacy.widgets.utils_icons import (
 from rana_qgis_plugin.legacy.widgets.utils_qviews import update_width_with_wrapping
 from rana_qgis_plugin.legacy.widgets.utils_view import ContentAwareTreeView
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
     get_publication_details,
     get_publication_version_details,
     get_publication_version_files,
@@ -326,8 +326,8 @@ class PublicationView(QWidget):
             self.current_version = get_publication_version_details(
                 self.publication["id"], latest=True
             )
-        except FetchError as e:
-            # FetchError is raised when the publication version cannot be retrieved
+        except RanaFetchError as e:
+            # RanaFetchError is raised when the publication version cannot be retrieved
             self.communication.log_warn(str(e))
             self.current_version = None
         if self.current_version:

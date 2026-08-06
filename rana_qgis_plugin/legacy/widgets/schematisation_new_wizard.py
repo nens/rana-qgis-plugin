@@ -29,6 +29,7 @@ from rana_qgis_plugin.simulation.threedi_calls import (
     SchematisationApiMapper,
     ThreediCalls,
 )
+from rana_qgis_plugin.utils.api import RanaPostError, create_rana_schematisation
 
 
 class CommitErrors(Exception):
@@ -91,21 +92,21 @@ def _check_name_available(name, working_dir, communication):
     return True
 
 
-def _create_schematisation_base(tc, working_dir, name, owner, tags, description):
-    """Create schematisation remotely and set up local directory structure.
+def _create_schematisation_base(
+    tc, working_dir, name, owner, description, project_id, rana_path
+):
+    """Create schematisation via Rana and set up local directory structure.
 
     Returns a tuple of (schematisation, local_schematisation, wip_revision).
     """
-    schematisation = tc.create_schematisation(
-        name,
-        owner,
-        tags=tags,
-        meta={"description": description},
-        threedimodel_limit=32767,  # maximum allowed by api
+    path = f"{rana_path}{name}" if rana_path else name
+    rana_response = create_rana_schematisation(
+        project_id=project_id, path=path, description=description
     )
+    schematisation = tc.fetch_schematisation(rana_response["schematisation_id"])
     local_schematisation = LocalSchematisation(
         working_dir,
-        schematisation.id,
+        rana_response["schematisation_id"],
         name,
         parent_revision_number=0,
         create=True,
@@ -117,13 +118,23 @@ def _create_schematisation_base(tc, working_dir, name, owner, tags, description)
 class NewSchematisationWizard(QWizard):
     """New schematisation wizard."""
 
-    def __init__(self, threedi_api, working_dir, communication, organisations):
+    def __init__(
+        self,
+        threedi_api,
+        working_dir,
+        communication,
+        organisations,
+        project_id,
+        rana_path,
+    ):
         super().__init__()
         self.setWizardStyle(QWizard.ClassicStyle)
         self.working_dir = working_dir
         self.threedi_api = threedi_api
         self.tc = ThreediCalls(threedi_api)
         self.communication = communication
+        self.project_id = project_id
+        self.rana_path = rana_path
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
@@ -163,7 +174,6 @@ class NewSchematisationWizard(QWizard):
 
         name = self.schematisation_name_page.name
         description = self.schematisation_name_page.description
-        tags = self.schematisation_name_page.tags
         owner = self.schematisation_name_page.owner
 
         schematisation_settings = self.schematisation_settings_page.main_widget.collect_new_schematisation_settings()
@@ -173,7 +183,13 @@ class NewSchematisationWizard(QWizard):
         try:
             schematisation, local_schematisation, wip_revision = (
                 _create_schematisation_base(
-                    self.tc, self.working_dir, name, owner, tags, description
+                    self.tc,
+                    self.working_dir,
+                    name,
+                    owner,
+                    description,
+                    self.project_id,
+                    self.rana_path,
                 )
             )
 
@@ -233,7 +249,7 @@ class NewSchematisationWizard(QWizard):
             self.new_local_schematisation = local_schematisation
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
-        except ApiException as e:
+        except (ApiException, RanaPostError) as e:
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = extract_error_message(e)
@@ -254,7 +270,14 @@ class UploadExistingSchematisationWizard(QWizard):
     """Wizard for creating a new schematisation from an existing GeoPackage."""
 
     def __init__(
-        self, threedi_api, working_dir, communication, organisations, gpkg_path
+        self,
+        threedi_api,
+        working_dir,
+        communication,
+        organisations,
+        gpkg_path,
+        project_id,
+        rana_path,
     ):
         super().__init__()
         self.setWizardStyle(QWizard.ClassicStyle)
@@ -263,6 +286,8 @@ class UploadExistingSchematisationWizard(QWizard):
         self.tc = ThreediCalls(threedi_api)
         self.communication = communication
         self.gpkg_path = gpkg_path
+        self.project_id = project_id
+        self.rana_path = rana_path
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
@@ -293,7 +318,6 @@ class UploadExistingSchematisationWizard(QWizard):
             return
 
         description = self.schematisation_name_page.description
-        tags = self.schematisation_name_page.tags
         owner = self.schematisation_name_page.owner
 
         try:
@@ -307,7 +331,13 @@ class UploadExistingSchematisationWizard(QWizard):
 
             schematisation, local_schematisation, wip_revision = (
                 _create_schematisation_base(
-                    self.tc, self.working_dir, name, owner, tags, description
+                    self.tc,
+                    self.working_dir,
+                    name,
+                    owner,
+                    description,
+                    self.project_id,
+                    self.rana_path,
                 )
             )
             geopackage_filepath = os.path.join(
@@ -342,7 +372,7 @@ class UploadExistingSchematisationWizard(QWizard):
             self.new_local_schematisation = local_schematisation
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
-        except ApiException as e:
+        except (ApiException, RanaPostError) as e:
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = extract_error_message(e)
