@@ -3,10 +3,20 @@
 import uuid
 
 import pytest
+from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt
 from qgis.PyQt.QtTest import QTest
+from qgis.PyQt.QtWidgets import QTreeView
 
+from rana_qgis_plugin.data_items.folder_item import (
+    RanaFilesDataItem,
+    RanaFolderDataItem,
+)
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.utils.api import create_project, delete_project
+from rana_qgis_plugin.utils.api import (
+    create_project,
+    create_tenant_project_directory,
+    delete_project,
+)
 
 
 @pytest.fixture
@@ -46,6 +56,10 @@ def test_project_listing(plugin, qtbot, qgis_application, rana_project):
         lambda: rana_project["name"] in get_child_names(plugin, qgis_application),
         timeout=30000,
     )
+    qtbot.waitUntil(
+        lambda: rana_project["name"] in get_child_names(plugin, qgis_application),
+        timeout=30000,
+    )
 
     # Step 2: delete project via API, refresh, assert it disappears
     delete_project(rana_project["id"])
@@ -55,3 +69,100 @@ def test_project_listing(plugin, qtbot, qgis_application, rana_project):
         lambda: rana_project["name"] not in get_child_names(plugin, qgis_application),
         timeout=30000,
     )
+
+
+def test_files(plugin, qtbot, qgis_application, rana_project):
+    # Add folders to project
+    create_tenant_project_directory(rana_project["id"], "foo")
+    create_tenant_project_directory(rana_project["id"], "foo/bar")
+    # Get project and get Files root
+    qtbot.waitUntil(
+        lambda: rana_project["name"] in get_child_names(plugin, qgis_application),
+        timeout=30000,
+    )
+    project_item = next(
+        child
+        for child in plugin.rana_root_item.children()
+        if isinstance(child, RanaProjectDataItem)
+        and child.name() == rana_project["name"]
+    )
+    tree = plugin.browser_dock.findChild(QTreeView)
+    assert tree is not None, "Browser tree not found"
+    model = tree.model()
+
+    def item_index(item, parent=None):
+        parent = parent or QModelIndex()
+        for row in range(model.rowCount(parent)):
+            index = model.index(row, 0, parent)
+            source_index = model.mapToSource(index)
+            if model.sourceModel().dataItem(source_index) is item:
+                return index
+            nested = item_index(item, index)
+            if nested.isValid():
+                return nested
+        return QModelIndex()
+
+    def expand_item(item):
+        index = item_index(item)
+        assert index.isValid(), f"No model index for {item.name()}"
+        tree.scrollTo(index)
+        tree.setCurrentIndex(index)
+        rect = tree.visualRect(index)
+        assert rect.isValid(), f"No visual rectangle for {item.name()}"
+        qtbot.mouseClick(
+            tree.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=rect.center() - QPoint(rect.height() // 2, 0),
+        )
+        tree.expand(index)
+        qgis_application.processEvents()
+
+    def assert_visible(item):
+        index = item_index(item)
+        assert index.isValid(), f"No model index for {item.name()}"
+        assert tree.isExpanded(index.parent()), f"Parent of {item.name()} is collapsed"
+        assert tree.isRowHidden(index.row(), index.parent()) is False, item.name()
+
+    expand_item(project_item)
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFilesDataItem)
+            for child in (project_item.children() or [])
+        ),
+        timeout=30000,
+    )
+    files_item = next(
+        child
+        for child in (project_item.children() or [])
+        if isinstance(child, RanaFilesDataItem)
+    )
+
+    expand_item(files_item)
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFolderDataItem) and child.name() == "foo"
+            for child in files_item.children()
+        ),
+        timeout=30000,
+    )
+    foo_item = next(
+        child
+        for child in files_item.children()
+        if isinstance(child, RanaFolderDataItem) and child.name() == "foo"
+    )
+    assert_visible(foo_item)
+
+    expand_item(foo_item)
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFolderDataItem) and child.name() == "bar"
+            for child in foo_item.children()
+        ),
+        timeout=30000,
+    )
+    bar_item = next(
+        child
+        for child in foo_item.children()
+        if isinstance(child, RanaFolderDataItem) and child.name() == "bar"
+    )
+    assert_visible(bar_item)
