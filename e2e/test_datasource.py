@@ -4,7 +4,6 @@ import uuid
 
 import pytest
 from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt
-from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QTreeView
 
 from rana_qgis_plugin.data_items.folder_item import (
@@ -24,8 +23,10 @@ def authenticated(plugin, qtbot, qgis_application):
     """Ensure the QGIS auth manager has resolved the authcfg by performing one API call."""
     root = plugin.rana_root_item
     root.refresh()
-    QTest.qWait(2000)
-    qgis_application.processEvents()
+    qtbot.waitUntil(
+        lambda: root.children() is not None,
+        timeout=30000,
+    )
 
 
 @pytest.fixture
@@ -39,10 +40,8 @@ def rana_project(authenticated, plugin):
         delete_project(result["id"])
 
 
-def get_child_names(plugin, qgis_application):
+def get_child_names(plugin):
     plugin.rana_root_item.refresh()
-    QTest.qWait(3000)
-    qgis_application.processEvents()
     return [
         child.name()
         for child in (plugin.rana_root_item.children() or [])
@@ -50,14 +49,14 @@ def get_child_names(plugin, qgis_application):
     ]
 
 
-def test_project_listing(plugin, qtbot, qgis_application, rana_project):
+def test_project_listing(plugin, qtbot, rana_project):
     # Step 1: project created by fixture — assert it appears after refresh
     qtbot.waitUntil(
-        lambda: rana_project["name"] in get_child_names(plugin, qgis_application),
+        lambda: rana_project["name"] in get_child_names(plugin),
         timeout=30000,
     )
     qtbot.waitUntil(
-        lambda: rana_project["name"] in get_child_names(plugin, qgis_application),
+        lambda: rana_project["name"] in get_child_names(plugin),
         timeout=30000,
     )
 
@@ -66,7 +65,7 @@ def test_project_listing(plugin, qtbot, qgis_application, rana_project):
     rana_project["id"] = None  # prevent double-delete in fixture teardown
 
     qtbot.waitUntil(
-        lambda: rana_project["name"] not in get_child_names(plugin, qgis_application),
+        lambda: rana_project["name"] not in get_child_names(plugin),
         timeout=30000,
     )
 
@@ -77,7 +76,7 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
     create_tenant_project_directory(rana_project["id"], "foo/bar")
     # Get project and get Files root
     qtbot.waitUntil(
-        lambda: rana_project["name"] in get_child_names(plugin, qgis_application),
+        lambda: rana_project["name"] in get_child_names(plugin),
         timeout=30000,
     )
     project_item = next(

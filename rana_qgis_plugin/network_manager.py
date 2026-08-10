@@ -270,6 +270,7 @@ class NetworkManager(object):
             content_type = self._reply.header(
                 QNetworkRequest.KnownHeaders.ContentTypeHeader
             )
+            content_type = str(content_type) if content_type else ""
             if content_type.startswith("application/json"):
                 json_doc = QJsonDocument.fromJson(raw_content)
                 if json_doc.isObject():
