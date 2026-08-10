@@ -23,6 +23,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name
+from rana_qgis_plugin.widgets.file_info_dialog import FileInfoDialog
 
 
 class RanaFileDataItem(QgsDataItem):
@@ -37,27 +38,25 @@ class RanaFileDataItem(QgsDataItem):
         self,
         parent: QgsDataItem,
         project_id: str,
-        file_path: str,
+        file_item: dict,
         display_name: str,
-        data_type: str,
-        descriptor_id: Optional[str],
         error_signals: ApiErrorSignals,
     ):
         self.project_id = project_id
-        self.file_path = file_path
-        self.data_type = data_type
-        self.descriptor_id = descriptor_id
+        self.file_item = file_item
+        self.data_type = file_item.get("data_type", "")
+        self.descriptor_id = file_item.get("descriptor_id")
         self.error_signals = error_signals
         super().__init__(
             Qgis.BrowserItemType.Custom,
             parent,
             display_name,
-            f"{parent.path()}/{file_path}",
+            f"{parent.path()}/{file_item['id']}",
             "Rana",
         )
-        self.setIcon(get_icon_from_theme(get_file_icon_name(data_type)))
+        self.setIcon(get_icon_from_theme(get_file_icon_name(self.data_type)))
         self.setSortKey(f"1:{display_name.lower()}")
-        if data_type == "vector":
+        if self.data_type == "vector":
             self.setCapabilitiesV2(
                 cast(
                     Qgis.BrowserItemCapabilities,
@@ -103,5 +102,11 @@ class RanaFileDataItem(QgsDataItem):
             q_action = QAction(action.value, parent)
             q_action.setIcon(action.icon)
             q_action.setToolTip(get_action_tooltip(action))
+            if action is FileAction.VIEW_FILE_INFO:
+                q_action.triggered.connect(
+                    lambda: FileInfoDialog(
+                        self.file_item, self.error_signals, parent
+                    ).exec()
+                )
             actions.append(q_action)
         return actions

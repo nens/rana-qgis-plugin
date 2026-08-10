@@ -29,6 +29,7 @@ class FileAction(Enum):
     CREATE_DIRECTORY = "Create directory"
     UPLOAD_FILES = "Upload file(s)"
     VERSION_HISTORY = "Version history"
+    VIEW_FILE_INFO = "View file info"
 
     @property
     def icon(self) -> QIcon:
@@ -55,6 +56,7 @@ _TOOLTIPS = {
     FileAction.CREATE_DIRECTORY: "Create a new folder",
     FileAction.UPLOAD_FILES: "Upload files to this location",
     FileAction.VERSION_HISTORY: "View file version history",
+    FileAction.VIEW_FILE_INFO: "View file metadata",
 }
 
 
@@ -80,7 +82,9 @@ def get_file_actions(data_type: str) -> list[FileAction]:
         actions = [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
     else:
         actions = [FileAction.OPEN_IN_BROWSER] if data_type == "other" else []
-    return actions + [FileAction.RENAME, FileAction.DELETE]
+    return (
+        [FileAction.VIEW_FILE_INFO] + actions + [FileAction.RENAME, FileAction.DELETE]
+    )
 
 
 def get_folder_actions(is_root: bool = False) -> list[FileAction]:

@@ -5,8 +5,11 @@ from pathlib import PurePosixPath
 from typing import Any, Optional
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
+
+# TODO - consider if this breaks the design of no api fetchign her
+from rana_qgis_plugin.utils.api import get_threedi_schematisation
 from rana_qgis_plugin.utils.generic import display_bytes
-from rana_qgis_plugin.utils.time import parse_timestamp_str
+from rana_qgis_plugin.utils.time import format_activity_timestamp_str
 
 
 @dataclass
@@ -70,12 +73,12 @@ def parse_timestamp(value: Any) -> FieldValue:
     if not value:
         return FieldValue(value, True)
     try:
-        return FieldValue(parse_timestamp_str(value))
+        return FieldValue(format_activity_timestamp_str(value))
     except (TypeError, ValueError, OverflowError) as error:
         return FieldValue(value, True, str(error))
 
 
-class MoreInfoModel:
+class FileInfoModel:
     """Common data for the More Information box."""
 
     def __init__(self, descriptor: dict | None, file_data: dict | None = None):
@@ -95,8 +98,10 @@ class MoreInfoModel:
             filename=FieldValue(filename, not bool(filename)),
             icon_name=data_type,
             size=FieldValue(
-                display_bytes(size) if size is not None else None,
-                size is None and data_type != "threedi_schematisation",
+                display_bytes(size)
+                if size and data_type != "threedi_schematisation"
+                else "N/A",
+                size is None,
             ),
             user=self.username(user),
             avatar_user=user,
@@ -129,14 +134,16 @@ class MoreInfoModel:
             InfoRow("Projection", self.projection()),
             InfoRow("Type", FieldValue(SUPPORTED_DATA_TYPES.get(data_type, data_type))),
             InfoRow("Status", FieldValue(status_value)),
-            InfoRow(
-                "Storage",
-                FieldValue(
-                    display_bytes(size) if size is not None else None, size is None
-                ),
-            ),
         ]
-
+        if data_type != "threedi_schematisation":
+            rows.append(
+                InfoRow(
+                    "Storage",
+                    FieldValue(
+                        display_bytes(size) if size is not None else None, size is None
+                    ),
+                )
+            )
         return InfoSection("More information", rows)
 
     def projection(self) -> FieldValue:
@@ -148,7 +155,7 @@ class MoreInfoModel:
         return FieldValue(projection, projection is None)
 
 
-class ScenarioMoreInfoModel(MoreInfoModel):
+class ScenarioFileInfoModel(FileInfoModel):
     """Scenario-specific More Information data."""
 
     def get_more_section(self) -> InfoSection:
@@ -195,17 +202,21 @@ class ScenarioMoreInfoModel(MoreInfoModel):
         )
 
 
-class SchematisationMoreInfoModel(MoreInfoModel):
+class SchematisationFileInfoModel(FileInfoModel):
     """Schematisation-specific More Information data."""
 
     def get_more_section(self) -> InfoSection:
         """Build schematisation and revision metadata rows."""
-        base_section_rows = [
-            row for row in super().get_more_section().rows if row.key != "Storage"
-        ]
-        schematisation = self.descriptor.get("schematisation") or {}
-        revision = self.descriptor.get("latest_revision") or {}
+        schematisation_obj = get_threedi_schematisation(self.file_data["descriptor_id"])
+        schematisation = schematisation_obj["schematisation"]
+        revision = schematisation_obj["latest_revision"]
         metadata = schematisation.get("meta") or {}
+        # TODO: setup HCC auth and retrieve model
+        # TODO: would be great if this works after showing UI
+        latest_revision_model = None
+        from rana_qgis_plugin.utils.log import plugin_log_warn
+
+        plugin_log_warn(f"{schematisation=}")
         created_by = (
             " ".join(
                 part
@@ -219,7 +230,7 @@ class SchematisationMoreInfoModel(MoreInfoModel):
         )
         return InfoSection(
             "Schematisation",
-            base_section_rows
+            super().get_more_section().rows
             + [
                 InfoRow(
                     "Schematisation name", FieldValue.from_dict(schematisation, "name")
@@ -241,7 +252,9 @@ class SchematisationMoreInfoModel(MoreInfoModel):
                 ),
                 InfoRow(
                     "Schematisation tags",
-                    FieldValue("; ".join(schematisation.get("tags", []))),
+                    FieldValue(value="; ".join(schematisation["tags"]))
+                    if "tags" in schematisation
+                    else FieldValue.from_dict(schematisation, "tags"),
                 ),
                 InfoRow("Latest revision ID", FieldValue.from_dict(revision, "id")),
                 InfoRow(
@@ -252,10 +265,27 @@ class SchematisationMoreInfoModel(MoreInfoModel):
                 ),
                 InfoRow(
                     "Latest revision is simulation ready",
-                    FieldValue.from_dict(revision, "is_simulation_ready"),
+                    FieldValue(
+                        value=latest_revision_model is not None,
+                        error=(not schematisation),
+                    ),
                 ),
-                InfoRow("Node count", FieldValue.from_dict(revision, "nodes_count")),
-                InfoRow("Line count", FieldValue.from_dict(revision, "lines_count")),
+                InfoRow(
+                    "Node count",
+                    FieldValue(
+                        value=latest_revision_model.nodes_count,
+                    )
+                    if latest_revision_model
+                    else FieldValue(error=True),
+                ),
+                InfoRow(
+                    "Line count",
+                    FieldValue(
+                        value=latest_revision_model.lines_count,
+                    )
+                    if latest_revision_model
+                    else FieldValue(error=True),
+                ),
             ],
         )
 
@@ -305,12 +335,17 @@ class SchematisationMoreInfoModel(MoreInfoModel):
         return rows
 
 
+def get_file_info_model_class(data_type: str) -> type[FileInfoModel]:
+    """Return the model class for a given file type."""
+    return {
+        "scenario": ScenarioFileInfoModel,
+        "threedi_schematisation": SchematisationFileInfoModel,
+    }.get(data_type, FileInfoModel)
+
+
 def make_more_info_model(
     data_type: str, descriptor: dict | None, file_data: dict | None = None
-) -> MoreInfoModel:
+) -> FileInfoModel:
     """Create the More Information model for a file type."""
-    model_class = {
-        "scenario": ScenarioMoreInfoModel,
-        "threedi_schematisation": SchematisationMoreInfoModel,
-    }.get(data_type, MoreInfoModel)
+    model_class = get_file_info_model_class(data_type)
     return model_class(descriptor, file_data)

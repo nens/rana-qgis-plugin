@@ -101,10 +101,8 @@ class RanaFolderDataItem(QgsDataItem):
         return RanaFileDataItem(
             self,
             self.project_id,
-            item["id"],
+            item,
             display_name,
-            item.get("data_type", ""),
-            item.get("descriptor_id"),
             self.error_signals,
         )
 

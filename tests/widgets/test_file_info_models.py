@@ -1,11 +1,9 @@
-from datetime import datetime
-
 import pytest
 
 from rana_qgis_plugin.widgets.file_info_models import (
     FieldValue,
-    ScenarioMoreInfoModel,
-    SchematisationMoreInfoModel,
+    ScenarioFileInfoModel,
+    SchematisationFileInfoModel,
     make_more_info_model,
 )
 
@@ -49,11 +47,11 @@ def test_scenario_model_contains_simulation_information():
             }
         },
     )
-    assert isinstance(model, ScenarioMoreInfoModel)
+    assert isinstance(model, ScenarioFileInfoModel)
     row_dict = {row.key: row.value for row in model.get_more_section().rows}
     assert row_dict["Simulation name"].value == "Flood run"
     assert row_dict["Model software"].value == "3di"
-    assert isinstance(row_dict["Start"].value, datetime)
+    assert isinstance(row_dict["Start"].value, str)
 
 
 def test_schematisation_model_contains_related_files():
@@ -67,7 +65,7 @@ def test_schematisation_model_contains_related_files():
             },
         },
     )
-    assert isinstance(model, SchematisationMoreInfoModel)
+    assert isinstance(model, SchematisationFileInfoModel)
     assert [row.name.value for row in model.get_related_files()] == [
         "model.sqlite",
         "gridadmin.h5",
