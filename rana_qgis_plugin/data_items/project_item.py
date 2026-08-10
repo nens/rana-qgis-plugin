@@ -12,11 +12,17 @@ from qgis.PyQt.QtWidgets import QAction
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.constant import ICONS_DIR
 from rana_qgis_plugin.data_items.folder_item import RanaFilesDataItem
+from rana_qgis_plugin.data_items.utils import get_loader_from_parent
 from rana_qgis_plugin.utils.settings import base_url, get_tenant_id, hide_project
 
 
 class RanaProjectDataItem(QgsDataItem):
     """Browser item representing a single Rana project."""
+
+    @property
+    def loader(self):
+        """Return the loader owned by the root Rana data item."""
+        return get_loader_from_parent(self.parent())
 
     def __init__(
         self,

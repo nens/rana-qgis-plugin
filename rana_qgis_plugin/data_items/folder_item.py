@@ -15,6 +15,7 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_folder_actions,
 )
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
+from rana_qgis_plugin.data_items.utils import get_loader_from_parent
 from rana_qgis_plugin.icons import dir_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import FetchError, get_tenant_project_files
@@ -22,6 +23,11 @@ from rana_qgis_plugin.utils.api import FetchError, get_tenant_project_files
 
 class RanaFolderDataItem(QgsDataItem):
     """Lazy-loading container for one level of a Rana project folder."""
+
+    @property
+    def loader(self):
+        """Return the loader from the parent data-item chain."""
+        return get_loader_from_parent(self.parent())
 
     def __init__(
         self,

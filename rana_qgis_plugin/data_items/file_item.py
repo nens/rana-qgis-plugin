@@ -15,6 +15,7 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_file_actions,
 )
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
+from rana_qgis_plugin.data_items.utils import get_loader_from_parent
 from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
@@ -26,6 +27,11 @@ from rana_qgis_plugin.utils.generic import get_file_icon_name
 
 class RanaFileDataItem(QgsDataItem):
     """Browser item representing one file in a Rana project."""
+
+    @property
+    def loader(self):
+        """Return the loader from the parent data-item chain."""
+        return get_loader_from_parent(self.parent())
 
     def __init__(
         self,
