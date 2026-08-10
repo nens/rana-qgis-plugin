@@ -1,0 +1,316 @@
+"""Presentation models for the Rana file information dialog."""
+
+from dataclasses import dataclass
+from pathlib import PurePosixPath
+from typing import Any, Optional
+
+from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
+from rana_qgis_plugin.utils.generic import display_bytes
+from rana_qgis_plugin.utils.time import parse_timestamp_str
+
+
+@dataclass
+class FieldValue:
+    """A display value that records missing or invalid source data."""
+
+    value: Any = None
+    error: bool = False
+    error_msg: str = ""
+
+    @staticmethod
+    def from_dict(data: Optional[dict], key: str, default: Any = None) -> "FieldValue":
+        """Safely extract a value from a dictionary."""
+        if data is None:
+            return FieldValue(default, True, "Source unavailable")
+        if key not in data:
+            return FieldValue(default, True, f"Missing key: {key}")
+        return FieldValue(data[key])
+
+
+@dataclass
+class GeneralInfo:
+    """Data rendered by the distinct General box layout."""
+
+    filename: FieldValue
+    icon_name: str
+    size: FieldValue
+    user: FieldValue
+    avatar_user: dict | None
+    message: FieldValue
+    last_modified: FieldValue
+
+
+@dataclass
+class InfoRow:
+    """One label/value pair in the More Information box."""
+
+    key: str
+    value: FieldValue
+
+
+@dataclass
+class InfoSection:
+    """A titled group of More Information rows."""
+
+    title: str
+    rows: list[InfoRow]
+
+
+@dataclass
+class RelatedFile:
+    """One file shown in the schematisation related-files table."""
+
+    name: FieldValue
+    data_type: FieldValue
+    size: FieldValue
+
+
+def parse_timestamp(value: Any) -> FieldValue:
+    """Parse an API timestamp while preserving an error state."""
+    if not value:
+        return FieldValue(value, True)
+    try:
+        return FieldValue(parse_timestamp_str(value))
+    except (TypeError, ValueError, OverflowError) as error:
+        return FieldValue(value, True, str(error))
+
+
+class MoreInfoModel:
+    """Common data for the More Information box."""
+
+    def __init__(self, descriptor: dict | None, file_data: dict | None = None):
+        self.descriptor = descriptor or {}
+        self.file_data = file_data or {}
+
+    def get_related_files(self) -> list[RelatedFile]:
+        return []
+
+    def get_general_info(self) -> GeneralInfo:
+        """Build the General box data without flattening its layout."""
+        data_type = self.file_data.get("data_type", "")
+        user = self.file_data.get("user")
+        size = self.file_data.get("size")
+        filename = PurePosixPath(self.file_data.get("id", "")).name
+        return GeneralInfo(
+            filename=FieldValue(filename, not bool(filename)),
+            icon_name=data_type,
+            size=FieldValue(
+                display_bytes(size) if size is not None else None,
+                size is None and data_type != "threedi_schematisation",
+            ),
+            user=self.username(user),
+            avatar_user=user,
+            message=FieldValue.from_dict(self.descriptor, "description", ""),
+            last_modified=parse_timestamp(self.file_data.get("last_modified")),
+        )
+
+    @staticmethod
+    def username(user: dict | None) -> FieldValue:
+        """Build a display name from a user object."""
+        if user is None:
+            return FieldValue(None, True, "Source unavailable")
+        given = FieldValue.from_dict(user, "given_name", "")
+        family = FieldValue.from_dict(user, "family_name", "")
+        name = f"{given.value} {family.value}".strip() or None
+        return FieldValue(
+            name, given.error or family.error, given.error_msg or family.error_msg
+        )
+
+    def get_more_section(self) -> InfoSection:
+        """Build common More Information rows."""
+        data_type = self.file_data.get("data_type", "")
+        status = self.descriptor.get("status") or {}
+        status_value = status.get("id", "")
+        status_message = (status.get("message_i18n") or {}).get("msg")
+        if status_message:
+            status_value = f"{status_value}: {status_message}"
+        size = self.file_data.get("size")
+        rows = [
+            InfoRow("Projection", self.projection()),
+            InfoRow("Type", FieldValue(SUPPORTED_DATA_TYPES.get(data_type, data_type))),
+            InfoRow("Status", FieldValue(status_value)),
+            InfoRow(
+                "Storage",
+                FieldValue(
+                    display_bytes(size) if size is not None else None, size is None
+                ),
+            ),
+        ]
+
+        return InfoSection("More information", rows)
+
+    def projection(self) -> FieldValue:
+        """Return the best available projection."""
+        meta = self.descriptor.get("meta") or {}
+        projection = (meta.get("extent") or {}).get("crs") or (
+            meta.get("grid") or {}
+        ).get("crs")
+        return FieldValue(projection, projection is None)
+
+
+class ScenarioMoreInfoModel(MoreInfoModel):
+    """Scenario-specific More Information data."""
+
+    def get_more_section(self) -> InfoSection:
+        meta = self.descriptor.get("meta") or {}
+        simulation = meta.get("simulation") or {}
+        schematisation = meta.get("schematisation") or {}
+        software = simulation.get("software") or {}
+        interval = simulation.get("interval") or []
+        return InfoSection(
+            "Scenario",
+            super().get_more_section().rows
+            + [
+                InfoRow("Simulation name", FieldValue.from_dict(simulation, "name")),
+                InfoRow("Simulation ID", FieldValue.from_dict(simulation, "id")),
+                InfoRow(
+                    "Schematisation name", FieldValue.from_dict(schematisation, "name")
+                ),
+                InfoRow(
+                    "Schematisation ID", FieldValue.from_dict(schematisation, "id")
+                ),
+                InfoRow(
+                    "Schematisation version",
+                    FieldValue.from_dict(schematisation, "version"),
+                ),
+                InfoRow(
+                    "Revision ID", FieldValue.from_dict(schematisation, "revision_id")
+                ),
+                InfoRow("Model ID", FieldValue.from_dict(schematisation, "model_id")),
+                InfoRow("Model software", FieldValue.from_dict(software, "id")),
+                InfoRow("Software version", FieldValue.from_dict(software, "version")),
+                InfoRow(
+                    "Start",
+                    parse_timestamp(interval[0])
+                    if len(interval) > 0
+                    else FieldValue(None, True),
+                ),
+                InfoRow(
+                    "End",
+                    parse_timestamp(interval[1])
+                    if len(interval) > 1
+                    else FieldValue(None, True),
+                ),
+            ],
+        )
+
+
+class SchematisationMoreInfoModel(MoreInfoModel):
+    """Schematisation-specific More Information data."""
+
+    def get_more_section(self) -> InfoSection:
+        """Build schematisation and revision metadata rows."""
+        base_section_rows = [
+            row for row in super().get_more_section().rows if row.key != "Storage"
+        ]
+        schematisation = self.descriptor.get("schematisation") or {}
+        revision = self.descriptor.get("latest_revision") or {}
+        metadata = schematisation.get("meta") or {}
+        created_by = (
+            " ".join(
+                part
+                for part in (
+                    schematisation.get("created_by_first_name"),
+                    schematisation.get("created_by_last_name"),
+                )
+                if part
+            )
+            or None
+        )
+        return InfoSection(
+            "Schematisation",
+            base_section_rows
+            + [
+                InfoRow(
+                    "Schematisation name", FieldValue.from_dict(schematisation, "name")
+                ),
+                InfoRow(
+                    "Schematisation ID", FieldValue.from_dict(schematisation, "id")
+                ),
+                InfoRow(
+                    "Schematisation description",
+                    FieldValue.from_dict(metadata, "description"),
+                ),
+                InfoRow(
+                    "Schematisation created by",
+                    FieldValue(created_by, created_by is None),
+                ),
+                InfoRow(
+                    "Schematisation created on",
+                    parse_timestamp(schematisation.get("created")),
+                ),
+                InfoRow(
+                    "Schematisation tags",
+                    FieldValue("; ".join(schematisation.get("tags", []))),
+                ),
+                InfoRow("Latest revision ID", FieldValue.from_dict(revision, "id")),
+                InfoRow(
+                    "Latest revision number", FieldValue.from_dict(revision, "number")
+                ),
+                InfoRow(
+                    "Latest revision valid", FieldValue.from_dict(revision, "is_valid")
+                ),
+                InfoRow(
+                    "Latest revision is simulation ready",
+                    FieldValue.from_dict(revision, "is_simulation_ready"),
+                ),
+                InfoRow("Node count", FieldValue.from_dict(revision, "nodes_count")),
+                InfoRow("Line count", FieldValue.from_dict(revision, "lines_count")),
+            ],
+        )
+
+    def projection(self) -> FieldValue:
+        """Return the projection from the DEM raster when available."""
+        revision = self.descriptor.get("latest_revision") or {}
+        dem = next(
+            (
+                raster
+                for raster in revision.get("rasters", [])
+                if raster.get("type") == "dem_file"
+            ),
+            None,
+        )
+        if dem and dem.get("epsg_code"):
+            return FieldValue(f"EPSG:{dem['epsg_code']}")
+        return super().projection()
+
+    def get_related_files(self) -> list[RelatedFile]:
+        """Build the related-files table data."""
+        revision = self.descriptor.get("latest_revision") or {}
+        rows = []
+        sqlite_file = (revision.get("sqlite") or {}).get("file")
+        if sqlite_file:
+            rows.append(
+                RelatedFile(
+                    FieldValue(sqlite_file.get("filename")),
+                    FieldValue(sqlite_file.get("type")),
+                    FieldValue(sqlite_file.get("size", 0)),
+                )
+            )
+        for raster in revision.get("rasters", []):
+            file_data = raster.get("file")
+            if file_data:
+                rows.append(
+                    RelatedFile(
+                        FieldValue(file_data.get("filename")),
+                        FieldValue(raster.get("type")),
+                        FieldValue(file_data.get("size", 0)),
+                    )
+                )
+        if revision.get("is_simulation_ready"):
+            rows.extend(
+                RelatedFile(FieldValue(name), FieldValue("gridadmin"), FieldValue(0))
+                for name in ("gridadmin.h5", "gridadmin.gpkg")
+            )
+        return rows
+
+
+def make_more_info_model(
+    data_type: str, descriptor: dict | None, file_data: dict | None = None
+) -> MoreInfoModel:
+    """Create the More Information model for a file type."""
+    model_class = {
+        "scenario": ScenarioMoreInfoModel,
+        "threedi_schematisation": SchematisationMoreInfoModel,
+    }.get(data_type, MoreInfoModel)
+    return model_class(descriptor, file_data)
