@@ -28,9 +28,7 @@ class AvatarWorker(QRunnable):
         for user in self.users:
             if self._cancelled:
                 break
-            new_avatar = get_avatar(
-                user, self.communication, create_from_initials=False
-            )
+            new_avatar = get_avatar(user, create_from_initials=False)
             if new_avatar:
                 self.signals.avatar_ready.emit(user["id"], new_avatar)
         self.signals.finished.emit()

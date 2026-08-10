@@ -27,14 +27,16 @@ from rana_qgis_plugin.widgets.file_info_models import (
     get_file_info_model_class,
     make_more_info_model,
 )
+from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme_as_pixmap
 
 
 class GeneralInfoWidget(QWidget):
     """Render the distinct General section layout."""
 
-    def __init__(self, parent=None):
+    def __init__(self, communication, parent=None):
         super().__init__(parent)
+        self.communication = communication
         self.labels = {}
         self.setLayout(QVBoxLayout(self))
         self.setup_ui()
@@ -55,7 +57,6 @@ class GeneralInfoWidget(QWidget):
 
     def update(self, info: GeneralInfo):
         """Update stable labels from General data."""
-        # TODO: icon and avatar
         fields = {
             "filename": info.filename,
             "size": info.size,
@@ -66,6 +67,11 @@ class GeneralInfoWidget(QWidget):
         self.labels["file_icon"].setPixmap(
             get_icon_from_theme_as_pixmap(get_file_icon_name(info.icon_name))
         )
+        avatar = get_avatar(
+            info.avatar_user, try_remote=True, create_from_initials=True
+        )
+        if avatar:
+            self.labels["user_icon"].setPixmap(avatar)
         for key, field in fields.items():
             update_label(self.labels[key], field)
 

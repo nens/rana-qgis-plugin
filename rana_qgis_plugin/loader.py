@@ -23,7 +23,7 @@ class Loader(QObject):
 
     def __init__(self, communication: "UICommunication", parent=None):
         super().__init__(parent)
-        self.avatar_cache = AvatarCache(communication)
+        self.avatar_cache = AvatarCache()
         self.avatar_cache.avatar_changed.connect(self._on_avatar_changed)
         self._communication = communication
         self._avatar_pool = QThreadPool()
