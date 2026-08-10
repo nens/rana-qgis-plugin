@@ -24,7 +24,7 @@ COPY requirements-dev.txt /root
 COPY requirements-test.txt /root
 RUN pip3 install -r /root/requirements-dev.txt --break-system-packages
 
-ADD https://raw.githubusercontent.com/nens/nens-dependency-loader/refs/heads/main/dependencies.py /root/dependencies.py
+ADD https://raw.githubusercontent.com/nens/nens-dependency-loader/refs/heads/threedi-api-client5/dependencies.py /root/dependencies.py
 RUN python3 /root/dependencies.py
 RUN pip3 install -r /root/requirements-test.txt -c /root/constraints.txt --no-deps --upgrade --target /usr/share/qgis/python/plugins
 

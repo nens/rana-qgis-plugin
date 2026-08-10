@@ -20,3 +20,4 @@
 
 * Test if project is visible after adding and refresh
 * Test if project is no longer visible after removing and refresh
+* Test if expected folder tree is shown in Files item

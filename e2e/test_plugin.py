@@ -2,7 +2,6 @@ from unittest.mock import patch
 
 from qgis.core import QgsSettings
 from qgis.PyQt.QtCore import QEvent, Qt, QTimer
-from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QDialog, QDialogButtonBox, QTreeView
 
 from e2e.test_utils import (
@@ -88,8 +87,16 @@ def test_refocus_not_triggered_by_settings_dialog(plugin, qtbot, qgis_applicatio
     with patch.object(root, "refresh") as mock_refresh:
         QTimer.singleShot(200, make_modal_handler(qtbot, QDialog, dismiss))
         plugin.rana_root_item.open_settings()
-        QTest.qWait(500)
-        qgis_application.processEvents()
+        qtbot.waitUntil(
+            lambda: (
+                not any(
+                    widget.isVisible() and widget.isModal()
+                    for widget in qgis_application.topLevelWidgets()
+                    if isinstance(widget, QDialog)
+                )
+            ),
+            timeout=5000,
+        )
 
         mock_refresh.assert_not_called()
 

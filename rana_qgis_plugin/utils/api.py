@@ -212,25 +212,24 @@ def get_tenant_projects(params: Optional[dict] = None) -> dict:
     return paginated_fetch(url, limit=100, params=params or {})
 
 
-def get_tenant_project_files(
-    communication: UICommunication, project_id: str, params: Optional[dict] = None
-) -> list:
+def get_tenant_project_files(project_id: str, params: Optional[dict] = None) -> list:
+    """Fetch all files for a project using cursor-based pagination.
+
+    Raises:
+        FetchError: If a page cannot be fetched.
+    """
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/ls"
     if params is None:
         params = {"limit": 1000}
-    try:
-        files = []
-        while True:
-            response = simple_fetch(url, params)
-            files += response["items"]
-            if not response["next"]:
-                break
-            params["cursor"] = response["next"]
-        return files
-    except RanaFetchError as e:
-        communication.show_error(f"Failed to get files: {e}")
-        return []
+    files = []
+    while True:
+        response = simple_fetch(url, params)
+        files += response["items"]
+        if not response["next"]:
+            break
+        params["cursor"] = response["next"]
+    return files
 
 
 def create_project(params: dict) -> Optional[dict]:
@@ -392,13 +391,13 @@ def get_tenant_file_descriptor(descriptor_id: str) -> Optional[dict]:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}"
     network_manager = NetworkManager(url, authcfg_id)
-    status, _ = network_manager.fetch()
+    status, error = network_manager.fetch()
 
     if status:
         response = network_manager.content
         return response
     else:
-        return None
+        raise RanaFetchError(error or "", url, {})
 
 
 def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str) -> list:
