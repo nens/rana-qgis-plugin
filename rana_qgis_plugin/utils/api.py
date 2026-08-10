@@ -391,13 +391,13 @@ def get_tenant_file_descriptor(descriptor_id: str) -> Optional[dict]:
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}"
     network_manager = NetworkManager(url, authcfg_id)
-    status, _ = network_manager.fetch()
+    status, error = network_manager.fetch()
 
     if status:
         response = network_manager.content
         return response
     else:
-        return None
+        raise RanaFetchError(error or "", url, {})
 
 
 def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str) -> list:
