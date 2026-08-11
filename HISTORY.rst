@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.19 (unreleased)
+1.2.19 (2026-08-11)
 -------------------
 
 - Revert fix for nens/rana#4720 becuase it completely breaks opening schematisations on windows
