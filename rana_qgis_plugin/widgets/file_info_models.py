@@ -5,10 +5,7 @@ from pathlib import PurePosixPath
 from typing import Any, Optional
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
-from rana_qgis_plugin.utils.api import get_threedi_schematisation
-from rana_qgis_plugin.utils.auth_3di import has_3di_auth
-from rana_qgis_plugin.utils.generic import display_bytes, get_threedi_api
+from rana_qgis_plugin.utils.generic import display_bytes
 from rana_qgis_plugin.utils.time import format_activity_timestamp_str
 
 
@@ -205,55 +202,29 @@ class ScenarioFileInfoModel(FileInfoModel):
 class SchematisationFileInfoModel(FileInfoModel):
     """Schematisation-specific More Information data."""
 
-    def __init__(self, descriptor: dict | None, file_data: dict | None = None):
+    def __init__(
+        self,
+        descriptor: dict | None,
+        file_data: dict | None = None,
+        schematisation_data: dict | None = None,
+        threedi_model_data: Any = None,
+    ):
         super().__init__(descriptor, file_data)
-        # Pre-populate from descriptor when it already contains schematisation data
-        # (used in tests and callers that pass the API response directly).
-        if (
-            descriptor
-            and "schematisation" in descriptor
-            and "latest_revision" in descriptor
-        ):
-            self._schematisation_obj: dict | None = descriptor
-        else:
-            self._schematisation_obj = None
-        self._threedi_model: Any = None
-        self._threedi_model_fetched = False
+        self.schematisation_data: dict | None = schematisation_data
+        self.threedi_model_data: Any = threedi_model_data
 
     def schematisation_obj(self) -> dict:
-        """Fetch and cache the schematisation and latest revision data."""
-        if self._schematisation_obj is None:
-            self._schematisation_obj = get_threedi_schematisation(
-                self.file_data["descriptor_id"]
-            )
-        return self._schematisation_obj
+        """Return the fetched schematisation data."""
+        return self.schematisation_data or {}
 
     def threedi_model(self) -> Any:
-        """Fetch and cache the latest valid ThreediModel, or None."""
-        if self._threedi_model_fetched:
-            return self._threedi_model
-        self._threedi_model_fetched = True
-        revision = self.schematisation_obj()["latest_revision"]
-        if (not has_3di_auth()) or (not revision.get("has_threedimodel")):
-            return None
-        try:
-            tc = ThreediCalls(get_threedi_api())
-            schematisation_id = self.schematisation_obj()["schematisation"]["id"]
-            models = tc.fetch_schematisation_revision_3di_models(
-                schematisation_id, revision["id"]
-            )
-            self._threedi_model = next(
-                (m for m in models if m.is_valid and not m.disabled), None
-            )
-        except Exception as e:
-            self._threedi_model = None
-        return self._threedi_model
+        """Return the fetched latest valid ThreediModel, or None."""
+        return self.threedi_model_data
 
     def get_more_section(self) -> InfoSection:
         """Build schematisation and revision metadata rows."""
-        schematisation_obj = self.schematisation_obj()
-        schematisation = schematisation_obj["schematisation"]
-        revision = schematisation_obj["latest_revision"]
+        schematisation = self.schematisation_obj()["schematisation"]
+        revision = self.schematisation_obj()["latest_revision"]
         metadata = schematisation.get("meta") or {}
         latest_revision_model = self.threedi_model()
         created_by = (
@@ -330,7 +301,7 @@ class SchematisationFileInfoModel(FileInfoModel):
 
     def projection(self) -> FieldValue:
         """Return the projection from the DEM raster when available."""
-        revision = self.descriptor.get("latest_revision") or {}
+        revision = self.schematisation_obj()["latest_revision"]
         dem = next(
             (
                 raster
@@ -380,11 +351,3 @@ def get_file_info_model_class(data_type: str) -> type[FileInfoModel]:
         "scenario": ScenarioFileInfoModel,
         "threedi_schematisation": SchematisationFileInfoModel,
     }.get(data_type, FileInfoModel)
-
-
-def make_more_info_model(
-    data_type: str, descriptor: dict | None, file_data: dict | None = None
-) -> FileInfoModel:
-    """Create the More Information model for a file type."""
-    model_class = get_file_info_model_class(data_type)
-    return model_class(descriptor, file_data)

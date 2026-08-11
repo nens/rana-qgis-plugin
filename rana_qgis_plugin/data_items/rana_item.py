@@ -48,6 +48,7 @@ from rana_qgis_plugin.utils.api import (
     get_user_tenants,
 )
 from rana_qgis_plugin.utils.auth_3di import remove_3di_auth, set_3di_auth
+from rana_qgis_plugin.utils.log import plugin_log_error, plugin_log_info
 from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
@@ -329,13 +330,15 @@ class RanaRootDataItem(QgsDataItem):
 
     def _setup_3di_auth(self, user) -> None:  # type: ignore[no-untyped-def]
         """Fetch and store the 3Di personal API key for this user."""
-        personal_api_key, _ = get_threedi_personal_api_key(
+        personal_api_key, error = get_threedi_personal_api_key(
             self.communication, user["sub"]
         )  # type: ignore[arg-type]
         if personal_api_key:
             set_3di_auth(personal_api_key)
+        elif error:
+            plugin_log_error(f"Failed to fetch 3Di personal API key: {error}")
         else:
-            remove_3di_auth()
+            plugin_log_info("User has no 3Di access; skipping 3Di auth setup")
 
     def logout(self, delete_config: bool = True) -> None:
         """Full logout: clear credentials and reset UI state."""

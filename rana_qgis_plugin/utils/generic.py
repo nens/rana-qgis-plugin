@@ -25,11 +25,10 @@ from rana_qgis_plugin.utils.settings import get_hcc_url_override
 def get_threedi_api() -> Any:
     _, personal_api_token = get_3di_auth()
     if not personal_api_token:
-        raise RuntimeError("No 3Di personal API token available")
+        return None
     hcc_url = get_hcc_url_override() or get_frontend_settings()["hcc_url"]
     hcc_url = hcc_url.rstrip("/")
-    threedi_api = get_api_client_with_personal_api_token(personal_api_token, hcc_url)
-    return threedi_api
+    return get_api_client_with_personal_api_token(personal_api_token, hcc_url)
 
 
 def get_threedi_organisations(communication: Any) -> list[str]:

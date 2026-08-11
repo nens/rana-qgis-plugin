@@ -23,7 +23,10 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name
-from rana_qgis_plugin.widgets.file_info_dialog import FileInfoDialog
+from rana_qgis_plugin.widgets.file_info_dialog import (
+    FileInfoDialog,
+    SchematisationFileInfoDialog,
+)
 
 
 class RanaFileDataItem(QgsDataItem):
@@ -104,9 +107,11 @@ class RanaFileDataItem(QgsDataItem):
             q_action.setToolTip(get_action_tooltip(action))
             if action is FileAction.VIEW_FILE_INFO:
                 q_action.triggered.connect(
-                    lambda: FileInfoDialog(
-                        self.file_item, self.error_signals, parent
-                    ).exec()
+                    lambda: (
+                        SchematisationFileInfoDialog
+                        if self.file_item.get("data_type") == "threedi_schematisation"
+                        else FileInfoDialog
+                    )(self.file_item, self.error_signals, parent).exec()
                 )
             actions.append(q_action)
         return actions

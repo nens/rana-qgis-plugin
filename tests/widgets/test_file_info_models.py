@@ -2,9 +2,10 @@ import pytest
 
 from rana_qgis_plugin.widgets.file_info_models import (
     FieldValue,
+    FileInfoModel,
     ScenarioFileInfoModel,
     SchematisationFileInfoModel,
-    make_more_info_model,
+    get_file_info_model_class,
 )
 
 
@@ -33,10 +34,21 @@ def test_missing_field_is_explicitly_marked():
     assert field.value is None
 
 
+@pytest.mark.parametrize(
+    "data_type,model_cls",
+    [
+        ("scenario", ScenarioFileInfoModel),
+        ("threedi_schematisation", SchematisationFileInfoModel),
+        ("other", FileInfoModel),
+    ],
+)
+def test_get_file_info_model_class(data_type: str, model_cls):
+    assert get_file_info_model_class(data_type) == model_cls
+
+
 def test_scenario_model_contains_simulation_information():
-    model = make_more_info_model(
-        "scenario",
-        {
+    model = ScenarioFileInfoModel(
+        descriptor={
             "meta": {
                 "simulation": {
                     "name": "Flood run",
@@ -45,9 +57,8 @@ def test_scenario_model_contains_simulation_information():
                 },
                 "schematisation": {"name": "Base", "id": "schema-1"},
             }
-        },
+        }
     )
-    assert isinstance(model, ScenarioFileInfoModel)
     row_dict = {row.key: row.value for row in model.get_more_section().rows}
     assert row_dict["Simulation name"].value == "Flood run"
     assert row_dict["Model software"].value == "3di"
@@ -55,17 +66,16 @@ def test_scenario_model_contains_simulation_information():
 
 
 def test_schematisation_model_contains_related_files():
-    model = make_more_info_model(
-        "threedi_schematisation",
-        {
-            "schematisation": {"name": "Model", "tags": ["urban", "demo"]},
-            "latest_revision": {
-                "sqlite": {"file": {"filename": "model.sqlite", "size": 12}},
-                "is_simulation_ready": True,
-            },
+    descriptor = {
+        "schematisation": {"name": "Model", "tags": ["urban", "demo"]},
+        "latest_revision": {
+            "sqlite": {"file": {"filename": "model.sqlite", "size": 12}},
+            "is_simulation_ready": True,
         },
-    )
-    assert isinstance(model, SchematisationFileInfoModel)
+    }
+    model = SchematisationFileInfoModel(descriptor=descriptor)
+
+    model.schematisation_data = descriptor
     assert [row.name.value for row in model.get_related_files()] == [
         "model.sqlite",
         "gridadmin.h5",
@@ -74,8 +84,8 @@ def test_schematisation_model_contains_related_files():
 
 
 def test_generic_model_has_separate_general_data():
-    model = make_more_info_model(
-        "other", None, {"id": "file.txt", "data_type": "other", "size": 12}
+    model = FileInfoModel(
+        descriptor=None, file_data={"id": "file.txt", "data_type": "other", "size": 12}
     )
     general = model.get_general_info()
     assert general.filename.value == "file.txt"

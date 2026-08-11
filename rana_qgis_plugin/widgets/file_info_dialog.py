@@ -18,14 +18,21 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
-from rana_qgis_plugin.utils.api import FetchError, get_tenant_file_descriptor
-from rana_qgis_plugin.utils.generic import get_file_icon_name
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
+from rana_qgis_plugin.utils.api import (
+    FetchError,
+    get_tenant_file_descriptor,
+    get_threedi_schematisation,
+)
+from rana_qgis_plugin.utils.generic import get_file_icon_name, get_threedi_api
+from rana_qgis_plugin.utils.log import plugin_log_error
 from rana_qgis_plugin.widgets.file_info_models import (
     FieldValue,
     GeneralInfo,
     InfoSection,
     RelatedFile,
-    make_more_info_model,
+    SchematisationFileInfoModel,
+    get_file_info_model_class,
 )
 from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme_as_pixmap
@@ -178,9 +185,8 @@ class FileInfoDialog(QDialog):
         layout.addLayout(buttons)
         self.refresh()
 
-    def refresh(self):
+    def _fetch_descriptor(self):
         """Fetch the descriptor and update all section widgets."""
-        self.refresh_button.setEnabled(False)
         self.error_label.hide()
         try:
             descriptor = get_tenant_file_descriptor(self.file_data["descriptor_id"])
@@ -192,20 +198,78 @@ class FileInfoDialog(QDialog):
             self.error_signals.fetch_error_occurred.emit(str(error))
             self.show_error(f"Failed to load file information: {error}")
             return
-        model = make_more_info_model(
-            self.file_data.get("data_type", ""), descriptor, self.file_data
-        )
+        return descriptor
+
+    def _populate_widgets(self, model):
         self.general_widget.update(model.get_general_info())
         self.more_widget.update(model.get_more_section())
         related_files = model.get_related_files()
         self.files_widget.update(related_files)
         self.files_box.setVisible(bool(related_files))
+
+    def refresh(self):
+        """Fetch the descriptor and update all section widgets."""
+        self.refresh_button.setEnabled(False)
+        descriptor = self._fetch_descriptor()
+        if descriptor is None:
+            return
+        model_class = get_file_info_model_class(self.file_data.get("data_type", ""))
+        self._populate_widgets(model_class(descriptor, self.file_data))
         self.refresh_button.setEnabled(True)
 
     def show_error(self, message: str):
         """Display an error while keeping refresh available."""
         self.error_label.setText(message)
         self.error_label.show()
+        self.refresh_button.setEnabled(True)
+
+
+class SchematisationFileInfoDialog(FileInfoDialog):
+    """Display schematisation metadata with its additional API resources."""
+
+    def refresh(self):
+        """Fetch descriptor, schematisation, and model independently."""
+        self.refresh_button.setEnabled(False)
+        descriptor = self._fetch_descriptor()
+        if descriptor is None:
+            return
+        schematisation = None
+        try:
+            schematisation = get_threedi_schematisation(self.file_data["descriptor_id"])
+        except NetworkUnavailableError:
+            self.error_signals.connection_lost.emit()
+            self.show_error("No connection to Rana while loading schematisation")
+        except FetchError as error:
+            plugin_log_error(f"Failed to load schematisation: {error}")
+            self.show_error("Failed to load schematisation details")
+        threedi_model = None
+        revision = (schematisation or {}).get("latest_revision") or {}
+        api = get_threedi_api()
+        if api is not None and revision.get("has_threedimodel"):
+            try:
+                assert schematisation is not None
+                models = ThreediCalls(api).fetch_schematisation_revision_3di_models(
+                    schematisation["schematisation"]["id"], revision["id"]
+                )
+                threedi_model = next(
+                    (
+                        model
+                        for model in models
+                        if model.is_valid and not model.disabled
+                    ),
+                    None,
+                )
+            except Exception as error:
+                plugin_log_error(f"Failed to load 3Di revision model: {error}")
+                self.show_error("Failed to load 3Di model details")
+
+        model = SchematisationFileInfoModel(
+            descriptor,
+            file_data=self.file_data,
+            schematisation_data=schematisation,
+            threedi_model_data=threedi_model,
+        )
+        self._populate_widgets(model)
         self.refresh_button.setEnabled(True)
 
 
