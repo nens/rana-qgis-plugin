@@ -1,8 +1,8 @@
 """Dialog and section widgets for viewing Rana file metadata."""
 
 from qgis.gui import QgsCollapsibleGroupBox
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
+from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtGui import QShowEvent, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -135,8 +135,8 @@ class RelatedFilesWidget(QWidget):
         self.table.resizeRowsToContents()
         height = self.table.horizontalHeader().height()
         height += sum(self.table.rowHeight(row) for row in range(self.model.rowCount()))
-        self.table.setMinimumHeight(height)
-        self.table.setMaximumHeight(height)
+        self.table.setMinimumHeight(height + 10)
+        self.table.setMaximumHeight(height + 10)
 
 
 class FileInfoDialog(QDialog):
@@ -147,7 +147,6 @@ class FileInfoDialog(QDialog):
         self.file_data = file_data
         self.error_signals = error_signals
         self.setWindowTitle(f"File information - {file_data.get('id', '')}")
-        self.resize(650, 600)
         self.setup_ui()
 
     def setup_ui(self):
@@ -161,15 +160,15 @@ class FileInfoDialog(QDialog):
         self.files_box = QgsCollapsibleGroupBox("Related files")
         self.files_widget = RelatedFilesWidget(self.files_box)
         QVBoxLayout(self.files_box).addWidget(self.files_widget)
-        container = QWidget()
-        container_layout = QVBoxLayout(container)
+        self._container = QWidget()
+        container_layout = QVBoxLayout(self._container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         for box in (self.general_box, self.more_box, self.files_box):
             container_layout.addWidget(box)
         container_layout.addStretch()
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(container)
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setWidget(self._container)
 
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.clicked.connect(self.refresh)
@@ -180,7 +179,7 @@ class FileInfoDialog(QDialog):
         buttons.addStretch()
         buttons.addWidget(self.refresh_button)
         layout = QVBoxLayout(self)
-        layout.addWidget(scroll_area)
+        layout.addWidget(self._scroll_area)
         layout.addWidget(self.error_label)
         layout.addLayout(buttons)
         self.refresh()
@@ -216,12 +215,43 @@ class FileInfoDialog(QDialog):
         model_class = get_file_info_model_class(self.file_data.get("data_type", ""))
         self._populate_widgets(model_class(descriptor, self.file_data))
         self.refresh_button.setEnabled(True)
+        if self.isVisible():
+            QTimer.singleShot(0, self._fit_to_content)
+
+    def _fit_to_content(self):
+        """Resize the dialog to show all content without scrolling.
+
+        Uses the vertical scrollbar's overflow (how many pixels are hidden)
+        to determine the extra height needed, and the container's natural
+        sizeHint for the preferred width (before setWidgetResizable squeezes it).
+        """
+        vbar = self._scroll_area.verticalScrollBar()
+        overflow_h = vbar.maximum()
+
+        margins = self.layout().contentsMargins()
+        natural_w = (
+            self._container.sizeHint().width() + margins.left() + margins.right() + 4
+        )
+        target_h = self.height() + overflow_h
+        target_w = max(self.width(), natural_w)
+
+        if screen := self.screen():
+            avail = screen.availableGeometry()
+            target_w = min(target_w, int(avail.width() * 0.85))
+            target_h = min(target_h, int(avail.height() * 0.85))
+
+        self.resize(target_w, target_h)
 
     def show_error(self, message: str):
         """Display an error while keeping refresh available."""
         self.error_label.setText(message)
         self.error_label.show()
         self.refresh_button.setEnabled(True)
+
+    def showEvent(self, event: QShowEvent):
+        """Resize to content after the first layout pass completes."""
+        super().showEvent(event)
+        QTimer.singleShot(0, self._fit_to_content)
 
 
 class SchematisationFileInfoDialog(FileInfoDialog):
@@ -271,6 +301,8 @@ class SchematisationFileInfoDialog(FileInfoDialog):
         )
         self._populate_widgets(model)
         self.refresh_button.setEnabled(True)
+        if self.isVisible():
+            QTimer.singleShot(0, self._fit_to_content)
 
 
 def update_label(label: QLabel, field: FieldValue):

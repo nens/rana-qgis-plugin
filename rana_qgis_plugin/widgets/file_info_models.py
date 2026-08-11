@@ -324,7 +324,7 @@ class SchematisationFileInfoModel(FileInfoModel):
                 RelatedFile(
                     FieldValue(sqlite_file.get("filename")),
                     FieldValue(sqlite_file.get("type")),
-                    FieldValue(sqlite_file.get("size", 0)),
+                    FieldValue(display_bytes(sqlite_file.get("size", 0))),
                 )
             )
         for raster in revision.get("rasters", []):
