@@ -1,11 +1,13 @@
 """Dialog and section widgets for viewing Rana file metadata."""
 
 from qgis.gui import QgsCollapsibleGroupBox
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -20,11 +22,9 @@ from rana_qgis_plugin.utils.api import FetchError, get_tenant_file_descriptor
 from rana_qgis_plugin.utils.generic import get_file_icon_name
 from rana_qgis_plugin.widgets.file_info_models import (
     FieldValue,
-    FileInfoModel,
     GeneralInfo,
     InfoSection,
     RelatedFile,
-    get_file_info_model_class,
     make_more_info_model,
 )
 from rana_qgis_plugin.widgets.utils_avatars import get_avatar
@@ -104,6 +104,13 @@ class RelatedFilesWidget(QWidget):
         self.model = QStandardItemModel(0, 3, self.table)
         self.model.setHorizontalHeaderLabels(["Name", "Type", "Size"])
         self.table.setModel(self.model)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setStretchLastSection(False)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setSizeAdjustPolicy(QTableView.SizeAdjustPolicy.AdjustToContents)
         layout = QVBoxLayout(self)
         layout.addWidget(self.table)
 
@@ -118,6 +125,11 @@ class RelatedFilesWidget(QWidget):
                     make_item(related_file.size),
                 ]
             )
+        self.table.resizeRowsToContents()
+        height = self.table.horizontalHeader().height()
+        height += sum(self.table.rowHeight(row) for row in range(self.model.rowCount()))
+        self.table.setMinimumHeight(height)
+        self.table.setMaximumHeight(height)
 
 
 class FileInfoDialog(QDialog):
@@ -127,11 +139,6 @@ class FileInfoDialog(QDialog):
         super().__init__(parent)
         self.file_data = file_data
         self.error_signals = error_signals
-        self.model_cls: type[FileInfoModel] = get_file_info_model_class(
-            file_data["data_type"]
-        )
-        # TODO: do we need self.model?
-        self.model: FileInfoModel | None = None
         self.setWindowTitle(f"File information - {file_data.get('id', '')}")
         self.resize(650, 600)
         self.setup_ui()
@@ -147,7 +154,6 @@ class FileInfoDialog(QDialog):
         self.files_box = QgsCollapsibleGroupBox("Related files")
         self.files_widget = RelatedFilesWidget(self.files_box)
         QVBoxLayout(self.files_box).addWidget(self.files_widget)
-
         container = QWidget()
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(0, 0, 0, 0)
@@ -186,10 +192,9 @@ class FileInfoDialog(QDialog):
             self.error_signals.fetch_error_occurred.emit(str(error))
             self.show_error(f"Failed to load file information: {error}")
             return
-        self.model = make_more_info_model(
+        model = make_more_info_model(
             self.file_data.get("data_type", ""), descriptor, self.file_data
         )
-        model = self.model
         self.general_widget.update(model.get_general_info())
         self.more_widget.update(model.get_more_section())
         related_files = model.get_related_files()

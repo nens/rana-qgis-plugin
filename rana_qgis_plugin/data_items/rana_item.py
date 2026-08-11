@@ -43,9 +43,11 @@ from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     FetchError,
     get_tenant_projects,
+    get_threedi_personal_api_key,
     get_user_info,
     get_user_tenants,
 )
+from rana_qgis_plugin.utils.auth_3di import remove_3di_auth, set_3di_auth
 from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
@@ -262,6 +264,7 @@ class RanaRootDataItem(QgsDataItem):
             self.tenants = get_user_tenants(self.communication, user["sub"])
 
             self.communication.log_info(f"Signed in to Rana (tenant: {tenant_id}).")
+            self._setup_3di_auth(user)
             return True
 
         finally:
@@ -324,9 +327,20 @@ class RanaRootDataItem(QgsDataItem):
             self.update_display()
             self.refresh()
 
+    def _setup_3di_auth(self, user) -> None:  # type: ignore[no-untyped-def]
+        """Fetch and store the 3Di personal API key for this user."""
+        personal_api_key, _ = get_threedi_personal_api_key(
+            self.communication, user["sub"]
+        )  # type: ignore[arg-type]
+        if personal_api_key:
+            set_3di_auth(personal_api_key)
+        else:
+            remove_3di_auth()
+
     def logout(self, delete_config: bool = True) -> None:
         """Full logout: clear credentials and reset UI state."""
         clear_credentials(delete_config=delete_config)
+        remove_3di_auth()
         self.tenants = None
         self.update_display()
         self.refresh()

@@ -5,10 +5,10 @@ from pathlib import PurePosixPath
 from typing import Any, Optional
 
 from rana_qgis_plugin.constant import SUPPORTED_DATA_TYPES
-
-# TODO - consider if this breaks the design of no api fetchign her
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import get_threedi_schematisation
-from rana_qgis_plugin.utils.generic import display_bytes
+from rana_qgis_plugin.utils.auth_3di import has_3di_auth
+from rana_qgis_plugin.utils.generic import display_bytes, get_threedi_api
 from rana_qgis_plugin.utils.time import format_activity_timestamp_str
 
 
@@ -205,18 +205,57 @@ class ScenarioFileInfoModel(FileInfoModel):
 class SchematisationFileInfoModel(FileInfoModel):
     """Schematisation-specific More Information data."""
 
+    def __init__(self, descriptor: dict | None, file_data: dict | None = None):
+        super().__init__(descriptor, file_data)
+        # Pre-populate from descriptor when it already contains schematisation data
+        # (used in tests and callers that pass the API response directly).
+        if (
+            descriptor
+            and "schematisation" in descriptor
+            and "latest_revision" in descriptor
+        ):
+            self._schematisation_obj: dict | None = descriptor
+        else:
+            self._schematisation_obj = None
+        self._threedi_model: Any = None
+        self._threedi_model_fetched = False
+
+    def schematisation_obj(self) -> dict:
+        """Fetch and cache the schematisation and latest revision data."""
+        if self._schematisation_obj is None:
+            self._schematisation_obj = get_threedi_schematisation(
+                self.file_data["descriptor_id"]
+            )
+        return self._schematisation_obj
+
+    def threedi_model(self) -> Any:
+        """Fetch and cache the latest valid ThreediModel, or None."""
+        if self._threedi_model_fetched:
+            return self._threedi_model
+        self._threedi_model_fetched = True
+        revision = self.schematisation_obj()["latest_revision"]
+        if (not has_3di_auth()) or (not revision.get("has_threedimodel")):
+            return None
+        try:
+            tc = ThreediCalls(get_threedi_api())
+            schematisation_id = self.schematisation_obj()["schematisation"]["id"]
+            models = tc.fetch_schematisation_revision_3di_models(
+                schematisation_id, revision["id"]
+            )
+            self._threedi_model = next(
+                (m for m in models if m.is_valid and not m.disabled), None
+            )
+        except Exception as e:
+            self._threedi_model = None
+        return self._threedi_model
+
     def get_more_section(self) -> InfoSection:
         """Build schematisation and revision metadata rows."""
-        schematisation_obj = get_threedi_schematisation(self.file_data["descriptor_id"])
+        schematisation_obj = self.schematisation_obj()
         schematisation = schematisation_obj["schematisation"]
         revision = schematisation_obj["latest_revision"]
         metadata = schematisation.get("meta") or {}
-        # TODO: setup HCC auth and retrieve model
-        # TODO: would be great if this works after showing UI
-        latest_revision_model = None
-        from rana_qgis_plugin.utils.log import plugin_log_warn
-
-        plugin_log_warn(f"{schematisation=}")
+        latest_revision_model = self.threedi_model()
         created_by = (
             " ".join(
                 part
@@ -306,7 +345,7 @@ class SchematisationFileInfoModel(FileInfoModel):
 
     def get_related_files(self) -> list[RelatedFile]:
         """Build the related-files table data."""
-        revision = self.descriptor.get("latest_revision") or {}
+        revision = self.schematisation_obj()["latest_revision"]
         rows = []
         sqlite_file = (revision.get("sqlite") or {}).get("file")
         if sqlite_file:
