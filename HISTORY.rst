@@ -5,7 +5,7 @@ History
 1.2.19 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Revert fix for nens/rana#4720 becuase it completely breaks opening schematisations on windows
 
 
 1.2.18 (2026-08-06)

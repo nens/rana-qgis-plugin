@@ -10,7 +10,7 @@ from enum import Enum
 from operator import attrgetter
 from time import sleep
 from typing import List
-from zipfile import ZIP_DEFLATED, ZipFile, is_zipfile
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import requests
 from qgis.core import QgsVectorLayer
@@ -318,13 +318,9 @@ def unzip_archive(zip_filepath, location=None):
     """Unzip archive content."""
     if not location:
         location = os.path.dirname(zip_filepath)
-    # if zip_filepath is not a proper zip file, just return the file path as a list
-    if not is_zipfile(zip_filepath):
-        return [zip_filepath]
     with ZipFile(zip_filepath, "r") as zf:
         content_list = zf.namelist()
         zf.extractall(location)
-        os.remove(zip_filepath)
         return content_list
 
 
@@ -898,6 +894,7 @@ def download_required_files(
         _emit_progress()
         get_download_file(sqlite_download, zip_filepath)
         content_list = unzip_archive(zip_filepath)
+        os.remove(zip_filepath)
         schematisation_db_file = content_list[0]
         current_progress += 1
         _emit_progress("Downloaded schematisation database")
