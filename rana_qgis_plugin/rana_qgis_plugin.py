@@ -49,10 +49,16 @@ class RanaDataItemProvider(QgsDataItemProvider):
             return self.root_item
         return None
 
+    def _handle_fetch_error(self, msg, show_dialog):
+        if show_dialog:
+            self._communication.show_error(msg)
+        else:
+            self._communication.log_err(msg)
+
     def connect_signals(self) -> None:
         if self.root_item is None:
             return
-        self.error_signals.fetch_error_occurred.connect(self._communication.show_error)
+        self.error_signals.fetch_error_occurred.connect(self._handle_fetch_error)
         self.error_signals.connection_lost.connect(
             lambda: self._communication.bar_warn("No connection to Rana")
         )

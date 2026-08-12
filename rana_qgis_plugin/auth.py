@@ -23,6 +23,11 @@ from rana_qgis_plugin.utils.settings import (
 )
 
 
+def get_authcfg_id():
+    settings = QgsSettings()
+    return settings.value(RANA_AUTHCFG_ENTRY)
+
+
 def is_authenticated() -> bool:
     """Return True iff the user has a valid active session.
 
@@ -40,7 +45,7 @@ def is_authenticated() -> bool:
     if not base_url:
         return False
 
-    authcfg_id = settings.value(RANA_AUTHCFG_ENTRY)
+    authcfg_id = get_authcfg_id()
     if not authcfg_id:
         return False
 
@@ -67,7 +72,7 @@ def clear_credentials(delete_config: bool = True) -> None:
     QgsAuthManager (e.g. when a temporary logout is followed by rollback).
     """
     settings = QgsSettings()
-    authcfg_id = settings.value(RANA_AUTHCFG_ENTRY)
+    authcfg_id = get_authcfg_id()
     if not authcfg_id:
         return
 

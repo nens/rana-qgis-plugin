@@ -41,11 +41,13 @@ from rana_qgis_plugin.constant import (
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
+    RanaPostError,
     get_tenant_projects,
     get_user_info,
     get_user_tenants,
 )
+from rana_qgis_plugin.utils.auth_3di import remove_3di_auth, setup_3di_auth
 from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
@@ -94,8 +96,8 @@ class RanaRootDataItem(QgsDataItem):
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return [QgsErrorItem(self, "No connection to Rana", self.path())]
-        except FetchError as e:
-            self.error_signals.fetch_error_occurred.emit(str(e))
+        except RanaFetchError as e:
+            self.error_signals.fetch_error_occurred.emit(str(e), True)
             return [QgsErrorItem(self, "Failed to load projects", self.path())]
         hidden = get_hidden_projects(base_url(), get_tenant_id())
         return [
@@ -108,9 +110,14 @@ class RanaRootDataItem(QgsDataItem):
 
     def restore_session(self) -> None:
         """Silently restore tenant list from a previous authenticated session."""
-        user = get_user_info(self.communication)
-        if user is not None:
-            self.tenants = get_user_tenants(self.communication, user["sub"])
+        try:
+            user = get_user_info()
+            if user is not None:
+                self.tenants = get_user_tenants(user["sub"])
+        except RanaFetchError as e:
+            self.error_signals.fetch_error_occurred.emit(str(e), False)
+        except NetworkUnavailableError:
+            self.error_signals.connection_lost.emit()
         self.update_display()
 
     def update_display(self) -> None:
@@ -248,22 +255,44 @@ class RanaRootDataItem(QgsDataItem):
             provider = self.prompt_provider(providers)
             if not provider:
                 return False
-
+            self.communication.clear_message_bar()
+            self.communication.bar_info("Signing in to Rana...")
             authcfg_id = create_oauth2_config(provider)
+
             if not authcfg_id:
+                self.communication.bar_info("Failed to sign in to Rana")
                 return False
 
             settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
             set_tenant_id(tenant_id)
-
-            user = get_user_info(self.communication)
-            if user is None:
+            try:
+                user = get_user_info()
+            except RanaFetchError as e:
+                self.communication.bar_info(f"Failed to sign in to Rana")
+                self.error_signals.fetch_error_occurred.emit(str(e), False)
                 return False
-            self.tenants = get_user_tenants(self.communication, user["sub"])
-
+            try:
+                self.tenants = get_user_tenants(user["sub"])
+            except RanaFetchError as e:
+                self.error_signals.fetch_error_occurred.emit(str(e), False)
             self.communication.log_info(f"Signed in to Rana (tenant: {tenant_id}).")
+            # Log in to HCC
+            self.communication.clear_message_bar()
+            self.communication.bar_info("Getting HCC access...")
+            try:
+                setup_3di_auth(user["sub"])
+                self.communication.bar_info("Signed in to HCC")
+                self.communication.log_info("Signed in to HCC")
+            except RanaPostError as e:
+                self.communication.bar_info(f"Failed to sign in to HCC: {e}")
+                self.error_signals.fetch_error_occurred.emit(
+                    f"Failed to sign in to HCC: {e}", False
+                )
+                return False
             return True
-
+        except NetworkUnavailableError:
+            self.error_signals.connection_lost.emit()
+            return False
         finally:
             self.update_display()
             self.refresh()
@@ -327,6 +356,7 @@ class RanaRootDataItem(QgsDataItem):
     def logout(self, delete_config: bool = True) -> None:
         """Full logout: clear credentials and reset UI state."""
         clear_credentials(delete_config=delete_config)
+        remove_3di_auth()
         self.tenants = None
         self.update_display()
         self.refresh()

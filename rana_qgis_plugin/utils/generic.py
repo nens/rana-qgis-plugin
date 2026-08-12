@@ -14,20 +14,21 @@ from threedi_mi_utils import (
     list_local_schematisations,
 )
 
-from rana_qgis_plugin.legacy.auth_3di import get_3di_auth
 from rana_qgis_plugin.simulation.threedi_calls import (
     get_api_client_with_personal_api_token,
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
+from rana_qgis_plugin.utils.auth_3di import get_3di_auth
 from rana_qgis_plugin.utils.settings import get_hcc_url_override
 
 
 def get_threedi_api() -> Any:
     _, personal_api_token = get_3di_auth()
+    if not personal_api_token:
+        return None
     hcc_url = get_hcc_url_override() or get_frontend_settings()["hcc_url"]
     hcc_url = hcc_url.rstrip("/")
-    threedi_api = get_api_client_with_personal_api_token(personal_api_token, hcc_url)
-    return threedi_api
+    return get_api_client_with_personal_api_token(personal_api_token, hcc_url)
 
 
 def get_threedi_organisations(communication: Any) -> list[str]:

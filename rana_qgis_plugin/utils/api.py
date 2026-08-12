@@ -3,9 +3,9 @@ from typing import Any, Optional, TypedDict, cast
 
 import requests
 
+from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
-from rana_qgis_plugin.legacy.auth import get_authcfg_id
 from rana_qgis_plugin.network_manager import NetworkManager
 from rana_qgis_plugin.utils.settings import api_url, get_tenant_id
 
@@ -31,9 +31,6 @@ class RanaPostError(Exception):
         self.url = url
         self.params = params
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
-
-
-FetchError = RanaFetchError
 
 
 class FileDescriptorStatus(Enum):
@@ -150,36 +147,27 @@ def get_frontend_settings() -> dict:
         raise RanaFetchError(error or "", url, {})
 
 
-def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
+def get_user_info() -> UserInfo:
     authcfg_id = get_authcfg_id()
     url = COGNITO_USER_INFO_ENDPOINT
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
-
-    if status:
-        user = network_manager.content
-        return user
-    else:
-        communication.show_error(f"Failed to get user info from cognito: {error}")
-        return None
+    if error:
+        raise RanaFetchError(error, url, {})
+    return network_manager.content
 
 
-def get_user_tenants(communication: UICommunication, user_id: str) -> list:
+def get_user_tenants(user_id: str) -> list:
     authcfg_id = get_authcfg_id()
     url = f"{api_url()}/tenants"
     params = {"user_id": user_id}
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get tenants: {error}")
-        return []
+    if error:
+        raise RanaFetchError(error, url, params)
+    return network_manager.content["items"]
 
 
 def get_tenant_details(communication: UICommunication) -> dict:
@@ -697,26 +685,19 @@ def create_rana_schematisation(
     )
 
 
-def get_threedi_personal_api_key(
-    communication: UICommunication, user_id: str
-) -> tuple[Optional[str], Optional[str]]:
-    communication.clear_message_bar()
-    communication.bar_info("Getting Rana personal API key ...")
+def get_threedi_personal_api_key(user_id: str) -> str:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/3di-personal-api-keys"
-
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.post()
-
-    if status:
-        response = network_manager.content
-        if "key" in response:
-            return response["key"], error
-        else:
-            return None, error
+    if error:
+        raise RanaPostError(msg=error, url=url, params={})
+    response = network_manager.content
+    if "key" not in response:
+        raise RanaPostError(msg=f"No key returned: {error}", url=url, params={})
     else:
-        return None, error
+        return response["key"]
 
 
 def get_filename_from_attachment_url(attachment_url: str) -> str:
@@ -761,7 +742,7 @@ def get_threedi_organisations() -> list[str]:
     return []
 
 
-def get_user_image(communication: UICommunication, user_id: str) -> Optional[dict]:
+def get_user_image(user_id: str) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"

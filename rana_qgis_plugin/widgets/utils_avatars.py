@@ -89,18 +89,17 @@ def create_user_image(image):
     return rounded
 
 
-def get_avatar(
-    user, communication, try_remote=True, create_from_initials=True
-) -> QPixmap:
+def get_avatar(user, try_remote=True, create_from_initials=True) -> QPixmap:
+    if not user:
+        try_remote = False
+        user = {}
     final_pixmap = None
     if try_remote:
-        bin_image = get_user_image(communication, user["id"])
+        bin_image = get_user_image(user["id"])
         if bin_image:
             final_pixmap = create_user_image(bin_image)
-    elif create_from_initials:
-        initials = (user["given_name"][0] if user["given_name"] else "?") + (
-            user["family_name"][0] if user["family_name"] else "?"
-        )
+    if not final_pixmap and create_from_initials:
+        initials = (user.get("given_name", "?")[0]) + (user.get("family_name", "?")[0])
         final_pixmap = get_user_image_from_initials(initials)
     return final_pixmap
 
@@ -109,9 +108,8 @@ class AvatarCache(QObject):
     # Avatar session cache
     avatar_changed = pyqtSignal(str)
 
-    def __init__(self, communication):
+    def __init__(self):
         super().__init__()
-        self.communication = communication
         self.cache: dict[str, QPixmap] = {}
 
     def get_avatar_from_cache(self, user_id: str) -> QPixmap | None:
@@ -119,9 +117,7 @@ class AvatarCache(QObject):
 
     def get_avatar_for_user(self, user: dict) -> QPixmap:
         if user["id"] not in self.cache:
-            self.cache[user["id"]] = get_avatar(
-                user, self.communication, try_remote=False
-            )
+            self.cache[user["id"]] = get_avatar(user, try_remote=False)
         return self.cache[user["id"]]
 
     def update_avatar(self, user_id: str, new_avatar: QPixmap):

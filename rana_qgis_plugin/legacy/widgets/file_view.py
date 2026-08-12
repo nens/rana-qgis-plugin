@@ -230,6 +230,7 @@ class EditLabel(QLineEdit):
 
 class FileView(QWidget):
     show_revisions_clicked = pyqtSignal(dict, dict)
+    # TODO: consider re-openen file view on the same file; should we keep state somehow?
 
     def __init__(
         self, communication, file_signals: FileActionSignals, avatar_cache, parent=None

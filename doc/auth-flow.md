@@ -4,7 +4,7 @@ This living document describes the auth lifecycle for the Rana Browser entrypoin
 
 ## Architecture note
 
-Auth logic lives in `rana_qgis_plugin/auth.py` as a module of plain functions. All persistent state is stored in `QgsSettings` and `QgsAuthManager` — there is no in-memory state object.
+Auth primitives live in `rana_qgis_plugin/auth.py` as a module of plain functions. The `RanaRootDataItem` owns prompts, UI messages, and orchestration. All persistent state is stored in `QgsSettings` and `QgsAuthManager` — there is no in-memory auth state object.
 
 ## Login: new user (first time or after logout)
 
@@ -28,7 +28,9 @@ sequenceDiagram
     Auth->>AuthMgr: create OAuth2 config (persistToken=true)
     AuthMgr-->>Auth: authcfg_id
     Auth->>Auth: persist tenant + authcfg_id to settings
-    Auth->>Browser: refresh UI
+    Browser->>Browser: get_user_info(), get_user_tenants()
+    Browser->>Browser: setup_3di_auth(user_id)
+    Browser->>Browser: refresh UI
 ```
 
 ## Login: returning user (after restart)
@@ -48,13 +50,11 @@ sequenceDiagram
     AuthMgr-->>Auth: config found
     Auth-->>Browser: True — UI shows authenticated actions
 
-    Note over Browser,Auth: On startup RanaRootDataItem.__init__ calls _restore_session()
-    Browser->>Auth: _restore_session()
-    Auth->>Auth: get_user_info()
-    Auth-->>Auth: user info returned
-    Auth->>Auth: get_user_tenants()
-    Auth-->>Auth: tenant list returned
-    Auth->>Browser: silently populate UI (no prompts)
+    Note over Browser,Auth: On startup RanaRootDataItem.__init__ calls restore_session()
+    Browser->>Browser: get_user_info()
+    Browser->>Browser: get_user_tenants(user_id)
+    Browser->>Browser: reuse existing 3Di auth config
+    Browser->>Browser: silently populate UI (no prompts)
 ```
 
 Key notes:
@@ -80,7 +80,16 @@ sequenceDiagram
     Auth-->>Browser: done — UI shows logged-out actions
 ```
 
-RanaRootDataItem.logout() calls auth.clear_credentials() which removes the QGIS authcfg and the stored settings pointer.
+RanaRootDataItem.logout() calls auth.clear_credentials(), then `remove_3di_auth()`. This removes both QGIS auth configurations and their stored settings pointers.
+
+## HCC authentication
+
+After a successful Rana login, the item fetches the user's 3Di personal API key with
+`get_threedi_personal_api_key(user_id)`. `setup_3di_auth()` stores it in a QGIS
+Auth Manager Basic configuration using username `__key__`, and persists only its ID
+under `threedi/authcfg`. Existing 3Di credentials are reused when available.
+Logout removes this configuration.
+
 
 ## Tenant switch (with rollback)
 

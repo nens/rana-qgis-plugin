@@ -24,7 +24,7 @@ classDiagram
 
 The root is always visible at `/Rana`. On construction it updates its display
 name (`Rana` or `Rana [tenant]`) and restores an existing session. Authentication
-details are documented in [the authentication flow](../../doc/auth-flow.md).
+details are documented in [the authentication flow](auth-flow.md).
 Its context menu changes with authentication state:
 
 - unauthenticated: Login and Settings;
@@ -35,9 +35,10 @@ Expanding an authenticated root calls `get_tenant_projects()`. Hidden project
 IDs are filtered using the tenant-specific settings before
 `RanaProjectDataItem` instances are returned.
 
-Login, logout, and tenant switching are delegated to the authentication flow;
-the root updates its display and refreshes the tree when those operations
-complete.
+The root item orchestrates login, logout, and tenant switching while the auth
+module provides credential and OAuth helpers. It updates its display and refreshes
+the tree when those operations complete. Successful Rana login also creates or
+reuses the user's 3Di QGIS authentication configuration.
 
 ### Project: `RanaProjectDataItem`
 
@@ -106,7 +107,7 @@ sequenceDiagram
     end
 ```
 
-Authentication errors use dialogs and boolean results rather than
-`QgsErrorItem`s; see [the authentication flow](../../doc/auth-flow.md) for
-their handling. Logout clears credentials and refreshes the display.
-
+Authentication errors are handled at the root-item UI boundary using message-bar
+notifications, error signals, and boolean results rather than `QgsErrorItem`s;
+see [the authentication flow](auth-flow.md) for their handling. Logout clears both
+Rana and 3Di credentials and refreshes the display.

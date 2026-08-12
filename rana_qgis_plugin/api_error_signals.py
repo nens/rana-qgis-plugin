@@ -7,4 +7,4 @@ class ApiErrorSignals(QObject):
     """Shared API error signals owned by the plugin's data item provider."""
 
     connection_lost = pyqtSignal()
-    fetch_error_occurred = pyqtSignal(str)
+    fetch_error_occurred = pyqtSignal(str, bool)
