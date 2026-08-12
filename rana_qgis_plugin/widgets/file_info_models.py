@@ -128,7 +128,7 @@ class FileInfoModel:
             status_value = f"{status_value}: {status_message}"
         size = self.file_data.get("size")
         rows = [
-            InfoRow("Projection", self.projection()),
+            InfoRow("Projection", self.get_projection()),
             InfoRow("Type", FieldValue(SUPPORTED_DATA_TYPES.get(data_type, data_type))),
             InfoRow("Status", FieldValue(status_value)),
         ]
@@ -143,7 +143,7 @@ class FileInfoModel:
             )
         return InfoSection("More information", rows)
 
-    def projection(self) -> FieldValue:
+    def get_projection(self) -> FieldValue:
         """Return the best available projection."""
         meta = self.descriptor.get("meta") or {}
         projection = (meta.get("extent") or {}).get("crs") or (
@@ -223,8 +223,8 @@ class SchematisationFileInfoModel(FileInfoModel):
 
     def get_more_section(self) -> InfoSection:
         """Build schematisation and revision metadata rows."""
-        schematisation = self.schematisation_obj()["schematisation"]
-        revision = self.schematisation_obj()["latest_revision"]
+        schematisation = self.schematisation_obj().get("schematisation", {})
+        revision = self.schematisation_obj().get("latest_revision", {})
         metadata = schematisation.get("meta") or {}
         latest_revision_model = self.threedi_model()
         created_by = (
@@ -299,24 +299,25 @@ class SchematisationFileInfoModel(FileInfoModel):
             ],
         )
 
-    def projection(self) -> FieldValue:
+    def get_projection(self) -> FieldValue:
         """Return the projection from the DEM raster when available."""
-        revision = self.schematisation_obj()["latest_revision"]
-        dem = next(
-            (
-                raster
-                for raster in revision.get("rasters", [])
-                if raster.get("type") == "dem_file"
-            ),
-            None,
-        )
-        if dem and dem.get("epsg_code"):
-            return FieldValue(f"EPSG:{dem['epsg_code']}")
-        return super().projection()
+        revision = self.schematisation_obj().get("latest_revision", {})
+        if revision:
+            dem = next(
+                (
+                    raster
+                    for raster in revision.get("rasters", [])
+                    if raster.get("type") == "dem_file"
+                ),
+                None,
+            )
+            if dem and dem.get("epsg_code"):
+                return FieldValue(f"EPSG:{dem['epsg_code']}")
+        return super().get_projection()
 
     def get_related_files(self) -> list[RelatedFile]:
         """Build the related-files table data."""
-        revision = self.schematisation_obj()["latest_revision"]
+        revision = self.schematisation_obj().get("latest_revision", {})
         rows = []
         sqlite_file = (revision.get("sqlite") or {}).get("file")
         if sqlite_file:

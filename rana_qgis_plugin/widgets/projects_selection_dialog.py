@@ -399,7 +399,7 @@ class ProjectsSelectionDialog(QDialog):
             self.reject()
             return
         except RanaFetchError as e:
-            self.error_signals.fetch_error_occurred.emit(str(e))
+            self.error_signals.fetch_error_occurred.emit(str(e), True)
             self.reject()
             return
 

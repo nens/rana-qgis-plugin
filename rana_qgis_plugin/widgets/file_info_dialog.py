@@ -211,6 +211,7 @@ class FileInfoDialog(QDialog):
         self.refresh_button.setEnabled(False)
         descriptor = self._fetch_descriptor()
         if descriptor is None:
+            self.refresh_button.setEnabled(True)
             return
         model_class = get_file_info_model_class(self.file_data.get("data_type", ""))
         self._populate_widgets(model_class(descriptor, self.file_data))
@@ -246,7 +247,6 @@ class FileInfoDialog(QDialog):
         """Display an error while keeping refresh available."""
         self.error_label.setText(message)
         self.error_label.show()
-        self.refresh_button.setEnabled(True)
 
     def showEvent(self, event: QShowEvent):
         """Resize to content after the first layout pass completes."""
@@ -262,6 +262,7 @@ class SchematisationFileInfoDialog(FileInfoDialog):
         self.refresh_button.setEnabled(False)
         descriptor = self._fetch_descriptor()
         if descriptor is None:
+            self.refresh_button.setEnabled(True)
             return
         schematisation = None
         try:
