@@ -25,8 +25,8 @@ class RanaDataItemProvider(QgsDataItemProvider):
 
     def __init__(self, communication: UICommunication, loader: Loader):
         super().__init__()
-        self._communication = communication
-        self._loader = loader
+        self.communication = communication
+        self.loader = loader
         self.error_signals = ApiErrorSignals()
         self.root_item: Optional[RanaRootDataItem] = None
 
@@ -43,7 +43,7 @@ class RanaDataItemProvider(QgsDataItemProvider):
     ) -> Optional[QgsDataItem]:
         if parentItem is None:
             self.root_item = RanaRootDataItem(
-                self._communication, self._loader, self.error_signals, parentItem
+                self.communication, self.loader, self.error_signals, parentItem
             )
             self.connect_signals()
             return self.root_item
@@ -51,16 +51,16 @@ class RanaDataItemProvider(QgsDataItemProvider):
 
     def _handle_fetch_error(self, msg, show_dialog):
         if show_dialog:
-            self._communication.show_error(msg)
+            self.communication.show_error(msg)
         else:
-            self._communication.log_err(msg)
+            self.communication.log_err(msg)
 
     def connect_signals(self) -> None:
         if self.root_item is None:
             return
         self.error_signals.fetch_error_occurred.connect(self._handle_fetch_error)
         self.error_signals.connection_lost.connect(
-            lambda: self._communication.bar_warn("No connection to Rana")
+            lambda: self.communication.bar_warn("No connection to Rana")
         )
 
 
