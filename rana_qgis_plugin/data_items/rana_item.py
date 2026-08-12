@@ -118,6 +118,7 @@ class RanaRootDataItem(QgsDataItem):
             self.error_signals.fetch_error_occurred.emit(str(e), False)
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
+        self.communication.bar_info(f"Signed in to Rana")
         self.update_display()
 
     def update_display(self) -> None:
@@ -275,6 +276,7 @@ class RanaRootDataItem(QgsDataItem):
                 self.tenants = get_user_tenants(user["sub"])
             except RanaFetchError as e:
                 self.error_signals.fetch_error_occurred.emit(str(e), False)
+            self.communication.bar_info(f"Signed in to Rana")
             self.communication.log_info(f"Signed in to Rana (tenant: {tenant_id}).")
             # Log in to HCC
             self.communication.clear_message_bar()
@@ -358,5 +360,6 @@ class RanaRootDataItem(QgsDataItem):
         clear_credentials(delete_config=delete_config)
         remove_3di_auth()
         self.tenants = None
+        self.communication.bar_info(f"Signed out of Rana")
         self.update_display()
         self.refresh()
