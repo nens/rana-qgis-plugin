@@ -498,13 +498,13 @@ class ProjectsSelectionDialog(QDialog):
             for project in projects
             for contributor in project.get("contributors", [])
         }
+        my_user = []
         try:
             my_id = get_user_info().get("sub")
             if my_id and my_id in all_contributors:
                 my_user = [all_contributors.pop(my_id)]
         except RanaFetchError:
             my_id = None
-            my_user = []
         sorted_users = my_user + sorted(
             all_contributors.values(),
             key=lambda x: f"{x['given_name']} {x['family_name']}".lower(),
