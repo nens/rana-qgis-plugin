@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from threedi_api_client.openapi import ApiException
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
@@ -25,7 +26,6 @@ from rana_qgis_plugin.utils.api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name, get_threedi_api
-from rana_qgis_plugin.utils.log import plugin_log_error
 from rana_qgis_plugin.widgets.file_info_models import (
     FieldValue,
     GeneralInfo,
@@ -270,7 +270,7 @@ class SchematisationFileInfoDialog(FileInfoDialog):
             self.error_signals.connection_lost.emit()
             self.show_error("No connection to Rana while loading schematisation")
         except RanaFetchError as error:
-            plugin_log_error(f"Failed to load schematisation: {error}")
+            self.error_signals.fetch_error_occurred.emit(str(error), False)
             self.show_error("Failed to load schematisation details")
         threedi_model = None
         revision = (schematisation or {}).get("latest_revision") or {}
@@ -289,9 +289,9 @@ class SchematisationFileInfoDialog(FileInfoDialog):
                     ),
                     None,
                 )
-            except Exception as error:
-                plugin_log_error(f"Failed to load 3Di revision model: {error}")
-                self.show_error("Failed to load 3Di model details")
+            except ApiException as e:
+                self.error_signals.fetch_error_occurred.emit(str(e), False)
+                self.show_error("Failed to load HCC model details")
 
         model = SchematisationFileInfoModel(
             descriptor,

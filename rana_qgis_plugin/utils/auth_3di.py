@@ -11,7 +11,7 @@ def get_3di_authcfg_id() -> str | None:
     return QSettings().value(THREEDI_AUTHCFG_ENTRY)
 
 
-def _auth_manager() -> QgsAuthManager:
+def auth_manager() -> QgsAuthManager:
     """Return the QGIS auth manager, raising if unavailable."""
     manager = QgsApplication.authManager()
     if manager is None:
@@ -25,7 +25,7 @@ def get_3di_auth() -> tuple[str | None, str | None]:
     if not authcfg_id:
         return None, None
     authcfg = QgsAuthMethodConfig()
-    _auth_manager().loadAuthenticationConfig(authcfg_id, authcfg, True)
+    auth_manager().loadAuthenticationConfig(authcfg_id, authcfg, True)
     return authcfg.config("username"), authcfg.config("password")
 
 
@@ -40,7 +40,7 @@ def set_3di_auth(personal_api_key: str, username: str = "__key__") -> None:
     settings = QSettings()
     authcfg_id = get_3di_authcfg_id()
     authcfg = QgsAuthMethodConfig()
-    manager = _auth_manager()
+    manager = auth_manager()
     manager.setMasterPassword()
     manager.loadAuthenticationConfig(authcfg_id, authcfg, True)
 
@@ -61,7 +61,7 @@ def remove_3di_auth() -> None:
     """Remove the 3Di auth config from the QGIS Authorization Manager."""
     authcfg_id = get_3di_authcfg_id()
     if authcfg_id:
-        _auth_manager().removeAuthenticationConfig(authcfg_id)
+        auth_manager().removeAuthenticationConfig(authcfg_id)
     QSettings().remove(THREEDI_AUTHCFG_ENTRY)
 
 
