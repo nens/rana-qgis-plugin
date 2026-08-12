@@ -19,7 +19,7 @@ from rana_qgis_plugin.data_items.utils import get_loader_from_parent
 from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
     get_tenant_file_descriptor,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name
@@ -79,8 +79,8 @@ class RanaFileDataItem(QgsDataItem):
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return [QgsErrorItem(self, "No connection to Rana", self.path())]
-        except FetchError as e:
-            self.error_signals.fetch_error_occurred.emit(str(e))
+        except RanaFetchError as e:
+            self.error_signals.fetch_error_occurred.emit(str(e), True)
             return [QgsErrorItem(self, "Failed to load layers", self.path())]
         if not descriptor:
             return []

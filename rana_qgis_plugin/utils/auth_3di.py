@@ -4,6 +4,7 @@ from qgis.core import QgsApplication, QgsAuthManager, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
 from rana_qgis_plugin.constant import THREEDI_AUTHCFG_ENTRY
+from rana_qgis_plugin.utils.api import get_threedi_personal_api_key
 
 
 def get_3di_authcfg_id() -> str | None:
@@ -62,3 +63,14 @@ def remove_3di_auth() -> None:
     if authcfg_id:
         _auth_manager().removeAuthenticationConfig(authcfg_id)
     QSettings().remove(THREEDI_AUTHCFG_ENTRY)
+
+
+def setup_3di_auth(user_id: str) -> None:
+    authcf_id = get_3di_authcfg_id()
+    if authcf_id:
+        username, password = get_3di_auth()
+        if username and password:
+            # Existing authentication found in the QGIS Authorization Manager
+            return
+    personal_api_key = get_threedi_personal_api_key(user_id)
+    set_3di_auth(personal_api_key)

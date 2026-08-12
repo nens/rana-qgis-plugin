@@ -23,7 +23,11 @@ from qgis.PyQt.QtWidgets import (
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.icons import refresh_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
-from rana_qgis_plugin.utils.api import FetchError, get_tenant_projects, get_user_info
+from rana_qgis_plugin.utils.api import (
+    RanaFetchError,
+    get_tenant_projects,
+    get_user_info,
+)
 from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
@@ -394,7 +398,7 @@ class ProjectsSelectionDialog(QDialog):
             self.error_signals.connection_lost.emit()
             self.reject()
             return
-        except FetchError as e:
+        except RanaFetchError as e:
             self.error_signals.fetch_error_occurred.emit(str(e))
             self.reject()
             return
@@ -494,11 +498,11 @@ class ProjectsSelectionDialog(QDialog):
             for project in projects
             for contributor in project.get("contributors", [])
         }
-        my_info = get_user_info(self.communication)
-        if my_info and my_info.get("sub") in all_contributors:
+        try:
+            my_info = get_user_info()
             my_id = my_info["sub"]
             my_user = [all_contributors.pop(my_id)]
-        else:
+        except RanaFetchError:
             my_id = None
             my_user = []
         sorted_users = my_user + sorted(

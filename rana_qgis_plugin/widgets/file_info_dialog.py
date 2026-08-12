@@ -20,7 +20,7 @@ from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
-    FetchError,
+    RanaFetchError,
     get_tenant_file_descriptor,
     get_threedi_schematisation,
 )
@@ -193,8 +193,8 @@ class FileInfoDialog(QDialog):
             self.error_signals.connection_lost.emit()
             self.show_error("No connection to Rana")
             return
-        except FetchError as error:
-            self.error_signals.fetch_error_occurred.emit(str(error))
+        except RanaFetchError as error:
+            self.error_signals.fetch_error_occurred.emit(str(error), False)
             self.show_error(f"Failed to load file information: {error}")
             return
         return descriptor
@@ -269,7 +269,7 @@ class SchematisationFileInfoDialog(FileInfoDialog):
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             self.show_error("No connection to Rana while loading schematisation")
-        except FetchError as error:
+        except RanaFetchError as error:
             plugin_log_error(f"Failed to load schematisation: {error}")
             self.show_error("Failed to load schematisation details")
         threedi_model = None
