@@ -96,7 +96,7 @@ class FileInfoModel:
             icon_name=data_type,
             size=FieldValue(
                 display_bytes(size)
-                if size and data_type != "threedi_schematisation"
+                if size is not None and data_type != "threedi_schematisation"
                 else "N/A",
                 size is None,
             ),

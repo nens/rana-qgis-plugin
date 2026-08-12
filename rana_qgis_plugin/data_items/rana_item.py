@@ -110,12 +110,14 @@ class RanaRootDataItem(QgsDataItem):
 
     def restore_session(self) -> None:
         """Silently restore tenant list from a previous authenticated session."""
-        user = get_user_info()
-        if user is not None:
-            try:
+        try:
+            user = get_user_info()
+            if user is not None:
                 self.tenants = get_user_tenants(user["sub"])
-            except NetworkUnavailableError:
-                self.error_signals.connection_lost.emit()
+        except RanaFetchError as e:
+            self.error_signals.fetch_error_occurred.emit(str(e), False)
+        except NetworkUnavailableError:
+            self.error_signals.connection_lost.emit()
         self.update_display()
 
     def update_display(self) -> None:

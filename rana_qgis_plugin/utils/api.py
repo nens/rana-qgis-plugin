@@ -695,7 +695,7 @@ def get_threedi_personal_api_key(user_id: str) -> str:
         raise RanaPostError(msg=error, url=url, params={})
     response = network_manager.content
     if "key" not in response:
-        raise RanaPostError(msg="No key returned: {error}", url=url, params={})
+        raise RanaPostError(msg=f"No key returned: {error}", url=url, params={})
     else:
         return response["key"]
 

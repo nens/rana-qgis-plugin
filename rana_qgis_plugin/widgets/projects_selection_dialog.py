@@ -499,9 +499,9 @@ class ProjectsSelectionDialog(QDialog):
             for contributor in project.get("contributors", [])
         }
         try:
-            my_info = get_user_info()
-            my_id = my_info["sub"]
-            my_user = [all_contributors.pop(my_id)]
+            my_id = get_user_info().get("sub")
+            if my_id and my_id in all_contributors:
+                my_user = [all_contributors.pop(my_id)]
         except RanaFetchError:
             my_id = None
             my_user = []

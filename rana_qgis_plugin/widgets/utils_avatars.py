@@ -92,6 +92,7 @@ def create_user_image(image):
 def get_avatar(user, try_remote=True, create_from_initials=True) -> QPixmap:
     if not user:
         try_remote = False
+        user = {}
     final_pixmap = None
     if try_remote:
         bin_image = get_user_image(user["id"])
