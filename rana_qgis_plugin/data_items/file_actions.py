@@ -7,7 +7,6 @@ from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.icons import (
     add_icon,
-    dir_icon,
     download_icon,
     edit_icon,
     history_icon,
