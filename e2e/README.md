@@ -21,3 +21,5 @@
 * Test if project is visible after adding and refresh
 * Test if project is no longer visible after removing and refresh
 * Test if expected folder tree is shown in Files item
+* Test if uploading a file via the context menu works
+* Test if the uploaded file is displayed in the parent folder
