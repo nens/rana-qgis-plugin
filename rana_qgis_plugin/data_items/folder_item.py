@@ -88,10 +88,16 @@ class RanaFolderDataItem(QgsDataItem):
                         {"id": self.project_id},
                         self.folder_path,
                         parent,
+                        refresh_callback=self.refresh_if_populated,
                     )
                 )
             actions.append(q_action)
         return actions
+
+    def refresh_if_populated(self) -> None:
+        """Refresh this folder if it has already been populated."""
+        if self.state() == Qgis.BrowserItemState.Populated:
+            self.refresh()
 
     def create_child_item(self, item: dict) -> QgsDataItem:
         """Create a folder or file child item."""

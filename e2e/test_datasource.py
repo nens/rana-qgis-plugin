@@ -1,11 +1,15 @@
 """E2E tests for project listing in the QGIS Browser panel."""
 
+import os
 import uuid
 
 import pytest
-from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt
-from qgis.PyQt.QtWidgets import QTreeView
+from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt, QTimer
+from qgis.PyQt.QtTest import QTest
+from qgis.PyQt.QtWidgets import QFileDialog, QTreeView
 
+from rana_qgis_plugin.data_items.file_actions import FileAction
+from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.data_items.folder_item import (
     RanaFilesDataItem,
     RanaFolderDataItem,
@@ -16,6 +20,8 @@ from rana_qgis_plugin.utils.api import (
     create_tenant_project_directory,
     delete_project,
 )
+
+from .test_utils import click_context_menu_action, make_modal_handler
 
 
 @pytest.fixture
@@ -140,13 +146,13 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
     qtbot.waitUntil(
         lambda: any(
             isinstance(child, RanaFolderDataItem) and child.name() == "foo"
-            for child in files_item.children()
+            for child in (files_item.children() or [])
         ),
         timeout=30000,
     )
     foo_item = next(
         child
-        for child in files_item.children()
+        for child in (files_item.children() or [])
         if isinstance(child, RanaFolderDataItem) and child.name() == "foo"
     )
     assert_visible(foo_item)
@@ -155,13 +161,34 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
     qtbot.waitUntil(
         lambda: any(
             isinstance(child, RanaFolderDataItem) and child.name() == "bar"
-            for child in foo_item.children()
+            for child in (foo_item.children() or [])
         ),
         timeout=30000,
     )
     bar_item = next(
         child
-        for child in foo_item.children()
+        for child in (foo_item.children() or [])
         if isinstance(child, RanaFolderDataItem) and child.name() == "bar"
     )
     assert_visible(bar_item)
+
+    def select_upload_file(qtbot, modal):
+        modal.selectFile(os.path.join(os.path.dirname(__file__), "data", "upload.gpkg"))
+        qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+    QTimer.singleShot(500, make_modal_handler(qtbot, QFileDialog, select_upload_file))
+    click_context_menu_action(qtbot, foo_item, FileAction.UPLOAD_FILES.value)
+
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFileDataItem) and child.name() == "upload.gpkg"
+            for child in (foo_item.children() or [])
+        ),
+        timeout=30000,
+    )
+    upload_item = next(
+        child
+        for child in (foo_item.children() or [])
+        if isinstance(child, RanaFileDataItem) and child.name() == "upload.gpkg"
+    )
+    assert_visible(upload_item)
