@@ -29,6 +29,7 @@ AGENTS.md
 # IDE / local dev
 .envrc
 .idea/
-scripts/
+scripts/*
+!scripts/cleanup_e2e_projects.py
 # UI dev environment local files (ignored except the placeholder)
 local_files/*

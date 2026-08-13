@@ -83,13 +83,13 @@ docker compose build
 
 ### Running tests
 
-Unit tests with QGIS 4.x:
+#### Unit tests with QGIS 4.x:
 
 ```bash
 docker compose run --rm qgis pytest -v tests
 ```
 
-E2E tests (requires authentication):
+#### E2E tests (requires authentication):
 
 ```bash
 docker compose run --rm --service-ports qgis pytest -v e2e
@@ -108,6 +108,13 @@ Optionally, visually inspect e2e tests using `vncviewer`:
 
 ```bash
 vncviewer localhost:5900
+```
+
+The e2e tests normally remove their projects during fixture teardown, but if a test process crashes projects may remain. To list or remove the remaining projects:
+
+```bash
+docker compose run --rm qgis python scripts/cleanup_e2e_projects.py --list
+docker compose run --rm qgis python scripts/cleanup_e2e_projects.py
 ```
 
 
