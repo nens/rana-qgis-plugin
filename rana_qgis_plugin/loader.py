@@ -23,10 +23,10 @@ from rana_qgis_plugin.workers.avatars import AvatarWorker
 class UploadChoice(Enum):
     """Choices presented while resolving an upload conflict."""
 
-    SKIP = "Skip this file"
-    OVERWRITE = "Overwrite this file"
+    SKIP = "Skip"
+    OVERWRITE = "Overwrite"
     OVERWRITE_ALL = "Overwrite all conflicts"
-    ABORT = "Abort"
+    ABORT = "Cancel"
 
 
 if TYPE_CHECKING:
@@ -110,13 +110,17 @@ class Loader(QObject):
             source_shp_path = None
             if path.suffix.lower() == ".shp":
                 if not convert_all:
+                    conversion_choices = [
+                        "Cancel",
+                        "Convert",
+                    ]
+                    if len(local_paths) > 1:
+                        conversion_choices.append("Convert all shapefiles")
                     choice = self.communication.custom_ask(
                         parent,
                         "Shapefile not supported",
                         "Rana does not natively support shapefiles, would you like to convert it before uploading or cancel?",
-                        "Cancel",
-                        "Convert this file only",
-                        "Convert all shapefiles",
+                        *conversion_choices,
                     )
                     if choice == "Cancel":
                         return
@@ -134,15 +138,19 @@ class Loader(QObject):
             if (
                 result.conflict_path and not result.exact_conflict
             ) and not overwrite_all:
+                overwrite_choices = [
+                    UploadChoice.SKIP.value,
+                    UploadChoice.OVERWRITE.value,
+                ]
+                if len(local_paths) > 1:
+                    overwrite_choices.append(UploadChoice.OVERWRITE_ALL.value)
+                overwrite_choices.append(UploadChoice.ABORT.value)
                 choice = UploadChoice(
                     self.communication.custom_ask(
                         parent,
                         "File conflict",
                         result.error,
-                        UploadChoice.SKIP.value,
-                        UploadChoice.OVERWRITE.value,
-                        UploadChoice.OVERWRITE_ALL.value,
-                        UploadChoice.ABORT.value,
+                        *overwrite_choices,
                     )
                 )
                 if choice == UploadChoice.ABORT:
