@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from qgis.core import Qgis, QgsDataItem
 from qgis.PyQt.QtWidgets import QAction
 
@@ -10,6 +12,9 @@ from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.utils.generic import get_file_icon_name
 
+if TYPE_CHECKING:
+    from rana_qgis_plugin.loader import Loader
+
 
 class RanaLayerDataItem(QgsDataItem):
     """Leaf item representing a layer within a vector file."""
@@ -17,12 +22,14 @@ class RanaLayerDataItem(QgsDataItem):
     def __init__(
         self,
         parent: QgsDataItem,
+        loader: Loader,
         descriptor_id: str,
         layer_id: str,
         display_name: str,
         geometry_type: str | None,
         error_signals: ApiErrorSignals,
     ):
+        self.loader = loader
         self.descriptor_id = descriptor_id
         self.layer_id = layer_id
         self.geometry_type = geometry_type

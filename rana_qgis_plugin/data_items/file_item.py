@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtWidgets import QAction
@@ -15,7 +15,6 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_file_actions,
 )
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
-from rana_qgis_plugin.data_items.utils import get_loader_from_parent
 from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
@@ -28,23 +27,23 @@ from rana_qgis_plugin.widgets.file_info_dialog import (
     SchematisationFileInfoDialog,
 )
 
+if TYPE_CHECKING:
+    from rana_qgis_plugin.loader import Loader
+
 
 class RanaFileDataItem(QgsDataItem):
     """Browser item representing one file in a Rana project."""
 
-    @property
-    def loader(self):
-        """Return the loader from the parent data-item chain."""
-        return get_loader_from_parent(self.parent())
-
     def __init__(
         self,
         parent: QgsDataItem,
+        loader: Loader,
         project_id: str,
         file_item: dict,
         display_name: str,
         error_signals: ApiErrorSignals,
     ):
+        self.loader = loader
         self.project_id = project_id
         self.file_item = file_item
         self.data_type = file_item.get("data_type", "")
@@ -87,6 +86,7 @@ class RanaFileDataItem(QgsDataItem):
         return [
             RanaLayerDataItem(
                 self,
+                self.loader,
                 self.descriptor_id,
                 layer.get("id", ""),
                 layer.get("name", ""),
