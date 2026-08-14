@@ -102,7 +102,12 @@ class RanaRootDataItem(QgsDataItem):
         hidden = get_hidden_projects(base_url(), get_tenant_id())
         return [
             RanaProjectDataItem(
-                self, p["id"], p["name"], p.get("slug", ""), self.error_signals
+                self,
+                self.loader,
+                p["id"],
+                p["name"],
+                p.get("slug", ""),
+                self.error_signals,
             )
             for p in response.get("items", [])
             if p["id"] not in hidden

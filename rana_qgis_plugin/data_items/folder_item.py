@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtWidgets import QAction
@@ -15,28 +15,27 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_folder_actions,
 )
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
-from rana_qgis_plugin.data_items.utils import get_loader_from_parent
 from rana_qgis_plugin.icons import dir_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import RanaFetchError, get_tenant_project_files
+
+if TYPE_CHECKING:
+    from rana_qgis_plugin.loader import Loader
 
 
 class RanaFolderDataItem(QgsDataItem):
     """Lazy-loading container for one level of a Rana project folder."""
 
-    @property
-    def loader(self):
-        """Return the loader from the parent data-item chain."""
-        return get_loader_from_parent(self.parent())
-
     def __init__(
         self,
         parent: QgsDataItem,
+        loader: Loader,
         project_id: str,
         folder_path: str,
         display_name: str,
         error_signals: ApiErrorSignals,
     ):
+        self.loader = loader
         self.project_id = project_id
         self.folder_path = folder_path
         self.error_signals = error_signals
@@ -83,6 +82,14 @@ class RanaFolderDataItem(QgsDataItem):
             q_action = QAction(action.value, parent)
             q_action.setIcon(action.icon)
             q_action.setToolTip(get_action_tooltip(action))
+            if action is FileAction.UPLOAD_FILES:
+                q_action.triggered.connect(
+                    lambda: self.loader.upload_files(
+                        {"id": self.project_id},
+                        self.folder_path,
+                        parent,
+                    )
+                )
             actions.append(q_action)
         return actions
 
@@ -93,6 +100,7 @@ class RanaFolderDataItem(QgsDataItem):
         if is_directory:
             return RanaFolderDataItem(
                 self,
+                self.loader,
                 self.project_id,
                 item["id"],
                 display_name,
@@ -100,6 +108,7 @@ class RanaFolderDataItem(QgsDataItem):
             )
         return RanaFileDataItem(
             self,
+            self.loader,
             self.project_id,
             item,
             display_name,
@@ -113,7 +122,8 @@ class RanaFilesDataItem(RanaFolderDataItem):
     def __init__(
         self,
         parent: QgsDataItem,
+        loader: Loader,
         project_id: str,
         error_signals: ApiErrorSignals,
     ):
-        super().__init__(parent, project_id, "", "Files", error_signals)
+        super().__init__(parent, loader, project_id, "", "Files", error_signals)
