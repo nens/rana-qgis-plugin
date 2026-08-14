@@ -55,6 +55,7 @@ class RanaFolderDataItem(QgsDataItem):
                 Qgis.BrowserItemCapabilities,
                 Qgis.BrowserItemCapability.Fertile
                 | Qgis.BrowserItemCapability.Collapse
+                | Qgis.BrowserItemCapability.Rename
                 | Qgis.BrowserItemCapability.RefreshChildrenWhenItemIsRefreshed,
             )
         )
@@ -133,3 +134,11 @@ class RanaFilesDataItem(RanaFolderDataItem):
         error_signals: ApiErrorSignals,
     ):
         super().__init__(parent, loader, project_id, "", "Files", error_signals)
+        self.setCapabilitiesV2(
+            cast(
+                Qgis.BrowserItemCapabilities,
+                Qgis.BrowserItemCapability.Fertile
+                | Qgis.BrowserItemCapability.Collapse
+                | Qgis.BrowserItemCapability.RefreshChildrenWhenItemIsRefreshed,
+            )
+        )

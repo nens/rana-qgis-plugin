@@ -63,10 +63,17 @@ class RanaFileDataItem(QgsDataItem):
                 cast(
                     Qgis.BrowserItemCapabilities,
                     Qgis.BrowserItemCapability.Fertile
-                    | Qgis.BrowserItemCapability.Collapse,
+                    | Qgis.BrowserItemCapability.Collapse
+                    | Qgis.BrowserItemCapability.Rename,
                 )
             )
         else:
+            self.setCapabilitiesV2(
+                cast(
+                    Qgis.BrowserItemCapabilities,
+                    Qgis.BrowserItemCapability.Rename,
+                )
+            )
             self.setState(Qgis.BrowserItemState.Populated)
 
     def createChildren(self) -> list:
