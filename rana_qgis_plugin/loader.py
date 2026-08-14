@@ -131,7 +131,9 @@ class Loader(QObject):
                 overwrite_exact=False,
                 overwrite_case=overwrite_all,
             )
-            if result.conflict_path and not result.exact_conflict:
+            if (
+                result.conflict_path and not result.exact_conflict
+            ) and not overwrite_all:
                 choice = UploadChoice(
                     self.communication.custom_ask(
                         parent,

@@ -175,31 +175,38 @@ def test_upload_files_collects_multiple_jobs_overwrite_all():
     loader, communication = make_loader()
     communication.custom_ask.return_value = UploadChoice.OVERWRITE_ALL.value
     first = UploadJob("project", Path("first.tif"), "url1", {})
+    second = UploadJob("project", Path("second.tif"), "url2", {})
+    third = UploadJob("project", Path("third.tif"), "url3", {})
     task_manager = MagicMock()
     with (
         patch(
             "rana_qgis_plugin.loader.QFileDialog.getOpenFileNames",
-            return_value=(["/tmp/first.tif", "/tmp/second.tif"], ""),
+            return_value=(["/tmp/first.tif", "/tmp/second.tif", "/tmp/third.tif"], ""),
         ),
         patch(
             "rana_qgis_plugin.loader.prepare_new_file_upload",
             side_effect=[
                 UploadPreparationResult(first),
-                UploadPreparationResult(None, "conflict", conflict_path="second.tif"),
-                UploadPreparationResult(None, "conflict", conflict_path="third.tif"),
+                UploadPreparationResult(
+                    second, "conflict", conflict_path="second.tif", exact_conflict=False
+                ),
+                UploadPreparationResult(second),
+                UploadPreparationResult(
+                    third, "conflict", conflict_path="second.tif", exact_conflict=False
+                ),
             ],
         ) as prepare,
-        patch("rana_qgis_plugin.loader.UploadTask") as task_class,
+        patch("rana_qgis_plugin.loader.UploadTask") as upload_task,
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=task_manager,
         ),
     ):
         loader.upload_files({"id": "project"}, "folder")
-    assert prepare.call_count == 3
+    assert prepare.call_count == 4
     assert communication.custom_ask.call_count == 1
-    task_manager.addTask.assert_called_once_with(task_class.return_value)
-    task_class.assert_called_once_with([first])
+    task_manager.addTask.assert_called_once_with(upload_task.return_value)
+    upload_task.assert_called_once_with([first, second, third])
 
 
 # --- Layer 1: handle_upload_completed / handle_upload_file_started / handle_upload_file_failed ---
