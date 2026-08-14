@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Any, Optional, TypedDict, cast
 
 import requests
+from qgis.PyQt.QtGui import QImage
 
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
@@ -742,7 +743,7 @@ def get_threedi_organisations() -> list[str]:
     return []
 
 
-def get_user_image(user_id: str) -> Optional[dict]:
+def get_user_image(user_id: str) -> Optional[QImage]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"

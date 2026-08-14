@@ -3,14 +3,15 @@ from qgis.PyQt.QtCore import (
     QRunnable,
     pyqtSignal,
 )
+from qgis.PyQt.QtGui import QImage
 
-from rana_qgis_plugin.widgets.utils_avatars import get_avatar
+from rana_qgis_plugin.utils.api import get_user_image
 
 
 # We need a separate signals class since QRunnable cannot have signals
 class AvatarWorkerSignals(QObject):
     finished = pyqtSignal()
-    avatar_ready = pyqtSignal(str, "QPixmap")
+    avatar_ready = pyqtSignal(str, QImage)
 
 
 class AvatarWorker(QRunnable):
@@ -28,7 +29,7 @@ class AvatarWorker(QRunnable):
         for user in self.users:
             if self._cancelled:
                 break
-            new_avatar = get_avatar(user, create_from_initials=False)
-            if new_avatar:
-                self.signals.avatar_ready.emit(user["id"], new_avatar)
+            image = get_user_image(user["id"])
+            if image and not image.isNull():
+                self.signals.avatar_ready.emit(user["id"], image)
         self.signals.finished.emit()

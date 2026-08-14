@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import (
     Qt,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QPainter, QPainterPath, QPixmap
+from qgis.PyQt.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.utils.api import get_user_image
@@ -120,16 +120,17 @@ class AvatarCache(QObject):
             self.cache[user["id"]] = get_avatar(user, try_remote=False)
         return self.cache[user["id"]]
 
-    def update_avatar(self, user_id: str, new_avatar: QPixmap):
+    def update_avatar(self, user_id: str, image: QImage):
+        """Convert a QImage to a circular QPixmap and update the cache.
+
+        The conversion to QPixmap must happen on the main thread.
+        """
+        if not image or image.isNull():
+            return
+        new_avatar = create_user_image(image)
         current_avatar = self.cache.get(user_id, None)
-        if not new_avatar or new_avatar.isNull():
-            changed = False
-        elif not current_avatar or current_avatar.isNull():
-            changed = True
-        elif new_avatar.toImage() == current_avatar.toImage():
-            changed = False
-        else:
-            changed = True
-        if changed:
-            self.cache[user_id] = new_avatar
-            self.avatar_changed.emit(user_id)
+        if current_avatar and not current_avatar.isNull():
+            if new_avatar.toImage() == current_avatar.toImage():
+                return
+        self.cache[user_id] = new_avatar
+        self.avatar_changed.emit(user_id)
