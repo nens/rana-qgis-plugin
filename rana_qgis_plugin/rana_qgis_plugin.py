@@ -71,7 +71,7 @@ class RanaQgisPlugin(QObject):
         self.communication = UICommunication(iface, PLUGIN_NAME)
         self.loader = Loader(self.communication)
         self.data_item_provider = RanaDataItemProvider(self.communication, self.loader)
-        self.gui_provider = RanaDataItemGuiProvider()
+        self.gui_provider = RanaDataItemGuiProvider(self.loader)
         self._externally_deactivated = False
 
     def initGui(self):

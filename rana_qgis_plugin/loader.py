@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from qgis.core import QgsApplication, QgsProject
@@ -10,8 +10,12 @@ from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSl
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QFileDialog
 
+from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
+    RanaPostError,
     delete_tenant_project_file,
+    get_tenant_project_file,
+    get_tenant_project_files,
     move_directory,
     move_file,
 )
@@ -66,32 +70,61 @@ class Loader(QObject):
 
     def rename_item(
         self, project_id: str, old_path: str, new_name: str, is_folder: bool
-    ) -> bool:
-        """Rename a file or folder on Rana. Emits item_renamed on success."""
-        new_path = Path(old_path.rstrip("/")).with_name(new_name).as_posix()
-        if is_folder:
-            success = move_directory(
-                project_id,
-                params={
-                    "source_path": old_path.rstrip("/") + "/",
-                    "destination_path": new_path + "/",
-                },
-            )
-        else:
-            success = move_file(
-                project_id,
-                params={"source_path": old_path, "destination_path": new_path},
-            )
-        if success:
-            self.item_renamed.emit(old_path, new_path, is_folder)
-        return success
+    ) -> str | None:
+        """Rename a file or folder on Rana. Emits item_renamed on success.
 
-    def delete_file(self, project_id: str, path: str) -> bool:
-        """Delete a file on Rana. Emits item_deleted on success."""
-        success = delete_tenant_project_file(project_id, params={"path": path})
-        if success:
-            self.item_deleted.emit(path, False)
-        return success
+        Returns None on success, or an error message string on failure.
+        """
+        if not new_name or not new_name.strip():
+            return "Name cannot be empty."
+
+        # Rana directory paths have a trailing /; strip it for path manipulation
+        source = old_path.rstrip("/")
+        try:
+            new_path = PurePosixPath(source).with_name(new_name).as_posix()
+        except ValueError:
+            return f"'{new_name}' is not a valid name."
+
+        try:
+            if is_folder:
+                if _has_sibling_folder(project_id, source, new_name):
+                    return f"Folder '{new_name}' already exists."
+                move_directory(
+                    project_id,
+                    params={
+                        "source_path": source + "/",
+                        "destination_path": new_path + "/",
+                    },
+                )
+            else:
+                if _has_sibling_file(project_id, old_path, new_name):
+                    return f"File '{new_name}' already exists."
+                move_file(
+                    project_id,
+                    params={"source_path": old_path, "destination_path": new_path},
+                )
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        except RanaPostError as e:
+            return e.msg
+
+        self.item_renamed.emit(old_path, new_path, is_folder)
+        return None
+
+    def delete_file(self, project_id: str, path: str) -> str | None:
+        """Delete a file on Rana. Emits item_deleted on success.
+
+        Returns None on success, or an error message string on failure.
+        """
+        try:
+            delete_tenant_project_file(project_id, params={"path": path})
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        except RanaPostError as e:
+            return e.msg
+
+        self.item_deleted.emit(path, False)
+        return None
 
     def fetch_avatars(self, users: list[dict]) -> None:
         """Start a background fetch of real avatars for the given users."""
@@ -261,3 +294,26 @@ class Loader(QObject):
             self.communication.bar_warn("File upload cancelled.")
         else:
             self.communication.bar_error("File upload failed.")
+
+
+# TODO: I hate these methods here, but they are good for testability
+
+
+def _has_sibling_folder(project_id: str, source: str, new_name: str) -> bool:
+    """Check whether a folder with new_name already exists among siblings."""
+    parent_path = PurePosixPath(source).parent
+    params = (
+        {"path": parent_path.as_posix()} if parent_path != PurePosixPath(".") else None
+    )
+    siblings = get_tenant_project_files(project_id, params=params)
+    return any(
+        sibling["type"] == "directory"
+        and sibling["id"].rstrip("/").rsplit("/", 1)[-1] == new_name
+        for sibling in siblings
+    )
+
+
+def _has_sibling_file(project_id: str, old_path: str, new_name: str) -> bool:
+    """Check whether a file with new_name already exists among siblings."""
+    target_path = PurePosixPath(old_path).with_name(new_name).as_posix()
+    return get_tenant_project_file(project_id, {"path": target_path}) is not None

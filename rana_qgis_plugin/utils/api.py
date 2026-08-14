@@ -250,18 +250,16 @@ def delete_project(project_id: str) -> bool:
         return False
 
 
-def delete_tenant_project_file(project_id: str, params: dict) -> bool:
+def delete_tenant_project_file(project_id: str, params: dict) -> None:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/delete"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, _ = network_manager.delete(params)
+    status, msg = network_manager.delete(params)
 
-    if status:
-        return True
-    else:
-        return False
+    if not status:
+        raise RanaPostError(msg or "Unknown error", url, params)
 
 
 def create_tenant_project_directory(project_id: str, path: str) -> bool:
@@ -292,30 +290,26 @@ def delete_tenant_project_directory(project_id: str, params: dict) -> bool:
         return False
 
 
-def move_file(project_id: str, params: dict) -> bool:
+def move_file(project_id: str, params: dict) -> None:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/move"
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post(params=params)
 
-    if status:
-        return True
-    else:
-        return False
+    if not status:
+        raise RanaPostError(msg or "Unknown error", url, params)
 
 
-def move_directory(project_id: str, params: dict) -> bool:
+def move_directory(project_id: str, params: dict) -> None:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/directories/move"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, msg = network_manager.post(params)
-    if status:
-        return True
-    else:
-        return False
+    if not status:
+        raise RanaPostError(msg or "Unknown error", url, params)
 
 
 def create_folder(project_id: str, params: dict) -> bool:

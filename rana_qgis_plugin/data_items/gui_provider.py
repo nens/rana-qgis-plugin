@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+from typing import TYPE_CHECKING
 
 from qgis.core import QgsDataItem
 from qgis.gui import QgsDataItemGuiContext, QgsDataItemGuiProvider
@@ -13,13 +13,16 @@ from rana_qgis_plugin.data_items.folder_item import (
     RanaFolderDataItem,
 )
 
-logger = logging.getLogger(__name__)
-
-RENAMABLE_TYPES = (RanaFolderDataItem, RanaFileDataItem)
+if TYPE_CHECKING:
+    from rana_qgis_plugin.loader import Loader
 
 
 class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
     """Handles GUI-level actions (rename) for Rana browser items."""
+
+    def __init__(self, loader: Loader):
+        super().__init__()
+        self.loader = loader
 
     def name(self) -> str:
         return "Rana"
@@ -29,9 +32,24 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
     ) -> bool:
         if isinstance(item, RanaFilesDataItem):
             return False
-        if not isinstance(item, RENAMABLE_TYPES):
+        if isinstance(item, RanaFolderDataItem):
+            old_path = item.folder_path
+            is_folder = True
+        elif isinstance(item, RanaFileDataItem):
+            old_path = item.file_item["id"]
+            is_folder = False
+        else:
             return False
-        logger.warning(
-            "SPIKE: rename() called for %s with new name: %s", item.name(), name
+
+        error = self.loader.rename_item(
+            item.project_id, old_path, name or "", is_folder
         )
-        return False
+        if error:
+            self.notify("Rename failed", error, context)
+            return False
+
+        item.setName(name or "")
+        parent = item.parent()
+        if parent is not None:
+            parent.refresh()
+        return True
