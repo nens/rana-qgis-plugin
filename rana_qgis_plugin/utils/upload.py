@@ -14,6 +14,7 @@ from rana_qgis_plugin.utils.api import (
     start_file_upload,
 )
 from rana_qgis_plugin.utils.local_paths import get_local_file_path
+from rana_qgis_plugin.utils.qgis import convert_vectorfile_to_geopackage
 
 
 @dataclass
@@ -24,6 +25,35 @@ class UploadJob:
     local_path: Path
     upload_url: str
     payload: dict
+
+    def preprocess(self) -> None:
+        """Perform any work required before transferring the file."""
+
+
+@dataclass
+class ShapefileUploadJob(UploadJob):
+    """Upload job that converts a shapefile before transferring it."""
+
+    source_path: Path
+    transform_context: object
+
+    @classmethod
+    def from_upload_job(
+        cls, job: UploadJob, source_path: Path, transform_context: object
+    ) -> "ShapefileUploadJob":
+        return cls(
+            job.project_id,
+            job.local_path,
+            job.upload_url,
+            job.payload,
+            source_path,
+            transform_context,
+        )
+
+    def preprocess(self) -> None:
+        convert_vectorfile_to_geopackage(
+            str(self.source_path), transform_context=self.transform_context
+        )
 
 
 @dataclass
@@ -58,18 +88,16 @@ def prepare_new_file_upload(
     Returns a result without a job when the file conflicts or initiation fails.
     """
     online_path = str(PurePosixPath(online_dir) / local_path.name)
-
-    if (
-        get_tenant_project_file(project_id, {"path": online_path})
-        and not overwrite_exact
-    ):
-        return UploadPreparationResult(
-            None,
-            f"File already exists on the server and was skipped: {online_path}",
-            exact_conflict=True,
-        )
-
     try:
+        if (
+            get_tenant_project_file(project_id, {"path": online_path})
+            and not overwrite_exact
+        ):
+            return UploadPreparationResult(
+                None,
+                f"File already exists on the server and was skipped: {online_path}",
+                exact_conflict=True,
+            )
         response, error = start_file_upload(project_id, {"path": online_path})
     except NetworkUnavailableError as exc:
         return UploadPreparationResult(None, str(exc))
@@ -169,6 +197,7 @@ class UploadTask(QgsTask):
                 return False
             self.file_started.emit(job.local_path.name)
             try:
+                job.preprocess()
                 with job.local_path.open("rb") as file:
                     # timout guerds against failing to reach the server
                     # no read timeout because S3 only responds at the end of the PUT

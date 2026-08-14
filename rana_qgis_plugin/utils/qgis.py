@@ -43,10 +43,9 @@ def is_loaded_in_schematisation_editor(
         return None
 
 
-def convert_vectorfile_to_geopackage(
-    vector_path: str, layer_name: str = "default"
-) -> str:
+def convert_vectorfile_to_geopackage(vector_path: str, transform_context: Any) -> str:
     """Returns the path of the resulting geopackage"""
+    layer_name = "default"
     layer = QgsVectorLayer(vector_path, layer_name, "ogr")
     if not layer.isValid():
         raise Exception("Layer failed to load")
@@ -61,7 +60,7 @@ def convert_vectorfile_to_geopackage(
     error = QgsVectorFileWriter.writeAsVectorFormatV3(
         layer,
         gpkg_path,
-        QgsProject.instance().transformContext(),  # type: ignore[union-attr]
+        transform_context,
         options,  # type: ignore[union-attr]
     )
 

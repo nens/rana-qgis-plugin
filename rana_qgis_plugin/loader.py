@@ -5,13 +5,17 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qgis.core import QgsApplication
+from qgis.core import QgsApplication, QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QFileDialog
 
-from rana_qgis_plugin.utils.qgis import convert_vectorfile_to_geopackage
-from rana_qgis_plugin.utils.upload import UploadTask, prepare_new_file_upload
+from rana_qgis_plugin.utils.upload import (
+    ShapefileUploadJob,
+    UploadJob,
+    UploadTask,
+    prepare_new_file_upload,
+)
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.workers.avatars import AvatarWorker
 
@@ -92,11 +96,18 @@ class Loader(QObject):
             "Rana/last_upload_folder", str(Path(local_paths[0]).parent)
         )
 
-        jobs = []
+        jobs: list[UploadJob] = []
         convert_all = False
         overwrite_all = False
+        project_instance = QgsProject.instance()
+        transform_context = (
+            project_instance.transformContext()
+            if project_instance is not None
+            else None
+        )
         for local_path in local_paths:
             path = Path(local_path)
+            source_shp_path = None
             if path.suffix.lower() == ".shp":
                 if not convert_all:
                     choice = self.communication.custom_ask(
@@ -110,7 +121,8 @@ class Loader(QObject):
                     if choice == "Cancel":
                         return
                     convert_all = choice == "Convert all shapefiles"
-                path = Path(convert_vectorfile_to_geopackage(str(path)))
+                source_shp_path = path
+                path = path.with_suffix(".gpkg")
 
             result = prepare_new_file_upload(
                 project["id"],
@@ -119,9 +131,6 @@ class Loader(QObject):
                 overwrite_exact=False,
                 overwrite_case=overwrite_all,
             )
-            if result.job:
-                jobs.append(result.job)
-                continue
             if result.conflict_path and not result.exact_conflict:
                 choice = UploadChoice(
                     self.communication.custom_ask(
@@ -148,10 +157,17 @@ class Loader(QObject):
                         overwrite_exact=False,
                         overwrite_case=True,
                     )
-                    if result.job:
-                        jobs.append(result.job)
-            elif result.error:
+            if result.error:
                 self.communication.show_warn(result.error)
+            if result.job:
+                if source_shp_path is not None:
+                    jobs.append(
+                        ShapefileUploadJob.from_upload_job(
+                            result.job, source_shp_path, transform_context
+                        )
+                    )
+                else:
+                    jobs.append(result.job)
 
         if not jobs:
             return
