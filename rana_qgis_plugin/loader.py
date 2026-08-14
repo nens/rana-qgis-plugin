@@ -10,6 +10,11 @@ from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSl
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QFileDialog
 
+from rana_qgis_plugin.utils.api import (
+    delete_tenant_project_file,
+    move_directory,
+    move_file,
+)
 from rana_qgis_plugin.utils.upload import (
     ShapefileUploadJob,
     UploadJob,
@@ -41,6 +46,8 @@ class Loader(QObject):
     """
 
     avatar_updated = pyqtSignal(str, QPixmap)
+    item_renamed = pyqtSignal(str, str, bool)  # old_path, new_path, is_folder
+    item_deleted = pyqtSignal(str, bool)  # path, is_folder
 
     def __init__(self, communication: "UICommunication", parent=None):
         super().__init__(parent)
@@ -56,6 +63,35 @@ class Loader(QObject):
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def rename_item(
+        self, project_id: str, old_path: str, new_name: str, is_folder: bool
+    ) -> bool:
+        """Rename a file or folder on Rana. Emits item_renamed on success."""
+        new_path = Path(old_path.rstrip("/")).with_name(new_name).as_posix()
+        if is_folder:
+            success = move_directory(
+                project_id,
+                params={
+                    "source_path": old_path.rstrip("/") + "/",
+                    "destination_path": new_path + "/",
+                },
+            )
+        else:
+            success = move_file(
+                project_id,
+                params={"source_path": old_path, "destination_path": new_path},
+            )
+        if success:
+            self.item_renamed.emit(old_path, new_path, is_folder)
+        return success
+
+    def delete_file(self, project_id: str, path: str) -> bool:
+        """Delete a file on Rana. Emits item_deleted on success."""
+        success = delete_tenant_project_file(project_id, params={"path": path})
+        if success:
+            self.item_deleted.emit(path, False)
+        return success
 
     def fetch_avatars(self, users: list[dict]) -> None:
         """Start a background fetch of real avatars for the given users."""
