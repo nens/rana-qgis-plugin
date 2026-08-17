@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
+from qgis.PyQt.QtCore import QUrl
+from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
@@ -18,6 +20,7 @@ from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.icons import dir_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import RanaFetchError, get_tenant_project_files
+from rana_qgis_plugin.utils.generic import get_rana_file_url
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -30,13 +33,13 @@ class RanaFolderDataItem(QgsDataItem):
         self,
         parent: QgsDataItem,
         loader: Loader,
-        project_id: str,
+        project: dict,
         folder_path: str,
         display_name: str,
         error_signals: ApiErrorSignals,
     ):
         self.loader = loader
-        self.project_id = project_id
+        self.project = project
         self.folder_path = folder_path
         self.error_signals = error_signals
         super().__init__(
@@ -64,7 +67,7 @@ class RanaFolderDataItem(QgsDataItem):
         """Fetch and return the immediate contents of this folder."""
         params = {"path": self.folder_path} if self.folder_path else None
         try:
-            files = get_tenant_project_files(self.project_id, params=params)
+            files = get_tenant_project_files(self.project["id"], params=params)
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return [QgsErrorItem(self, "No connection to Rana", self.path())]
@@ -86,10 +89,16 @@ class RanaFolderDataItem(QgsDataItem):
             if action is FileAction.UPLOAD_FILES:
                 q_action.triggered.connect(
                     lambda: self.loader.upload_files(
-                        {"id": self.project_id},
+                        {"id": self.project["id"]},
                         self.folder_path,
                         parent,
                         refresh_callback=self.refresh_if_populated,
+                    )
+                )
+            elif action is FileAction.OPEN_IN_BROWSER:
+                q_action.triggered.connect(
+                    lambda: QDesktopServices.openUrl(
+                        QUrl(get_rana_file_url(self.project["slug"], self.folder_path))
                     )
                 )
             actions.append(q_action)
@@ -108,7 +117,7 @@ class RanaFolderDataItem(QgsDataItem):
             return RanaFolderDataItem(
                 self,
                 self.loader,
-                self.project_id,
+                self.project,
                 item["id"],
                 display_name,
                 self.error_signals,
@@ -116,7 +125,7 @@ class RanaFolderDataItem(QgsDataItem):
         return RanaFileDataItem(
             self,
             self.loader,
-            self.project_id,
+            self.project,
             item,
             display_name,
             self.error_signals,
@@ -130,10 +139,10 @@ class RanaFilesDataItem(RanaFolderDataItem):
         self,
         parent: QgsDataItem,
         loader: Loader,
-        project_id: str,
+        project: dict,
         error_signals: ApiErrorSignals,
     ):
-        super().__init__(parent, loader, project_id, "", "Files", error_signals)
+        super().__init__(parent, loader, project, "", "Files", error_signals)
         self.setCapabilitiesV2(
             cast(
                 Qgis.BrowserItemCapabilities,

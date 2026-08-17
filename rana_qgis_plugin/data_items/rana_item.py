@@ -104,9 +104,7 @@ class RanaRootDataItem(QgsDataItem):
             RanaProjectDataItem(
                 self,
                 self.loader,
-                p["id"],
-                p["name"],
-                p.get("slug", ""),
+                p,
                 self.error_signals,
             )
             for p in response.get("items", [])

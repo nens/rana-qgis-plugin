@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, cast
 
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtCore import QUrl
+from qgis.PyQt.QtGui import QDesktopServices
+from qgis.PyQt.QtWidgets import QAction, QMessageBox
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.data_items.file_actions import (
@@ -21,7 +23,7 @@ from rana_qgis_plugin.utils.api import (
     RanaFetchError,
     get_tenant_file_descriptor,
 )
-from rana_qgis_plugin.utils.generic import get_file_icon_name
+from rana_qgis_plugin.utils.generic import get_file_icon_name, get_rana_file_url
 from rana_qgis_plugin.widgets.file_info_dialog import (
     FileInfoDialog,
     SchematisationFileInfoDialog,
@@ -38,13 +40,14 @@ class RanaFileDataItem(QgsDataItem):
         self,
         parent: QgsDataItem,
         loader: Loader,
-        project_id: str,
+        project: dict,
         file_item: dict,
         display_name: str,
         error_signals: ApiErrorSignals,
     ):
         self.loader = loader
-        self.project_id = project_id
+        self.project_id = project["id"]
+        self.project = project
         self.file_item = file_item
         self.data_type = file_item.get("data_type", "")
         self.descriptor_id = file_item.get("descriptor_id")
@@ -120,5 +123,39 @@ class RanaFileDataItem(QgsDataItem):
                         else FileInfoDialog
                     )(self.file_item, self.error_signals, parent).exec()
                 )
+            elif action is FileAction.DELETE:
+                q_action.triggered.connect(lambda: self.delete_file(parent))
+            elif action is FileAction.OPEN_IN_BROWSER:
+                q_action.triggered.connect(
+                    lambda: QDesktopServices.openUrl(
+                        QUrl(
+                            get_rana_file_url(
+                                self.project["slug"], self.file_item["id"]
+                            )
+                        )
+                    )
+                )
             actions.append(q_action)
         return actions
+
+    def delete_file(self, parent) -> None:
+        """Confirm and delete this file, then refresh its parent item."""
+        if (
+            QMessageBox.question(
+                parent,
+                "Delete file",
+                f"Delete '{self.name()}'?",
+                QMessageBox.StandardButton.Yes,
+                QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+
+        error = self.loader.delete_file(self.project_id, self.file_item["id"])
+        if error:
+            self.loader.communication.show_error(error, parent=parent)
+            return
+        parent_item = self.parent()
+        if parent_item is not None:
+            parent_item.refresh()

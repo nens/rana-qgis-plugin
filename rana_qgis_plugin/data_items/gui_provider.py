@@ -42,7 +42,7 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
             return False
 
         error = self.loader.rename_item(
-            item.project_id, old_path, name or "", is_folder
+            item.project["id"], old_path, name or "", is_folder
         )
         if error:
             self.notify("Rename failed", error, context)
