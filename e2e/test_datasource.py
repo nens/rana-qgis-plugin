@@ -6,7 +6,7 @@ import uuid
 import pytest
 from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt, QTimer
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QFileDialog, QTreeView
+from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox, QTreeView
 
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
@@ -17,9 +17,9 @@ from rana_qgis_plugin.data_items.folder_item import (
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
 from rana_qgis_plugin.utils.api import (
     create_project,
-    create_tenant_project_directory,
     delete_project,
 )
+from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 
 from .test_utils import click_context_menu_action, make_modal_handler
 
@@ -77,10 +77,14 @@ def test_project_listing(plugin, qtbot, rana_project):
 
 
 def test_files(plugin, qtbot, qgis_application, rana_project):
-    # Add folders to project
-    create_tenant_project_directory(rana_project["id"], "foo")
-    create_tenant_project_directory(rana_project["id"], "foo/bar")
-    # Get project and get Files root
+    # This is one end-to-end file-management flow. It deliberately uses the
+    # context menu for mutations so that the test covers the user-facing path,
+    # rather than only checking the API helpers in isolation.
+    #
+    # The flow covers folder creation at two levels, duplicate and invalid
+    # names, folder and file renames, upload, and file/folder deletion.
+
+    # Locate the project in the Browser and obtain its Files container.
     qtbot.waitUntil(
         lambda: rana_project["name"] in get_child_names(plugin),
         timeout=30000,
@@ -142,7 +146,47 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
         if isinstance(child, RanaFilesDataItem)
     )
 
+    # Expanding the Files container loads its children from Rana. It starts
+    # empty because all folders below are created through the UI in this test.
     expand_item(files_item)
+
+    def enter_name(name):
+        def handler(qtbot, modal):
+            modal.line_edit.clear()
+            qtbot.keyClicks(modal.line_edit, name)
+            qtbot.keyClick(modal, Qt.Key.Key_Enter)
+
+        return handler
+
+    def reject_duplicate_name(qtbot, modal):
+        enter_name("foo")(qtbot, modal)
+        assert modal.error_label.isVisible()
+        modal.reject()
+
+    def reject_invalid_name(qtbot, modal):
+        modal.line_edit.clear()
+        qtbot.keyClicks(modal.line_edit, "bad/name")
+        assert modal.ok_button.isEnabled() is False
+        modal.reject()
+
+    def reject_duplicate_rename(qtbot, modal):
+        enter_name("bar")(qtbot, modal)
+        assert modal.error_label.isVisible()
+        modal.reject()
+
+    def confirm_delete(qtbot, modal):
+        yes_button = modal.button(QMessageBox.StandardButton.Yes)
+        assert yes_button is not None
+        qtbot.mouseClick(yes_button, Qt.MouseButton.LeftButton)
+
+    # Create a folder at the Files root. This verifies that the root folder
+    # exposes Create directory and that the entered name reaches the API.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, enter_name("foo")),
+    )
+    click_context_menu_action(qtbot, files_item, FileAction.CREATE_DIRECTORY.value)
+
     qtbot.waitUntil(
         lambda: any(
             isinstance(child, RanaFolderDataItem) and child.name() == "foo"
@@ -157,7 +201,27 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
     )
     assert_visible(foo_item)
 
+    # Creating the same root folder again must not create another item. The
+    # server-side duplicate check should report an error while the dialog stays
+    # open; the test then cancels it so the flow can continue.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, reject_duplicate_name),
+    )
+    click_context_menu_action(qtbot, files_item, FileAction.CREATE_DIRECTORY.value)
+
+    # Expand foo and create bar inside it. This exercises path construction for
+    # a non-root parent, not just creation at the Files root.
     expand_item(foo_item)
+
+    # Create a second sibling folder. It is used below to verify that a folder
+    # cannot be renamed to the name of an existing sibling.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, enter_name("bar")),
+    )
+    click_context_menu_action(qtbot, foo_item, FileAction.CREATE_DIRECTORY.value)
+
     qtbot.waitUntil(
         lambda: any(
             isinstance(child, RanaFolderDataItem) and child.name() == "bar"
@@ -172,10 +236,46 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
     )
     assert_visible(bar_item)
 
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, enter_name("baz")),
+    )
+    click_context_menu_action(qtbot, foo_item, FileAction.CREATE_DIRECTORY.value)
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFolderDataItem) and child.name() == "baz"
+            for child in (foo_item.children() or [])
+        ),
+        timeout=30000,
+    )
+    baz_item = next(
+        child
+        for child in (foo_item.children() or [])
+        if isinstance(child, RanaFolderDataItem) and child.name() == "baz"
+    )
+
+    # An invalid local name is rejected entirely in the dialog. OK must be
+    # disabled before any network request can be made.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, reject_invalid_name),
+    )
+    click_context_menu_action(qtbot, bar_item, FileAction.RENAME.value)
+
+    # Renaming baz to the existing sibling bar exercises server-side duplicate
+    # validation. The dialog remains open with an error and is then cancelled.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, reject_duplicate_rename),
+    )
+    click_context_menu_action(qtbot, baz_item, FileAction.RENAME.value)
+
     def select_upload_file(qtbot, modal):
         modal.selectFile(os.path.join(os.path.dirname(__file__), "data", "upload.gpkg"))
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
+    # Upload a real fixture into foo. This keeps the subsequent file rename and
+    # delete assertions on an item created through the normal UI flow.
     QTimer.singleShot(500, make_modal_handler(qtbot, QFileDialog, select_upload_file))
     click_context_menu_action(qtbot, foo_item, FileAction.UPLOAD_FILES.value)
 
@@ -192,3 +292,77 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
         if isinstance(child, RanaFileDataItem) and child.name() == "upload.gpkg"
     )
     assert_visible(upload_item)
+
+    # Rename the uploaded file and wait for the refreshed Browser item. This
+    # verifies the file-specific move endpoint and the UI refresh afterward.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, enter_name("renamed.gpkg")),
+    )
+    click_context_menu_action(qtbot, upload_item, FileAction.RENAME.value)
+
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFileDataItem) and child.name() == "renamed.gpkg"
+            for child in (foo_item.children() or [])
+        ),
+        timeout=30000,
+    )
+    renamed_item = next(
+        child
+        for child in (foo_item.children() or [])
+        if isinstance(child, RanaFileDataItem) and child.name() == "renamed.gpkg"
+    )
+    assert_visible(renamed_item)
+
+    # A valid folder rename succeeds after the rejected attempts above. This
+    # verifies the folder-specific move endpoint and confirms that the original
+    # folder item is replaced by the renamed item in the Browser.
+    # Delete the renamed file after confirming the destructive action. The
+    # item must disappear from foo's children after the synchronous API call.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, NameInputDialog, enter_name("renamed_bar")),
+    )
+    click_context_menu_action(qtbot, bar_item, FileAction.RENAME.value)
+
+    qtbot.waitUntil(
+        lambda: any(
+            isinstance(child, RanaFolderDataItem) and child.name() == "renamed_bar"
+            for child in (foo_item.children() or [])
+        ),
+        timeout=30000,
+    )
+
+    # Finally delete foo, which still contains the renamed_bar folder. This
+    # covers folder deletion and confirms that the whole top-level folder is
+    # removed from the Files container.
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, QMessageBox, confirm_delete),
+    )
+    click_context_menu_action(qtbot, renamed_item, FileAction.DELETE.value)
+    qtbot.waitUntil(
+        lambda: (
+            not any(
+                isinstance(child, RanaFileDataItem) and child.name() == "renamed.gpkg"
+                for child in (foo_item.children() or [])
+            )
+        ),
+        timeout=30000,
+    )
+
+    QTimer.singleShot(
+        500,
+        make_modal_handler(qtbot, QMessageBox, confirm_delete),
+    )
+    click_context_menu_action(qtbot, foo_item, FileAction.DELETE.value)
+    qtbot.waitUntil(
+        lambda: (
+            not any(
+                isinstance(child, RanaFolderDataItem) and child.name() == "foo"
+                for child in (files_item.children() or [])
+            )
+        ),
+        timeout=30000,
+    )
