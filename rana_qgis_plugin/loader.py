@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import QFileDialog
 
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
+    RanaFetchError,
     RanaPostError,
     create_tenant_project_directory,
     delete_tenant_project_directory,
@@ -109,7 +110,7 @@ class Loader(QObject):
                 )
         except NetworkUnavailableError:
             return "No connection to Rana."
-        except RanaPostError as e:
+        except (RanaFetchError, RanaPostError) as e:
             return e.msg
 
         return None
@@ -154,6 +155,8 @@ class Loader(QObject):
             success = create_tenant_project_directory(project_id, full_path)
         except NetworkUnavailableError:
             return "No connection to Rana."
+        except RanaFetchError as e:
+            return e.msg
         if not success:
             return "Failed to create folder."
 
