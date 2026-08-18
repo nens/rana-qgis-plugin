@@ -2,7 +2,7 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from osgeo import gdal
 from qgis.core import QgsProject, QgsVectorLayer
@@ -302,10 +302,11 @@ def save_layer_changes(layer: QgsVectorLayer) -> tuple[bool, str | None]:
 
 def get_rana_file_url(project_slug: str, file_id: str) -> str:
     """Get the URL of a file in the rana file system."""
-    link = f"{base_url()}/{get_tenant_id()}/projects/{project_slug}?tab=1&"
+    query_params = {"tab": "1"}
     if "/" in file_id:
         path, file_name = file_id.rsplit("/", 1)
-        link += f"path={path.replace('/', ',')}&fileName={file_name}"
+        query_params["path"] = path.replace("/", ",")
+        query_params["fileName"] = file_name
     else:
-        link += f"fileName={file_id}"
-    return link
+        query_params["fileName"] = file_id
+    return f"{base_url()}/{get_tenant_id()}/projects/{project_slug}?{urlencode(query_params)}"

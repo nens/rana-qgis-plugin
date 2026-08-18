@@ -126,7 +126,7 @@ class RanaFileDataItem(QgsDataItem):
                     lambda: QDesktopServices.openUrl(
                         QUrl(
                             get_rana_file_url(
-                                self.project["slug"], self.file_item["id"]
+                                self.project.get("slug", ""), self.file_item["id"]
                             )
                         )
                     )

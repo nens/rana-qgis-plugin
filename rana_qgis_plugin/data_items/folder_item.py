@@ -104,7 +104,11 @@ class RanaFolderDataItem(QgsDataItem):
             elif action is FileAction.OPEN_IN_BROWSER:
                 q_action.triggered.connect(
                     lambda: QDesktopServices.openUrl(
-                        QUrl(get_rana_file_url(self.project["slug"], self.folder_path))
+                        QUrl(
+                            get_rana_file_url(
+                                self.project.get("slug", ""), self.folder_path
+                            )
+                        )
                     )
                 )
             actions.append(q_action)
