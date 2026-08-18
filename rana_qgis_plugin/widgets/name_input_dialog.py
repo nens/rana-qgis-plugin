@@ -56,6 +56,7 @@ class NameInputDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle(title)
+        self.initial_value = initial_value
         self.submit_callback = submit_callback
 
         layout = QVBoxLayout(self)
@@ -87,6 +88,8 @@ class NameInputDialog(QDialog):
 
     def on_text_changed(self, text: str) -> None:
         error = validate_item_name(text)
+        if error is None and self.initial_value and text == self.initial_value:
+            error = "Name has not changed."
         self.ok_button.setEnabled(error is None)
         if error:
             self.error_label.setText(error)
