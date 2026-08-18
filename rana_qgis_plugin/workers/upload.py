@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -15,6 +16,7 @@ from rana_qgis_plugin.utils.api import (
 )
 from rana_qgis_plugin.utils.local_paths import get_local_file_path
 from rana_qgis_plugin.utils.qgis import convert_vectorfile_to_geopackage
+from rana_qgis_plugin.utils.time import convert_timestamp_str_to_local_time
 
 
 @dataclass
@@ -25,6 +27,7 @@ class UploadJob:
     local_path: Path
     upload_url: str
     payload: dict
+    last_modified_key: str | None = field(default=None, init=False, compare=False)
 
     def preprocess(self) -> None:
         """Perform any work required before transferring the file."""
@@ -64,6 +67,14 @@ class UploadPreparationResult:
     error: str | None = None
     conflict_path: str | None = None
     exact_conflict: bool = False
+    status: "ExistingUploadStatus | None" = None
+    conflict: str | None = None
+
+
+class ExistingUploadStatus(Enum):
+    READY = "ready"
+    REMOTE_NEWER = "remote_newer"
+    ERROR = "error"
 
 
 def extract_case_conflict_path(error: dict | None) -> str | None:
@@ -141,23 +152,46 @@ def prepare_existing_file_upload(
             return UploadPreparationResult(
                 None,
                 "Failed to get file from server. Check if it has been moved or deleted.",
+                status=ExistingUploadStatus.ERROR,
             )
 
         timestamp_key = f"{project['name']}/{file['id']}/last_modified"
         local_timestamp = QSettings().value(timestamp_key)
         server_timestamp = server_file["last_modified"]
-        if server_timestamp == local_timestamp:
-            return UploadPreparationResult(
-                None, "The file has not been modified on the server."
+
+        if (
+            local_timestamp is not None
+            and server_timestamp != local_timestamp
+            and not overwrite
+        ):
+            user = server_file.get("user") or {}
+            remote_user = (
+                " ".join(
+                    part
+                    for part in (user.get("given_name"), user.get("family_name"))
+                    if part
+                )
+                or None
             )
-        if not overwrite:
             return UploadPreparationResult(
-                None, "The file has been modified on the server."
+                None,
+                "The file has been modified on the server.",
+                status=ExistingUploadStatus.REMOTE_NEWER,
+                conflict=(
+                    f'"{Path(file["id"]).name}" was modified both locally and on Rana. '
+                    f"The local version is from {local_timestamp}, "
+                    f"while the Rana version is from {server_timestamp}"
+                    + (f", last changed by {remote_user}." if remote_user else ".")
+                ),
             )
 
         response, _ = start_file_upload(project["id"], {"path": file["id"]})
         if not response:
-            return UploadPreparationResult(None, "Failed to initiate file upload.")
+            return UploadPreparationResult(
+                None,
+                "Failed to initiate file upload.",
+                status=ExistingUploadStatus.ERROR,
+            )
 
         payload = response.copy()
         descriptor = get_tenant_file_descriptor(file["descriptor_id"])
@@ -167,14 +201,14 @@ def prepare_existing_file_upload(
                 "description": descriptor["description"],
                 "data_type": descriptor["data_type"],
             }
-        return UploadPreparationResult(
-            UploadJob(project["id"], local_file, response["urls"][0], payload)
-        )
+        job = UploadJob(project["id"], local_file, response["urls"][0], payload)
+        job.last_modified_key = timestamp_key
+        return UploadPreparationResult(job, status=ExistingUploadStatus.READY)
     except NetworkUnavailableError as e:
-        return UploadPreparationResult(None, str(e))
+        return UploadPreparationResult(None, str(e), status=ExistingUploadStatus.ERROR)
 
 
-class UploadTask(QgsTask):
+class FileUploadTask(QgsTask):
     """Upload prepared files without blocking QGIS's main thread."""
 
     file_failed = pyqtSignal(str, str)
@@ -189,6 +223,8 @@ class UploadTask(QgsTask):
         self.jobs = jobs
         self.failed_files: list[tuple[Path, str]] = []
         self.successful_files: list[Path] = []
+        self.updated_descriptors: dict[str, str] = {}
+        self.rana_sync_keys: list[tuple[str, str]] = []
 
     def run(self) -> bool:
         """PUT and finish each prepared upload, stopping on cancellation."""
@@ -205,8 +241,17 @@ class UploadTask(QgsTask):
                         job.upload_url, data=file, timeout=(15, None)
                     )
                     response.raise_for_status()
-                if not finish_file_upload(job.project_id, job.payload):
+                upload_result = finish_file_upload(job.project_id, job.payload)
+                if not upload_result:
                     raise RuntimeError("Failed to complete file upload")
+                new_descriptor_id = upload_result.get("descriptor_id")
+                file_id = upload_result.get("id")
+                if new_descriptor_id and file_id:
+                    self.updated_descriptors[file_id] = new_descriptor_id
+                if job.last_modified_key is not None:
+                    last_modified = upload_result.get("last_modified")
+                    if last_modified is not None:
+                        QSettings().setValue(job.last_modified_key, last_modified)
                 self.successful_files.append(job.local_path)
             except Exception as error:
                 self.failed_files.append((job.local_path, str(error)))

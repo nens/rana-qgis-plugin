@@ -66,8 +66,13 @@ populated. Expanding a vector file fetches its descriptor and creates one
 ### Layers: `RanaLayerDataItem`
 
 A layer is a populated custom leaf. It stores descriptor/layer identifiers,
-uses the geometry type for its icon, and exposes an unconnected `Open in QGIS`
-action.
+uses the geometry type for its icon, and exposes an `Open in QGIS` action.
+
+Opening files and layers is documented in
+[`layer_management.md`](layer_management.md). The action downloads the Rana
+resource and adds linked QGIS layers grouped according to the Browser path.
+Linked layers can subsequently synchronize styles and file data from the
+layer-panel context menu.
 
 ## Signals and error handling
 

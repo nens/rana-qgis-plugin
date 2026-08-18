@@ -6,10 +6,10 @@ import zipfile
 from functools import cached_property
 from pathlib import Path
 from time import sleep
-from typing import Optional
+from typing import Optional, cast
 
 import requests
-from qgis.core import QgsSettings
+from qgis.core import QgsSettings, QgsTask
 from qgis.PyQt.QtCore import (
     QObject,
     QThread,
@@ -42,6 +42,7 @@ from rana_qgis_plugin.utils.local_paths import (
 )
 from rana_qgis_plugin.utils.qgis import rescale_qml_file
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
+from rana_qgis_plugin.utils.zip import extract_flat
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
@@ -291,10 +292,19 @@ class RanaDownloader(BaseDownloader):
         super().__init__(download_context)
         self.project = project
         self.file = file
+        self._resolved_url: Optional[str] = None
 
     @property
     def url(self) -> Optional[str]:
+        if self._resolved_url is not None:
+            return self._resolved_url
         return get_tenant_file_url(self.project["id"], {"path": self.file["id"]})
+
+    def resolve_url(self) -> None:
+        """Fetch the download URL eagerly. Must be called on the main thread."""
+        self._resolved_url = get_tenant_file_url(
+            self.project["id"], {"path": self.file["id"]}
+        )
 
     @property
     def file_id(self) -> str:
@@ -311,11 +321,17 @@ class RanaFileDownloader(RanaDownloader):
         """Handles the extraction of QML zip file and matching/renaming for rasters."""
         if self.file["data_type"] in ["vector", "raster"]:
             qml_zip_content = self.download_context.get_style_zip()
+            from rana_qgis_plugin.utils.log import plugin_log_info
+
+            plugin_log_info(
+                f"Downloaded QML zip content for file {self.file_id}: {qml_zip_content is not None}"
+            )
             if qml_zip_content:
+                plugin_log_info("found zip content")
                 stream = io.BytesIO(qml_zip_content)
                 if zipfile.is_zipfile(stream):
                     with zipfile.ZipFile(stream, "r") as zip_file:
-                        zip_file.extractall(str(self.download_context.local_dir))
+                        extract_flat(zip_file, self.download_context.local_dir)
 
         # For rasters, handle QML file matching and physical_quantity.qml renaming
         if self.file["data_type"] == "raster":
@@ -779,88 +795,38 @@ class LizardResultDownloader(BaseDownloader):
                     f.write(chunk)
 
 
-class SingleFileDownloadWorker(QThread):
-    """Worker thread for downloading a single file."""
+class DownloadTask(QgsTask):
+    """Run one or more downloads sequentially without blocking QGIS."""
 
-    def __init__(self, downloader: BaseDownloader):
-        super().__init__()
-        self.signals = FileDownloadWorkerSignals()
-        self.downloader = downloader
+    file_started = pyqtSignal(str)
+    file_failed = pyqtSignal(str, str)
+    file_downloaded = pyqtSignal(str)
 
-    @pyqtSlot()
-    def run(self):
-        self.downloader.download_file(self.signals)
+    def __init__(self, jobs: list[BaseDownloader]):
+        cancel_flag = cast("QgsTask.Flags", getattr(QgsTask, "CanCancel", 0))
+        super().__init__("Download files", flags=cancel_flag)
+        self.jobs = jobs
+        self.failed_files: list[tuple[str, str]] = []
+        self.successful_files: list[str] = []
 
-
-class BatchFileDownloadWorker(QThread):
-    """Worker thread for downloading multiple files, one after the other."""
-
-    def __init__(self, downloaders: list[BaseDownloader]):
-        super().__init__()
-        self.signals = FileDownloadWorkerSignals()
-        self.downloaders = downloaders
-        self.downloaded_files = {}
-        self.warning_cnt = 0
-        self.fail_cnt = 0
-        self.signals.warning.connect(self._on_warning)
-        self.signals.failed.connect(self._on_failed)
-
-    def _on_warning(self, msg: str):
-        self.warning_cnt += 1
-
-    def _on_failed(self, msg: str):
-        self.fail_cnt += 1
-
-    @cached_property
-    def unique_file_ids(self) -> set[str]:
-        return set([downloader.file_id for downloader in self.downloaders])
-
-    @property
-    def nof_files(self) -> int:
-        """Count number of unique files"""
-        return len(self.unique_file_ids)
-
-    def handle_existing(self, downloader) -> bool:
-        """Check if a file was already downloaded by this worker. If so, just copy the file to the required destination"""
-        if downloader.file_id in self.downloaded_files:
-            download_path = downloader.download_context.local_file_path
-            file_location = self.downloaded_files[downloader.file["id"]]
-            # make sure the file didn't disappear somehow
-            if file_location == str(download_path):
-                return True
-            if Path(file_location).exists():
-                try:
-                    Path(download_path).parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(file_location, download_path)
-                    return True
-                except (FileNotFoundError, PermissionError, OSError) as e:
-                    # Don't raise for reasonable exceptions, just return False to redownload
-                    return False
-        else:
-            return False
-
-    @pyqtSlot()
-    def run(self):
-        # Find the first downloader for each unique file id, download the file and remove the downloader
-        for file_id in self.unique_file_ids:
-            downloader = next(
-                downloader
-                for downloader in self.downloaders
-                if downloader.file_id == file_id
-            )
-            try:
-                downloader.download_file(self.signals)
-                download_path = downloader.download_context.local_file_path
-                self.downloaded_files[downloader.file_id] = download_path
-            except Exception as e:
-                self.signals.failed.emit(f"An error occurred: {str(e)}")
-            self.downloaders.remove(downloader)
-        # Iterate over the remaining downloaders and copy the existing file
-        for downloader in self.downloaders:
-            # copy existing, and if redownload if that was unsuccessful
-            download_file = not self.handle_existing(downloader)
-            try:
-                downloader.download_file(self.signals, download_file)
-            except Exception as e:
-                self.signals.failed.emit(f"An error occurred: {str(e)}")
-        self.signals.all_finished.emit()
+    def run(self) -> bool:
+        """Download each job in order, stopping when canceled."""
+        for index, downloader in enumerate(self.jobs):
+            if self.isCanceled():
+                return False
+            key = downloader.file_id
+            self.file_started.emit(key)
+            error: list[Optional[str]] = [None]
+            signals = FileDownloadWorkerSignals()
+            signals.failed.connect(lambda message: error.__setitem__(0, message))
+            downloader.download_file(signals)
+            if error[0] is not None:
+                self.failed_files.append((key, error[0]))
+                self.file_failed.emit(key, error[0])
+            else:
+                self.successful_files.append(key)
+                self.file_downloaded.emit(
+                    str(downloader.download_context.local_file_path)
+                )
+            self.setProgress((index + 1) * 100 / len(self.jobs))
+        return not self.failed_files

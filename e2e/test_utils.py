@@ -12,13 +12,7 @@ from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMenu, QTreeView
 def build_context_menu(
     data_item: QgsDataItem, selected_items: Sequence[QgsDataItem]
 ) -> QMenu:
-    """Build a context menu the way the QGIS Browser panel actually does.
-
-    Combines the legacy item.actions() entries with whatever every registered
-    QgsDataItemGuiProvider.populateContextMenu() adds/removes, passing the full
-    current selection along — this is what makes multi-select-aware gating
-    (e.g. RanaDataItemGuiProvider) observable in tests.
-    """
+    """Build a Browser context menu including registered GUI providers."""
     menu = QMenu()
     for action in data_item.actions(menu):
         menu.addAction(action)
@@ -27,16 +21,11 @@ def build_context_menu(
     registry = QgsGui.dataItemGuiProviderRegistry()
     for provider in registry.providers() if registry is not None else []:
         provider.populateContextMenu(data_item, menu, list(selected_items), context)
-
     return menu
 
 
 def click_context_menu_action(qtbot, data_item: QgsDataItem, action_text: str) -> None:
-    """Build the context menu for a data item, show it, and click the named action.
-
-    This mimics exactly what the QGIS Browser panel does: it calls item.actions()
-    to populate a QMenu, then the user clicks an entry.
-    """
+    """Build the context menu for a data item and click a named action."""
     menu = build_context_menu(data_item, [data_item])
 
     target = next((a for a in menu.actions() if a.text() == action_text), None)

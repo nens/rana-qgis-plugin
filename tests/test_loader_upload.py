@@ -7,7 +7,7 @@ from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QCoreApplication
 
 from rana_qgis_plugin.loader import Loader, UploadChoice
-from rana_qgis_plugin.utils.upload import UploadJob, UploadPreparationResult
+from rana_qgis_plugin.workers.upload import UploadJob, UploadPreparationResult
 
 
 def make_loader():
@@ -93,7 +93,7 @@ def test_upload_files_case_conflict_overwrite(tmp_path, upload_choice):
             "rana_qgis_plugin.loader.prepare_new_file_upload",
             side_effect=[case_result, UploadPreparationResult(prepared_job)],
         ) as prepare,
-        patch("rana_qgis_plugin.loader.UploadTask") as task_class,
+        patch("rana_qgis_plugin.loader.FileUploadTask") as task_class,
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=MagicMock(),
@@ -126,7 +126,7 @@ def test_upload_files_collects_multiple_jobs():
                 UploadPreparationResult(second),
             ],
         ),
-        patch("rana_qgis_plugin.loader.UploadTask") as task_class,
+        patch("rana_qgis_plugin.loader.FileUploadTask") as task_class,
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=task_manager,
@@ -158,7 +158,7 @@ def test_upload_files_collects_multiple_jobs_abort():
                 UploadPreparationResult(third),
             ],
         ) as prepare,
-        patch("rana_qgis_plugin.loader.UploadTask") as task_class,
+        patch("rana_qgis_plugin.loader.FileUploadTask") as task_class,
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=task_manager,
@@ -196,7 +196,7 @@ def test_upload_files_collects_multiple_jobs_overwrite_all():
                 ),
             ],
         ) as prepare,
-        patch("rana_qgis_plugin.loader.UploadTask") as upload_task,
+        patch("rana_qgis_plugin.loader.FileUploadTask") as upload_task,
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=task_manager,
@@ -247,18 +247,82 @@ def test_handle_upload_completed_clears_message_bar():
     communication.clear_message_bar.assert_called_once()
 
 
-def test_handle_upload_file_started_shows_progress_bar():
-    loader, communication = make_loader()
-    loader.handle_upload_file_started("myfile.tif")
-    communication.progress_bar.assert_called_once_with(
-        "Uploading myfile.tif", minimum=0, maximum=0, clear_msg_bar=True
-    )
-
-
 def test_handle_upload_file_failed_logs_error():
     loader, communication = make_loader()
     loader.handle_upload_file_failed("/tmp/file.tif", "connection error")
     communication.log_err.assert_called_once()
+
+
+def test_data_sync_acquires_and_releases_lock_and_clears_dirty_state():
+    loader, communication = make_loader()
+    task = MagicMock()
+    task.rana_sync_keys = [("project", "descriptor")]
+    task.failed_files = []
+    task.isCanceled.return_value = False
+    layer = MagicMock()
+
+    with (
+        patch.object(loader, "layers_for_keys", return_value=[layer]),
+        patch("rana_qgis_plugin.loader.clear_dirty") as clear_dirty,
+    ):
+        assert loader.acquire_sync_keys(task.rana_sync_keys)
+        loader.handle_sync_completed(
+            task, "rana/data_dirty", "Data saved to Rana.", task.failed_files
+        )
+
+    clear_dirty.assert_called_once_with(layer, "rana/data_dirty")
+    assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
+    communication.bar_info.assert_called_once()
+
+
+def test_data_sync_termination_releases_lock_without_clearing_dirty_state():
+    loader, _ = make_loader()
+    task = MagicMock()
+    task.rana_sync_keys = [("project", "descriptor")]
+    task.isCanceled.return_value = True
+    assert loader.acquire_sync_keys(task.rana_sync_keys)
+
+    with patch("rana_qgis_plugin.loader.clear_dirty") as clear_dirty:
+        loader.release_sync_keys(task.rana_sync_keys)
+        loader.handle_data_sync_terminated(task)
+
+    clear_dirty.assert_not_called()
+    assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
+
+
+def test_style_sync_completion_clears_style_state_and_releases_lock():
+    loader, communication = make_loader()
+    task = MagicMock()
+    task.rana_sync_keys = [("project", "descriptor")]
+    task.failed_items = []
+    task.isCanceled.return_value = False
+    layer = MagicMock()
+
+    with (
+        patch.object(loader, "layers_for_keys", return_value=[layer]),
+        patch("rana_qgis_plugin.loader.clear_dirty") as clear_dirty,
+    ):
+        assert loader.acquire_sync_keys(task.rana_sync_keys)
+        loader.handle_sync_completed(
+            task, "rana/style_dirty", "Styles saved to Rana.", task.failed_items
+        )
+
+    clear_dirty.assert_called_once_with(layer, "rana/style_dirty")
+    assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
+    communication.bar_info.assert_called_once()
+
+
+def test_sync_key_acquisition_releases_partial_batch_on_conflict():
+    loader, communication = make_loader()
+    first = ("project", "first")
+    second = ("project", "second")
+    assert loader.layer_lock_registry.acquire(second)
+
+    assert not loader.acquire_sync_keys([first, second])
+
+    assert not loader.layer_lock_registry.is_locked(first)
+    assert loader.layer_lock_registry.is_locked(second)
+    communication.bar_warn.assert_not_called()
 
 
 # --- Layer 2: full signal chain via real QgsTaskManager ---
@@ -286,8 +350,11 @@ def test_upload_files_full_chain_success(qgis_application, tmp_path):
                 )
             ),
         ),
-        patch("rana_qgis_plugin.utils.upload.requests.put") as mock_put,
-        patch("rana_qgis_plugin.utils.upload.finish_file_upload", return_value=True),
+        patch("rana_qgis_plugin.workers.upload.requests.put") as mock_put,
+        patch(
+            "rana_qgis_plugin.workers.upload.finish_file_upload",
+            return_value={"id": "file.tif", "descriptor_id": "desc"},
+        ),
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=QgsApplication.taskManager(),
@@ -298,7 +365,7 @@ def test_upload_files_full_chain_success(qgis_application, tmp_path):
         assert wait_for(lambda: communication.bar_info.called), "upload never completed"
 
     communication.progress_bar.assert_called_once_with(
-        "Uploading file.tif", minimum=0, maximum=0, clear_msg_bar=True
+        "Downloading file.tif", minimum=0, maximum=0
     )
     communication.bar_info.assert_called_once()
     communication.bar_error.assert_not_called()
@@ -328,7 +395,7 @@ def test_upload_files_full_chain_failure(qgis_application, tmp_path):
             ),
         ),
         patch(
-            "rana_qgis_plugin.utils.upload.requests.put",
+            "rana_qgis_plugin.workers.upload.requests.put",
             side_effect=OSError("network error"),
         ),
         patch(
@@ -342,7 +409,7 @@ def test_upload_files_full_chain_failure(qgis_application, tmp_path):
         )
 
     communication.progress_bar.assert_called_once_with(
-        "Uploading file.tif", minimum=0, maximum=0, clear_msg_bar=True
+        "Downloading file.tif", minimum=0, maximum=0
     )
     communication.bar_error.assert_called_once()
     communication.bar_info.assert_not_called()

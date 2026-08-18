@@ -3,28 +3,23 @@ import json
 import math
 import shutil
 import tempfile
-import time
 import zipfile
-from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from bridgestyle.qgis import togeostyler
-from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QObject, QSettings, Qt, QThread, pyqtSignal, pyqtSlot
+from qgis.core import QgsProject, QgsTask
+from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.utils.api import (
-    FileDescriptorStatus,
-    RanaUploadError,
-    get_tenant_file_descriptor,
     upload_file_styling,
     upload_publication_style,
 )
-from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
+from rana_qgis_plugin.utils.data_models import DataType, StyleUploadItem
 from rana_qgis_plugin.utils.generic import (
     image_to_bytes,
 )
@@ -59,7 +54,10 @@ class StyleBuilder(QObject):
 
     @cached_property
     def all_layers(self):
-        all_layers = QgsProject.instance().mapLayers().values()
+        proj = QgsProject.instance()
+        if proj is None:
+            return []
+        all_layers = proj.mapLayers().values()
         return [layer for layer in all_layers if self.local_file_path in layer.source()]
 
     @property
@@ -132,17 +130,19 @@ class RasterStyleBuilder(StyleBuilder):
     def get_files(self) -> list:
         zip_files = self.save_qml_style_to_file()
         lizard_styling_files = self._save_lizard_style_to_file()
-        return [zip_files, lizard_styling_files]
+        if lizard_styling_files:
+            return [zip_files, lizard_styling_files]
+        return [zip_files]
 
-    def _save_lizard_style_to_file(self) -> tuple:
+    def _save_lizard_style_to_file(self) -> Optional[tuple]:
         layer = self.layers[0]
         geostyler, _, _, warnings = togeostyler.convert(layer)
         if len(geostyler["rules"]) != 1:
             self.failed.emit(f"Multiple rules found for {self.file_ref_str}.")
-            return
+            return None
         if len(geostyler["rules"][0]["symbolizers"]) != 1:
             self.failed.emit(f"Multiple symbolizers found for {self.file_ref_str}.")
-            return
+            return None
         lizard_styling = import_from_geostyler(geostyler["rules"][0]["symbolizers"][0])
         # Do some corrections and checks
         labels = copy.deepcopy(lizard_styling.get("labels", {}))
@@ -162,7 +162,7 @@ class RasterStyleBuilder(StyleBuilder):
                     self.failed.emit(
                         f"Failed to generate and upload styling files: DiscreteColormap cannot contain float quantities."
                     )
-                    return
+                    return None
         if warnings:
             self.warning.emit(", ".join(set(warnings)))
         lizard_styling_path = self.tempdir.joinpath("colormap.json")
@@ -201,7 +201,7 @@ class VectorStyleBuilder(StyleBuilder):
         return files
 
     def get_qgis_styling_files(self) -> list:
-        files = []
+        files: list[tuple[str, str, str, str]] = []
         # Convert QGIS layers to styling files for the Rana Web Client
         try:
             _, warnings, mb_style, sprite_sheet = convertGroup(
@@ -261,219 +261,111 @@ class VectorStyleBuilderSingleLayer(VectorStyleBuilder):
         return len(self.layers) == 1
 
 
-class FileDescriptorStyleUploadWorker(QThread):
-    """Upload style for a single file descriptor.
+class StyleUploadTask(QgsTask):
+    """Build and upload styles for one or more items."""
 
-    Selects the appropriate StyleBuilder based on data_type and uploads
-    the resulting style files via the unified upload_file_styling endpoint.
-    """
-
-    finished = pyqtSignal(str)
-    failed = pyqtSignal(str)
+    item_finished = pyqtSignal(str)
+    item_started = pyqtSignal(str)
+    item_failed = pyqtSignal(str, str)
     warning = pyqtSignal(str)
-    retry = pyqtSignal(str)  # Signal to show busy progress bar with message
 
-    def __init__(
-        self,
-        descriptor_id: str,
-        data_type: DataType,
-        local_file_path: str,
-        file_ref_str: str,
-        communication,
-        retry_timeout_seconds: int = 0,
-    ):
-        super().__init__()
-        self.success = True
-        self.descriptor_id = descriptor_id
-        self.data_type = data_type
-        self.local_file_path = local_file_path
-        self.file_ref_str = file_ref_str
-        self.communication = communication
-        self.retry_timeout_seconds = retry_timeout_seconds
+    def __init__(self, items: list[StyleUploadItem]):
+        # avoid importing task flags for typing compatibility in tests
+        super().__init__("Upload styling")
+        self.items = items
+        self.failed_items: list[tuple[str, str]] = []
+        self.rana_sync_keys: list[tuple[str, str]] = []
 
-    def _make_builder(self) -> StyleBuilder:
+    def make_builder(self, item: StyleUploadItem) -> StyleBuilder:
         """Build the appropriate StyleBuilder based on data_type."""
-        if self.data_type == DataType.raster:
-            return RasterStyleBuilder(self.local_file_path, self.file_ref_str)
-        elif self.data_type == DataType.vector:
-            return VectorStyleBuilderAllLayers(self.local_file_path, self.file_ref_str)
-        elif self.data_type == DataType.schematisation:
+        if item.data_type == DataType.raster:
+            return RasterStyleBuilder(item.local_file_path, item.file_ref_str)
+        elif item.data_type == DataType.vector:
+            if item.layer_in_file:
+                return VectorStyleBuilderSingleLayer(
+                    item.local_file_path, item.file_ref_str, item.layer_in_file
+                )
+            return VectorStyleBuilderAllLayers(item.local_file_path, item.file_ref_str)
+        elif item.data_type == DataType.schematisation:
             return SchematisationStyleBuilder()
         else:
             raise ValueError(
-                f"Unsupported data type for style upload: {self.data_type.value}"
+                f"Unsupported data type for style upload: {item.data_type.value}"
             )
 
-    def mark_as_failed(self, msg: str):
-        self.success = False
-        self.failed.emit(msg)
-
-    def _upload_with_retry(self, files):
-        start_time = time.time()
-        retry_delay = 2  # seconds between retries
-        # Signal to show busy progress bar
-        self.retry.emit("Waiting for style upload...")
-        while True:
-            status = FileDescriptorStatus.from_fd_response(
-                get_tenant_file_descriptor(self.descriptor_id)
-            )
-            if not status.is_valid:
-                self.mark_as_failed(f"Processing of the file failed")
-                break
-            elif not status.is_ready:
-                if (time.time() - start_time) >= self.retry_timeout_seconds:
-                    self.mark_as_failed(
-                        f"Uploading styling files failed: processing not ready after {self.retry_timeout_seconds} seconds"
-                    )
-                    break
-                else:
-                    time.sleep(retry_delay)
-            else:
-                try:
-                    upload_file_styling(self.descriptor_id, files)
-                except RanaUploadError as e:
-                    self.mark_as_failed(f"Uploading styling files failed: {e}")
-                finally:
-                    break
-
-    def run(self):
-        """Build style files and upload them via upload_file_styling endpoint."""
-        builder = self._make_builder()
-        builder.failed.connect(self.mark_as_failed)
-        builder.warning.connect(self.warning.emit)
-
-        if not builder.validate_layers():
-            self.failed.emit(
-                f"Layer not found for {self.file_ref_str}. Add file to map and try again"
-            )
-            return
-
-        builder.tempdir.mkdir(parents=True, exist_ok=True)
-        files = builder.get_files()
-        if self.success and files:
-            status = FileDescriptorStatus.from_fd_response(
-                get_tenant_file_descriptor(self.descriptor_id)
-            )
-            if status.is_ready:
-                try:
-                    upload_file_styling(self.descriptor_id, files)
-                except RanaUploadError as e:
-                    self.mark_as_failed(f"Uploading styling files failed: {e}")
-            else:
-                self._upload_with_retry(files)
-        builder.clean()
-
-        if self.success:
-            self.finished.emit(
-                f"Styling files uploaded successfully for {self.file_ref_str}."
-            )
-
-
-class PublicationStyleUploadWorker(QThread):
-    """Handle uploading many styles associated to single publication version"""
-
-    finished = pyqtSignal(str, list)
-    progress = pyqtSignal(int)
-
-    def __init__(
-        self,
-        project: dict,
-        publication_version: dict,
-        tasks: list[RanaPublicationFileData],
-        communication,
-    ):
-        super().__init__()
-        self.communication = communication
-        self.project = project
-        self.publication_version = publication_version
-        self.tasks = tasks
-        self.warning_cnt = 0
-        self.fail_cnt = 0
-
-    @pyqtSlot(str)
-    def pass_fail_to_logging(self, msg):
-        self.communication.log_err(msg)
-        self.fail_cnt += 1
-
-    @pyqtSlot(str)
-    def pass_warning_to_logging(self, msg):
-        self.communication.log_warn(msg)
-        self.warning_cnt += 1
-
-    @contextmanager
-    def builder_signal_connections(self, builder: StyleBuilder):
-        connections = [
-            (builder.failed, self.pass_fail_to_logging),
-            (builder.warning, self.pass_warning_to_logging),
-        ]
-        """Context manager to ensure signals are always connected and disconnected properly."""
-        for signal, func in connections:
-            signal.connect(func)
-        try:
-            yield
-        finally:
-            for signal, func in connections:
-                try:
-                    signal.disconnect(func)
-                except TypeError:
-                    # TypeError is raised when signal is not connected
-                    continue
-
-    def _make_builder(self, task) -> StyleBuilder:
-        if task.data_type not in [DataType.raster, DataType.vector]:
-            raise ValueError(f"Unknown file type: {task.data_type.value}")
-        local_file_path = get_local_publication_file_path(
-            self.project["slug"], task.file["id"], task.file_tree
-        )
-        file_ref_str = f"layer {task.display_name} from {'/'.join(task.file_tree)}"
-        if task.data_type == DataType.raster:
-            return RasterStyleBuilder(local_file_path, file_ref_str)
-        elif task.data_type == DataType.vector:
-            return VectorStyleBuilderSingleLayer(
-                local_file_path, file_ref_str, task.layer_in_file
-            )
-
-    def run(self):
-        not_found_cnt = 0
-        new_style_ids = []
-        for i, task in enumerate(self.tasks):
-            self.progress.emit(i)
+    def run(self) -> bool:
+        for index, item in enumerate(self.items):
+            if self.isCanceled():
+                return False
+            name = item.file_ref_str
+            self.item_started.emit(name)
+            builder = None
             try:
-                builder = self._make_builder(task)
-            except ValueError:
-                not_found_cnt += 1
-                continue
-            with self.builder_signal_connections(builder):
+                builder = self.make_builder(item)
                 if not builder.validate_layers():
-                    not_found_cnt += 1
-                    continue
+                    raise RuntimeError(f"Layer not found for {name}")
                 builder.tempdir.mkdir(parents=True, exist_ok=True)
                 files = builder.get_files()
-            if files:
-                try:
-                    style_id = upload_publication_style(
-                        publication_id=self.publication_version["publication_id"],
-                        publication_version=self.publication_version["version"],
-                        file_path=task.file["id"],
-                        files=files,
-                    )
-                    new_style_ids.append((task, style_id))
-                except RanaUploadError as e:
-                    # mark as failed and continue with clean up
-                    self.pass_fail_to_logging(f"Failed to upload styling files: {e}")
-            # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
-            try:
-                shutil.rmtree(builder.tempdir)
-            except (FileNotFoundError, PermissionError, OSError) as e:
-                pass
-        if len(new_style_ids) > 0:
-            msg = f"Styling file(s) uploaded successfully for {len(new_style_ids)} layer(s)."
-        else:
-            msg = "No styling files uploaded."
-        if not_found_cnt > 0:
-            msg += f"\n{not_found_cnt} layer(s) not found. Add layer(s) to map and try again."
-        if self.fail_cnt > 0:
-            msg += f"\nUpload failed for {self.fail_cnt} layer(s), see the logs for more information."
-        if self.warning_cnt > 0:
-            msg += f"\n{self.warning_cnt} warnings were generated, see the logs for more information."
-        self.finished.emit(msg, new_style_ids)
+                if not files:
+                    raise RuntimeError(f"No style files generated for {name}")
+                item.upload_func(files)
+                self.item_finished.emit(name)
+            except Exception as error:
+                self.failed_items.append((name, str(error)))
+                self.item_failed.emit(name, str(error))
+            finally:
+                if builder is not None:
+                    builder.clean()
+            self.setProgress((index + 1) * 100 / len(self.items))
+        return not self.failed_items
+
+
+def make_publication_style_upload_item(
+    publication_id: str,
+    publication_version: str,
+    data_type: DataType,
+    local_file_path: str,
+    file_ref_str: str,
+    file_path: str,
+    layer_in_file: str | None = None,
+) -> StyleUploadItem:
+
+    def upload_func(files: list) -> object:
+        return upload_publication_style(
+            publication_id=publication_id,
+            publication_version=publication_version,
+            file_path=file_path,
+            files=files,
+        )
+
+    return StyleUploadItem(
+        data_type=data_type,
+        local_file_path=local_file_path,
+        file_ref_str=file_ref_str,
+        upload_func=upload_func,
+        layer_in_file=layer_in_file,
+    )
+
+
+def make_file_style_upload_item(
+    descriptor_id: str,
+    data_type: DataType,
+    local_file_path: str,
+    file_ref_str: str,
+    layer_in_file: str | None = None,
+    project_id: str | None = None,
+) -> StyleUploadItem:
+    """Build a style item for the file-descriptor styling endpoint."""
+
+    def upload_func(files: list) -> object:
+        return upload_file_styling(descriptor_id, files)
+
+    return StyleUploadItem(
+        data_type=data_type,
+        local_file_path=local_file_path,
+        file_ref_str=file_ref_str,
+        upload_func=upload_func,
+        layer_in_file=layer_in_file,
+        project_id=project_id,
+        descriptor_id=descriptor_id,
+    )

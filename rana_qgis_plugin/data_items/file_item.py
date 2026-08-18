@@ -17,18 +17,19 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_file_actions,
 )
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
-from rana_qgis_plugin.legacy.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     RanaFetchError,
     get_tenant_file_descriptor,
 )
+from rana_qgis_plugin.utils.data_models import OpenFileRequest
 from rana_qgis_plugin.utils.generic import get_file_icon_name, get_rana_file_url
 from rana_qgis_plugin.widgets.file_info_dialog import (
     FileInfoDialog,
     SchematisationFileInfoDialog,
 )
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
+from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -100,6 +101,13 @@ class RanaFileDataItem(QgsDataItem):
             for layer in descriptor.get("layers", [])
         ]
 
+    def handleDoubleClick(self) -> bool:
+        """Download and open this file in the QGIS layer panel."""
+        if self.data_type not in ("vector", "raster"):
+            return False
+        self.loader.open_items([OpenFileRequest(self.project, self.file_item)])
+        return True
+
     def actions(self, parent) -> list:
         """Return unconnected file context-menu actions."""
         actions = []
@@ -131,6 +139,8 @@ class RanaFileDataItem(QgsDataItem):
                         )
                     )
                 )
+            elif action is FileAction.OPEN_IN_QGIS:
+                q_action.triggered.connect(lambda: self.handleDoubleClick())
             actions.append(q_action)
         return actions
 

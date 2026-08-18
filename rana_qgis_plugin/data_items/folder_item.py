@@ -20,6 +20,7 @@ from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.icons import dir_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import RanaFetchError, get_tenant_project_files
+from rana_qgis_plugin.utils.data_models import OpenFolderRequest
 from rana_qgis_plugin.utils.generic import get_rana_file_url
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 
@@ -86,7 +87,13 @@ class RanaFolderDataItem(QgsDataItem):
             q_action = QAction(action.value, parent)
             q_action.setIcon(action.icon)
             q_action.setToolTip(get_action_tooltip(action))
-            if action is FileAction.UPLOAD_FILES:
+            if action is FileAction.OPEN_IN_QGIS:
+                q_action.triggered.connect(
+                    lambda: self.loader.open_items(
+                        [OpenFolderRequest(self.project, self.folder_path)]
+                    )
+                )
+            elif action is FileAction.UPLOAD_FILES:
                 q_action.triggered.connect(
                     lambda: self.loader.upload_files(
                         {"id": self.project["id"]},

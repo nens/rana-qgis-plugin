@@ -15,10 +15,16 @@ from rana_qgis_plugin.data_items.folder_item import (
     RanaFilesDataItem,
     RanaFolderDataItem,
 )
+from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.utils.data_models import (
+    OpenFileRequest,
+    OpenFolderRequest,
+    OpenLayerRequest,
+)
 
-# Actions permitted for a valid multi-select (files/folders, no root)
-MULTI_SELECT_ACTIONS: list[FileAction] = []
+# Actions permitted for a valid multi-select (files/folders/layers, no root)
+MULTI_SELECT_ACTIONS: list[FileAction] = [FileAction.OPEN_IN_QGIS]
 
 
 class SelectionKind(Enum):
@@ -30,7 +36,8 @@ class SelectionKind(Enum):
 def classify_selection(selected_items: Sequence[QgsDataItem]) -> SelectionKind:
     """Classify a Browser selection for context-menu gating purposes.
 
-    projects and the files-root item cannot be part of a valid multi-select; files/folders can.
+    projects and the files-root item cannot be part of a valid multi-select;
+    files/folders/layers can.
     """
     if len(selected_items) <= 1:
         return SelectionKind.SINGLE
@@ -39,7 +46,7 @@ def classify_selection(selected_items: Sequence[QgsDataItem]) -> SelectionKind:
     if any(isinstance(item, RanaFilesDataItem) for item in selected_items):
         return SelectionKind.INVALID_MULTI
     if all(
-        isinstance(item, (RanaFolderDataItem, RanaFileDataItem))
+        isinstance(item, (RanaFolderDataItem, RanaFileDataItem, RanaLayerDataItem))
         for item in selected_items
     ):
         return SelectionKind.VALID_MULTI
@@ -71,12 +78,11 @@ def merge_multi_select_actions(
 class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
     """Gates Rana Browser context menus for multi-select safety.
 
-    Runs alongside the legacy per-item `actions()` menus (unchanged). For
-    0-1 selected items it does nothing. For an invalid multi-select
-    (projects, files-root, or otherwise disallowed combinations) it clears
-    the menu entirely. For a valid multi-select (files/folders, no root)
-    it keeps only the actions common to every selected item's own actions()
-    that are also in `MULTI_SELECT_ACTIONS` (see `merge_multi_select_actions`).
+    For 0-1 selected items: no-op (per-item actions() stand).
+    For invalid multi-select: clears the menu.
+    For valid multi-select: keeps only whitelisted actions common to all
+    items, replacing OPEN_IN_QGIS with a batch handler that resolves
+    the full selection.
     """
 
     def name(self) -> str:
@@ -113,4 +119,48 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
 
         menu.clear()
         for action in allowed_actions:
-            menu.addAction(action)
+            if action.text() == FileAction.OPEN_IN_QGIS.value:
+                batch_action = QAction(FileAction.OPEN_IN_QGIS.value, menu)
+                batch_action.setIcon(FileAction.OPEN_IN_QGIS.icon)
+                batch_action.triggered.connect(
+                    lambda: RanaDataItemGuiProvider.open_selected_items(selected)
+                )
+                menu.addAction(batch_action)
+            else:
+                menu.addAction(action)
+
+    @staticmethod
+    def open_selected_items(items: Sequence[QgsDataItem]) -> None:
+        """Build open requests from the selection and delegate to the loader."""
+        requests: list[OpenFileRequest | OpenLayerRequest | OpenFolderRequest] = []
+        loader = None
+
+        for item in items:
+            if isinstance(item, RanaLayerDataItem):
+                parent = item.parent()
+                if isinstance(parent, RanaFileDataItem):
+                    requests.append(
+                        OpenLayerRequest(
+                            project=parent.project,
+                            file_item=parent.file_item,
+                            layer_name=item.name(),
+                            layer_id=item.layer_id,
+                        )
+                    )
+                    loader = loader or item.loader
+            elif isinstance(item, RanaFileDataItem):
+                if item.data_type in ("vector", "raster"):
+                    requests.append(
+                        OpenFileRequest(project=item.project, file_item=item.file_item)
+                    )
+                    loader = loader or item.loader
+            elif isinstance(item, RanaFolderDataItem):
+                requests.append(
+                    OpenFolderRequest(
+                        project=item.project, folder_path=item.folder_path
+                    )
+                )
+                loader = loader or item.loader
+
+        if requests and loader is not None:
+            loader.open_items(requests)
