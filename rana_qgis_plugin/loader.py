@@ -13,6 +13,8 @@ from qgis.PyQt.QtWidgets import QFileDialog
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     RanaPostError,
+    create_tenant_project_directory,
+    delete_tenant_project_directory,
     delete_tenant_project_file,
     get_tenant_project_file,
     get_tenant_project_files,
@@ -50,8 +52,6 @@ class Loader(QObject):
     """
 
     avatar_updated = pyqtSignal(str, QPixmap)
-    item_renamed = pyqtSignal(str, str, bool)  # old_path, new_path, is_folder
-    item_deleted = pyqtSignal(str, bool)  # path, is_folder
 
     def __init__(self, communication: "UICommunication", parent=None):
         super().__init__(parent)
@@ -71,7 +71,7 @@ class Loader(QObject):
     def rename_item(
         self, project_id: str, old_path: str, new_name: str, is_folder: bool
     ) -> str | None:
-        """Rename a file or folder on Rana. Emits item_renamed on success.
+        """Rename a file or folder on Rana.
 
         Returns None on success, or an error message string on failure.
         """
@@ -87,7 +87,11 @@ class Loader(QObject):
 
         try:
             if is_folder:
-                if _has_sibling_folder(project_id, source, new_name):
+                parent = PurePosixPath(source).parent
+                parent_path = (
+                    parent.as_posix() + "/" if parent != PurePosixPath(".") else ""
+                )
+                if Loader.folder_exists_in(project_id, parent_path, new_name):
                     return f"Folder '{new_name}' already exists."
                 move_directory(
                     project_id,
@@ -97,7 +101,7 @@ class Loader(QObject):
                     },
                 )
             else:
-                if _has_sibling_file(project_id, old_path, new_name):
+                if get_tenant_project_file(project_id, {"path": new_path}) is not None:
                     return f"File '{new_name}' already exists."
                 move_file(
                     project_id,
@@ -108,11 +112,10 @@ class Loader(QObject):
         except RanaPostError as e:
             return e.msg
 
-        self.item_renamed.emit(old_path, new_path, is_folder)
         return None
 
     def delete_file(self, project_id: str, path: str) -> str | None:
-        """Delete a file on Rana. Emits item_deleted on success.
+        """Delete a file on Rana.
 
         Returns None on success, or an error message string on failure.
         """
@@ -123,8 +126,49 @@ class Loader(QObject):
         except RanaPostError as e:
             return e.msg
 
-        self.item_deleted.emit(path, False)
         return None
+
+    def delete_folder(self, project_id: str, path: str) -> str | None:
+        """Delete a folder on Rana.
+
+        Returns None on success, or an error message string on failure.
+        """
+        try:
+            success = delete_tenant_project_directory(project_id, params={"path": path})
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        if not success:
+            return "Failed to delete folder."
+
+        return None
+
+    def create_folder(self, project_id: str, parent_path: str, name: str) -> str | None:
+        """Create a folder on Rana. Emits folder_created on success.
+
+        Returns None on success, or an error message string on failure.
+        """
+        full_path = f"{parent_path}{name}/" if parent_path else f"{name}/"
+        try:
+            if Loader.folder_exists_in(project_id, parent_path, name):
+                return f"Folder '{name}' already exists."
+            success = create_tenant_project_directory(project_id, full_path)
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        if not success:
+            return "Failed to create folder."
+
+        return None
+
+    @staticmethod
+    def folder_exists_in(project_id: str, parent_path: str, name: str) -> bool:
+        """Check whether a folder with *name* already exists inside *parent_path*."""
+        params = {"path": parent_path} if parent_path else None
+        children = get_tenant_project_files(project_id, params=params)
+        return any(
+            child["type"] == "directory"
+            and child["id"].rstrip("/").rsplit("/", 1)[-1] == name
+            for child in children
+        )
 
     def fetch_avatars(self, users: list[dict]) -> None:
         """Start a background fetch of real avatars for the given users."""
@@ -294,26 +338,3 @@ class Loader(QObject):
             self.communication.bar_warn("File upload cancelled.")
         else:
             self.communication.bar_error("File upload failed.")
-
-
-# TODO: I hate these methods here, but they are good for testability
-
-
-def _has_sibling_folder(project_id: str, source: str, new_name: str) -> bool:
-    """Check whether a folder with new_name already exists among siblings."""
-    parent_path = PurePosixPath(source).parent
-    params = (
-        {"path": parent_path.as_posix()} if parent_path != PurePosixPath(".") else None
-    )
-    siblings = get_tenant_project_files(project_id, params=params)
-    return any(
-        sibling["type"] == "directory"
-        and sibling["id"].rstrip("/").rsplit("/", 1)[-1] == new_name
-        for sibling in siblings
-    )
-
-
-def _has_sibling_file(project_id: str, old_path: str, new_name: str) -> bool:
-    """Check whether a file with new_name already exists among siblings."""
-    target_path = PurePosixPath(old_path).with_name(new_name).as_posix()
-    return get_tenant_project_file(project_id, {"path": target_path}) is not None

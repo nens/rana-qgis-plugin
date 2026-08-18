@@ -28,6 +28,7 @@ from rana_qgis_plugin.widgets.file_info_dialog import (
     FileInfoDialog,
     SchematisationFileInfoDialog,
 )
+from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -66,17 +67,10 @@ class RanaFileDataItem(QgsDataItem):
                 cast(
                     Qgis.BrowserItemCapabilities,
                     Qgis.BrowserItemCapability.Fertile
-                    | Qgis.BrowserItemCapability.Collapse
-                    | Qgis.BrowserItemCapability.Rename,
+                    | Qgis.BrowserItemCapability.Collapse,
                 )
             )
         else:
-            self.setCapabilitiesV2(
-                cast(
-                    Qgis.BrowserItemCapabilities,
-                    Qgis.BrowserItemCapability.Rename,
-                )
-            )
             self.setState(Qgis.BrowserItemState.Populated)
 
     def createChildren(self) -> list:
@@ -125,6 +119,8 @@ class RanaFileDataItem(QgsDataItem):
                 )
             elif action is FileAction.DELETE:
                 q_action.triggered.connect(lambda: self.delete_file(parent))
+            elif action is FileAction.RENAME:
+                q_action.triggered.connect(lambda: self.rename_file(parent))
             elif action is FileAction.OPEN_IN_BROWSER:
                 q_action.triggered.connect(
                     lambda: QDesktopServices.openUrl(
@@ -159,3 +155,20 @@ class RanaFileDataItem(QgsDataItem):
         parent_item = self.parent()
         if parent_item is not None:
             parent_item.refresh()
+
+    def rename_file(self, parent) -> None:
+        """Open a dialog to rename this file."""
+        current_name = self.name()
+        dialog = NameInputDialog(
+            "Rename file",
+            "New name:",
+            current_name,
+            lambda name: self.loader.rename_item(
+                self.project_id, self.file_item["id"], name, is_folder=False
+            ),
+            parent,
+        )
+        if dialog.exec() == NameInputDialog.DialogCode.Accepted:
+            parent_item = self.parent()
+            if parent_item is not None:
+                parent_item.refresh()

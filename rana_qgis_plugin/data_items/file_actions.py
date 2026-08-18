@@ -95,4 +95,4 @@ def get_folder_actions(is_root: bool = False) -> list[FileAction]:
         FileAction.VERSION_HISTORY,
         FileAction.OPEN_IN_BROWSER,
     ]
-    return actions if is_root else actions + [FileAction.DELETE]
+    return actions if is_root else actions + [FileAction.RENAME, FileAction.DELETE]

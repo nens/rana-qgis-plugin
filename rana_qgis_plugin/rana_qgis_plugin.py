@@ -8,13 +8,11 @@ from qgis.core import (
     QgsDataItem,
     QgsDataItemProvider,
 )
-from qgis.gui import QgsGui
 from qgis.PyQt.QtCore import QEvent, QObject
 from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.data_items.gui_provider import RanaDataItemGuiProvider
 from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.settings import initialize_settings
@@ -71,7 +69,6 @@ class RanaQgisPlugin(QObject):
         self.communication = UICommunication(iface, PLUGIN_NAME)
         self.loader = Loader(self.communication)
         self.data_item_provider = RanaDataItemProvider(self.communication, self.loader)
-        self.gui_provider = RanaDataItemGuiProvider(self.loader)
         self._externally_deactivated = False
 
     def initGui(self):
@@ -81,17 +78,11 @@ class RanaQgisPlugin(QObject):
             registry = app.dataItemProviderRegistry()
             if registry is not None:
                 registry.addProvider(self.data_item_provider)
-        gui_registry = QgsGui.dataItemGuiProviderRegistry()
-        if gui_registry is not None:
-            gui_registry.addProvider(self.gui_provider)
         self.iface.mainWindow().installEventFilter(self)
 
     def unload(self):
         self.iface.mainWindow().removeEventFilter(self)
         self.loader.shutdown()
-        gui_registry = QgsGui.dataItemGuiProviderRegistry()
-        if gui_registry is not None:
-            gui_registry.removeProvider(self.gui_provider)
         app = QgsApplication.instance()
         if app is not None:
             registry = app.dataItemProviderRegistry()
