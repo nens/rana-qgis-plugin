@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -46,6 +47,15 @@ def rana_cache_dir() -> str:
 
 def set_rana_cache_dir(cache_dir: str) -> None:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cache_dir", cache_dir)
+
+
+def rana_open_cache_dir() -> str:
+    default = str(Path(tempfile.gettempdir()) / "rana_downloads")
+    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/open_cache_dir", default)
+
+
+def set_rana_open_cache_dir(cache_dir: str) -> None:
+    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/open_cache_dir", cache_dir)
 
 
 def cleanup_cache_on_close() -> bool:
@@ -110,7 +120,6 @@ def read_hidden_projects() -> dict[str, list[str]]:
 def get_hidden_projects(base_url: str, tenant_id: str) -> set[str]:
     """Return the set of hidden project IDs for the given backend and tenant."""
     data = read_hidden_projects()
-    print(f"{data=}")
     return set(data.get(f"{base_url.rstrip('/')}|{tenant_id}", []))
 
 

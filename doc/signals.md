@@ -52,7 +52,7 @@ the actual upload runs as a QGIS task.
 sequenceDiagram
     participant Folder
     participant Loader
-    participant Task as UploadTask
+    participant Task as FileUploadTask
     Folder->>Loader: QAction.triggered
     Loader->>Task: add to QGIS TaskManager
     Task-->>Loader: file_started
@@ -78,6 +78,18 @@ flowchart LR
 Examples include login, logout, refresh, project selection, file information,
 and folder upload. Only actions that need shared background orchestration are
 routed through `Loader`.
+
+## Layer reference updates
+
+`Loader` emits these signals after a Browser operation succeeds:
+
+- `item_renamed(old_path, new_path, project_id, is_folder)` updates the stored path on
+  linked QGIS layers below the renamed file or folder;
+- `item_deleted(path, project_id, is_folder)` clears Rana references on affected layers,
+  leaving the QGIS layers in the project but disabling Rana sync actions.
+
+Remote changes do not emit these signals. They are checked lazily when a save
+operation is started.
 
 ## Project-selection dialog
 

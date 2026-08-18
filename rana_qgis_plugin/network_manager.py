@@ -79,9 +79,11 @@ class NetworkManager(object):
         self._network_manager: QgsNetworkAccessManager = (  # type: ignore[assignment]
             QgsNetworkAccessManager.instance()  # type: ignore[assignment]
         )
-        # Follow safe redirects (e.g. HTTP→HTTPS) automatically
+        # Don't follow redirects automatically: the Rana API returns 302s to
+        # S3 presigned URLs, and auto-following would forward the Authorization
+        # header, causing S3 to reject the request with HTTP 400.
         self._network_manager.setRedirectPolicy(
-            QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy
+            QNetworkRequest.RedirectPolicy.ManualRedirectPolicy
         )
         self._auth_manager: QgsAuthManager = QgsApplication.authManager()  # type: ignore[assignment]
         self._network_finished = False

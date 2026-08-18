@@ -1,5 +1,8 @@
 # File Upload
 
+This document describes the technical pipeline for uploading files from the
+Rana Browser.
+
 ## File upload pipeline
 
 ```mermaid
@@ -7,7 +10,7 @@ sequenceDiagram
     participant Loader
     participant API
     participant TaskManager
-    participant UploadTask
+    participant FileUploadTask
     participant S3
 
     loop For each file (sync, UI thread)
@@ -15,12 +18,12 @@ sequenceDiagram
         API-->>Loader: UploadJob
     end
 
-    Loader->>TaskManager: addTask(UploadTask)
+    Loader->>TaskManager: addTask(FileUploadTask)
 
     loop For each job (async, background)
-        UploadTask->>S3: PUT presigned_url
-        S3-->>UploadTask: 200 OK
-        UploadTask->>API: finish_file_upload(payload)
+        FileUploadTask->>S3: PUT presigned_url
+        S3-->>FileUploadTask: 200 OK
+        FileUploadTask->>API: finish_file_upload(payload)
     end
 
     TaskManager->>Loader: taskCompleted / taskTerminated
@@ -46,13 +49,15 @@ Checks whether the file already exists on the server, initiates the upload sessi
 Prepares re-upload of a file already tracked on the server. It ensures that the file is on the server and that the local file is newer than the server copy. It returns an `UploadJob` with a pre-signed URL ready for execution.
 
 
-### Stage 2 — Background execution (`UploadTask`)
+### Stage 2 — Background execution (`FileUploadTask`)
 
-`UploadTask` subclasses `QgsTask` and processes a list of `UploadJob` objects in QGIS's thread pool.
+`FileUploadTask` subclasses `QgsTask` and processes a list of `UploadJob`
+objects in QGIS's thread pool. It is distinct from `DownloadTask` and
+`StyleUploadTask`.
 
 ```mermaid
 flowchart TD
-    Start([UploadTask.run]) --> A{isCanceled?}
+    Start([FileUploadTask.run]) --> A{isCanceled?}
     A -- Yes --> Abort([return False])
     A -- No --> B[Open file as binary]
     B --> C[requests.put — presigned URL]
@@ -114,5 +119,3 @@ When `prepare_new_file_upload()` returns a `conflict_path`, `Loader` presents an
 - **Success** → info bar + optional `refresh_callback()`
 - **Failure** → error bar listing failed files
 - **Cancelled** → warning bar
-
-

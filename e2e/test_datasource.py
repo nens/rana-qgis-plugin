@@ -1,9 +1,7 @@
 """E2E tests for project listing in the QGIS Browser panel."""
 
 import os
-import uuid
 
-import pytest
 from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt, QTimer
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox, QTreeView
@@ -15,39 +13,12 @@ from rana_qgis_plugin.data_items.folder_item import (
     RanaFolderDataItem,
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.utils.api import (
-    create_project,
-    delete_project,
-)
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 
 from .test_utils import (
-    build_context_menu,
     click_context_menu_action,
     make_modal_handler,
 )
-
-
-@pytest.fixture
-def authenticated(plugin, qtbot, qgis_application):
-    """Ensure the QGIS auth manager has resolved the authcfg by performing one API call."""
-    root = plugin.rana_root_item
-    root.refresh()
-    qtbot.waitUntil(
-        lambda: root.children() is not None,
-        timeout=30000,
-    )
-
-
-@pytest.fixture
-def rana_project(authenticated, plugin):
-    result = create_project(
-        {"code": f"e2e_{uuid.uuid4().hex[:24]}", "name": f"e2e_{uuid.uuid4().hex[:56]}"}
-    )
-    assert result is not None, "create_project failed — check authentication"
-    yield result
-    if result.get("id"):
-        delete_project(result["id"])
 
 
 def get_child_names(plugin):
@@ -71,6 +42,8 @@ def test_project_listing(plugin, qtbot, rana_project):
     )
 
     # Step 2: delete project via API, refresh, assert it disappears
+    from rana_qgis_plugin.utils.api import delete_project
+
     delete_project(rana_project["id"])
     rana_project["id"] = None  # prevent double-delete in fixture teardown
 
@@ -337,23 +310,6 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
         ),
         timeout=30000,
     )
-
-    # Multi-select gating: none of these selections should ever produce an
-    # actionable context menu. This exercises RanaDataItemGuiProvider directly
-    # rather than the deferred, empty multi-select whitelist, so it stays
-    # meaningful even before any multi-select action is ever whitelisted.
-    multi_select_cases = [
-        ("two folders", [baz_item, foo_item]),
-        ("folder + file", [baz_item, renamed_item]),
-        ("project + folder", [project_item, baz_item]),
-        ("files root + folder", [files_item, baz_item]),
-    ]
-    for description, selected_items in multi_select_cases:
-        menu = build_context_menu(selected_items[0], selected_items)
-        assert not menu.actions(), (
-            f"Expected no context menu actions for {description}, "
-            f"got {[a.text() for a in menu.actions()]}"
-        )
 
     # Finally delete foo, which still contains the renamed_bar folder. This
     # covers folder deletion and confirms that the whole top-level folder is

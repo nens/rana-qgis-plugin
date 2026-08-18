@@ -113,8 +113,8 @@ vncviewer localhost:5900
 The e2e tests normally remove their projects during fixture teardown, but if a test process crashes projects may remain. To list or remove the remaining projects:
 
 ```bash
-docker compose run --rm qgis python scripts/cleanup_e2e_projects.py --list
-docker compose run --rm qgis python scripts/cleanup_e2e_projects.py
+docker compose run --rm qgis python3 scripts/cleanup_e2e_projects.py --list
+docker compose run --rm qgis python3 scripts/cleanup_e2e_projects.py
 ```
 
 

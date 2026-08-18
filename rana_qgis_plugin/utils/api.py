@@ -19,10 +19,13 @@ class UserInfo(TypedDict):
 
 
 class RanaFetchError(Exception):
-    def __init__(self, msg: str, url: str, params: dict):
+    def __init__(
+        self, msg: str, url: str, params: dict, status_code: int | None = None
+    ):
         self.msg = msg
         self.url = url
         self.params = params
+        self.status_code = status_code
         super().__init__(f"{self.msg}. URL: {self.url}. params: {self.params}")
 
 
@@ -324,17 +327,26 @@ def create_folder(project_id: str, params: dict) -> bool:
         return False
 
 
-def get_tenant_project_file(project_id: str, params: dict) -> Optional[dict]:
+def get_tenant_project_file(
+    project_id: str, params: dict, raise_on_error: bool = False
+) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/stat"
 
     network_manager = NetworkManager(url, authcfg_id)
-    status, _ = network_manager.fetch(params)
+    status, error = network_manager.fetch(params)
 
     if status:
         response = network_manager.content
         return response
+    if raise_on_error:
+        raise RanaFetchError(
+            error or "Could not retrieve file information",
+            url,
+            params,
+            network_manager.last_http_status,
+        )
     else:
         return None
 
@@ -380,7 +392,7 @@ def get_tenant_file_descriptor(descriptor_id: str) -> Optional[dict]:
         response = network_manager.content
         return response
     else:
-        raise RanaFetchError(error or "", url, {})
+        raise RanaFetchError(error or "", url, {}, network_manager.last_http_status)
 
 
 def get_tenant_file_descriptor_view(descriptor_id: str, view_type: str) -> list:
@@ -566,11 +578,14 @@ def get_file_descriptor_style(descriptor_id: str, file_name: str) -> Optional[by
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/file-descriptors/{descriptor_id}/styles/{file_name}"
-
     network_manager = NetworkManager(url, authcfg_id)
     status, redirect_url = network_manager.fetch()
+    from rana_qgis_plugin.utils.log import plugin_log_info
 
     if status and redirect_url:
+        plugin_log_info(
+            f"Fetching style for descriptor {descriptor_id}, file {file_name}: status={status}, redirect_url={redirect_url}"
+        )
         try:
             headers = {"Content-Type": "application/zip"}
             response = requests.get(redirect_url, headers=headers, timeout=10)
@@ -578,6 +593,9 @@ def get_file_descriptor_style(descriptor_id: str, file_name: str) -> Optional[by
         except requests.RequestException as e:
             return None
     else:
+        plugin_log_info(
+            f"Failed fetching style for descriptor:\n{url=}\nstatus={status}\nredirect_url={redirect_url}"
+        )
         return None
 
 

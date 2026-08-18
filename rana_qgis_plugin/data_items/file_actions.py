@@ -89,6 +89,7 @@ def get_file_actions(data_type: str) -> list[FileAction]:
 def get_folder_actions(is_root: bool = False) -> list[FileAction]:
     """Return the unconnected actions for a folder."""
     actions = [
+        FileAction.OPEN_IN_QGIS,
         FileAction.REFRESH,
         FileAction.CREATE_DIRECTORY,
         FileAction.UPLOAD_FILES,

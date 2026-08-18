@@ -1,15 +1,19 @@
-from unittest.mock import MagicMock, patch
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from qgis.core import QgsSettings
 
 from rana_qgis_plugin.utils.settings import (
+    base_url,
     get_advanced_settings,
-    get_hcc_url_override,
     get_hidden_projects,
-    hide_project,
+    rana_open_cache_dir,
     read_hidden_projects,
     set_base_url,
     set_hidden_projects,
+    set_rana_open_cache_dir,
     unhide_project,
 )
 
@@ -19,25 +23,24 @@ OTHER_TENANT = "tenant-uuid-456"
 OTHER_BASE = "https://staging.rana.com"
 
 
-@pytest.mark.parametrize(
-    "mock_return_value,expected_result",
-    [
-        (None, None),
-        ("https://dev-3di-api.example.com", "https://dev-3di-api.example.com"),
-        ("", None),
-    ],
-    ids=["not_set", "with_value", "empty_string"],
-)
-def test_get_hcc_url_override(mock_return_value, expected_result):
-    """Test get_hcc_url_override with various QgsSettings values"""
-    with patch("rana_qgis_plugin.utils.settings.QgsSettings") as mock_settings:
-        mock_instance = MagicMock()
-        mock_settings.return_value = mock_instance
-        mock_instance.value.return_value = mock_return_value
+@pytest.fixture(scope="function")
+def settings():
+    settings = QgsSettings()
+    rana_keys = [key for key in settings.allKeys() if key.startswith("Rana/")]
+    for key in rana_keys:
+        print(f"Removing key: {key}")
+        settings.remove(key)
+    return settings
 
-        result = get_hcc_url_override()
-        assert result == expected_result
-        mock_instance.value.assert_called_with("Rana/hcc_url")
+
+def test_rana_open_cache_dir_default(settings):
+    assert rana_open_cache_dir() == str(Path(tempfile.gettempdir()) / "rana_downloads")
+
+
+def test_set_rana_open_cache_dir(settings):
+    custom_dir = "/tmp/custom-rana-open"
+    set_rana_open_cache_dir(custom_dir)
+    assert rana_open_cache_dir() == custom_dir
 
 
 @pytest.mark.parametrize(
@@ -72,23 +75,15 @@ def test_get_hcc_url_override(mock_return_value, expected_result):
         "both_empty_strings",
     ],
 )
-def test_get_advanced_settings(hcc_url_value, excepthook_value, expected_dict):
-    """Test get_advanced_settings returns only non-empty settings"""
-    with patch("rana_qgis_plugin.utils.settings.QgsSettings") as mock_settings:
-        mock_instance = MagicMock()
-        mock_settings.return_value = mock_instance
-
-        def mock_value(key, default=None, **kwargs):
-            if key == "Rana/hcc_url":
-                return hcc_url_value if hcc_url_value else None
-            elif key == "Rana/use_plugin_excepthook":
-                return excepthook_value if excepthook_value else None
-            return default
-
-        mock_instance.value.side_effect = mock_value
-
-        result = get_advanced_settings()
-        assert result == expected_dict
+def test_get_advanced_settings(
+    settings, hcc_url_value, excepthook_value, expected_dict
+):
+    if hcc_url_value:
+        settings.setValue("Rana/hcc_url", hcc_url_value)
+    if excepthook_value:
+        settings.setValue("Rana/use_plugin_excepthook", excepthook_value)
+    result = get_advanced_settings()
+    assert result == expected_dict
 
 
 @pytest.mark.parametrize(
@@ -101,13 +96,8 @@ def test_get_advanced_settings(hcc_url_value, excepthook_value, expected_dict):
     ids=["no_slash", "trailing_slash", "multiple_trailing_slashes"],
 )
 def test_set_base_url_strips_trailing_slash(input_url, expected_stored):
-    with patch("rana_qgis_plugin.utils.settings.QgsSettings") as mock_settings:
-        mock_instance = MagicMock()
-        mock_settings.return_value = mock_instance
-
-        set_base_url(input_url)
-
-        mock_instance.setValue.assert_called_once_with("Rana/base_url", expected_stored)
+    set_base_url(input_url)
+    assert base_url() == expected_stored
 
 
 @pytest.fixture()
@@ -127,7 +117,7 @@ def test_read_hidden_projects_missing_file(hidden_file):
     assert read_hidden_projects() == {}
 
 
-def test_read_hidden_projects_unset():
+def test_read_hidden_projects_unset(hidden_file):
     assert read_hidden_projects() == {}
 
 
@@ -155,11 +145,11 @@ def test_invalid_hidden_projects_data_is_ignored(hidden_file):
     assert read_hidden_projects() == {"valid": ["project-1"]}
 
 
-def test_get_hidden_projects_missing_file():
+def test_get_hidden_projects_missing_file(hidden_file):
     assert get_hidden_projects(BASE_URL, TENANT) == set()
 
 
-def test_get_hidden_projects_unset():
+def test_get_hidden_projects_unset(hidden_file):
     assert get_hidden_projects(BASE_URL, TENANT) == set()
 
 

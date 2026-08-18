@@ -1,17 +1,20 @@
 import os
+import uuid
 from unittest.mock import Mock, patch
 
 import pytest
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject
+from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsLayerTreeModel, QgsProject
 from qgis.gui import (
     QgsBrowserDockWidget,
     QgsBrowserGuiModel,
     QgsLayerTreeMapCanvasBridge,
+    QgsLayerTreeView,
     QgsMapCanvas,
     QgsMessageBar,
 )
 from qgis.PyQt.QtCore import QSettings, Qt
 from qgis.PyQt.QtWidgets import (
+    QDockWidget,
     QMainWindow,
     QMenu,
     QToolBar,
@@ -22,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
 import rana_qgis_plugin.utils.api as utils_api
 from rana_qgis_plugin.constant import RANA_AUTHCFG_ENTRY, RANA_SETTINGS_ENTRY
 from rana_qgis_plugin.rana_qgis_plugin import RanaQgisPlugin
+from rana_qgis_plugin.utils.api import create_project, delete_project
 from rana_qgis_plugin.utils.settings import (
     set_base_url,
     set_cleanup_cache_on_close,
@@ -121,7 +125,12 @@ def qgis_iface(qgis_application):
     iface.mapCanvas.return_value = canvas
 
     # Connect our local canvas to the layer tree
-    bridge = QgsLayerTreeMapCanvasBridge(QgsProject.instance().layerTreeRoot(), canvas)
+    root = QgsProject.instance().layerTreeRoot()
+    bridge = QgsLayerTreeMapCanvasBridge(root, canvas)
+
+    layer_tree_model = QgsLayerTreeModel(root, main_window)
+    layer_tree_view = QgsLayerTreeView(main_window)
+    layer_tree_view.setModel(layer_tree_model)
 
     message_bar = QgsMessageBar(main_window)
     iface.messageBar.return_value = message_bar
@@ -153,6 +162,9 @@ def qgis_iface(qgis_application):
     iface.initializationCompleted = Mock()
     iface.initializationCompleted.connect = Mock()
 
+    # Real layer tree view for layer-panel interactions
+    iface.layerTreeView.return_value = layer_tree_view
+
     # Process events to show windows
     qgis_application.processEvents()
 
@@ -164,38 +176,34 @@ def qgis_iface(qgis_application):
     qgis_application.processEvents()
 
 
-@pytest.fixture(scope="function")
-def plugin(qgis_iface, qgis_application):
+def configure_rana_auth(qgis_application):
+    """Configure the Rana test backend and authentication."""
     QSettings().setValue(
         f"{RANA_SETTINGS_ENTRY}/last_upload_folder",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"),
     )
-
     auth_manager = QgsApplication.authManager()
     if not auth_manager.authenticationDatabasePath():
         auth_manager.setup()
-
     if not auth_manager.masterPasswordIsSet():
         auth_manager.setMasterPassword("test", True)
-
-    secret = os.getenv("RANA_PAK")
-
     set_base_url("https://test.ranawaterintelligence.com")
     set_tenant_id("rdc-e2e")
-    # insert BASIC auth config for testing
     authcfg = QgsAuthMethodConfig()
     authcfg.setName(RANA_SETTINGS_ENTRY)
     authcfg.setMethod("Basic")
     authcfg.setConfig("username", "__key__")
-    authcfg.setConfig("password", secret)
-    # check if method parameters are correctly set
+    authcfg.setConfig("password", os.getenv("RANA_PAK"))
     assert authcfg.isValid()
     auth_manager.storeAuthenticationConfig(authcfg)
-    newAuthCfgId = authcfg.id()
-    assert newAuthCfgId
-    QSettings().setValue(RANA_AUTHCFG_ENTRY, newAuthCfgId)
-
+    assert authcfg.id()
+    QSettings().setValue(RANA_AUTHCFG_ENTRY, authcfg.id())
     set_cleanup_cache_on_close(False)
+
+
+@pytest.fixture(scope="function")
+def plugin(qgis_iface, qgis_application):
+    configure_rana_auth(qgis_application)
 
     plugin = RanaQgisPlugin(qgis_iface)
     plugin.initGui()
@@ -211,6 +219,17 @@ def plugin(qgis_iface, qgis_application):
         Qt.DockWidgetArea.LeftDockWidgetArea, browser_dock
     )
     browser_dock.setUserVisible(True)
+
+    layer_tree_view = qgis_iface.layerTreeView()
+    layer_tree_dock = QDockWidget("Layers", qgis_iface.mainWindow())
+    layer_tree_dock.setWidget(layer_tree_view)
+    qgis_iface.mainWindow().addDockWidget(
+        Qt.DockWidgetArea.LeftDockWidgetArea, layer_tree_dock
+    )
+    qgis_iface.mainWindow().resizeDocks(
+        [browser_dock, layer_tree_dock], [300, 300], Qt.Orientation.Vertical
+    )
+
     qgis_application.processEvents()
 
     rana_root_item = None
@@ -226,8 +245,31 @@ def plugin(qgis_iface, qgis_application):
 
     yield plugin
 
+    plugin.unload()
+    QgsProject.instance().clear()
+    layer_tree_dock.close()
+    layer_tree_dock.deleteLater()
     browser_dock.close()
     browser_dock.deleteLater()
     browser_model.deleteLater()
-    plugin.unload()
     qgis_application.processEvents()
+
+
+@pytest.fixture
+def authenticated(plugin, qtbot, qgis_application):
+    """Ensure the configured authentication is usable by the test API."""
+    root = plugin.rana_root_item
+    root.refresh()
+    qtbot.waitUntil(lambda: root.children() is not None, timeout=30000)
+
+
+@pytest.fixture
+def rana_project(authenticated, plugin):
+    """Create and clean up a project on the configured Rana test instance."""
+    project = create_project(
+        {"code": f"e2e_{uuid.uuid4().hex[:24]}", "name": f"e2e_{uuid.uuid4().hex[:56]}"}
+    )
+    assert project is not None, "create_project failed — check authentication"
+    yield project
+    if project.get("id"):
+        delete_project(project["id"])

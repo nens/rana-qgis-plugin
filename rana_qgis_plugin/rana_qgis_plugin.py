@@ -16,6 +16,8 @@ from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.data_items.gui_provider import RanaDataItemGuiProvider
 from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
+from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
+from rana_qgis_plugin.layer_management.local_linking import LocalLinkingListener
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.settings import initialize_settings
 
@@ -72,6 +74,10 @@ class RanaQgisPlugin(QObject):
         self.loader = Loader(self.communication)
         self.data_item_provider = RanaDataItemProvider(self.communication, self.loader)
         self.data_item_gui_provider = RanaDataItemGuiProvider()
+        self.layer_tree_menu = LayerTreeMenuProvider(
+            iface, self.loader.layer_lock_registry, self.loader
+        )
+        self.local_linking = LocalLinkingListener(self.loader)
         self._externally_deactivated = False
 
     def initGui(self):
@@ -84,10 +90,14 @@ class RanaQgisPlugin(QObject):
         gui_registry = QgsGui.dataItemGuiProviderRegistry()
         if gui_registry is not None:
             gui_registry.addProvider(self.data_item_gui_provider)
+        self.layer_tree_menu.connect()
+        self.local_linking.connect()
         self.iface.mainWindow().installEventFilter(self)
 
     def unload(self):
         self.iface.mainWindow().removeEventFilter(self)
+        self.local_linking.disconnect()
+        self.layer_tree_menu.disconnect()
         self.loader.shutdown()
         app = QgsApplication.instance()
         if app is not None:
