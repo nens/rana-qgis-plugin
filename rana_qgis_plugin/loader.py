@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from qgis.core import QgsApplication, QgsProject
@@ -10,6 +10,18 @@ from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSl
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QFileDialog
 
+from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.utils.api import (
+    RanaFetchError,
+    RanaPostError,
+    create_tenant_project_directory,
+    delete_tenant_project_directory,
+    delete_tenant_project_file,
+    get_tenant_project_file,
+    get_tenant_project_files,
+    move_directory,
+    move_file,
+)
 from rana_qgis_plugin.utils.upload import (
     ShapefileUploadJob,
     UploadJob,
@@ -56,6 +68,110 @@ class Loader(QObject):
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def rename_item(
+        self, project_id: str, old_path: str, new_name: str, is_folder: bool
+    ) -> str | None:
+        """Rename a file or folder on Rana.
+
+        Returns None on success, or an error message string on failure.
+        """
+        if not new_name or not new_name.strip():
+            return "Name cannot be empty."
+
+        # Rana directory paths have a trailing /; strip it for path manipulation
+        source = old_path.rstrip("/")
+        try:
+            new_path = PurePosixPath(source).with_name(new_name).as_posix()
+        except ValueError:
+            return f"'{new_name}' is not a valid name."
+
+        try:
+            if is_folder:
+                parent = PurePosixPath(source).parent
+                parent_path = (
+                    parent.as_posix() + "/" if parent != PurePosixPath(".") else ""
+                )
+                if Loader.folder_exists_in(project_id, parent_path, new_name):
+                    return f"Folder '{new_name}' already exists."
+                move_directory(
+                    project_id,
+                    params={
+                        "source_path": source + "/",
+                        "destination_path": new_path + "/",
+                    },
+                )
+            else:
+                if get_tenant_project_file(project_id, {"path": new_path}) is not None:
+                    return f"File '{new_name}' already exists."
+                move_file(
+                    project_id,
+                    params={"source_path": old_path, "destination_path": new_path},
+                )
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        except (RanaFetchError, RanaPostError) as e:
+            return e.msg
+
+        return None
+
+    def delete_file(self, project_id: str, path: str) -> str | None:
+        """Delete a file on Rana.
+
+        Returns None on success, or an error message string on failure.
+        """
+        try:
+            delete_tenant_project_file(project_id, params={"path": path})
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        except RanaPostError as e:
+            return e.msg
+
+        return None
+
+    def delete_folder(self, project_id: str, path: str) -> str | None:
+        """Delete a folder on Rana.
+
+        Returns None on success, or an error message string on failure.
+        """
+        try:
+            success = delete_tenant_project_directory(project_id, params={"path": path})
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        if not success:
+            return "Failed to delete folder."
+
+        return None
+
+    def create_folder(self, project_id: str, parent_path: str, name: str) -> str | None:
+        """Create a folder on Rana. Emits folder_created on success.
+
+        Returns None on success, or an error message string on failure.
+        """
+        full_path = f"{parent_path}{name}/" if parent_path else f"{name}/"
+        try:
+            if Loader.folder_exists_in(project_id, parent_path, name):
+                return f"Folder '{name}' already exists."
+            success = create_tenant_project_directory(project_id, full_path)
+        except NetworkUnavailableError:
+            return "No connection to Rana."
+        except RanaFetchError as e:
+            return e.msg
+        if not success:
+            return "Failed to create folder."
+
+        return None
+
+    @staticmethod
+    def folder_exists_in(project_id: str, parent_path: str, name: str) -> bool:
+        """Check whether a folder with *name* already exists inside *parent_path*."""
+        params = {"path": parent_path} if parent_path else None
+        children = get_tenant_project_files(project_id, params=params)
+        return any(
+            child["type"] == "directory"
+            and child["id"].rstrip("/").rsplit("/", 1)[-1] == name
+            for child in children
+        )
 
     def fetch_avatars(self, users: list[dict]) -> None:
         """Start a background fetch of real avatars for the given users."""

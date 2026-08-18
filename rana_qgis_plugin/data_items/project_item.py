@@ -25,20 +25,18 @@ class RanaProjectDataItem(QgsDataItem):
         self,
         parent: QgsDataItem,
         loader: Loader,
-        project_id: str,
-        name: str,
-        slug: str,
+        project: dict,
         error_signals: ApiErrorSignals,
     ):
         self.loader = loader
-        self.project_id = project_id
-        self.slug = slug
+        self.project = project
+        self.slug = project.get("slug", "")
         self.error_signals = error_signals
         super().__init__(
             Qgis.BrowserItemType.Collection,
             parent,
-            name,
-            f"/Rana/projects/{project_id}",
+            project["name"],
+            f"/Rana/projects/{project['id']}",
             "Rana",
         )
         self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
@@ -54,7 +52,12 @@ class RanaProjectDataItem(QgsDataItem):
     def createChildren(self) -> list:
         """Return the files container for this project."""
         return [
-            RanaFilesDataItem(self, self.loader, self.project_id, self.error_signals)
+            RanaFilesDataItem(
+                self,
+                self.loader,
+                self.project,
+                self.error_signals,
+            )
         ]
 
     def actions(self, parent) -> list:
@@ -69,7 +72,7 @@ class RanaProjectDataItem(QgsDataItem):
         return [open_action, hide_action]
 
     def hide_project(self) -> None:
-        hide_project(base_url(), get_tenant_id(), self.project_id)
+        hide_project(base_url(), get_tenant_id(), self.project["id"])
         parent = self.parent()
         if parent:
             parent.refresh()

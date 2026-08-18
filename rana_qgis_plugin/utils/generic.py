@@ -2,7 +2,7 @@ import math
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from osgeo import gdal
 from qgis.core import QgsProject, QgsVectorLayer
@@ -19,7 +19,11 @@ from rana_qgis_plugin.simulation.threedi_calls import (
 )
 from rana_qgis_plugin.utils.api import get_frontend_settings, get_tenant_details
 from rana_qgis_plugin.utils.auth_3di import get_3di_auth
-from rana_qgis_plugin.utils.settings import get_hcc_url_override
+from rana_qgis_plugin.utils.settings import (
+    base_url,
+    get_hcc_url_override,
+    get_tenant_id,
+)
 
 
 def get_threedi_api() -> Any:
@@ -294,3 +298,15 @@ def save_layer_changes(layer: QgsVectorLayer) -> tuple[bool, str | None]:
     except Exception as e:
         # Catch any exceptions from commitChanges (e.g., database errors)
         return False, f"Error committing changes: {str(e)}"
+
+
+def get_rana_file_url(project_slug: str, file_id: str) -> str:
+    """Get the URL of a file in the rana file system."""
+    query_params = {"tab": "1"}
+    if "/" in file_id:
+        path, file_name = file_id.rsplit("/", 1)
+        query_params["path"] = path.replace("/", ",")
+        query_params["fileName"] = file_name
+    else:
+        query_params["fileName"] = file_id
+    return f"{base_url()}/{get_tenant_id()}/projects/{project_slug}?{urlencode(query_params)}"

@@ -45,6 +45,13 @@ def test_get_file_actions(data_type, expected):
     assert get_file_actions(data_type) == expected
 
 
-def test_get_folder_actions_excludes_delete_for_root():
-    assert FileAction.DELETE not in get_folder_actions(is_root=True)
-    assert FileAction.DELETE in get_folder_actions(is_root=False)
+def test_get_folder_actions_excludes_delete_and_rename_for_root():
+    root_actions = get_folder_actions(is_root=True)
+    assert FileAction.DELETE not in root_actions
+    assert FileAction.RENAME not in root_actions
+
+
+def test_get_folder_actions_includes_delete_and_rename_for_non_root():
+    non_root_actions = get_folder_actions(is_root=False)
+    assert FileAction.DELETE in non_root_actions
+    assert FileAction.RENAME in non_root_actions
