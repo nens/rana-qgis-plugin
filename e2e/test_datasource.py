@@ -21,7 +21,11 @@ from rana_qgis_plugin.utils.api import (
 )
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 
-from .test_utils import click_context_menu_action, make_modal_handler
+from .test_utils import (
+    build_context_menu,
+    click_context_menu_action,
+    make_modal_handler,
+)
 
 
 @pytest.fixture
@@ -333,6 +337,23 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
         ),
         timeout=30000,
     )
+
+    # Multi-select gating: none of these selections should ever produce an
+    # actionable context menu. This exercises RanaDataItemGuiProvider directly
+    # rather than the deferred, empty multi-select whitelist, so it stays
+    # meaningful even before any multi-select action is ever whitelisted.
+    multi_select_cases = [
+        ("two folders", [baz_item, foo_item]),
+        ("folder + file", [baz_item, renamed_item]),
+        ("project + folder", [project_item, baz_item]),
+        ("files root + folder", [files_item, baz_item]),
+    ]
+    for description, selected_items in multi_select_cases:
+        menu = build_context_menu(selected_items[0], selected_items)
+        assert not menu.actions(), (
+            f"Expected no context menu actions for {description}, "
+            f"got {[a.text() for a in menu.actions()]}"
+        )
 
     # Finally delete foo, which still contains the renamed_bar folder. This
     # covers folder deletion and confirms that the whole top-level folder is
