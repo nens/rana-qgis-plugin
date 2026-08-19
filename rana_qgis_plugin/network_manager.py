@@ -278,13 +278,29 @@ class NetworkManager(object):
                         json_doc.toVariant()
                     )  # Returns QVariant which can be used like a Python dict
                 else:
-                    self._content = json.loads(str(raw_content, "utf-8"))
+                    try:
+                        self._content = json.loads(str(raw_content, "utf-8"))
+                    except json.JSONDecodeError:
+                        status = False
+                        description = (
+                            f"Received an invalid response body (HTTP "
+                            f"{self.last_http_status}, content-type="
+                            f"{content_type!r}, {len(raw_content)} bytes)"
+                        )
             elif content_type.startswith("image/"):
                 image = QImage()
                 image.loadFromData(raw_content)
                 self._content = image
             else:
-                self._content = json.loads(str(raw_content, "utf-8"))
+                try:
+                    self._content = json.loads(str(raw_content, "utf-8"))
+                except json.JSONDecodeError:
+                    status = False
+                    description = (
+                        f"Received an invalid response body (HTTP "
+                        f"{self.last_http_status}, content-type="
+                        f"{content_type!r}, {len(raw_content)} bytes)"
+                    )
         self._reply.deleteLater()
         return status, description
 
