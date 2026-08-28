@@ -90,34 +90,6 @@ class StyleBuilder(QObject):
         return ("files", "qml.zip", zip_path, "application/zip")
 
 
-class SchematisationStyleBuilder(StyleBuilder):
-    """Export predefined style for a schematisation"""
-
-    def __init__(self):
-        super().__init__("", "")
-
-    def clean(self):
-        # Do not clean up these files!
-        pass
-
-    def validate_layers(self) -> bool:
-        # qgis layers are not relevant
-        return True
-
-    def get_files(self) -> list:
-        base_path = STYLE_DIR.joinpath("schematisation")
-        files = [
-            ("files", "qml.zip", str(base_path.joinpath("qml.zip")), "application/zip")
-        ]
-        for name in ["sprite.json", "sprite@2x.json", "style.json"]:
-            files.append(
-                ("files", name, str(base_path.joinpath(name)), "application/json")
-            )
-        for name in ["sprite.png", "sprite@2x.png"]:
-            files.append(("files", name, str(base_path.joinpath(name)), "image/png"))
-        return files
-
-
 class RasterStyleBuilder(StyleBuilder):
     def validate_layers(self) -> bool:
         return len(self.layers) == 1
@@ -286,8 +258,6 @@ class StyleUploadTask(QgsTask):
                     item.local_file_path, item.file_ref_str, item.layer_in_file
                 )
             return VectorStyleBuilderAllLayers(item.local_file_path, item.file_ref_str)
-        elif item.data_type == DataType.schematisation:
-            return SchematisationStyleBuilder()
         else:
             raise ValueError(
                 f"Unsupported data type for style upload: {item.data_type.value}"
