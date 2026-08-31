@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 from qgis.core import (
     Qgis,
@@ -80,6 +80,14 @@ class RanaRootDataItem(QgsDataItem):
             Qgis.BrowserItemType.Collection, parent, "Rana", "/Rana", "Rana"
         )
         self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
+        self.setCapabilitiesV2(
+            cast(
+                Qgis.BrowserItemCapabilities,
+                Qgis.BrowserItemCapability.Fertile
+                | Qgis.BrowserItemCapability.Collapse
+                | Qgis.BrowserItemCapability.RefreshChildrenWhenItemIsRefreshed,
+            )
+        )
         self.tenants: Optional[list] = None
         self.update_display()
         if is_authenticated():

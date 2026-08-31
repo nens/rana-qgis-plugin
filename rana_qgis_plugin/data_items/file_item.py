@@ -21,6 +21,7 @@ from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     RanaFetchError,
     get_tenant_file_descriptor,
+    get_tenant_project_file,
 )
 from rana_qgis_plugin.utils.data_models import OpenFileRequest
 from rana_qgis_plugin.utils.generic import get_file_icon_name, get_rana_file_url
@@ -101,6 +102,18 @@ class RanaFileDataItem(QgsDataItem):
             for layer in descriptor.get("layers", [])
         ]
 
+    def equal(self, other: QgsDataItem | None) -> bool:
+        """Compare mutable file metadata when browser children are refreshed."""
+        if not isinstance(other, RanaFileDataItem):
+            return False
+        return (
+            super().equal(other)
+            and self.file_item.get("descriptor_id")
+            == other.file_item.get("descriptor_id")
+            and self.file_item.get("data_type") == other.file_item.get("data_type")
+            and self.file_item.get("status") == other.file_item.get("status")
+        )
+
     def handleDoubleClick(self) -> bool:
         """Download and open this file in the QGIS layer panel."""
         if self.data_type not in ("vector", "raster"):
@@ -118,13 +131,7 @@ class RanaFileDataItem(QgsDataItem):
             q_action.setIcon(action.icon)
             q_action.setToolTip(get_action_tooltip(action))
             if action is FileAction.VIEW_FILE_INFO:
-                q_action.triggered.connect(
-                    lambda: (
-                        SchematisationFileInfoDialog
-                        if self.file_item.get("data_type") == "threedi_schematisation"
-                        else FileInfoDialog
-                    )(self.file_item, self.error_signals, parent).exec()
-                )
+                q_action.triggered.connect(lambda: self.show_file_info(parent))
             elif action is FileAction.DELETE:
                 q_action.triggered.connect(lambda: self.delete_file(parent))
             elif action is FileAction.RENAME:
@@ -143,6 +150,20 @@ class RanaFileDataItem(QgsDataItem):
                 q_action.triggered.connect(lambda: self.handleDoubleClick())
             actions.append(q_action)
         return actions
+
+    def show_file_info(self, parent) -> None:
+        """Fetch current metadata before opening the file information dialog."""
+        file_data = get_tenant_project_file(
+            self.project_id, {"path": self.file_item["id"]}
+        )
+        if file_data is None:
+            file_data = self.file_item
+        dialog_class = (
+            SchematisationFileInfoDialog
+            if file_data.get("data_type") == "threedi_schematisation"
+            else FileInfoDialog
+        )
+        dialog_class(file_data, self.error_signals, parent).exec()
 
     def delete_file(self, parent) -> None:
         """Confirm and delete this file, then refresh its parent item."""

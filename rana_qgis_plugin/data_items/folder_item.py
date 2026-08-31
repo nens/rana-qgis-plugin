@@ -102,6 +102,8 @@ class RanaFolderDataItem(QgsDataItem):
                         refresh_callback=self.refresh_if_populated,
                     )
                 )
+            elif action is FileAction.REFRESH:
+                q_action.triggered.connect(lambda: self.refresh())
             elif action is FileAction.DELETE:
                 q_action.triggered.connect(lambda: self.delete_folder(parent))
             elif action is FileAction.CREATE_DIRECTORY:
