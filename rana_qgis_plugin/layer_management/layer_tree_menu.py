@@ -15,6 +15,7 @@ from rana_qgis_plugin.layer_management.dirty_tracking import (
     is_style_dirty,
 )
 from rana_qgis_plugin.layer_management.layer_manager import (
+    _GROUP_SCHEMATISATION_ID_KEY,
     RanaLayerRef,
     get_rana_refs,
     is_rana_linked,
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from qgis.gui import QgisInterface
 
 _GROUP_PROJECT_ID_KEY = "rana/project_id"
+_GROUP_LOADING_KEY = "rana/loading"
 
 
 class LayerTreeMenuProvider:
@@ -69,6 +71,18 @@ class LayerTreeMenuProvider:
 
         node = view.currentNode()
         if not isinstance(node, QgsLayerTreeGroup):
+            return
+
+        if node.customProperty(_GROUP_SCHEMATISATION_ID_KEY) is not None:
+            separator = QAction(menu)
+            separator.setSeparator(True)
+            menu.addAction(separator)
+            save_revision = QAction(rana_icon, "Save revision", menu)
+            save_revision.setEnabled(
+                not bool(node.customProperty(_GROUP_LOADING_KEY, False))
+            )
+            save_revision.triggered.connect(lambda: self.save_revision([node]))
+            menu.addAction(save_revision)
             return
 
         if not self._is_rana_group(node):
@@ -161,6 +175,11 @@ class LayerTreeMenuProvider:
             )
             seen.add(key)
         self.loader.upload_existing_files(items)
+
+    def save_revision(self, groups: list[QgsLayerTreeGroup]) -> None:
+        """Show the placeholder until revision upload is implemented."""
+        if self.loader is not None:
+            self.loader.communication.bar_info("Save revision not yet implemented")
 
     @staticmethod
     def file_groups(groups: list[QgsLayerTreeGroup]) -> list[QgsLayerTreeGroup]:

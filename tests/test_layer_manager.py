@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 from qgis.core import QgsProject, QgsVectorLayer
@@ -163,3 +164,36 @@ def test_open_raster(tmp_path):
 def test_open_raster_invalid(tmp_path):
     layer = lm.open_rana_raster(str(tmp_path / "nonexistent.tif"), PARENTS, REF)
     assert layer is None
+
+
+def test_open_rana_schematisation_tags_loaded_group():
+    local_schematisation = type(
+        "LocalSchematisation",
+        (),
+        {
+            "id": 42,
+            "revisions": {7: object()},
+            "wip_revision": None,
+        },
+    )()
+    with patch.object(lm, "load_local_schematisation") as load:
+        load.return_value = "Rana schematisation: schema"
+        lm.open_rana_schematisation(
+            Mock(),
+            "Project",
+            local_schematisation,
+            7,
+            False,
+            parents=["Project", "files", "folder"],
+        )
+
+    group = lm.find_or_create_rana_groups(["Project", "files", "folder"], "Project")
+    group = group.findGroup("Rana schematisation: schema")
+    assert group is not None
+    assert group.customProperty("rana/schematisation_id") == 42
+    assert group.customProperty("rana/revision_number") == 7
+    assert load.call_args.kwargs["parents"] == [
+        "Project",
+        "files",
+        "folder",
+    ]

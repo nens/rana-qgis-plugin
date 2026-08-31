@@ -18,14 +18,17 @@ from rana_qgis_plugin.layer_management.dirty_tracking import (
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
     clear_rana_refs,
+    find_or_create_rana_groups,
     get_rana_refs,
     get_vector_layer_names,
     open_rana_raster,
+    open_rana_schematisation,
     open_rana_vector_layer,
     open_rana_vector_layers,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.simulation.utils import resolve_schematisation_download_dir
 from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     RanaFetchError,
@@ -36,6 +39,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_tenant_project_files,
+    get_threedi_schematisation,
     move_directory,
     move_file,
 )
@@ -43,9 +47,12 @@ from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
     OpenLayerRequest,
+    OpenSchematisationRequest,
     StyleUploadItem,
     UploadableLayerItem,
 )
+from rana_qgis_plugin.utils.generic import get_threedi_api
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.workers.avatars import AvatarWorker
 from rana_qgis_plugin.workers.download import (
@@ -53,6 +60,8 @@ from rana_qgis_plugin.workers.download import (
     DownloadTask,
     FileDownloadContext,
     RanaFileDownloader,
+    SchematisationRevisionDownloadContext,
+    SchematisationRevisionDownloader,
 )
 from rana_qgis_plugin.workers.styling import StyleUploadTask
 from rana_qgis_plugin.workers.upload import (
@@ -673,118 +682,113 @@ class Loader(QObject):
 
     def open_items(
         self,
-        requests: list[OpenFileRequest | OpenLayerRequest | OpenFolderRequest],
+        requests: list[
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenLayerRequest
+            | OpenFolderRequest
+        ],
     ) -> None:
-        """Resolve, confirm, download and open Rana files/layers.
+        """Resolve, download and open Rana resources.
 
-        Folder requests are resolved via the API into file requests (single
-        level). Downloads are de-duplicated by (project_id, file_id) — multiple
-        layer requests for the same file result in one download. Shows a
-        confirmation dialog when the download count exceeds 10 or hits the
-        limit. Creates one DownloadTask for the entire batch.
+        Phase 1: flatten all requests into actionable items (expanding folders).
+        Phase 2: dispatch each item by type, with one DownloadTask per item.
         """
-        MAX_DOWNLOADS = 50
-        # Step 1: Expand folder requests into file requests
-        file_requests: list[OpenFileRequest | OpenLayerRequest] = []
+        # Phase 1: resolve into a flat list of actionable requests
+        resolved: list[
+            OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+        ] = []
         for request in requests:
             if isinstance(request, OpenFolderRequest):
-                self.resolve_folder(request.project, request.folder_path, file_requests)
-            elif isinstance(request, (OpenFileRequest, OpenLayerRequest)):
-                data_type = request.file_item.get("data_type", "")
-                if data_type in ("vector", "raster"):
-                    file_requests.append(request)
-
-        if not file_requests:
-            return
-
-        # Step 2: Build downloaders — one per unique file, multiple callbacks
-        downloaders: list[BaseDownloader] = []
-        open_callbacks: dict[str, list[Callable[[str], None]]] = {}
-        seen_files: set[tuple[str, str]] = set()
-
-        for request in file_requests:
-            project = request.project
-            file_item = request.file_item
-            file_key = (project["id"], file_item["id"])
-
-            context = FileDownloadContext(
-                project_slug=project.get("slug", ""),
-                file_id=file_item["id"],
-                file_descriptor_id=file_item.get("descriptor_id") or "",
-                file_data_type=file_item.get("data_type", ""),
-            )
-            local_path = str(context.local_file_path)
-
-            if file_key not in seen_files:
-                if len(seen_files) >= MAX_DOWNLOADS:
-                    break
-                seen_files.add(file_key)
-                downloader = RanaFileDownloader(project, file_item, context)
-                try:
-                    downloader.resolve_url()
-                except (NetworkUnavailableError, RanaFetchError) as e:
-                    self.communication.bar_error(
-                        f"Could not resolve download URL for "
-                        f"{PurePosixPath(file_item['id']).name}: {e}"
-                    )
-                    continue
-                downloaders.append(downloader)
-                open_callbacks[local_path] = []
-
-            if isinstance(request, OpenLayerRequest):
-
-                def _make_layer_cb(
-                    p: dict, fi: dict, ln: str, lid: str | None
-                ) -> Callable[[str], None]:
-                    return lambda lp: self.open_layer(lp, p, fi, ln, lid)
-
-                open_callbacks[local_path].append(
-                    _make_layer_cb(
-                        project,
-                        file_item,
-                        request.layer_name,
-                        request.layer_id,
-                    )
-                )
+                resolved += self._resolve_folder(request.project, request.folder_path)
             else:
+                resolved.append(request)
 
-                def _make_file_cb(p: dict, fi: dict) -> Callable[[str], None]:
-                    return lambda lp: self.open_file(lp, p, fi)
-
-                open_callbacks[local_path].append(_make_file_cb(project, file_item))
-
-        if not downloaders:
+        if len(resolved) > 50:
+            self.communication.bar_error("Selection contains more than 50 items.")
             return
-
-        # Step 3: Confirm if many downloads
-        n_downloads = len(downloaders)
-        hit_limit = len(seen_files) >= MAX_DOWNLOADS
-        if n_downloads > 10 or hit_limit:
-            if hit_limit:
-                message = (
-                    f"This selection resolved to more than {MAX_DOWNLOADS} "
-                    f"files. Open the first {n_downloads}?"
-                )
-            else:
-                message = f"This will download {n_downloads} files. Continue?"
-
+        if len(resolved) > 10:
             answer = QMessageBox.question(
                 None,
                 "Open in QGIS",
-                message,
+                f"This will open {len(resolved)} items. Continue?",
                 QMessageBox.StandardButton.Yes,
                 QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
 
-        # Step 4: Submit one DownloadTask
+        # Phase 2: dispatch by type
+        for request in resolved:
+            if isinstance(request, OpenSchematisationRequest):
+                self.resolve_schematisation(request)
+            elif isinstance(request, OpenFileRequest):
+                self.download_and_open_file(request)
+            elif isinstance(request, OpenLayerRequest):
+                self.download_and_open_layer(request)
+
+    def _resolve_folder(
+        self, project: dict, folder_path: str
+    ) -> list[OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest]:
+        """Resolve a folder into individual open requests via the API (single level)."""
+        params = {"path": folder_path} if folder_path else None
+        try:
+            files = get_tenant_project_files(project["id"], params=params)
+        except (NetworkUnavailableError, RanaFetchError) as e:
+            self.communication.bar_error(f"Could not list folder contents: {e}")
+            return []
+
+        result: list[
+            OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+        ] = []
+        for item in files:
+            if item.get("type") == "directory":
+                continue
+            data_type = item.get("data_type", "")
+            if data_type == "threedi_schematisation":
+                result.append(
+                    OpenSchematisationRequest(project=project, file_item=item)
+                )
+            elif data_type in ("vector", "raster"):
+                result.append(OpenFileRequest(project=project, file_item=item))
+        return result
+
+    def download_and_open_file(self, request: OpenFileRequest) -> None:
+        self.download_and_open(request, self.open_file)
+
+    def download_and_open_layer(self, request: OpenLayerRequest) -> None:
+        self.download_and_open(
+            request,
+            lambda local_path, project, file_item: self.open_layer(
+                local_path, project, file_item, request.layer_name, request.layer_id
+            ),
+        )
+
+    def download_and_open(self, request, callback) -> None:
+        project = request.project
+        file_item = request.file_item
+        context = FileDownloadContext(
+            project_slug=project.get("slug", ""),
+            file_id=file_item["id"],
+            file_descriptor_id=file_item.get("descriptor_id") or "",
+            file_data_type=file_item.get("data_type", ""),
+        )
+        try:
+            downloader = RanaFileDownloader(project, file_item, context)
+            downloader.resolve_url()
+        except (NetworkUnavailableError, RanaFetchError) as error:
+            self.communication.bar_error(
+                f"Could not resolve download URL for "
+                f"{PurePosixPath(file_item['id']).name}: {error}"
+            )
+            return
+
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
             self.communication.bar_error("Could not start file download.")
             return
 
-        task = DownloadTask(list(downloaders))
+        task = DownloadTask([downloader])
         task.file_started.connect(
             lambda file_id: self.set_progress_bar_busy(
                 f"Downloading {PurePosixPath(file_id).name}"
@@ -792,7 +796,7 @@ class Loader(QObject):
         )
         task.file_failed.connect(self.handle_download_file_failed)
         task.file_downloaded.connect(
-            lambda local_path: self._on_file_downloaded(local_path, open_callbacks)
+            lambda local_path: callback(local_path, project, file_item)
         )
         task.file_downloaded.connect(
             lambda local_path: self.communication.log_msg(f"downloaded {local_path}")
@@ -801,26 +805,101 @@ class Loader(QObject):
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
         task_manager.addTask(task)
 
-    def resolve_folder(
-        self,
-        project: dict,
-        folder_path: str,
-        resolved: list[OpenFileRequest | OpenLayerRequest],
-    ) -> None:
-        """Resolve a folder into OpenFileRequests via the API (single level)."""
-        params = {"path": folder_path} if folder_path else None
+    def resolve_schematisation(self, request: OpenSchematisationRequest) -> None:
+        """Fetch metadata and resolve the local download directory for a schematisation.
+
+        Calls the interactive Replace/Store/Cancel decision tree when an
+        existing local WIP conflicts with the requested revision.  Does
+        nothing (and shows no error) when the user cancels.
+        """
         try:
-            files = get_tenant_project_files(project["id"], params=params)
-        except (NetworkUnavailableError, RanaFetchError) as e:
-            self.communication.bar_error(f"Could not list folder contents: {e}")
+            metadata = get_threedi_schematisation(request.file_item["descriptor_id"])
+            schematisation = metadata["schematisation"]
+            revision = metadata["latest_revision"]
+        except (KeyError, NetworkUnavailableError, RanaFetchError) as exc:
+            self.communication.bar_error(
+                f"Could not fetch schematisation metadata: {exc}"
+            )
             return
 
-        for item in files:
-            if item.get("type") == "directory":
-                continue
-            data_type = item.get("data_type", "")
-            if data_type in ("vector", "raster"):
-                resolved.append(OpenFileRequest(project=project, file_item=item))
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.bar_error(
+                "Not authenticated with 3Di API — cannot open schematisation."
+            )
+            return
+
+        working_dir = hcc_working_dir()
+        if not working_dir:
+            self.communication.bar_error(
+                "No working directory configured — set it in the 3Di settings."
+            )
+            return
+
+        result = resolve_schematisation_download_dir(
+            self.communication,
+            schematisation,
+            revision,
+            True,  # is_latest_revision — we always fetch the latest
+            working_dir,
+            threedi_api,
+        )
+        if result is None:
+            return  # user cancelled
+
+        target_dir, local_schematisation, wip_replace_requested = result
+
+        # Build the downloader
+        download_context = SchematisationRevisionDownloadContext(Path(target_dir))
+        downloader = SchematisationRevisionDownloader(
+            download_context,
+            schematisation,
+            revision,
+            local_schematisation,
+            wip_replace_requested,
+        )
+
+        # Submit via DownloadTask
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self.communication.bar_error("Could not start schematisation download.")
+            return
+
+        revision_number = (
+            revision.get("number") if isinstance(revision, dict) else revision.number
+        )
+        project_name = request.project.get("name", "")
+
+        def on_downloaded(_local_path: str) -> None:
+            # parents = [project_name, "files"] + request.file_item["id"].split("/")
+            parents = [project_name, "files"] + [
+                str(parent)
+                for parent in PurePosixPath(request.file_item["id"]).parents[:-1]
+            ]
+            open_rana_schematisation(
+                self.communication,
+                project_name,
+                download_context.local_schematisation,
+                revision_number,
+                download_context.wip_replace_requested,
+                geopackage_filepath=download_context.geopackage_filepath,
+                parents=parents,
+            )
+
+        task = DownloadTask([downloader])
+        task.file_started.connect(
+            lambda _: self.set_progress_bar_busy("Downloading schematisation…")
+        )
+        task.file_failed.connect(self.handle_download_file_failed)
+        task.taskCompleted.connect(
+            lambda: on_downloaded(str(download_context.local_file_path))
+        )
+        task.file_downloaded.connect(
+            lambda _: self.communication.bar_info("Schematisation downloaded!", dur=10)
+        )
+        task.taskCompleted.connect(self.communication.clear_message_bar)
+        task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
+        task_manager.addTask(task)
 
     def open_file(self, local_file_path: str, project: dict, file_item: dict) -> None:
         ref = RanaLayerRef(
