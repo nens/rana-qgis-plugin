@@ -78,6 +78,14 @@ class OpenFileRequest:
 
 
 @dataclass(frozen=True)
+class OpenSchematisationRequest:
+    """Request to open a Rana schematisation."""
+
+    project: dict
+    file_item: dict
+
+
+@dataclass(frozen=True)
 class OpenLayerRequest:
     """Request to open a single layer from a Rana vector file."""
 

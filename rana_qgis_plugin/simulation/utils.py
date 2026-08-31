@@ -680,8 +680,13 @@ def resolve_schematisation_download_dir(
 
         def decision_tree():
             replace, store, cancel = "Replace", "Store", "Cancel"
-            title = "Pick action"
-            question = f"Store as a revision {revision_number} or replace local WIP?"
+            title = f"Open schematisation: {schematisation_name}"
+            question = (
+                f"How should revision {revision_number} of "
+                f"'{schematisation_name}' be opened?\n\n"
+                "Replace: replace the existing local WIP.\n"
+                "Store: save it as a separate local revision."
+            )
             wip_replace_requested = False
             picked_action_name = communications.custom_ask(
                 None, title, question, replace, store, cancel
@@ -942,6 +947,7 @@ def load_local_schematisation(
     custom_geopackage_filepath=None,
     parents=None,
 ):
+    loaded_group_name = None
     if local_schematisation and (
         custom_geopackage_filepath or local_schematisation.schematisation_db_filepath
     ):
@@ -958,8 +964,9 @@ def load_local_schematisation(
             communication.log_info(f"Loading {geopackage_filepath}")
             if schematisation_editor:
                 try:
-                    schematisation_editor.load_schematisation(
-                        geopackage_filepath, parents=parents
+                    loaded_group_name = schematisation_editor.load_schematisation(
+                        geopackage_filepath,
+                        parents=parents,
                     )
                 except TypeError as e:
                     if "parents" in str(e):
@@ -976,6 +983,7 @@ def load_local_schematisation(
                     f"\n{geopackage_filepath}"
                 )
                 communication.show_warn(msg)
+            return loaded_group_name
         except (TypeError, ValueError):
             error_msg = "Invalid schematisation directory structure. Loading schematisation canceled."
             communication.show_error(error_msg)

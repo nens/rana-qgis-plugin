@@ -26,6 +26,7 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
 )
+from rana_qgis_plugin.utils.log import plugin_log_info
 from rana_qgis_plugin.utils.qgis import (
     get_qml_name_for_layer,
     get_threedi_results_analysis_tool_instance,
@@ -256,37 +257,6 @@ class LayerManager(QObject):
                 f"Cannot add wms layer(s) from {Path(file['id']).name}"
             )
 
-    def add_from_schematisation(
-        self,
-        project_name,
-        local_schematisation,
-        revision_number,
-        wip_replace_requested,
-        geopackage_filepath=None,
-    ):
-        """Open a previously downloaded schematisation in the schematisation editor."""
-        self.communication.clear_message_bar()
-        if not local_schematisation:
-            self.communication.log_warn("Unable to load local schematisation")
-            return
-
-        assert revision_number in local_schematisation.revisions
-        load_local_schematisation(
-            self.communication,
-            local_schematisation=local_schematisation.wip_revision
-            if wip_replace_requested
-            else local_schematisation.revisions[revision_number],
-            action=BuildOptionActions.DOWNLOADED,
-            custom_geopackage_filepath=geopackage_filepath,
-            parents=[project_name],
-        )
-        wip_revision = local_schematisation.wip_revision
-        if wip_revision is not None:
-            settings = QSettings("3di", "qgisplugin")
-            settings.setValue(
-                "last_used_geopackage_path", wip_revision.schematisation_dir
-            )
-
 
 class FileLayerManager(LayerManager):
     def add_from_wms(self, project_name, file: dict):
@@ -383,6 +353,8 @@ def open_file_via_layer_manager(
 
 _GROUP_PROJECT_ID_KEY = "rana/project_id"
 _GROUP_PATH_SEGMENT_KEY = "rana/path_segment"
+_GROUP_SCHEMATISATION_ID_KEY = "rana/schematisation_id"
+_GROUP_REVISION_NUMBER_KEY = "rana/revision_number"
 
 
 @dataclass(frozen=True)
@@ -454,13 +426,22 @@ def find_or_create_rana_group(
     parent: QgsLayerTreeGroup, segment: str, project_id: str
 ) -> QgsLayerTreeGroup:
     """Find an existing child group matching Rana metadata, or create one."""
+    untagged_match = None
     for child in parent.children():
-        if (
-            isinstance(child, QgsLayerTreeGroup)
-            and child.customProperty(_GROUP_PROJECT_ID_KEY) == project_id
-            and child.customProperty(_GROUP_PATH_SEGMENT_KEY) == segment
-        ):
+        if not isinstance(child, QgsLayerTreeGroup):
+            continue
+        child_segment = child.customProperty(_GROUP_PATH_SEGMENT_KEY)
+        child_project = child.customProperty(_GROUP_PROJECT_ID_KEY)
+        if child_segment == segment and child_project == project_id:
             return child
+        # Adopt groups created without Rana metadata (e.g. by the
+        # schematisation editor) if they match by name.
+        if child_segment is None and child_project is None and child.name() == segment:
+            untagged_match = child
+    if untagged_match is not None:
+        untagged_match.setCustomProperty(_GROUP_PROJECT_ID_KEY, project_id)
+        untagged_match.setCustomProperty(_GROUP_PATH_SEGMENT_KEY, segment)
+        return untagged_match
     group = parent.addGroup(segment)
     assert group is not None
     group.setCustomProperty(_GROUP_PROJECT_ID_KEY, project_id)
@@ -563,6 +544,57 @@ def open_rana_vector_layers(
         if layer is not None:
             layers.append(layer)
     return layers
+
+
+def open_rana_schematisation(
+    communication,
+    project_name,
+    local_schematisation,
+    revision_number,
+    wip_replace_requested,
+    geopackage_filepath=None,
+    parents=None,
+) -> None:
+    """Open a downloaded schematisation in the schematisation editor."""
+    communication.clear_message_bar()
+    if not local_schematisation:
+        communication.log_warn("Unable to load local schematisation")
+        return
+
+    assert revision_number in local_schematisation.revisions
+    group_parents = parents or [project_name]
+    # Pre-create the hierarchy because the editor currently creates groups by
+    # name only. This workaround can move into threedi-schematisation-editor
+    # once it supports Rana group metadata directly.
+    project = QgsProject.instance()
+    assert project is not None
+    parent_group = find_or_create_rana_groups(group_parents, project_name)
+    schematisation_id = (
+        local_schematisation.id
+        if hasattr(local_schematisation, "id")
+        else local_schematisation.schematisation_id
+    )
+    group_name = load_local_schematisation(
+        communication,
+        local_schematisation=local_schematisation.wip_revision
+        if wip_replace_requested
+        else local_schematisation.revisions[revision_number],
+        action=BuildOptionActions.DOWNLOADED,
+        custom_geopackage_filepath=geopackage_filepath,
+        parents=group_parents,
+    )
+    if group_name is not None:
+        group = find_or_create_rana_groups(group_parents + [group_name], project_name)
+        group.setCustomProperty(_GROUP_SCHEMATISATION_ID_KEY, schematisation_id)
+        group.setCustomProperty(_GROUP_REVISION_NUMBER_KEY, revision_number)
+    wip_revision = local_schematisation.wip_revision
+    if wip_revision is not None:
+        settings = QSettings("3di", "qgisplugin")
+        settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
+    wip_revision = local_schematisation.wip_revision
+    if wip_revision is not None:
+        settings = QSettings("3di", "qgisplugin")
+        settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
 
 
 def get_vector_layer_names(local_file_path: str) -> list[str]:

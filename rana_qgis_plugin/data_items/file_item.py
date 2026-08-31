@@ -23,7 +23,10 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
     get_tenant_project_file,
 )
-from rana_qgis_plugin.utils.data_models import OpenFileRequest
+from rana_qgis_plugin.utils.data_models import (
+    OpenFileRequest,
+    OpenSchematisationRequest,
+)
 from rana_qgis_plugin.utils.generic import get_file_icon_name, get_rana_file_url
 from rana_qgis_plugin.widgets.file_info_dialog import (
     FileInfoDialog,
@@ -116,9 +119,14 @@ class RanaFileDataItem(QgsDataItem):
 
     def handleDoubleClick(self) -> bool:
         """Download and open this file in the QGIS layer panel."""
-        if self.data_type not in ("vector", "raster"):
+        if self.data_type not in ("vector", "raster", "threedi_schematisation"):
             return False
-        self.loader.open_items([OpenFileRequest(self.project, self.file_item)])
+        request = (
+            OpenSchematisationRequest(self.project, self.file_item)
+            if self.data_type == "threedi_schematisation"
+            else OpenFileRequest(self.project, self.file_item)
+        )
+        self.loader.open_items([request])
         return True
 
     def actions(self, parent) -> list:
