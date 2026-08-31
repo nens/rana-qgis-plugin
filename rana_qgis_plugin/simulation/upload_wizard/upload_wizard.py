@@ -6,6 +6,7 @@ import shutil
 from collections import OrderedDict, defaultdict
 from functools import partial
 from operator import attrgetter
+from typing import Any
 
 from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt import uic
@@ -23,10 +24,10 @@ from qgis.PyQt.QtWidgets import (
 )
 from threedi_api_client.openapi import ApiException, SchematisationRevision
 
-from rana_qgis_plugin.legacy.simulation.utils import LogLevels, TreeViewLogger
-
 from ..utils import (
+    LogLevels,
     SchematisationRasterReferences,
+    TreeViewLogger,
     UploadFileStatus,
     UploadFileType,
     geopackage_layer,
@@ -52,7 +53,7 @@ uicls_files_page, basecls_files_page = uic.loadUiType(
 )
 
 
-class StartWidget(uicls_start_page, basecls_start_page):
+class StartWidget(uicls_start_page, basecls_start_page):  # type: ignore[misc,valid-type]
     """Widget for the Start page."""
 
     def __init__(
@@ -108,7 +109,7 @@ class StartWidget(uicls_start_page, basecls_start_page):
             self.revisions_tv.resizeColumnToContents(i)
 
 
-class CheckModelWidget(uicls_check_page, basecls_check_page):
+class CheckModelWidget(uicls_check_page, basecls_check_page):  # type: ignore[misc,valid-type]
     """Widget for the Check Model page."""
 
     SCHEMATISATION_CHECKS_HEADER = (
@@ -237,7 +238,9 @@ class CheckModelWidget(uicls_check_page, basecls_check_page):
             if migration_succeed and len(migration_feedback_msg) > 0:
                 self.communication.show_info(migration_feedback_msg)
                 QgsMessageLog.logMessage(
-                    migration_feedback_msg, level=Qgis.Warning, tag="Messages"
+                    migration_feedback_msg,
+                    level=Qgis.MessageLevel.Warning,
+                    tag="Messages",
                 )
             elif not migration_succeed:
                 self.communication.show_error(migration_feedback_msg, self)
@@ -372,7 +375,7 @@ class CheckModelWidget(uicls_check_page, basecls_check_page):
         )
 
 
-class SelectFilesWidget(uicls_files_page, basecls_files_page):
+class SelectFilesWidget(uicls_files_page, basecls_files_page):  # type: ignore[misc,valid-type]
     """Widget for the Select Files page."""
 
     def __init__(
@@ -911,7 +914,7 @@ class UploadWizard(QWizard):
         self.finish_btn.clicked.connect(self.start_upload)
         self.cancel_btn = self.button(QWizard.CancelButton)
         self.cancel_btn.clicked.connect(self.cancel_wizard)
-        self.new_upload = defaultdict(lambda: None)
+        self.new_upload: defaultdict[str, Any] = defaultdict(lambda: None)
         self.new_upload_statuses = None
         self.setWindowTitle("New upload")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

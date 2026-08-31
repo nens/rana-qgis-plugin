@@ -601,7 +601,7 @@ class SchematisationRevisionDownloader(BaseDownloader):
 
     def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
         """Download schematisation revision files."""
-        from rana_qgis_plugin.legacy.simulation.utils import download_required_files
+        from rana_qgis_plugin.simulation.utils import download_required_files
 
         try:
             result = download_required_files(
