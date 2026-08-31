@@ -21,6 +21,7 @@ from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
     OpenLayerRequest,
+    OpenSchematisationRequest,
 )
 
 # Actions permitted for a valid multi-select (files/folders/layers, no root)
@@ -132,7 +133,12 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
     @staticmethod
     def open_selected_items(items: Sequence[QgsDataItem]) -> None:
         """Build open requests from the selection and delegate to the loader."""
-        requests: list[OpenFileRequest | OpenLayerRequest | OpenFolderRequest] = []
+        requests: list[
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenLayerRequest
+            | OpenFolderRequest
+        ] = []
         loader = None
 
         for item in items:
@@ -149,9 +155,14 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
                     )
                     loader = loader or item.loader
             elif isinstance(item, RanaFileDataItem):
-                if item.data_type in ("vector", "raster"):
+                if item.data_type in ("vector", "raster", "threedi_schematisation"):
+                    request_type = (
+                        OpenSchematisationRequest
+                        if item.data_type == "threedi_schematisation"
+                        else OpenFileRequest
+                    )
                     requests.append(
-                        OpenFileRequest(project=item.project, file_item=item.file_item)
+                        request_type(project=item.project, file_item=item.file_item)
                     )
                     loader = loader or item.loader
             elif isinstance(item, RanaFolderDataItem):

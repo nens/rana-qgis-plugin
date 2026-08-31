@@ -825,6 +825,8 @@ class DownloadTask(QgsTask):
                 self.file_failed.emit(key, error[0])
             else:
                 self.successful_files.append(key)
+                # QgsTask completion handlers run on the main thread. Keep
+                # layer-tree/editor work out of the worker thread.
                 self.file_downloaded.emit(
                     str(downloader.download_context.local_file_path)
                 )
