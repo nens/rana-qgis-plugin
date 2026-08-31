@@ -19,7 +19,7 @@ from qgis.PyQt.QtCore import (
 
 from rana_qgis_plugin.layer_management.dirty_tracking import attach_dirty_tracking
 from rana_qgis_plugin.legacy.auth import get_authcfg_id
-from rana_qgis_plugin.legacy.simulation.utils import (
+from rana_qgis_plugin.simulation.utils import (
     BuildOptionActions,
     load_local_schematisation,
 )

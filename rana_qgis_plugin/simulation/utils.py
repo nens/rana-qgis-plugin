@@ -328,34 +328,6 @@ def unzip_archive(zip_filepath, location=None):
         return content_list
 
 
-def extract_error_message(e):
-    """Extracting useful information from ApiException exceptions."""
-    error_body = e.body
-    try:
-        if isinstance(error_body, str):
-            error_body = json.loads(error_body)
-        if "detail" in error_body:
-            error_details = error_body["detail"]
-        elif "details" in error_body:
-            error_details = error_body["details"]
-        elif "errors" in error_body:
-            errors = error_body["errors"]
-            try:
-                error_parts = [
-                    f"{err['reason']} ({err['instance']['related_object']})"
-                    for err in errors
-                ]
-            except TypeError:
-                error_parts = list(errors.values())
-            error_details = "\n" + "\n".join(error_parts)
-        else:
-            error_details = str(error_body)
-    except json.JSONDecodeError:
-        error_details = str(error_body)
-    error_msg = f"Error: {error_details}"
-    return error_msg
-
-
 def handle_csv_header(header: List[str]):
     """
     Handle CSV header.
@@ -743,6 +715,7 @@ def resolve_schematisation_download_dir(
                 if local_schematisation.wip_revision is None:
                     #  WIP not exist
                     local_schematisation.set_wip_revision(revision_number)
+                    assert local_schematisation.wip_revision is not None
                     schematisation_db_dir = (
                         local_schematisation.wip_revision.schematisation_dir
                     )
@@ -902,6 +875,7 @@ def download_required_files(
         current_progress += 1
         _emit_progress("Downloaded schematisation database")
         if gridadmin_download is not None:
+            assert gridadmin_file is not None
             grid_filepath = os.path.join(
                 local_schematisation.revisions[revision_number].grid_dir,
                 gridadmin_file.filename,
@@ -910,6 +884,7 @@ def download_required_files(
             current_progress += 1
             _emit_progress("Downloaded gridadmin")
         if gridadmin_download_gpkg is not None:
+            assert gridadmin_file_gpkg is not None
             gpkg_filepath = os.path.join(
                 local_schematisation.revisions[revision_number].grid_dir,
                 gridadmin_file_gpkg.filename,

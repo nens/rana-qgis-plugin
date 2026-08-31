@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 import warnings
-from typing import List
+from typing import Any, List
 from uuid import uuid4
 
 from qgis.gui import QgsFileWidget, QgsProjectionSelectionWidget
@@ -67,11 +67,11 @@ def scan_widgets_parameters(
     In Qt Designer, widgets in the same UI file need to have an unique object name. When an object
     name already exist, Qt designer adds a _2 postfix. Use remove_postfix to remove these.
     """
-    parameters = {}
+    parameters: dict[str, Any] = {}
     for widget in main_widget.children():
         obj_name = widget.objectName()
         if remove_postfix:
-            result = re.match("^(.+)(_\d+)$", obj_name)
+            result = re.match(r"^(.+)(_\d+)$", obj_name)
             if result is not None:
                 obj_name = result.group(1)
 
@@ -306,7 +306,7 @@ def migrate_schematisation_schema(schematisation_filepath, progress_callback=Non
             if w:
                 for warning in w:
                     migration_feedback_msg += (
-                        f"{warning._category_name}: {warning.message}\n"
+                        f"{warning.category.__name__}: {warning.message}\n"
                     )
             shutil.rmtree(os.path.dirname(backup_filepath))
             migration_succeed = True

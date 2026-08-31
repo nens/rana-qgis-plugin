@@ -21,7 +21,7 @@ uicls, basecls = uic.loadUiType(
 logger = logging.getLogger(__name__)
 
 
-class SchematisationLoad(uicls, basecls):
+class SchematisationLoad(uicls, basecls):  # type: ignore[misc,valid-type]
     """Dialog for local schematisation loading."""
 
     def __init__(
