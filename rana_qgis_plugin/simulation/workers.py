@@ -6,6 +6,7 @@ import os
 import time
 from functools import partial
 
+from qgis.core import QgsTask
 from qgis.PyQt.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 from threedi_api_client.files import upload_file
 from threedi_api_client.openapi import ApiException
@@ -1168,21 +1169,13 @@ class RevisionUploadError(Exception):
     pass
 
 
-class UploadWorkerSignals(QObject):
-    """Definition of the upload worker signals."""
+class SchematisationUploadTask(QgsTask):
+    """Upload and process a schematisation in the QGIS task thread."""
 
-    thread_finished = pyqtSignal(str)
-    upload_failed = pyqtSignal(str)
-    upload_progress = pyqtSignal(
-        str, int, int, int
-    )  # task name, task progress, total progress
-    upload_canceled = pyqtSignal(int)
-    revision_committed = pyqtSignal()
-    create_model_requested = pyqtSignal(int, bool)
-
-
-class SchematisationUploadProgressWorker(QRunnable):
-    """Worker object responsible for uploading models."""
+    progress_changed = pyqtSignal(str, int, int, int)
+    model_requested = pyqtSignal()
+    revision_committed = pyqtSignal(int)
+    upload_succeeded = pyqtSignal(int)
 
     UPLOAD_CHECK_INTERVAL = 10
     UPLOAD_CHECK_RETRIES = 15
@@ -1190,7 +1183,7 @@ class SchematisationUploadProgressWorker(QRunnable):
     TASK_CHECK_RETRIES = 4
 
     def __init__(self, threedi_api, local_schematisation, upload_specification):
-        super().__init__()
+        super().__init__("Upload schematisation", QgsTask.CanCancel)
         self.threedi_api = threedi_api
         self.local_schematisation = local_schematisation
         self.upload_specification = upload_specification
@@ -1200,44 +1193,56 @@ class SchematisationUploadProgressWorker(QRunnable):
         self.tc = None
         self.schematisation = self.upload_specification["schematisation"]
         self.revision = self.upload_specification["latest_revision"]
-        self.signals = UploadWorkerSignals()
-        self.upload_canceled = False
+        self.error_message = None
 
-    def stop_upload_tasks(self):
-        """Mark the upload task as canceled."""
-        self.upload_canceled = True
-
-    @pyqtSlot()
     def run(self):
         """Run all schematisation upload tasks."""
+        logger.info("Starting schematisation upload")
         self.tc = ThreediCalls(self.threedi_api)
         tasks_list = self.build_tasks_list()
+        logger.info("Schematisation upload has %d steps", len(tasks_list))
         if not tasks_list:
             self.current_task = "DONE"
             self.current_task_progress = 100
             self.total_progress = 100
             self.report_upload_progress()
-            self.signals.thread_finished.emit("Nothing to upload or process")
-            return
+            return True
         self.progress_per_task = int(1 / len(tasks_list) * 100)
         try:
             for i, task in enumerate(tasks_list, start=1):
-                if self.upload_canceled:
-                    self.signals.upload_canceled.emit()
-                    return
+                logger.info("Starting upload step %d/%d: %s", i, len(tasks_list), task)
+                if self.isCanceled():
+                    logger.warning("Schematisation upload cancelled before step %d", i)
+                    return False
                 task()
+                logger.info("Completed upload step %d/%d", i, len(tasks_list))
                 self.total_progress = self.progress_per_task * i
             self.current_task = "DONE"
             self.current_task_progress = 0
             self.total_progress = 100
             self.report_upload_progress()
-            time.sleep(2)
-            msg = f"Schematisation '{self.schematisation.name}' (revision: {self.revision.number}) files uploaded"
-            self.signals.thread_finished.emit(msg)
+            return True
         except RevisionUploadError as e:
-            self.signals.upload_failed.emit(str(e))
+            self.error_message = str(e)
+            logger.exception("Schematisation upload failed with revision error")
+            return False
         except Exception as e:
-            self.signals.upload_failed.emit(str(e))
+            self.error_message = str(e)
+            logger.exception("Schematisation upload failed unexpectedly")
+            return False
+
+    def finished(self, result):
+        """Report task failures after QGIS returns to the main thread."""
+        logger.info(
+            "Schematisation upload finished: result=%s, canceled=%s, error=%s",
+            result,
+            self.isCanceled(),
+            self.error_message,
+        )
+        if not result and self.error_message:
+            logger.error("Schematisation upload failed: %s", self.error_message)
+        elif result:
+            self.upload_succeeded.emit(self.revision.number)
 
     def build_tasks_list(self):
         """Build upload tasks list."""
@@ -1408,7 +1413,7 @@ class SchematisationUploadProgressWorker(QRunnable):
         self.current_task_progress = 100
         self.report_upload_progress()
         self.local_schematisation.update_wip_revision(self.revision.number)
-        self.signals.revision_committed.emit()
+        self.revision_committed.emit(self.revision.number)
 
     def create_3di_model_task(self, inherit_templates=False):
         """Run creation of the new model out of revision data."""
@@ -1451,11 +1456,16 @@ class SchematisationUploadProgressWorker(QRunnable):
                 err = RevisionUploadError(f"Model checker failed:\n {error_msg}")
                 raise err
         # Create 3Di model
-        self.signals.create_model_requested.emit(self.revision.id, inherit_templates)
+        self.model_requested.emit()
 
     def report_upload_progress(self):
         """Report upload progress."""
-        self.signals.upload_progress.emit(
+        progress = (
+            self.total_progress
+            + self.current_task_progress * self.progress_per_task / 100
+        )
+        self.setProgress(progress)
+        self.progress_changed.emit(
             self.current_task,
             self.current_task_progress,
             self.total_progress,
@@ -1464,6 +1474,8 @@ class SchematisationUploadProgressWorker(QRunnable):
 
     def monitor_upload_progress(self, chunk_size, total_size):
         """Upload progress callback method."""
+        if self.isCanceled():
+            raise RevisionUploadError("Schematisation upload cancelled")
         upload_progress = int(chunk_size / total_size * 100)
         self.current_task_progress = upload_progress
         self.report_upload_progress()

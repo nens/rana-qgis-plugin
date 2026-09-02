@@ -3,13 +3,15 @@
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 from collections import OrderedDict
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from enum import Enum
 from operator import attrgetter
 from time import sleep
-from typing import List
+from typing import TYPE_CHECKING, Any, List, Optional, Protocol, TypeAlias
 from zipfile import ZIP_DEFLATED, ZipFile, is_zipfile
 
 import requests
@@ -31,6 +33,29 @@ from threedi_mi_utils import (
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
+if TYPE_CHECKING:
+    from rana_qgis_plugin.communication import UICommunication
+
+
+class SchematisationLike(Protocol):
+    """API schematisation fields used by download helpers."""
+
+    id: int
+    name: str
+
+
+class RevisionLike(Protocol):
+    """API revision fields used by download helpers."""
+
+    id: int
+    number: int
+    sqlite: Any
+    rasters: Sequence[Any] | None
+
+
+SchematisationInput: TypeAlias = Any
+RevisionInput: TypeAlias = Any
+
 
 class LogLevels(Enum):
     """Model Checker log levels."""
@@ -50,9 +75,9 @@ class TreeViewLogger(object):
         self.model = QStandardItemModel()
         self.tree_view.setModel(self.model)
         self.levels_colors = {
-            LogLevels.INFO.value: QColor(Qt.black),
+            LogLevels.INFO.value: QColor(Qt.GlobalColor.black),
             LogLevels.WARNING.value: QColor(229, 144, 80),
-            LogLevels.ERROR.value: QColor(Qt.red),
+            LogLevels.ERROR.value: QColor(Qt.GlobalColor.red),
             LogLevels.FUTURE_ERROR.value: QColor(102, 51, 153),
         }
         self.initialize_view()
@@ -632,13 +657,13 @@ class BuildOptionActions(Enum):
 
 
 def resolve_schematisation_download_dir(
-    communications,
-    schematisation,
-    revision,
-    is_latest_revision,
-    working_dir,
-    threedi_api,
-):
+    communications: "UICommunication",
+    schematisation: SchematisationInput,
+    revision: RevisionInput,
+    is_latest_revision: bool,
+    working_dir: str,
+    threedi_api: Any,
+) -> tuple[str, LocalSchematisation, bool] | None:
     """Resolve the local directory for a schematisation revision download.
 
     Shows the decision_tree dialog if needed. Must be called on the main thread.
@@ -749,11 +774,11 @@ def resolve_schematisation_download_dir(
 
 
 def resolve_schematisation_download_dir_auto(
-    schematisation: dict,
-    revision: dict,
-    local_schematisations: dict,
+    schematisation: dict[str, Any],
+    revision: dict[str, Any],
+    local_schematisations: dict[int, LocalSchematisation],
     working_dir: str,
-) -> tuple:
+) -> tuple[str, LocalSchematisation, bool]:
     """Resolve the local directory for a schematisation revision download (non-interactive).
 
     Unlike resolve_schematisation_download_dir, this always replaces the WIP without
@@ -783,14 +808,14 @@ def resolve_schematisation_download_dir_auto(
 
 
 def download_required_files(
-    schematisation,
-    revision,
-    schematisation_db_dir,
-    local_schematisation,
-    wip_replace_requested,
-    threedi_api=None,
-    progress_fn=None,
-):
+    schematisation: SchematisationInput,
+    revision: RevisionInput,
+    schematisation_db_dir: str,
+    local_schematisation: LocalSchematisation,
+    wip_replace_requested: bool,
+    threedi_api: Any = None,
+    progress_fn: Callable[[int, str], None] | None = None,
+) -> tuple[LocalSchematisation, str | None, bool]:
     """Download schematisation revision files (sqlite + gridadmin + rasters).
 
     This function only downloads; the dialog to resolve the target directory
@@ -925,13 +950,12 @@ def download_required_files(
             downloaded_geopackage_filepath,
             wip_replace_requested,
         )
-    except ApiException as e:
-        raise
-    except Exception as e:
+    except Exception:
+        shutil.rmtree(schematisation_db_dir, ignore_errors=True)
         raise
 
 
-def get_plugin_instance(plugin_name):
+def get_plugin_instance(plugin_name: str) -> Any | None:
     """Return given plugin name instance."""
     try:
         plugin_instance = plugins[plugin_name]
@@ -941,12 +965,12 @@ def get_plugin_instance(plugin_name):
 
 
 def load_local_schematisation(
-    communication,
-    local_schematisation=None,
-    action=BuildOptionActions.LOADED,
-    custom_geopackage_filepath=None,
-    parents=None,
-):
+    communication: "UICommunication",
+    local_schematisation: Optional["LocalSchematisation"] = None,
+    action: BuildOptionActions = BuildOptionActions.LOADED,
+    custom_geopackage_filepath: str | None = None,
+    parents: Sequence[str] | None = None,
+) -> str | None:
     loaded_group_name = None
     if local_schematisation and (
         custom_geopackage_filepath or local_schematisation.schematisation_db_filepath
@@ -987,3 +1011,4 @@ def load_local_schematisation(
         except (TypeError, ValueError):
             error_msg = "Invalid schematisation directory structure. Loading schematisation canceled."
             communication.show_error(error_msg)
+    return None
