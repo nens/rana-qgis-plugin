@@ -47,10 +47,10 @@ class SimulationProgressDelegate(QStyledItemDelegate):
             SimulationStatusName.ENDED.value,
             SimulationStatusName.STOPPED.value,
         }:
-            pbar_color = Qt.gray
+            pbar_color = Qt.GlobalColor.gray
             ptext = f"{new_percentage}% (stopped)"
         elif status_name == SimulationStatusName.CRASHED.value:
-            pbar_color = Qt.red
+            pbar_color = Qt.GlobalColor.red
             ptext = f"{new_percentage}% (crashed)"
         else:
             pbar_color = Qt.lightGray
@@ -88,7 +88,7 @@ class DownloadProgressDelegate(QStyledItemDelegate):
             ptext = f"Download finished"
         else:
             new_percentage = 100
-            pbar_color = Qt.red
+            pbar_color = Qt.GlobalColor.red
             ptext = f"Download failed"
 
         pbar.progress = new_percentage
