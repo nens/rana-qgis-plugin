@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from qgis.core import QgsProject, QgsVectorLayer
@@ -166,14 +166,31 @@ def test_open_raster_invalid(tmp_path):
     assert layer is None
 
 
-def test_open_rana_schematisation_tags_loaded_group():
+@pytest.mark.parametrize(
+    "wip_replace_requested, expected_filename",
+    [(True, "wip.gpkg"), (False, "schema.gpkg")],
+)
+def test_open_rana_schematisation_tags_loaded_group(
+    wip_replace_requested: bool, expected_filename: str
+):
+    revision = Mock()
+    type(revision).schematisation_db_filepath = PropertyMock(
+        return_value="/tmp/schema.gpkg"
+    )
+    type(revision).schematisation_dir = PropertyMock(return_value="/tmp")
+    wip_revision = Mock()
+    type(wip_revision).schematisation_db_filepath = PropertyMock(
+        return_value="/tmp/wip.gpkg"
+    )
+    type(wip_revision).schematisation_dir = PropertyMock(return_value="/tmp")
+
     local_schematisation = type(
         "LocalSchematisation",
         (),
         {
             "id": 42,
-            "revisions": {7: object()},
-            "wip_revision": None,
+            "revisions": {7: revision},
+            "wip_revision": wip_revision,
         },
     )()
     with patch.object(lm, "load_local_schematisation") as load:
@@ -181,17 +198,22 @@ def test_open_rana_schematisation_tags_loaded_group():
         lm.open_rana_schematisation(
             Mock(),
             "Project",
+            "project-id",
             local_schematisation,
             7,
-            False,
+            wip_replace_requested=wip_replace_requested,
             parents=["Project", "files", "folder"],
         )
 
-    group = lm.find_or_create_rana_groups(["Project", "files", "folder"], "Project")
+    group = lm.find_or_create_rana_groups(["Project", "files", "folder"], "project-id")
     group = group.findGroup("Rana schematisation: schema")
     assert group is not None
     assert group.customProperty("rana/schematisation_id") == 42
     assert group.customProperty("rana/revision_number") == 7
+    assert (
+        group.customProperty("rana/schematisation_db_filepath")
+        == "/tmp/" + expected_filename
+    )
     assert load.call_args.kwargs["parents"] == [
         "Project",
         "files",

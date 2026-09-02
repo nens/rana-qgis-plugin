@@ -3,7 +3,7 @@
  <class>Form</class>
  <widget class="QWidget" name="Form">
   <property name="windowModality">
-   <enum>Qt::NonModal</enum>
+    <enum>Qt::WindowModality::NonModal</enum>
   </property>
   <property name="geometry">
    <rect>
@@ -40,10 +40,10 @@
    <item row="2" column="0">
     <widget class="QTreeView" name="tv_schema_check_result">
      <property name="editTriggers">
-      <set>QAbstractItemView::NoEditTriggers</set>
+       <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
      </property>
      <property name="selectionMode">
-      <enum>QAbstractItemView::ExtendedSelection</enum>
+       <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
      </property>
      <property name="sortingEnabled">
       <bool>true</bool>
@@ -124,7 +124,7 @@
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt; color:#00aa00;&quot;&gt;✓ GeoPackage checks completed&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignCenter</set>
+            <set>Qt::AlignmentFlag::AlignCenter</set>
           </property>
          </widget>
         </item>
@@ -184,7 +184,7 @@
            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt; color:#00aa00;&quot;&gt;✓ Computational grid checks completed&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignCenter</set>
+            <set>Qt::AlignmentFlag::AlignCenter</set>
           </property>
          </widget>
         </item>
@@ -225,7 +225,7 @@
            <enum>QToolButton::DelayedPopup</enum>
           </property>
           <property name="toolButtonStyle">
-           <enum>Qt::ToolButtonIconOnly</enum>
+            <enum>Qt::ToolButtonStyle::ToolButtonIconOnly</enum>
           </property>
           <property name="autoRaise">
            <bool>true</bool>
@@ -269,7 +269,7 @@
            <enum>QToolButton::DelayedPopup</enum>
           </property>
           <property name="toolButtonStyle">
-           <enum>Qt::ToolButtonIconOnly</enum>
+            <enum>Qt::ToolButtonStyle::ToolButtonIconOnly</enum>
           </property>
           <property name="autoRaise">
            <bool>true</bool>
@@ -363,7 +363,7 @@
    <item row="4" column="0">
     <widget class="QTreeView" name="tv_grid_check_result">
      <property name="editTriggers">
-      <set>QAbstractItemView::NoEditTriggers</set>
+       <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
      </property>
     </widget>
    </item>

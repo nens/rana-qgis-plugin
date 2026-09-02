@@ -500,9 +500,7 @@ def get_tenant_processes(communication: UICommunication) -> list:
         return []
 
 
-def start_tenant_process(
-    communication: UICommunication, process_id: str, params: dict
-) -> Optional[dict]:
+def start_tenant_process(process_id: str, params: dict) -> Optional[dict]:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes/{process_id}/execution"
@@ -513,8 +511,7 @@ def start_tenant_process(
     if status:
         return network_manager.content
     else:
-        communication.show_error(f"Failed to start process {process_id}: {error}")
-        return None
+        raise RanaPostError(msg=str(error), url=url, params=params)
 
 
 def start_file_upload(

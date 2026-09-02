@@ -18,6 +18,27 @@ The functions receive the local file path, Rana reference, and display-path
 segments. They create QGIS layers, add them to the current project, and attach
 dirty-state tracking to each linked layer.
 
+## Schematisation opening and saving
+
+Schematisations are opened from the Browser through double-click, context-menu,
+multi-select, and folder-selection flows. The loader resolves the local working
+directory before starting a `DownloadTask`. If a local WIP conflicts with the
+requested revision, the user can replace it, store the download as a separate
+revision, or cancel.
+
+After loading, the top-level group is tagged with:
+
+- `rana/schematisation_id`;
+- `rana/revision_number`; and
+- `rana/schematisation_db_filepath`.
+
+That group receives a **Save revision** action. The save flow checks for unsaved
+layer edits, confirms the upload through the upload wizard, and runs the upload
+through `SchematisationUploadTask`. The action is disabled while that task is
+active and the revision number is updated only after success. QGIS 4.2 Python
+bindings do not currently provide a reliable layer-level edit/commit guard, so
+users should not edit schematisation layers during upload.
+
 ## Layer-tree groups
 
 The group builder performs a find-or-create walk for the supplied path:
