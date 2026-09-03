@@ -77,7 +77,8 @@ Contexts implement the destination and optional styling lookup:
   publication styling.
 - `ResultsDownloadContext` resolves paths for scenario results.
 - `SchematisationRevisionDownloadContext` manages a complete revision's
-  destination and result metadata.
+  destination and result metadata. Its directory is resolved through the
+  schematisation WIP Replace/Store/Cancel flow.
 
 Downloaders implement resource-specific download and post-processing:
 
@@ -88,7 +89,9 @@ Downloaders implement resource-specific download and post-processing:
 - `LizardResultDownloader` downloads generated tiles and can build a VRT.
 - `SchematisationGeopackageDownloader` downloads, extracts, and upgrades a
   schematisation geopackage.
-- `SchematisationRevisionDownloader` downloads a complete revision.
+- `SchematisationRevisionDownloader` downloads a complete revision, including
+  its geopackage, rasters, and available model files, through
+  `download_required_files()`.
 
 `RanaFileDownloader` downloads a Rana tenant file and performs the applicable
 post-processing, including QML extraction for supported vector and raster
@@ -153,3 +156,8 @@ flow.
 Cancellation is checked between files. A failure is recorded and the task
 continues with the remaining jobs; the task result is unsuccessful if any
 file failed.
+
+Schematisation revision downloads remove the target revision directory when a
+download fails, preventing partial files from being treated as a complete
+revision. Existing data may be replaced according to the earlier WIP decision;
+atomic temporary-directory promotion is not currently used.

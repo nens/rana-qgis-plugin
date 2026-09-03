@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 from qgis.core import QgsApplication, QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
+from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
     DATA_DIRTY_PROPERTY,
@@ -21,11 +22,16 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     get_rana_refs,
     get_vector_layer_names,
     open_rana_raster,
+    open_rana_schematisation,
     open_rana_vector_layer,
     open_rana_vector_layers,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
+from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
+from rana_qgis_plugin.simulation.utils import resolve_schematisation_download_dir
+from rana_qgis_plugin.simulation.workers import SchematisationUploadTask
 from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     RanaFetchError,
@@ -33,19 +39,31 @@ from rana_qgis_plugin.utils.api import (
     create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
+    get_process_id_for_tag,
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_tenant_project_files,
+    get_threedi_schematisation,
     move_directory,
     move_file,
+    start_tenant_process,
 )
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
     OpenLayerRequest,
+    OpenSchematisationRequest,
     StyleUploadItem,
     UploadableLayerItem,
 )
+from rana_qgis_plugin.utils.filesystem import ensure_writable_directory
+from rana_qgis_plugin.utils.generic import (
+    get_editable_layers_for_file,
+    get_threedi_api,
+    save_layer_changes,
+)
+from rana_qgis_plugin.utils.qgis import is_loaded_in_schematisation_editor
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.workers.avatars import AvatarWorker
 from rana_qgis_plugin.workers.download import (
@@ -53,6 +71,8 @@ from rana_qgis_plugin.workers.download import (
     DownloadTask,
     FileDownloadContext,
     RanaFileDownloader,
+    SchematisationRevisionDownloadContext,
+    SchematisationRevisionDownloader,
 )
 from rana_qgis_plugin.workers.styling import StyleUploadTask
 from rana_qgis_plugin.workers.upload import (
@@ -107,6 +127,164 @@ class Loader(QObject):
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def save_revision(
+        self,
+        project_id: str,
+        schematisation_id: int,
+        revision_number: int,
+        schematisation_db_filepath: str,
+        parent: object,
+    ) -> SchematisationUploadTask | None:
+        """Prepare a local schematisation revision for upload."""
+        self.communication.progress_bar("preparing for save revision", 0, 0, 0)
+        try:
+            # TODO: this takes quite some time and progress bar is blocked during that time
+            api = get_threedi_api()
+            if api is None:
+                self.communication.bar_error(
+                    "Not authenticated with 3Di API — cannot save schematisation revision."
+                )
+                return None
+            tc = ThreediCalls(api)
+            schematisation = tc.fetch_schematisation(schematisation_id)
+            organisations = {org.unique_id: org for org in tc.fetch_organisations()}
+            organisation = organisations.get(schematisation.owner)
+        except (RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.bar_error(
+                f"Could not retrieve schematisation details: {error}"
+            )
+            return None
+        if organisation is None:
+            self.communication.bar_error(
+                "Could not determine the schematisation organisation."
+            )
+            return None
+        try:
+            local = LocalSchematisation(
+                hcc_working_dir(),
+                schematisation.id,
+                schematisation.name,
+                create=False,
+                parent_revision_number=revision_number,
+            )
+            filepath = schematisation_db_filepath
+            editable = get_editable_layers_for_file(filepath)
+            if editable:
+                choice = self.communication.custom_ask(
+                    parent,
+                    "Unsaved Changes Detected",
+                    "There are unsaved changes in the revision layers. What would you like to do?",
+                    "Save Changes",
+                    "Discard Changes",
+                    "Cancel Upload",
+                )
+                if choice == "Cancel Upload":
+                    return None
+                if choice == "Save Changes":
+                    for layer in editable:
+                        self.communication.progress_bar("Save changed layers", 0, 0, 0)
+                        ok, save_error = save_layer_changes(layer)
+                        if not ok:
+                            self.communication.bar_error(
+                                f"Failed to save changes in layer '{layer.name()}': {save_error}"
+                            )
+                            return None
+            self.communication.clear_message_bar()
+            if is_loaded_in_schematisation_editor(
+                filepath
+            ) is False and not self.communication.ask(
+                parent,
+                "Warning",
+                "The revision is not loaded in the Rana Schematisation Editor. Continue?",
+                QMessageBox.Warning,
+            ):
+                return None
+            upload = UploadWizard(
+                local,
+                schematisation,
+                filepath,
+                organisation,
+                self.communication,
+                tc,
+                parent,
+            )
+            if upload.exec() == QDialog.DialogCode.Accepted and upload.new_upload:
+                task = SchematisationUploadTask(api, local, upload.new_upload)
+                task.model_requested.connect(
+                    lambda: self.start_model_tracker_process(
+                        project_id,
+                        schematisation_id,
+                        schematisation.name,
+                        task.revision.id,
+                        task.upload_specification["cb_inherit_templates"],
+                    )
+                )
+                task.progress_changed.connect(
+                    lambda name, current, total, per_task: (
+                        self.communication.progress_bar(
+                            f"Uploading revision: {name}",
+                            0,
+                            100,
+                            int(total + current * per_task / 100),
+                        )
+                    )
+                )
+                task.taskCompleted.connect(
+                    lambda: self.communication.bar_info(
+                        "Schematisation revision uploaded successfully."
+                    )
+                )
+                task.taskTerminated.connect(
+                    lambda: self.communication.show_error(
+                        task.error_message
+                        or "Schematisation upload failed or was cancelled."
+                    )
+                )
+                task_manager = QgsApplication.taskManager()
+                if task_manager is None:
+                    self.communication.bar_error(
+                        "Could not start schematisation upload."
+                    )
+                    return None
+                task_manager.addTask(task)
+                return task
+            return None
+        except (OSError, ValueError) as error:
+            self.communication.bar_error(
+                f"Could not open the local schematisation: {error}"
+            )
+            return None
+
+    def start_model_tracker_process(
+        self,
+        project_id: str,
+        schematisation_id: int,
+        schematisation_name: str,
+        revision_id: int,
+        inherit_from_previous_revision: bool = True,
+    ) -> None:
+        """Start server-side model creation for an uploaded revision."""
+        track_process = get_process_id_for_tag(self.communication, "model_tracker")
+        if track_process is None:
+            self.communication.log_err("No model tracker available")
+            return None
+        params = {
+            "project_id": project_id,
+            "inputs": {
+                "schematisation_id": schematisation_id,
+                "revision_id": revision_id,
+                "inherit_from_previous_model": True,
+                "inherit_from_previous_revision": inherit_from_previous_revision,
+            },
+            "name": f"{schematisation_name}_rev{revision_id}",
+        }
+        try:
+            start_tenant_process(track_process, params)
+            self.communication.bar_info("Revision uploaded; model creation started.")
+        except RanaPostError as e:
+            self.communication.bar_error(f"Failed to start model tracker process")
+            self.communication.log_err(f"{e.msg}")
 
     def rename_item(
         self, project_id: str, old_path: str, new_name: str, is_folder: bool
@@ -218,7 +396,7 @@ class Loader(QObject):
     def fetch_avatars(self, users: list[dict]) -> None:
         """Start a background fetch of real avatars for the given users."""
         if not users:
-            return
+            return None
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_worker = AvatarWorker(self.communication, users)
@@ -312,7 +490,7 @@ class Loader(QObject):
                     )
                 )
                 if choice == UploadChoice.ABORT:
-                    return
+                    return None
                 if choice == UploadChoice.SKIP:
                     continue
                 if choice == UploadChoice.OVERWRITE_ALL:
@@ -518,7 +696,7 @@ class Loader(QObject):
             layers = self.layers_for_keys([(item.project_id, item.descriptor_id)])
             if not self.verify_style_target(item, layers):
                 self.release_sync_keys(keys)
-                return
+                return None
         task = StyleUploadTask(items)
         task.rana_sync_keys = keys
         task.item_started.connect(
@@ -673,118 +851,136 @@ class Loader(QObject):
 
     def open_items(
         self,
-        requests: list[OpenFileRequest | OpenLayerRequest | OpenFolderRequest],
+        requests: list[
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenLayerRequest
+            | OpenFolderRequest
+        ],
     ) -> None:
-        """Resolve, confirm, download and open Rana files/layers.
+        """Resolve, download and open Rana resources.
 
-        Folder requests are resolved via the API into file requests (single
-        level). Downloads are de-duplicated by (project_id, file_id) — multiple
-        layer requests for the same file result in one download. Shows a
-        confirmation dialog when the download count exceeds 10 or hits the
-        limit. Creates one DownloadTask for the entire batch.
+        Phase 1: flatten all requests into actionable items (expanding folders).
+        Phase 2: dispatch each item by type, with one DownloadTask per item.
         """
-        MAX_DOWNLOADS = 50
-        # Step 1: Expand folder requests into file requests
-        file_requests: list[OpenFileRequest | OpenLayerRequest] = []
+        # Phase 1: resolve into a flat list of actionable requests
+        resolved: list[
+            OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+        ] = []
         for request in requests:
             if isinstance(request, OpenFolderRequest):
-                self.resolve_folder(request.project, request.folder_path, file_requests)
-            elif isinstance(request, (OpenFileRequest, OpenLayerRequest)):
-                data_type = request.file_item.get("data_type", "")
-                if data_type in ("vector", "raster"):
-                    file_requests.append(request)
+                resolved += self._resolve_folder(request.project, request.folder_path)
+            else:
+                resolved.append(request)
 
-        if not file_requests:
-            return
-
-        # Step 2: Build downloaders — one per unique file, multiple callbacks
-        downloaders: list[BaseDownloader] = []
-        open_callbacks: dict[str, list[Callable[[str], None]]] = {}
-        seen_files: set[tuple[str, str]] = set()
-
-        for request in file_requests:
-            project = request.project
-            file_item = request.file_item
-            file_key = (project["id"], file_item["id"])
-
-            context = FileDownloadContext(
-                project_slug=project.get("slug", ""),
-                file_id=file_item["id"],
-                file_descriptor_id=file_item.get("descriptor_id") or "",
-                file_data_type=file_item.get("data_type", ""),
-            )
-            local_path = str(context.local_file_path)
-
-            if file_key not in seen_files:
-                if len(seen_files) >= MAX_DOWNLOADS:
-                    break
-                seen_files.add(file_key)
-                downloader = RanaFileDownloader(project, file_item, context)
-                try:
-                    downloader.resolve_url()
-                except (NetworkUnavailableError, RanaFetchError) as e:
-                    self.communication.bar_error(
-                        f"Could not resolve download URL for "
-                        f"{PurePosixPath(file_item['id']).name}: {e}"
-                    )
-                    continue
-                downloaders.append(downloader)
-                open_callbacks[local_path] = []
-
+        unique: dict[
+            tuple, OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+        ] = {}
+        for request in resolved:
             if isinstance(request, OpenLayerRequest):
-
-                def _make_layer_cb(
-                    p: dict, fi: dict, ln: str, lid: str | None
-                ) -> Callable[[str], None]:
-                    return lambda lp: self.open_layer(lp, p, fi, ln, lid)
-
-                open_callbacks[local_path].append(
-                    _make_layer_cb(
-                        project,
-                        file_item,
-                        request.layer_name,
-                        request.layer_id,
-                    )
+                key = (
+                    "layer",
+                    request.project["id"],
+                    request.file_item["id"],
+                    request.layer_id,
                 )
             else:
+                # include a fourth element so the key type is consistent
+                # with layer keys (tuple[str, Any, Any, str | None])
+                key = (
+                    "file",
+                    request.project["id"],
+                    request.file_item["id"],
+                    None,
+                )
+            unique.setdefault(key, request)
+        resolved = list(unique.values())
 
-                def _make_file_cb(p: dict, fi: dict) -> Callable[[str], None]:
-                    return lambda lp: self.open_file(lp, p, fi)
-
-                open_callbacks[local_path].append(_make_file_cb(project, file_item))
-
-        if not downloaders:
+        if len(resolved) > 50:
+            self.communication.bar_error("Selection contains more than 50 items.")
             return
-
-        # Step 3: Confirm if many downloads
-        n_downloads = len(downloaders)
-        hit_limit = len(seen_files) >= MAX_DOWNLOADS
-        if n_downloads > 10 or hit_limit:
-            if hit_limit:
-                message = (
-                    f"This selection resolved to more than {MAX_DOWNLOADS} "
-                    f"files. Open the first {n_downloads}?"
-                )
-            else:
-                message = f"This will download {n_downloads} files. Continue?"
-
+        if len(resolved) > 10:
             answer = QMessageBox.question(
                 None,
                 "Open in QGIS",
-                message,
+                f"This will open {len(resolved)} items. Continue?",
                 QMessageBox.StandardButton.Yes,
                 QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
-                return
+                return None
 
-        # Step 4: Submit one DownloadTask
+        # Phase 2: dispatch by type
+        for request in resolved:
+            if isinstance(request, OpenSchematisationRequest):
+                self.resolve_schematisation(request)
+            elif isinstance(request, OpenFileRequest):
+                self.download_and_open_file(request)
+            elif isinstance(request, OpenLayerRequest):
+                self.download_and_open_layer(request)
+
+    def _resolve_folder(
+        self, project: dict, folder_path: str
+    ) -> list[OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest]:
+        """Resolve a folder into individual open requests via the API (single level)."""
+        params = {"path": folder_path} if folder_path else None
+        try:
+            files = get_tenant_project_files(project["id"], params=params)
+        except (NetworkUnavailableError, RanaFetchError) as e:
+            self.communication.bar_error(f"Could not list folder contents: {e}")
+            return []
+
+        result: list[
+            OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+        ] = []
+        for item in files:
+            if item.get("type") == "directory":
+                continue
+            data_type = item.get("data_type", "")
+            if data_type == "threedi_schematisation":
+                result.append(
+                    OpenSchematisationRequest(project=project, file_item=item)
+                )
+            elif data_type in ("vector", "raster"):
+                result.append(OpenFileRequest(project=project, file_item=item))
+        return result
+
+    def download_and_open_file(self, request: OpenFileRequest) -> None:
+        self.download_and_open(request, self.open_file)
+
+    def download_and_open_layer(self, request: OpenLayerRequest) -> None:
+        self.download_and_open(
+            request,
+            lambda local_path, project, file_item: self.open_layer(
+                local_path, project, file_item, request.layer_name, request.layer_id
+            ),
+        )
+
+    def download_and_open(self, request, callback) -> None:
+        project = request.project
+        file_item = request.file_item
+        context = FileDownloadContext(
+            project_slug=project.get("slug", ""),
+            file_id=file_item["id"],
+            file_descriptor_id=file_item.get("descriptor_id") or "",
+            file_data_type=file_item.get("data_type", ""),
+        )
+        try:
+            downloader = RanaFileDownloader(project, file_item, context)
+            downloader.resolve_url()
+        except (NetworkUnavailableError, RanaFetchError) as error:
+            self.communication.bar_error(
+                f"Could not resolve download URL for "
+                f"{PurePosixPath(file_item['id']).name}: {error}"
+            )
+            return
+
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
             self.communication.bar_error("Could not start file download.")
             return
 
-        task = DownloadTask(list(downloaders))
+        task = DownloadTask([downloader])
         task.file_started.connect(
             lambda file_id: self.set_progress_bar_busy(
                 f"Downloading {PurePosixPath(file_id).name}"
@@ -792,7 +988,7 @@ class Loader(QObject):
         )
         task.file_failed.connect(self.handle_download_file_failed)
         task.file_downloaded.connect(
-            lambda local_path: self._on_file_downloaded(local_path, open_callbacks)
+            lambda local_path: callback(local_path, project, file_item)
         )
         task.file_downloaded.connect(
             lambda local_path: self.communication.log_msg(f"downloaded {local_path}")
@@ -801,26 +997,113 @@ class Loader(QObject):
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
         task_manager.addTask(task)
 
-    def resolve_folder(
-        self,
-        project: dict,
-        folder_path: str,
-        resolved: list[OpenFileRequest | OpenLayerRequest],
-    ) -> None:
-        """Resolve a folder into OpenFileRequests via the API (single level)."""
-        params = {"path": folder_path} if folder_path else None
+    def resolve_schematisation(self, request: OpenSchematisationRequest) -> None:
+        """Fetch metadata and resolve the local download directory for a schematisation.
+
+        Calls the interactive Replace/Store/Cancel decision tree when an
+        existing local WIP conflicts with the requested revision.  Does
+        nothing (and shows no error) when the user cancels.
+        """
         try:
-            files = get_tenant_project_files(project["id"], params=params)
-        except (NetworkUnavailableError, RanaFetchError) as e:
-            self.communication.bar_error(f"Could not list folder contents: {e}")
+            metadata = get_threedi_schematisation(request.file_item["descriptor_id"])
+            schematisation = metadata["schematisation"]
+            revision = metadata["latest_revision"]
+            if not all(field in schematisation for field in ("id", "name")):
+                raise ValueError("schematisation is missing required fields")
+            if not all(
+                field in revision for field in ("id", "number", "sqlite", "rasters")
+            ):
+                raise ValueError("latest revision is missing required fields")
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            NetworkUnavailableError,
+            RanaFetchError,
+        ) as exc:
+            self.communication.bar_error(f"Invalid schematisation metadata: {exc}")
+            return None
+
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.bar_error(
+                "Not authenticated with 3Di API — cannot open schematisation."
+            )
             return
 
-        for item in files:
-            if item.get("type") == "directory":
-                continue
-            data_type = item.get("data_type", "")
-            if data_type in ("vector", "raster"):
-                resolved.append(OpenFileRequest(project=project, file_item=item))
+        working_dir = hcc_working_dir()
+        if not working_dir:
+            self.communication.bar_error(
+                "No working directory configured — set it in the 3Di settings."
+            )
+            return
+
+        result = resolve_schematisation_download_dir(
+            self.communication,
+            schematisation,
+            revision,
+            True,  # is_latest_revision — we always fetch the latest
+            working_dir,
+            threedi_api,
+        )
+        if result is None:
+            return  # user cancelled
+
+        target_dir, local_schematisation, wip_replace_requested = result
+        writable, error = ensure_writable_directory(target_dir)
+        if not writable:
+            self.communication.bar_error(
+                f"Cannot write to schematisation directory '{target_dir}': {error}"
+            )
+            return
+        # Build the downloader
+        download_context = SchematisationRevisionDownloadContext(Path(target_dir))
+        downloader = SchematisationRevisionDownloader(
+            download_context,
+            schematisation,
+            revision,
+            local_schematisation,
+            wip_replace_requested,
+        )
+
+        # Submit via DownloadTask
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self.communication.bar_error("Could not start schematisation download.")
+            return
+
+        revision_number = int(revision.get("number"))
+        project_name = request.project.get("name", "")
+
+        def on_downloaded(_local_path: str) -> None:
+            parents = [project_name, "files"] + list(
+                PurePosixPath(request.file_item["id"]).parts[:-1]
+            )
+            open_rana_schematisation(
+                self.communication,
+                project_name,
+                request.project["id"],
+                download_context.local_schematisation,
+                revision_number,
+                download_context.wip_replace_requested,
+                geopackage_filepath=download_context.geopackage_filepath,
+                parents=parents,
+            )
+
+        task = DownloadTask([downloader])
+        task.file_started.connect(
+            lambda _: self.set_progress_bar_busy("Downloading schematisation…")
+        )
+        task.file_failed.connect(self.handle_download_file_failed)
+        task.taskCompleted.connect(
+            lambda: on_downloaded(str(download_context.local_file_path))
+        )
+        task.file_downloaded.connect(
+            lambda _: self.communication.bar_info("Schematisation downloaded!", dur=10)
+        )
+        task.taskCompleted.connect(self.communication.clear_message_bar)
+        task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
+        task_manager.addTask(task)
 
     def open_file(self, local_file_path: str, project: dict, file_item: dict) -> None:
         ref = RanaLayerRef(

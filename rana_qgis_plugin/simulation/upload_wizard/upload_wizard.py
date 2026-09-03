@@ -6,6 +6,7 @@ import shutil
 from collections import OrderedDict, defaultdict
 from functools import partial
 from operator import attrgetter
+from typing import Any
 
 from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt import uic
@@ -23,10 +24,10 @@ from qgis.PyQt.QtWidgets import (
 )
 from threedi_api_client.openapi import ApiException, SchematisationRevision
 
-from rana_qgis_plugin.legacy.simulation.utils import LogLevels, TreeViewLogger
-
 from ..utils import (
+    LogLevels,
     SchematisationRasterReferences,
+    TreeViewLogger,
     UploadFileStatus,
     UploadFileType,
     geopackage_layer,
@@ -52,7 +53,7 @@ uicls_files_page, basecls_files_page = uic.loadUiType(
 )
 
 
-class StartWidget(uicls_start_page, basecls_start_page):
+class StartWidget(uicls_start_page, basecls_start_page):  # type: ignore[misc,valid-type]
     """Widget for the Start page."""
 
     def __init__(
@@ -70,7 +71,7 @@ class StartWidget(uicls_start_page, basecls_start_page):
 
         self.tv_revisions_model = QStandardItemModel()
         self.revisions_tv.setModel(self.tv_revisions_model)
-        self.revisions_tv.setFocusPolicy(Qt.NoFocus)
+        self.revisions_tv.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.current_local_schematisation = current_local_schematisation
         self.schematisation = schematisation
         self.schematisation_filepath = schematisation_filepath
@@ -108,7 +109,7 @@ class StartWidget(uicls_start_page, basecls_start_page):
             self.revisions_tv.resizeColumnToContents(i)
 
 
-class CheckModelWidget(uicls_check_page, basecls_check_page):
+class CheckModelWidget(uicls_check_page, basecls_check_page):  # type: ignore[misc,valid-type]
     """Widget for the Check Model page."""
 
     SCHEMATISATION_CHECKS_HEADER = (
@@ -237,7 +238,9 @@ class CheckModelWidget(uicls_check_page, basecls_check_page):
             if migration_succeed and len(migration_feedback_msg) > 0:
                 self.communication.show_info(migration_feedback_msg)
                 QgsMessageLog.logMessage(
-                    migration_feedback_msg, level=Qgis.Warning, tag="Messages"
+                    migration_feedback_msg,
+                    level=Qgis.MessageLevel.Warning,
+                    tag="Messages",
                 )
             elif not migration_succeed:
                 self.communication.show_error(migration_feedback_msg, self)
@@ -372,7 +375,7 @@ class CheckModelWidget(uicls_check_page, basecls_check_page):
         )
 
 
-class SelectFilesWidget(uicls_files_page, basecls_files_page):
+class SelectFilesWidget(uicls_files_page, basecls_files_page):  # type: ignore[misc,valid-type]
     """Widget for the Select Files page."""
 
     def __init__(
@@ -570,11 +573,15 @@ class SelectFilesWidget(uicls_files_page, basecls_files_page):
                 status = file_state["status"]
                 widget.show()
                 name_label = QLabel(name)
-                name_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+                name_label.setSizePolicy(
+                    QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+                )
                 widget_layout.addWidget(name_label, current_main_layout_row, 0)
 
                 status_label = QLabel(status.value)
-                status_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+                status_label.setSizePolicy(
+                    QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+                )
                 widget_layout.addWidget(status_label, current_main_layout_row, 1)
 
                 empty_label = QLabel()
@@ -617,7 +624,7 @@ class SelectFilesWidget(uicls_files_page, basecls_files_page):
                 filepath_sublayout = QGridLayout()
                 filepath_line_edit = QLineEdit()
                 filepath_line_edit.setSizePolicy(
-                    QSizePolicy.Minimum, QSizePolicy.Minimum
+                    QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum
                 )
                 browse_pb = QPushButton("...")
                 browse_pb.clicked.connect(partial(self.browse_for_raster, field_name))
@@ -774,7 +781,7 @@ class StartPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -804,7 +811,7 @@ class CheckModelPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -834,7 +841,7 @@ class SelectFilesPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         commit_msg_te = self.main_widget.te_upload_description
         self.registerField(
             "commit_msg*",
@@ -860,7 +867,7 @@ class UploadWizard(QWizard):
     ):
         super().__init__(parent)
         self.settings = QSettings()
-        self.setWizardStyle(QWizard.ClassicStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
 
         self.current_local_schematisation = current_local_schematisation
         self.schematisation_filepath = schematisation_filepath
@@ -906,15 +913,15 @@ class UploadWizard(QWizard):
         self.addPage(self.check_model_page)
         self.addPage(self.select_files_page)
 
-        self.setButtonText(QWizard.FinishButton, "Start upload")
-        self.finish_btn = self.button(QWizard.FinishButton)
+        self.setButtonText(QWizard.WizardButton.FinishButton, "Start upload")
+        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
         self.finish_btn.clicked.connect(self.start_upload)
-        self.cancel_btn = self.button(QWizard.CancelButton)
+        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
         self.cancel_btn.clicked.connect(self.cancel_wizard)
-        self.new_upload = defaultdict(lambda: None)
+        self.new_upload: defaultdict[str, Any] = defaultdict(lambda: None)
         self.new_upload_statuses = None
         self.setWindowTitle("New upload")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.resize(self.settings.value("threedi/upload_wizard_size", QSize(800, 600)))
 
     def start_upload(self):

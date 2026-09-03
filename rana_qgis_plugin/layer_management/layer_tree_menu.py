@@ -15,6 +15,7 @@ from rana_qgis_plugin.layer_management.dirty_tracking import (
     is_style_dirty,
 )
 from rana_qgis_plugin.layer_management.layer_manager import (
+    _GROUP_SCHEMATISATION_ID_KEY,
     RanaLayerRef,
     get_rana_refs,
     is_rana_linked,
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from qgis.gui import QgisInterface
 
 _GROUP_PROJECT_ID_KEY = "rana/project_id"
+_GROUP_LOADING_KEY = "rana/loading"
+_GROUP_LOCKED_KEY = "rana/schematisation_uploading"
 
 
 class LayerTreeMenuProvider:
@@ -69,6 +72,19 @@ class LayerTreeMenuProvider:
 
         node = view.currentNode()
         if not isinstance(node, QgsLayerTreeGroup):
+            return
+
+        if node.customProperty(_GROUP_SCHEMATISATION_ID_KEY) is not None:
+            separator = QAction(menu)
+            separator.setSeparator(True)
+            menu.addAction(separator)
+            save_revision = QAction(rana_icon, "Save revision", menu)
+            save_revision.setEnabled(
+                not bool(node.customProperty(_GROUP_LOADING_KEY, False))
+                and not bool(node.customProperty(_GROUP_LOCKED_KEY, False))
+            )
+            save_revision.triggered.connect(lambda: self.save_revision([node]))
+            menu.addAction(save_revision)
             return
 
         if not self._is_rana_group(node):
@@ -161,6 +177,41 @@ class LayerTreeMenuProvider:
             )
             seen.add(key)
         self.loader.upload_existing_files(items)
+
+    def save_revision(self, groups: list[QgsLayerTreeGroup]) -> None:
+        """Prepare the selected schematisation revision for upload."""
+        if self.loader is None or len(groups) != 1:
+            return
+        group = groups[0]
+        schematisation_id = group.customProperty("rana/schematisation_id")
+        revision_number = group.customProperty("rana/revision_number")
+        # working_dir = group.customProperty("rana/schematisation_working_dir")
+        # is_wip = group.customProperty("rana/schematisation_is_wip")
+        schematisation_db_filepath = group.customProperty(
+            "rana/schematisation_db_filepath"
+        )
+        if schematisation_id is None or revision_number is None:
+            return
+        task = self.loader.save_revision(
+            group.customProperty("rana/project_id"),
+            schematisation_id,
+            revision_number,
+            schematisation_db_filepath,
+            self.iface.mainWindow(),
+        )
+        if task is not None:
+            group.setCustomProperty(_GROUP_LOCKED_KEY, True)
+
+            def unlock_group() -> None:
+                group.setCustomProperty(_GROUP_LOCKED_KEY, False)
+
+            task.upload_succeeded.connect(unlock_group)
+            task.taskTerminated.connect(unlock_group)
+            task.upload_succeeded.connect(
+                lambda new_revision: group.setCustomProperty(
+                    "rana/revision_number", new_revision
+                )
+            )
 
     @staticmethod
     def file_groups(groups: list[QgsLayerTreeGroup]) -> list[QgsLayerTreeGroup]:
