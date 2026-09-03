@@ -324,8 +324,8 @@ def unzip_archive(zip_filepath, location=None):
     with ZipFile(zip_filepath, "r") as zf:
         content_list = zf.namelist()
         zf.extractall(location)
-        os.remove(zip_filepath)
-        return content_list
+    os.remove(zip_filepath)
+    return content_list
 
 
 def extract_error_message(e):
