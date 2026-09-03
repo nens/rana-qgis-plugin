@@ -160,6 +160,9 @@ class ScenarioFileInfoModel(FileInfoModel):
         simulation = meta.get("simulation") or {}
         schematisation = meta.get("schematisation") or {}
         software = simulation.get("software") or {}
+        # Patch software id name
+        if software.get("id", "").lower() == "3di":
+            software["id"] = "Rana"
         interval = simulation.get("interval") or []
         return InfoSection(
             "Scenario",

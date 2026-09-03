@@ -228,7 +228,7 @@ def test_scenario_file_info_model_more_info():
     assert row_dict["Schematisation version"].value == 1
     assert row_dict["Revision ID"].value == 2
     assert row_dict["Model ID"].value == 42
-    assert row_dict["Model software"].value == "3di"
+    assert row_dict["Model software"].value == "Rana"
     assert row_dict["Software version"].value == "2"
     assert row_dict["Start"].value == "01-01-2026 00:00"
     assert row_dict["End"].value == "01-01-2026 01:00"
