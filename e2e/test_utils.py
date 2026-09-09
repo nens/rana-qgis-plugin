@@ -1,8 +1,14 @@
 import time
 
-from qgis.core import QgsMapRendererParallelJob
+from qgis.core import (
+    QgsCoordinateTransform,
+    QgsMapRendererParallelJob,
+    QgsMapSettings,
+    QgsProject,
+    QgsRectangle,
+)
 from qgis.PyQt.QtCore import QSize, Qt, QTimer
-from qgis.PyQt.QtGui import QImage
+from qgis.PyQt.QtGui import QColor, QImage
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QTreeView
 
@@ -68,14 +74,51 @@ def click_tree_item(tree: QTreeView, index, qtbot):
         qtbot.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
 
 
+def layers_extent(layers, crs, transform_context) -> QgsRectangle:
+    """Combined extent of the layers, reprojected to ``crs``."""
+    extent = None
+    for layer in layers:
+        layer_extent = layer.extent()
+        if layer_extent.isNull():
+            continue
+        if layer.crs() != crs:
+            layer_extent = QgsCoordinateTransform(
+                layer.crs(), crs, transform_context
+            ).transformBoundingBox(layer_extent)
+        if extent is None:
+            extent = layer_extent
+        else:
+            extent.combineExtentWith(layer_extent)
+    return extent if extent is not None else QgsRectangle()
+
+
 def canvas_to_image(canvas) -> QImage:
-    """Renders the QgsMapCanvas to a QImage and returns it. Useful for pixelperfect assertions."""
-    settings = canvas.mapSettings()
-    settings.setFlag(settings.Antialiasing, False)
-    settings.setFlag(settings.UseAdvancedEffects, False)
+    """Renders the layers of a QgsMapCanvas to a QImage. Useful for pixelperfect assertions.
+
+    The render deliberately does not reuse the canvas map settings: those carry
+    screen dependent state (output DPI and an extent derived from the widget
+    size) which makes the result differ between display backends.
+    """
+    crs = canvas.mapSettings().destinationCrs()
+    transform_context = QgsProject.instance().transformContext()
+    layers = canvas.layers()
+
+    settings = QgsMapSettings()
+    settings.setLayers(layers)
+    settings.setDestinationCrs(crs)
+    settings.setTransformContext(transform_context)
+    settings.setBackgroundColor(QColor(Qt.white))
+    settings.setFlag(QgsMapSettings.Antialiasing, False)
+    settings.setFlag(QgsMapSettings.UseAdvancedEffects, False)
 
     settings.setOutputSize(QSize(800, 600))
+    settings.setOutputDpi(96)
     settings.setDevicePixelRatio(1)
+
+    extent = layers_extent(layers, crs, transform_context)
+    # Margin keeps symbols on the extent boundary from being clipped.
+    extent.scale(1.1)
+    settings.setExtent(extent)
 
     job = QgsMapRendererParallelJob(settings)
     job.start()
