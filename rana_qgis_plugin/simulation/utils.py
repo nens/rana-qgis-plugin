@@ -898,7 +898,7 @@ def download_required_files(
         schematisation_db_file = content_list[0]
         current_progress += 1
         _emit_progress("Downloaded schematisation database")
-        if gridadmin_download is not None:
+        if gridadmin_download is not None and not wip_replace_requested:
             grid_filepath = os.path.join(
                 local_schematisation.revisions[revision_number].grid_dir,
                 gridadmin_file.filename,
@@ -906,7 +906,7 @@ def download_required_files(
             get_download_file(gridadmin_download, grid_filepath)
             current_progress += 1
             _emit_progress("Downloaded gridadmin")
-        if gridadmin_download_gpkg is not None:
+        if gridadmin_download_gpkg is not None and not wip_replace_requested:
             gpkg_filepath = os.path.join(
                 local_schematisation.revisions[revision_number].grid_dir,
                 gridadmin_file_gpkg.filename,
