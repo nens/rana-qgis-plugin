@@ -31,11 +31,11 @@ ENV PYTHONPATH=/usr/share/qgis/python/:/usr/share/qgis/python/plugins:/usr/lib/p
 
 WORKDIR /tests_directory
 
-COPY xvfb-startup.sh .
-RUN sed -i 's/\r$//' xvfb-startup.sh
-ARG RESOLUTION="1920x1080x24"
-ENV XVFB_RES="${RESOLUTION}"
-ARG XARGS=""
-ENV XVFB_ARGS="${XARGS}"
-RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
-ENTRYPOINT ["/bin/bash", "xvfb-startup.sh"]
+# COPY xvfb-startup.sh .
+# RUN sed -i 's/\r$//' xvfb-startup.sh
+# ARG RESOLUTION="1920x1080x24"
+# ENV XVFB_RES="${RESOLUTION}"
+# ARG XARGS=""
+# ENV XVFB_ARGS="${XARGS}"
+# RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+# ENTRYPOINT ["/bin/bash", "xvfb-startup.sh"]
