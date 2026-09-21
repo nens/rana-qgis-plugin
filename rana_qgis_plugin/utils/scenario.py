@@ -9,7 +9,6 @@ from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     get_tenant_file_descriptor_view,
 )
-from rana_qgis_plugin.utils.generic import get_threedi_api
 
 
 def get_ready_state_from_descriptor(descriptor: dict) -> bool:
@@ -47,26 +46,32 @@ class ScenarioInfo:
         self.simulation_name = simulation.get("name")
         # set preliminary value of has_3di_simulation
         self.has_3di_simulation: bool = self.simulation_id is not None
-        # check if all simulation data exists, and update if needed
-        if self.has_3di_simulation:
-            self.set_simulation_info_from_threedi()
 
-    def set_simulation_info_from_threedi(self) -> None:
+    def has_complete_simulation_info(
+        self, include_simulation_name: bool = True
+    ) -> bool:
+        required_info = [
+            self.schematisation_id,
+            self.schematisation_name,
+            self.revision_number,
+            self.simulation_id,
+        ]
+        if include_simulation_name:
+            required_info.append(self.simulation_name)
+        return all(required_info)
+
+    @property
+    def needs_threedi_resolution(self) -> bool:
+        return self.has_3di_simulation and not self.has_complete_simulation_info()
+
+    def set_simulation_info_from_threedi(self, threedi_api: Any) -> None:
         """
         Ensure all simulation info is properly set and update missing information via threedi.
         If any information cannot be retrieved, set has_3di_simulation to False.
         """
-        if all(
-            [
-                self.schematisation_id,
-                self.schematisation_name,
-                self.revision_number,
-                self.simulation_id,
-                self.simulation_name,
-            ]
-        ):
+        if self.has_complete_simulation_info():
             return
-        tc = ThreediCalls(get_threedi_api())
+        tc = ThreediCalls(threedi_api)
         # threedi-api fails when the simulation cannot be found
         try:
             simulation = tc.fetch_simulation(self.simulation_id)  # type: ignore[arg-type]
@@ -75,14 +80,7 @@ class ScenarioInfo:
             return
         if not self.simulation_name:
             self.simulation_name = simulation.name
-        if not all(
-            [
-                self.schematisation_id,
-                self.schematisation_name,
-                self.revision_number,
-                self.simulation_id,
-            ]
-        ):
+        if not self.has_complete_simulation_info(include_simulation_name=False):
             threedimodel = tc.fetch_3di_model(simulation.threedimodel_id)
             if threedimodel:
                 if not self.schematisation_name:
@@ -91,15 +89,7 @@ class ScenarioInfo:
                     self.schematisation_id = threedimodel.id
                 if not self.revision_number:
                     self.revision_number = threedimodel.revision_number
-        if not all(
-            [
-                self.schematisation_id,
-                self.schematisation_name,
-                self.revision_number,
-                self.simulation_id,
-                self.simulation_name,
-            ]
-        ):
+        if not self.has_complete_simulation_info():
             self.has_3di_simulation = False
 
     @cached_property

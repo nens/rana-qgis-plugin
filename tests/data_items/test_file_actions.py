@@ -24,8 +24,8 @@ from rana_qgis_plugin.data_items.file_actions import (
             "scenario",
             [
                 FileAction.VIEW_FILE_INFO,
+                FileAction.OPEN_IN_QGIS,
                 FileAction.OPEN_WMS,
-                FileAction.DOWNLOAD_RESULTS,
                 FileAction.RENAME,
                 FileAction.DELETE,
             ],

@@ -39,11 +39,13 @@ from rana_qgis_plugin.utils.api import (
     create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
+    get_default_result,
     get_process_id_for_tag,
     get_tenant_file_descriptor,
     get_tenant_project_file,
     get_tenant_project_files,
     get_threedi_schematisation,
+    map_result_to_file_name,
     move_directory,
     move_file,
     start_tenant_process,
@@ -52,6 +54,7 @@ from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
     OpenLayerRequest,
+    OpenScenarioRequest,
     OpenSchematisationRequest,
     StyleUploadItem,
     UploadableLayerItem,
@@ -62,19 +65,29 @@ from rana_qgis_plugin.utils.generic import (
     get_threedi_api,
     save_layer_changes,
 )
-from rana_qgis_plugin.utils.qgis import is_loaded_in_schematisation_editor
+from rana_qgis_plugin.utils.qgis import (
+    get_threedi_results_analysis_tool_instance,
+    is_loaded_in_schematisation_editor,
+)
+from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.workers.avatars import AvatarWorker
 from rana_qgis_plugin.workers.download import (
     BaseDownloader,
     DownloadTask,
     FileDownloadContext,
+    LizardResultDownloader,
     RanaFileDownloader,
+    RanaRawResultsDownloader,
+    RanaResultDownloader,
+    ResultsDownloadContext,
     SchematisationRevisionDownloadContext,
     SchematisationRevisionDownloader,
 )
 from rana_qgis_plugin.workers.styling import StyleUploadTask
+from rana_qgis_plugin.workers.threedi_resolve import ScenarioResolveTask
 from rana_qgis_plugin.workers.upload import (
     ExistingUploadStatus,
     FileUploadTask,
@@ -121,6 +134,7 @@ class Loader(QObject):
         self.avatar_pool = QThreadPool()
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
+        self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
 
     def shutdown(self) -> None:
         """Cancel pending work and drain the pool. Call on plugin unload."""
@@ -854,6 +868,7 @@ class Loader(QObject):
         requests: list[
             OpenFileRequest
             | OpenSchematisationRequest
+            | OpenScenarioRequest
             | OpenLayerRequest
             | OpenFolderRequest
         ],
@@ -865,7 +880,10 @@ class Loader(QObject):
         """
         # Phase 1: resolve into a flat list of actionable requests
         resolved: list[
-            OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenScenarioRequest
+            | OpenLayerRequest
         ] = []
         for request in requests:
             if isinstance(request, OpenFolderRequest):
@@ -874,7 +892,11 @@ class Loader(QObject):
                 resolved.append(request)
 
         unique: dict[
-            tuple, OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+            tuple,
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenScenarioRequest
+            | OpenLayerRequest,
         ] = {}
         for request in resolved:
             if isinstance(request, OpenLayerRequest):
@@ -914,6 +936,8 @@ class Loader(QObject):
         for request in resolved:
             if isinstance(request, OpenSchematisationRequest):
                 self.resolve_schematisation(request)
+            elif isinstance(request, OpenScenarioRequest):
+                self.open_scenario_results_batch(request)
             elif isinstance(request, OpenFileRequest):
                 self.download_and_open_file(request)
             elif isinstance(request, OpenLayerRequest):
@@ -921,7 +945,12 @@ class Loader(QObject):
 
     def _resolve_folder(
         self, project: dict, folder_path: str
-    ) -> list[OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest]:
+    ) -> list[
+        OpenFileRequest
+        | OpenSchematisationRequest
+        | OpenScenarioRequest
+        | OpenLayerRequest
+    ]:
         """Resolve a folder into individual open requests via the API (single level)."""
         params = {"path": folder_path} if folder_path else None
         try:
@@ -931,7 +960,10 @@ class Loader(QObject):
             return []
 
         result: list[
-            OpenFileRequest | OpenSchematisationRequest | OpenLayerRequest
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenScenarioRequest
+            | OpenLayerRequest
         ] = []
         for item in files:
             if item.get("type") == "directory":
@@ -941,6 +973,8 @@ class Loader(QObject):
                 result.append(
                     OpenSchematisationRequest(project=project, file_item=item)
                 )
+            elif data_type == "scenario":
+                result.append(OpenScenarioRequest(project=project, file_item=item))
             elif data_type in ("vector", "raster"):
                 result.append(OpenFileRequest(project=project, file_item=item))
         return result
@@ -996,6 +1030,353 @@ class Loader(QObject):
         task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
         task_manager.addTask(task)
+
+    def open_scenario_results(self, request: OpenScenarioRequest) -> None:
+        """Open one scenario with interactive result selection."""
+        self.resolve_scenario_results(request, self.start_scenario_result_download)
+
+    def open_scenario_results_batch(self, request: OpenScenarioRequest) -> None:
+        """Open one scenario from a batch using fixed result defaults."""
+        self.resolve_scenario_results(
+            request, self.start_batch_scenario_result_download
+        )
+
+    def resolve_scenario_results(
+        self,
+        request: OpenScenarioRequest,
+        continuation: Callable[[OpenScenarioRequest, ScenarioInfo], None],
+    ) -> None:
+        """Resolve descriptor and optional 3Di metadata before opening results."""
+        file_item = request.file_item
+        descriptor_id = file_item.get("descriptor_id")
+        if not descriptor_id:
+            self.communication.bar_error("Scenario descriptor is missing.")
+            return
+
+        try:
+            descriptor = get_tenant_file_descriptor(descriptor_id)
+        except (NetworkUnavailableError, RanaFetchError) as error:
+            self.communication.bar_error(
+                f"Could not retrieve scenario metadata: {error}"
+            )
+            return
+        if not descriptor:
+            self.communication.bar_error("Could not retrieve scenario metadata.")
+            return
+
+        scenario_info = ScenarioInfo(descriptor)
+        if not scenario_info.ready:
+            self.communication.bar_warn(
+                "Post-processing results cannot be retrieved yet."
+            )
+            return
+
+        if scenario_info.needs_threedi_resolution:
+            threedi_api = get_threedi_api()
+            if threedi_api is None:
+                scenario_info.has_3di_simulation = False
+                self.communication.bar_warn(
+                    "3Di API is unavailable. Only raw results will be downloaded."
+                )
+                continuation(request, scenario_info)
+                return
+
+            task_manager = QgsApplication.taskManager()
+            if task_manager is None:
+                self.communication.bar_error("Could not resolve scenario details.")
+                return
+
+            task = ScenarioResolveTask(scenario_info, threedi_api)
+            self.scenario_resolve_tasks.add(task)
+            task.taskCompleted.connect(
+                lambda: self.finish_scenario_resolution(
+                    task, continuation, request, scenario_info
+                )
+            )
+            task.taskTerminated.connect(
+                lambda: self.handle_scenario_resolution_terminated(task)
+            )
+            self.set_progress_bar_busy("Resolving scenario details…")
+            task_manager.addTask(task)
+            return
+
+        continuation(request, scenario_info)
+
+    def finish_scenario_resolution(
+        self,
+        task: ScenarioResolveTask,
+        continuation: Callable[[OpenScenarioRequest, ScenarioInfo], None],
+        request: OpenScenarioRequest,
+        scenario_info: ScenarioInfo,
+    ) -> None:
+        self.scenario_resolve_tasks.discard(task)
+        continuation(request, scenario_info)
+
+    def handle_scenario_resolution_terminated(self, task: ScenarioResolveTask) -> None:
+        self.scenario_resolve_tasks.discard(task)
+        if task.isCanceled():
+            self.communication.bar_warn("Scenario resolution cancelled.")
+        else:
+            self.communication.log_err("Scenario resolution terminated unexpectedly.")
+            self.communication.bar_error("Scenario resolution terminated unexpectedly.")
+
+    def start_scenario_result_download(
+        self, request: OpenScenarioRequest, scenario_info: ScenarioInfo
+    ) -> None:
+        if scenario_info.has_lizard_results and scenario_info.has_3di_simulation:
+            result_browser = ResultBrowser(
+                parent=self.parent(),
+                results=scenario_info.lizard_results,
+                scenario_crs=scenario_info.crs or "",
+                pixel_size=scenario_info.pixel_size,
+            )
+            if result_browser.exec() != QDialog.DialogCode.Accepted:
+                return
+            result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
+            download_raw = result_browser.get_download_raw_result()
+            if not result_ids and not download_raw:
+                self.communication.bar_warn("No scenario results selected.")
+                return
+            downloaders = self.build_scenario_result_downloaders(
+                request,
+                scenario_info,
+                result_ids,
+                nodata,
+                pixelsize,
+                crs,
+                download_raw,
+            )
+        else:
+            if not scenario_info.has_3di_simulation:
+                self.communication.bar_info(
+                    "This scenario is not linked to a 3Di simulation. Only raw results "
+                    "will be downloaded to the cache directory."
+                )
+            else:
+                self.communication.bar_info(
+                    "There is no post-processing data available. Only raw results "
+                    "will be downloaded."
+                )
+            downloaders = self.build_scenario_result_downloaders(
+                request,
+                scenario_info,
+                [],
+                None,
+                None,
+                None,
+                True,
+            )
+
+        if not downloaders:
+            self.communication.bar_warn("No scenario results selected.")
+            return
+        self.submit_scenario_result_download(request, downloaders)
+
+    def start_batch_scenario_result_download(
+        self, request: OpenScenarioRequest, scenario_info: ScenarioInfo
+    ) -> None:
+        """Build fixed defaults for one scenario in a batch and submit them."""
+        if not hcc_working_dir():
+            self.communication.bar_warn(
+                "Skipping scenario because no 3Di working directory is configured."
+            )
+            return
+        if not scenario_info.has_3di_simulation:
+            self.communication.bar_warn(
+                "Skipping scenario because it is not linked to a 3Di simulation."
+            )
+            return
+        default_result = get_default_result(scenario_info.lizard_results)
+        if default_result is None:
+            self.communication.bar_warn(
+                "Skipping scenario because the default result is unavailable."
+            )
+            return
+        downloaders = self.build_batch_scenario_result_downloaders(
+            request, scenario_info, default_result
+        )
+        if not downloaders:
+            return
+        self.submit_scenario_result_download(request, downloaders)
+
+    def build_scenario_result_downloaders(
+        self,
+        request: OpenScenarioRequest,
+        scenario_info: ScenarioInfo,
+        result_ids: list[int],
+        nodata: float | None,
+        pixelsize: float | None,
+        crs: str | None,
+        download_raw: bool,
+    ) -> list[BaseDownloader]:
+        project = request.project
+        file_item = request.file_item
+        downloaders: list[BaseDownloader] = []
+        if download_raw:
+            context = ResultsDownloadContext(
+                scenario_info,
+                project.get("slug", ""),
+                file_item["id"],
+                filename="results.zip",
+            )
+            raw_downloader = RanaRawResultsDownloader(project, file_item, context)
+            try:
+                raw_downloader.resolve_url()
+            except (NetworkUnavailableError, RanaFetchError) as error:
+                self.communication.bar_error(
+                    f"Could not resolve scenario download URL: {error}"
+                )
+                return []
+            downloaders.append(raw_downloader)
+
+        for result_id in result_ids:
+            result = next(
+                result
+                for result in scenario_info.lizard_results
+                if result["id"] == result_id
+            )
+            filename = map_result_to_file_name(result)
+            context = ResultsDownloadContext(
+                scenario_info,
+                project.get("slug", ""),
+                file_item["id"],
+                filename=filename,
+            )
+            if context.local_file_path.exists():
+                choice = self.communication.custom_ask(
+                    self.parent(),
+                    "File exists",
+                    f"Scenario file ({filename}) has already been downloaded before. "
+                    "Do you want to download again and overwrite existing data?",
+                    "Cancel",
+                    "Download again",
+                    "Continue",
+                )
+                if choice == "Cancel":
+                    return []
+                if choice == "Continue":
+                    continue
+            if result.get("attachment_url"):
+                downloaders.append(RanaResultDownloader(context, result))
+            else:
+                if nodata is None or pixelsize is None or crs is None:
+                    return []
+                downloaders.append(
+                    LizardResultDownloader(
+                        download_context=context,
+                        descriptor_id=file_item["descriptor_id"],
+                        result=result,
+                        grid=scenario_info.grid,
+                        nodata=nodata,
+                        pixelsize=pixelsize,
+                        crs=crs,
+                    )
+                )
+        return downloaders
+
+    def build_batch_scenario_result_downloaders(
+        self,
+        request: OpenScenarioRequest,
+        scenario_info: ScenarioInfo,
+        default_result: dict,
+    ) -> list[BaseDownloader]:
+        """Build raw and default attached-result downloaders without prompts."""
+        project = request.project
+        file_item = request.file_item
+        raw_context = ResultsDownloadContext(
+            scenario_info,
+            project.get("slug", ""),
+            file_item["id"],
+            filename="results.zip",
+        )
+        raw_downloader = RanaRawResultsDownloader(project, file_item, raw_context)
+        try:
+            raw_downloader.resolve_url()
+        except (NetworkUnavailableError, RanaFetchError) as error:
+            self.communication.bar_error(
+                f"Could not resolve scenario download URL: {error}"
+            )
+            return []
+
+        result_context = ResultsDownloadContext(
+            scenario_info,
+            project.get("slug", ""),
+            file_item["id"],
+            filename=map_result_to_file_name(default_result),
+        )
+        return [raw_downloader, RanaResultDownloader(result_context, default_result)]
+
+    def submit_scenario_result_download(
+        self,
+        request: OpenScenarioRequest,
+        downloaders: list[BaseDownloader],
+    ) -> None:
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self.communication.bar_error("Could not start scenario download.")
+            return
+        target_dir = str(downloaders[0].download_context.local_dir)
+        task = DownloadTask(downloaders)
+        task.file_started.connect(
+            lambda file_id: self.set_progress_bar_busy(
+                f"Downloading {PurePosixPath(file_id).name}"
+            )
+        )
+        task.file_failed.connect(self.handle_download_file_failed)
+        task.taskCompleted.connect(
+            lambda: self.load_scenario_results_in_results_analysis(
+                target_dir, request.project
+            )
+        )
+        task.taskCompleted.connect(self.communication.clear_message_bar)
+        task.taskTerminated.connect(
+            lambda: self.handle_scenario_result_download_terminated(task)
+        )
+        task_manager.addTask(task)
+
+    def handle_scenario_result_download_terminated(self, task: DownloadTask) -> None:
+        """Report a scenario download failure or cancellation without opening it."""
+        if task.isCanceled():
+            self.communication.bar_warn("Scenario results download cancelled.")
+        elif task.failed_files:
+            for file_id, error in task.failed_files:
+                self.communication.log_err(
+                    f"Scenario results download failed - {file_id}: {error}"
+                )
+            failed_files = ", ".join(file_id for file_id, _ in task.failed_files)
+            self.communication.bar_error(
+                f"Scenario results download failed for: {failed_files}"
+            )
+        else:
+            self.communication.bar_error("Scenario results download failed.")
+
+    def load_scenario_results_in_results_analysis(
+        self, local_dir: str, project: dict
+    ) -> None:
+        result_path = Path(local_dir) / "results_3di.nc"
+        admin_path = Path(local_dir) / "gridadmin.h5"
+        if not result_path.exists() or not admin_path.exists():
+            return
+        ra_tool = get_threedi_results_analysis_tool_instance()
+        if ra_tool is None or not hasattr(ra_tool, "load_result"):
+            self.communication.bar_warn(
+                "Cannot add results as layer without Rana Results Analysis plugin."
+            )
+            return
+        try:
+            ra_tool.load_result(
+                result_path, admin_path, project=project.get("name", "")
+            )
+        except TypeError as error:
+            if "project" not in str(error):
+                raise
+            self.communication.bar_warn(
+                "Rana Results Analysis is not up to date; results will not be "
+                "organized by project. Please update the plugin."
+            )
+            ra_tool.load_result(result_path, admin_path)
+        if not ra_tool.dockwidget.isVisible():
+            ra_tool.toggle_results_manager.run()
 
     def resolve_schematisation(self, request: OpenSchematisationRequest) -> None:
         """Fetch metadata and resolve the local download directory for a schematisation.
