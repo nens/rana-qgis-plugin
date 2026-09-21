@@ -86,6 +86,14 @@ class OpenSchematisationRequest:
 
 
 @dataclass(frozen=True)
+class OpenScenarioRequest:
+    """Request to download and open the results of a Rana scenario."""
+
+    project: dict
+    file_item: dict
+
+
+@dataclass(frozen=True)
 class OpenLayerRequest:
     """Request to open a single layer from a Rana vector file."""
 

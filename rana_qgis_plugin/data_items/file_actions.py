@@ -20,7 +20,6 @@ from rana_qgis_plugin.icons import (
 class FileAction(Enum):
     OPEN_IN_QGIS = "Open in QGIS"
     OPEN_WMS = "Open WMS in QGIS"
-    DOWNLOAD_RESULTS = "Download results"
     OPEN_IN_BROWSER = "Open in web viewer"
     RENAME = "Rename"
     DELETE = "Delete"
@@ -38,7 +37,6 @@ class FileAction(Enum):
 _ICONS = {
     FileAction.OPEN_IN_QGIS: download_icon,
     FileAction.OPEN_WMS: wms_icon,
-    FileAction.DOWNLOAD_RESULTS: download_icon,
     FileAction.OPEN_IN_BROWSER: link_icon,
     FileAction.RENAME: edit_icon,
     FileAction.DELETE: trash_icon,
@@ -50,7 +48,6 @@ _ICONS = {
 
 _TOOLTIPS = {
     FileAction.OPEN_WMS: "Retrieve WMS URL and open layer in QGIS",
-    FileAction.DOWNLOAD_RESULTS: "Download results and open in Rana Results Analysis",
     FileAction.OPEN_IN_BROWSER: "Open file in Rana web viewer",
     FileAction.CREATE_DIRECTORY: "Create a new folder",
     FileAction.UPLOAD_FILES: "Upload files to this location",
@@ -76,9 +73,7 @@ def get_file_actions(data_type: str) -> list[FileAction]:
     if data_type in {"vector", "raster", "threedi_schematisation"}:
         actions = [FileAction.OPEN_IN_QGIS, FileAction.OPEN_IN_BROWSER]
     elif data_type == "scenario":
-        # Keep these as static placeholders for now. Descriptor-dependent
-        # availability is checked later, when the actions are connected.
-        actions = [FileAction.OPEN_WMS, FileAction.DOWNLOAD_RESULTS]
+        actions = [FileAction.OPEN_IN_QGIS, FileAction.OPEN_WMS]
     else:
         actions = [FileAction.OPEN_IN_BROWSER] if data_type == "other" else []
     return (

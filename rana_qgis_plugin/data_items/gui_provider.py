@@ -21,6 +21,7 @@ from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
     OpenLayerRequest,
+    OpenScenarioRequest,
     OpenSchematisationRequest,
 )
 
@@ -113,9 +114,11 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
             (actions for candidate, actions in actions_by_item if candidate is item),
             actions_by_item[0][1] if actions_by_item else [],
         )
+        per_item_action_texts = [
+            {action.text() for action in actions} for _, actions in actions_by_item
+        ]
         allowed_actions = merge_multi_select_actions(
-            primary_item_actions,
-            [{action.text() for action in actions} for _, actions in actions_by_item],
+            primary_item_actions, per_item_action_texts
         )
 
         menu.clear()
@@ -136,6 +139,7 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
         requests: list[
             OpenFileRequest
             | OpenSchematisationRequest
+            | OpenScenarioRequest
             | OpenLayerRequest
             | OpenFolderRequest
         ] = []
@@ -155,10 +159,17 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
                     )
                     loader = loader or item.loader
             elif isinstance(item, RanaFileDataItem):
-                if item.data_type in ("vector", "raster", "threedi_schematisation"):
+                if item.data_type in (
+                    "vector",
+                    "raster",
+                    "threedi_schematisation",
+                    "scenario",
+                ):
                     request_type = (
                         OpenSchematisationRequest
                         if item.data_type == "threedi_schematisation"
+                        else OpenScenarioRequest
+                        if item.data_type == "scenario"
                         else OpenFileRequest
                     )
                     requests.append(

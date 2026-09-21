@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, cast
 
-from qgis._core import QgsMapLayer
 from qgis.core import (
     QgsDataSourceUri,
     QgsLayerTreeGroup,
@@ -26,7 +25,6 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
 )
-from rana_qgis_plugin.utils.log import plugin_log_info
 from rana_qgis_plugin.utils.qgis import (
     get_qml_name_for_layer,
     get_threedi_results_analysis_tool_instance,
@@ -36,7 +34,6 @@ if TYPE_CHECKING:
     from threedi_mi_utils import LocalSchematisation
 
     from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.utils.scenario import get_is_3di_simulation
 
 
 class LayerManager(QObject):
@@ -260,35 +257,6 @@ class LayerManager(QObject):
         else:
             self.communication.show_error(
                 f"Cannot add wms layer(s) from {Path(file['id']).name}"
-            )
-
-
-class FileLayerManager(LayerManager):
-    def add_from_wms(self, project_name, file: dict):
-        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        parents = [project_name] + file["id"].split("/")
-        if descriptor is not None and isinstance(descriptor.get("meta"), dict):
-            super()._add_from_wms(
-                file, descriptor["meta"].get("layers", []), parents=parents
-            )
-
-    def add_from_file(self, project_name, local_file_path: str, file: dict):
-        self.communication.clear_message_bar()
-        parents = [project_name] + file["id"].split("/")[:-1]
-        # Save the last modified date of the downloaded file in QSettings
-        last_modified_key = f"{project_name}/{file['id']}/last_modified"
-        QSettings().setValue(last_modified_key, file["last_modified"])
-        if file.get("data_type") == "scenario":
-            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-            if descriptor is not None and get_is_3di_simulation(descriptor):
-                self._add_layer_from_scenario(
-                    local_file_path, file, project=project_name
-                )
-        elif file.get("data_type") == "raster":
-            self._add_layer_from_raster_file(local_file_path, file, parents=parents)
-        elif file.get("data_type") == "vector":
-            self._add_all_layers_from_vector_file(
-                local_file_path, file, parents=parents
             )
 
 

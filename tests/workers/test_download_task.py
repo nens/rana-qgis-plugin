@@ -30,3 +30,15 @@ def test_download_task_reports_failed_file():
 
     assert not task.run()
     assert task.failed_files == [("broken", "download failed")]
+
+
+def test_download_task_normalizes_integer_file_id_for_signals():
+    downloader = MagicMock(file_id=123)
+    started_files = []
+    task = DownloadTask([downloader])
+    task.file_started.connect(started_files.append)
+
+    assert task.run()
+
+    assert started_files == ["123"]
+    assert task.successful_files == ["123"]

@@ -646,7 +646,7 @@ class LizardResultDownloader(BaseDownloader):
         descriptor_id: str,
         result: dict,
         grid: dict,
-        nodata: int,
+        nodata: float | None,
         pixelsize: float,
         crs: str,
     ):
@@ -814,7 +814,7 @@ class DownloadTask(QgsTask):
         for index, downloader in enumerate(self.jobs):
             if self.isCanceled():
                 return False
-            key = downloader.file_id
+            key = str(downloader.file_id)
             self.file_started.emit(key)
             error: list[Optional[str]] = [None]
             signals = FileDownloadWorkerSignals()
