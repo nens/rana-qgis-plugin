@@ -166,6 +166,40 @@ def test_open_raster_invalid(tmp_path):
     assert layer is None
 
 
+def test_open_rana_wms():
+    descriptor = {
+        "links": [{"rel": "wms", "href": "https://example.test/wms"}],
+    }
+    layers = [{"code": "depth", "name": "Depth", "label": "Maximum depth"}]
+
+    with patch.object(lm, "QgsRasterLayer") as raster_layer:
+        with patch.object(lm, "add_layer_to_group") as add_layer:
+            raster_layer.return_value.isValid.return_value = True
+            opened = lm.open_rana_wms(descriptor, layers, PARENTS + ["wms"], "proj-1")
+
+    raster_layer.assert_called_once()
+    uri, name, provider = raster_layer.call_args.args
+    assert "layers=depth" in uri
+    assert "url=https%3A%2F%2Fexample.test%2Fwms" in uri
+    assert name == "Depth (Maximum depth)"
+    assert provider == "wms"
+    assert opened == [raster_layer.return_value]
+    group = lm.find_or_create_rana_groups(PARENTS + ["wms"], "proj-1")
+    add_layer.assert_called_once_with(raster_layer.return_value, group)
+
+
+@pytest.mark.parametrize(
+    "descriptor, layers",
+    [
+        ({}, [{"code": "depth", "name": "Depth", "label": "Depth"}]),
+        ({"links": [{"rel": "other", "href": "https://example.test"}]}, []),
+        ({"links": [{"rel": "wms", "href": "https://example.test/wms"}]}, []),
+    ],
+)
+def test_open_rana_wms_without_openable_layers(descriptor, layers):
+    assert lm.open_rana_wms(descriptor, layers, PARENTS, "proj-1") == []
+
+
 @pytest.mark.parametrize(
     "wip_replace_requested, expected_filename",
     [(True, "wip.gpkg"), (False, "schema.gpkg")],

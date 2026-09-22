@@ -94,6 +94,14 @@ class OpenScenarioRequest:
 
 
 @dataclass(frozen=True)
+class OpenScenarioWmsRequest:
+    """Request to open the WMS layers of a Rana scenario."""
+
+    project: dict
+    file_item: dict
+
+
+@dataclass(frozen=True)
 class OpenLayerRequest:
     """Request to open a single layer from a Rana vector file."""
 

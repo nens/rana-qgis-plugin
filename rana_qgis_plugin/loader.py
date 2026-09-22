@@ -25,6 +25,7 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     open_rana_schematisation,
     open_rana_vector_layer,
     open_rana_vector_layers,
+    open_rana_wms,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
@@ -55,6 +56,7 @@ from rana_qgis_plugin.utils.data_models import (
     OpenFolderRequest,
     OpenLayerRequest,
     OpenScenarioRequest,
+    OpenScenarioWmsRequest,
     OpenSchematisationRequest,
     StyleUploadItem,
     UploadableLayerItem,
@@ -1034,6 +1036,55 @@ class Loader(QObject):
     def open_scenario_results(self, request: OpenScenarioRequest) -> None:
         """Open one scenario with interactive result selection."""
         self.resolve_scenario_results(request, self.start_scenario_result_download)
+
+    def open_scenario_wms(self, request: OpenScenarioWmsRequest) -> None:
+        """Open one scenario's WMS layers without downloading its results."""
+        self._open_scenario_wms(request)
+
+    def open_scenario_wms_batch(self, requests: list[OpenScenarioWmsRequest]) -> None:
+        """Open each requested scenario's WMS layers independently."""
+        opened = 0
+        for request in requests:
+            if self._open_scenario_wms(request):
+                opened += 1
+        if requests:
+            self.communication.bar_info(
+                f"Opened WMS for {opened} of {len(requests)} scenario(s)."
+            )
+
+    def _open_scenario_wms(self, request: OpenScenarioWmsRequest) -> bool:
+        descriptor_id = request.file_item.get("descriptor_id")
+        if not descriptor_id:
+            self.communication.bar_error("Scenario descriptor is missing.")
+            return False
+        descriptor = get_tenant_file_descriptor(descriptor_id)
+        if not descriptor:
+            self.communication.bar_error("Could not retrieve scenario metadata.")
+            return False
+        links = descriptor.get("links")
+        wms_link = next(
+            (link for link in links or [] if link.get("rel") == "wms"), None
+        )
+        metadata = descriptor.get("meta")
+        layers = metadata.get("layers") if isinstance(metadata, dict) else None
+        if not wms_link or not layers:
+            self.communication.bar_warn(
+                f"No WMS layers available for {PurePosixPath(request.file_item['id']).name}."
+            )
+            return False
+        parents = (
+            [request.project["name"], "files"]
+            + list(PurePosixPath(request.file_item["id"]).parts)
+            + ["wms"]
+        )
+        return bool(
+            open_rana_wms(
+                descriptor,
+                layers,
+                parents,
+                request.project["id"],
+            )
+        )
 
     def open_scenario_results_batch(self, request: OpenScenarioRequest) -> None:
         """Open one scenario from a batch using fixed result defaults."""

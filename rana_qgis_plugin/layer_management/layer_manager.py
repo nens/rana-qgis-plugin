@@ -483,6 +483,42 @@ def open_rana_raster(
     return layer
 
 
+def open_rana_wms(
+    descriptor: dict,
+    layers: list[dict] | None,
+    parents: list[str],
+    project_id: str,
+) -> list[QgsRasterLayer]:
+    """Open the descriptor's WMS layers into the Rana layer tree."""
+    links = descriptor.get("links")
+    if not isinstance(links, list):
+        return []
+    wms_link = next((link for link in links if link.get("rel") == "wms"), None)
+    if not isinstance(wms_link, dict) or not wms_link.get("href"):
+        return []
+
+    if not layers:
+        return []
+    group = find_or_create_rana_groups(parents, project_id)
+    opened_layers = []
+    for layer_info in layers:
+        quri = QgsDataSourceUri()
+        quri.setParam("layers", layer_info["code"])
+        quri.setParam("styles", "")
+        quri.setParam("format", "image/png")
+        quri.setParam("url", wms_link["href"])
+        quri.setAuthConfigId(get_authcfg_id())
+        layer = QgsRasterLayer(
+            bytes(quri.encodedUri()).decode(),
+            f"{layer_info['name']} ({layer_info['label']})",
+            "wms",
+        )
+        if layer.isValid():
+            add_layer_to_group(layer, group)
+            opened_layers.append(layer)
+    return opened_layers
+
+
 def open_rana_vector_layer(
     local_file_path: str,
     layer_name: str,

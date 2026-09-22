@@ -16,7 +16,10 @@ from rana_qgis_plugin.data_items.gui_provider import (
     merge_multi_select_actions,
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.utils.data_models import OpenScenarioRequest
+from rana_qgis_plugin.utils.data_models import (
+    OpenScenarioRequest,
+    OpenScenarioWmsRequest,
+)
 
 
 def fake(cls):
@@ -124,6 +127,29 @@ def test_open_selected_items_includes_scenarios_in_batch():
     )
 
 
+def test_open_selected_wms_dispatches_scenario_requests():
+    loader = MagicMock()
+    project = {"id": "project", "name": "Project"}
+    scenario_files = [
+        {"id": "scenario-1", "descriptor_id": "descriptor-1"},
+        {"id": "scenario-2", "descriptor_id": "descriptor-2"},
+    ]
+    items = []
+    for file_item in scenario_files:
+        item = Mock(spec=RanaFileDataItem)
+        item.data_type = "scenario"
+        item.project = project
+        item.file_item = file_item
+        item.loader = loader
+        items.append(item)
+
+    RanaDataItemGuiProvider.open_selected_wms(items)
+
+    loader.open_scenario_wms_batch.assert_called_once_with(
+        [OpenScenarioWmsRequest(project, file_item) for file_item in scenario_files]
+    )
+
+
 def test_multi_select_menu_keeps_open_in_qgis_for_scenarios(qgis_application):
     menu = QMenu()
     first = Mock(spec=RanaFileDataItem)
@@ -138,3 +164,17 @@ def test_multi_select_menu_keeps_open_in_qgis_for_scenarios(qgis_application):
     assert [action.text() for action in menu.actions()] == [
         FileAction.OPEN_IN_QGIS.value
     ]
+
+
+def test_multi_select_menu_keeps_open_wms_for_scenarios(qgis_application):
+    menu = QMenu()
+    first = Mock(spec=RanaFileDataItem)
+    second = Mock(spec=RanaFileDataItem)
+    for item in (first, second):
+        item.data_type = "scenario"
+        item.actions.return_value = [QAction(FileAction.OPEN_WMS.value)]
+
+    provider = RanaDataItemGuiProvider()
+    provider.populateContextMenu(first, menu, [first, second], MagicMock())
+
+    assert [action.text() for action in menu.actions()] == [FileAction.OPEN_WMS.value]
