@@ -26,6 +26,7 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenScenarioRequest,
+    OpenScenarioWmsRequest,
     OpenSchematisationRequest,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name, get_rana_file_url
@@ -162,6 +163,12 @@ class RanaFileDataItem(QgsDataItem):
                 )
             elif action is FileAction.OPEN_IN_QGIS:
                 q_action.triggered.connect(lambda: self.handleDoubleClick())
+            elif action is FileAction.OPEN_WMS:
+                q_action.triggered.connect(
+                    lambda: self.loader.open_scenario_wms(
+                        OpenScenarioWmsRequest(self.project, self.file_item)
+                    )
+                )
             actions.append(q_action)
         return actions
 

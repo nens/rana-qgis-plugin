@@ -3,17 +3,67 @@ from unittest.mock import MagicMock, patch
 
 from qgis.PyQt.QtWidgets import QDialog
 
+from rana_qgis_plugin.utils.api import RanaFetchError
+from rana_qgis_plugin.utils.data_models import OpenScenarioWmsRequest
 from rana_qgis_plugin.workers.download import (
     RanaRawResultsDownloader,
     RanaResultDownloader,
 )
 
-from .helpers import (
-    linked_descriptor,
-    make_loader,
-    scenario_descriptor,
-    scenario_request,
-)
+from .helpers import make_loader, scenario_request
+
+
+def test_open_scenario_wms_opens_descriptor_layers_in_wms_group():
+    loader, communication = make_loader()
+    request = scenario_wms_request()
+    descriptor = {
+        "links": [{"rel": "wms", "href": "https://example.test/wms"}],
+        "meta": {"layers": [{"code": "depth"}]},
+    }
+
+    with (
+        patch(
+            "rana_qgis_plugin.loader.get_tenant_file_descriptor",
+            return_value=descriptor,
+        ),
+        patch(
+            "rana_qgis_plugin.loader.open_rana_wms", return_value=[MagicMock()]
+        ) as open_wms,
+    ):
+        loader.open_scenario_wms(request)
+
+    open_wms.assert_called_once_with(
+        descriptor,
+        descriptor["meta"]["layers"],
+        ["Project", "files", "path", "to", "scenario", "wms"],
+        "project",
+    )
+    communication.bar_error.assert_not_called()
+
+
+def test_open_scenario_wms_batch_continues_after_failure():
+    loader, communication = make_loader()
+    requests = [scenario_wms_request(), scenario_wms_request()]
+
+    with patch.object(
+        loader, "_open_scenario_wms", side_effect=[False, True]
+    ) as open_wms:
+        loader.open_scenario_wms_batch(requests)
+
+    assert open_wms.call_count == 2
+    communication.bar_info.assert_called_once_with("Opened WMS for 1 of 2 scenario(s).")
+
+
+def test_open_scenario_wms_reports_missing_descriptor():
+    loader, communication = make_loader()
+    request = scenario_wms_request().__class__(
+        project={"id": "project", "name": "Project"},
+        file_item={"id": "scenario", "data_type": "scenario"},
+    )
+
+    loader.open_scenario_wms(request)
+
+    communication.bar_error.assert_called_once_with("Scenario descriptor is missing.")
 
 
 def test_open_scenario_results_downloads_raw_results_without_3di_link():
@@ -337,3 +387,39 @@ def test_scenario_download_falls_back_for_old_results_analysis_signature(tmp_pat
 
     assert results_analysis.load_result.call_count == 2
     communication.bar_warn.assert_called_once()
+
+
+def scenario_wms_request() -> OpenScenarioWmsRequest:
+    return OpenScenarioWmsRequest(
+        project={"id": "project", "name": "Project", "slug": "project"},
+        file_item={
+            "id": "path/to/scenario",
+            "descriptor_id": "descriptor",
+            "data_type": "scenario",
+        },
+    )
+
+
+def scenario_descriptor(simulation: dict, scenario_id: int | None = 1) -> dict:
+    return {
+        "data_type": "scenario",
+        "status": {"id": "completed"},
+        "meta": {
+            "id": scenario_id,
+            "simulation": simulation,
+            "grid": {
+                "x": {"cell_size": 10},
+                "crs": "EPSG:4326",
+            },
+        },
+    }
+
+
+def linked_descriptor() -> dict:
+    descriptor = scenario_descriptor({"id": 42, "name": "Simulation"})
+    descriptor["meta"]["schematisation"] = {
+        "id": 7,
+        "name": "Schematisation",
+        "version": 3,
+    }
+    return descriptor
