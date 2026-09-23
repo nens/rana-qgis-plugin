@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.20 (unreleased)
+1.2.20 (2026-09-23)
 -------------------
 
 - Gridadmins no longer downloaded to revision folder when schematisation replaces wip version. (nens/rana#4926)
