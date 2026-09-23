@@ -6,6 +6,7 @@ History
 -------------------
 
 - Gridadmins no longer downloaded to revision folder when schematisation replaces wip version. (nens/rana#4926)
+- In case the file descriptor contains tables, all tables from the geopackage are loaded (nens/rana#4925)
 
 
 1.2.19 (2026-08-11)

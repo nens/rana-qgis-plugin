@@ -5,8 +5,10 @@ from qgis.core import (
     QgsDataSourceUri,
     QgsMapLayer,
     QgsProject,
+    QgsProviderRegistry,
     QgsRasterLayer,
     QgsVectorLayer,
+    QgsWkbTypes,
 )
 from qgis.PyQt.QtCore import (
     QObject,
@@ -81,6 +83,8 @@ class LayerManager(QObject):
             self._add_layers_from_vector_file(
                 file_layer["name"], local_file_path, file, parents=parents
             )
+        if descriptor["meta"].get("tables"):
+            self._load_all_tables_file(local_file_path, file, parents=parents)
         self.communication.bar_info(
             f"Added layers from {file_name}"
             + (f" to group {'/'.join(parents)}." if parents else ".")
@@ -111,6 +115,34 @@ class LayerManager(QObject):
             self.communication.show_error(
                 f"Failed to add {layer_name} layer from: {Path(file['id']).name}"
             )
+
+    def _load_all_tables_file(
+        self,
+        local_file_path: str,
+        file: dict,
+        parents: Optional[list[str]] = None,
+    ):
+        """Add every non-spatial (geometryless) table of a vector file to the project."""
+        sublayers = QgsProviderRegistry.instance().querySublayers(local_file_path)
+        for sublayer in sublayers:
+            if sublayer.wkbType() != QgsWkbTypes.NoGeometry:
+                continue
+            table_name = sublayer.name()
+            layer = self._create_and_add_layer(
+                QgsVectorLayer,
+                layer_args=[
+                    sublayer.uri(),
+                    table_name,
+                    sublayer.providerKey(),
+                ],
+                parents=parents,
+            )
+            if layer:
+                self._unlock_layer(layer)
+            else:
+                self.communication.show_error(
+                    f"Failed to add {table_name} table from: {Path(file['id']).name}"
+                )
 
     def _add_layer_from_scenario(self, local_file_path: str, file: dict, project: str):
         # if zip file, do nothing, else try to load in results analysis
