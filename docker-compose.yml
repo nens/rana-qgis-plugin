@@ -2,7 +2,6 @@ services:
   qgis:
     build: .
     ports:
-      - "7070:7070"
       - "5900:5900" # x11vnc
     tmpfs:
       - /tmp

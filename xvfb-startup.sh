@@ -1,6 +1,6 @@
 #!/bin/bash
 # Set up virtual screen
-Xvfb :99 -ac -screen 0 "$XVFB_RES" -nolisten tcp $XVFB_ARGS &
+Xvfb :99 -ac -screen 0 "1920x1080x24" -nolisten tcp &
 XVFB_PROC=$!
 export DISPLAY=:99
 sleep 1
@@ -12,6 +12,7 @@ fluxbox &
 x11vnc -display :99 -nopw -forever -shared &
 X11VNC_PROC=$!
 
+# Start recording of video
 ffmpeg -loglevel error -y -f x11grab -video_size 1920x1080 -framerate 15 -i :99 -c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart output.mp4 &
 FFMPEG_PROC=$!
 

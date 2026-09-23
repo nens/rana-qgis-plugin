@@ -31,11 +31,12 @@ def make_modal_handler(qtbot, modal_type, action, timeout=30000, poll_interval=5
 
         QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, dismiss))
     """
-    deadline = [None]
+    deadline = None
 
     def handler():
-        if deadline[0] is None:
-            deadline[0] = time.monotonic() + timeout / 1000.0
+        nonlocal deadline
+        if deadline is None:
+            deadline = time.monotonic() + timeout / 1000.0
 
         modal = QApplication.activeModalWidget() or QApplication.activeWindow()
         if isinstance(modal, modal_type):
@@ -44,7 +45,7 @@ def make_modal_handler(qtbot, modal_type, action, timeout=30000, poll_interval=5
             action(qtbot, modal)
             return
 
-        if time.monotonic() < deadline[0]:
+        if time.monotonic() < deadline:
             QTimer.singleShot(poll_interval, handler)
 
     return handler
@@ -53,7 +54,8 @@ def make_modal_handler(qtbot, modal_type, action, timeout=30000, poll_interval=5
 def click_tree_item(tree: QTreeView, index, qtbot):
     """Click on a specific position in a QTreeView item, ensuring it is visible and focused."""
     # Ensure item is visible
-    qtbot.waitExposed(tree)
+    with qtbot.waitExposed(tree):
+        tree.show()
     tree.setFocus()
     tree.scrollTo(index)
 

@@ -103,7 +103,7 @@ def rana_project(plugin, login):
     delete_project(result["id"])
 
 
-def test_smoke(plugin, qtbot, request):
+def test_smoke(plugin, request):
     plugin.iface.mainWindow().setWindowTitle(request.node.nodeid)
 
     assert not plugin.dock_widget
