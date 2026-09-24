@@ -1,8 +1,12 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from qgis.PyQt.QtWidgets import QDialog
 
+from rana_qgis_plugin.layer_management.layer_manager import (
+    open_scenario_results_in_results_analysis,
+)
 from rana_qgis_plugin.utils.api import RanaFetchError
 from rana_qgis_plugin.utils.data_models import OpenScenarioWmsRequest
 from rana_qgis_plugin.workers.download import (
@@ -288,8 +292,8 @@ def test_failed_scenario_download_does_not_open_results_analysis():
             return_value=task_manager,
         ),
         patch("rana_qgis_plugin.loader.DownloadTask", return_value=task),
-        patch.object(
-            loader, "load_scenario_results_in_results_analysis"
+        patch(
+            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis"
         ) as open_results,
     ):
         loader.submit_scenario_result_download(request, [MagicMock()])
@@ -308,19 +312,23 @@ def test_scenario_download_completion_opens_results_analysis_once(tmp_path):
     (tmp_path / "gridadmin.h5").touch()
     results_analysis = MagicMock()
     results_analysis.dockwidget.isVisible.return_value = True
+    file_item = {"id": "folder/result.zip"}
 
     with patch(
-        "rana_qgis_plugin.loader.get_threedi_results_analysis_tool_instance",
+        "rana_qgis_plugin.layer_management.layer_manager.get_threedi_results_analysis_tool_instance",
         return_value=results_analysis,
     ):
-        loader.load_scenario_results_in_results_analysis(
-            str(tmp_path), {"name": "Project"}
+        open_scenario_results_in_results_analysis(
+            str(tmp_path),
+            {"name": "Project"},
+            file_item,
+            loader.communication,
         )
 
     results_analysis.load_result.assert_called_once_with(
         Path(tmp_path) / "results_3di.nc",
         Path(tmp_path) / "gridadmin.h5",
-        project="Project",
+        group_path=["Project", "files", "folder", "result.zip"],
     )
 
 
@@ -338,15 +346,20 @@ def test_scenario_download_task_completion_opens_results_analysis(tmp_path):
             return_value=task_manager,
         ),
         patch("rana_qgis_plugin.loader.DownloadTask", return_value=task),
-        patch.object(
-            loader, "load_scenario_results_in_results_analysis"
+        patch(
+            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis"
         ) as open_results,
     ):
         loader.submit_scenario_result_download(request, [downloader])
         assert task.taskCompleted.connect.call_count == 2
         completion_callback = task.taskCompleted.connect.call_args_list[0].args[0]
         completion_callback()
-        open_results.assert_called_once_with(str(tmp_path), request.project)
+        open_results.assert_called_once_with(
+            str(tmp_path),
+            request.project,
+            request.file_item,
+            loader.communication,
+        )
         task_manager.addTask.assert_called_once_with(task)
 
 
@@ -356,11 +369,14 @@ def test_scenario_download_warns_when_results_analysis_is_missing(tmp_path):
     (tmp_path / "gridadmin.h5").touch()
 
     with patch(
-        "rana_qgis_plugin.loader.get_threedi_results_analysis_tool_instance",
+        "rana_qgis_plugin.layer_management.layer_manager.get_threedi_results_analysis_tool_instance",
         return_value=None,
     ):
-        loader.load_scenario_results_in_results_analysis(
-            str(tmp_path), {"name": "Project"}
+        open_scenario_results_in_results_analysis(
+            str(tmp_path),
+            {"name": "Project"},
+            {"id": "path/to/scenario"},
+            communication,
         )
 
     communication.bar_warn.assert_called_once()
@@ -373,20 +389,90 @@ def test_scenario_download_falls_back_for_old_results_analysis_signature(tmp_pat
     results_analysis = MagicMock()
     results_analysis.dockwidget.isVisible.return_value = True
     results_analysis.load_result.side_effect = [
+        TypeError("unexpected keyword argument 'group_path'"),
+        None,
+    ]
+
+    with patch(
+        "rana_qgis_plugin.layer_management.layer_manager.get_threedi_results_analysis_tool_instance",
+        return_value=results_analysis,
+    ):
+        open_scenario_results_in_results_analysis(
+            str(tmp_path),
+            {"name": "Project"},
+            {"id": "path/to/scenario"},
+            communication,
+        )
+
+    assert results_analysis.load_result.call_count == 2
+    communication.bar_warn.assert_not_called()
+
+
+def test_scenario_results_falls_back_to_two_argument_signature(tmp_path):
+    loader, communication = make_loader()
+    (tmp_path / "results_3di.nc").touch()
+    (tmp_path / "gridadmin.h5").touch()
+    results_analysis = MagicMock()
+    results_analysis.dockwidget.isVisible.return_value = True
+    results_analysis.load_result.side_effect = [
+        TypeError("unexpected keyword argument 'group_path'"),
         TypeError("unexpected keyword argument 'project'"),
         None,
     ]
 
     with patch(
-        "rana_qgis_plugin.loader.get_threedi_results_analysis_tool_instance",
+        "rana_qgis_plugin.layer_management.layer_manager.get_threedi_results_analysis_tool_instance",
         return_value=results_analysis,
     ):
-        loader.load_scenario_results_in_results_analysis(
-            str(tmp_path), {"name": "Project"}
+        open_scenario_results_in_results_analysis(
+            str(tmp_path),
+            {"name": "Project"},
+            {"id": "path/to/scenario"},
+            communication,
         )
 
-    assert results_analysis.load_result.call_count == 2
+    assert results_analysis.load_result.call_count == 3
     communication.bar_warn.assert_called_once()
+
+
+def test_scenario_results_reraises_unrelated_type_error(tmp_path):
+    loader, _ = make_loader()
+    (tmp_path / "results_3di.nc").touch()
+    (tmp_path / "gridadmin.h5").touch()
+    results_analysis = MagicMock()
+    results_analysis.load_result.side_effect = TypeError("invalid result data")
+
+    with (
+        patch(
+            "rana_qgis_plugin.layer_management.layer_manager.get_threedi_results_analysis_tool_instance",
+            return_value=results_analysis,
+        ),
+        pytest.raises(TypeError, match="invalid result data"),
+    ):
+        open_scenario_results_in_results_analysis(
+            str(tmp_path),
+            {"name": "Project"},
+            {"id": "path/to/scenario"},
+            loader.communication,
+        )
+
+
+def test_scenario_results_skips_missing_files(tmp_path):
+    loader, _ = make_loader()
+    results_analysis = MagicMock()
+
+    with patch(
+        "rana_qgis_plugin.layer_management.layer_manager.get_threedi_results_analysis_tool_instance",
+        return_value=results_analysis,
+    ):
+        open_scenario_results_in_results_analysis(
+            str(tmp_path),
+            {"name": "Project"},
+            {"id": "path/to/scenario"},
+            loader.communication,
+        )
+
+    results_analysis.load_result.assert_not_called()
 
 
 def scenario_wms_request() -> OpenScenarioWmsRequest:

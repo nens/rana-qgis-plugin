@@ -26,6 +26,7 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     open_rana_vector_layer,
     open_rana_vector_layers,
     open_rana_wms,
+    open_scenario_results_in_results_analysis,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
@@ -1375,8 +1376,11 @@ class Loader(QObject):
         )
         task.file_failed.connect(self.handle_download_file_failed)
         task.taskCompleted.connect(
-            lambda: self.load_scenario_results_in_results_analysis(
-                target_dir, request.project
+            lambda: open_scenario_results_in_results_analysis(
+                target_dir,
+                request.project,
+                request.file_item,
+                self.communication,
             )
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
@@ -1400,34 +1404,6 @@ class Loader(QObject):
             )
         else:
             self.communication.bar_error("Scenario results download failed.")
-
-    def load_scenario_results_in_results_analysis(
-        self, local_dir: str, project: dict
-    ) -> None:
-        result_path = Path(local_dir) / "results_3di.nc"
-        admin_path = Path(local_dir) / "gridadmin.h5"
-        if not result_path.exists() or not admin_path.exists():
-            return
-        ra_tool = get_threedi_results_analysis_tool_instance()
-        if ra_tool is None or not hasattr(ra_tool, "load_result"):
-            self.communication.bar_warn(
-                "Cannot add results as layer without Rana Results Analysis plugin."
-            )
-            return
-        try:
-            ra_tool.load_result(
-                result_path, admin_path, project=project.get("name", "")
-            )
-        except TypeError as error:
-            if "project" not in str(error):
-                raise
-            self.communication.bar_warn(
-                "Rana Results Analysis is not up to date; results will not be "
-                "organized by project. Please update the plugin."
-            )
-            ra_tool.load_result(result_path, admin_path)
-        if not ra_tool.dockwidget.isVisible():
-            ra_tool.toggle_results_manager.run()
 
     def resolve_schematisation(self, request: OpenSchematisationRequest) -> None:
         """Fetch metadata and resolve the local download directory for a schematisation.
