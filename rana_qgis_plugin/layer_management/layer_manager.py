@@ -608,10 +608,53 @@ def open_rana_schematisation(
     if wip_revision is not None:
         settings = QSettings("3di", "qgisplugin")
         settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
+
     wip_revision = local_schematisation.wip_revision
     if wip_revision is not None:
         settings = QSettings("3di", "qgisplugin")
         settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
+
+
+def open_scenario_results_in_results_analysis(
+    local_dir: str, project: dict, file_item: dict, communication
+) -> None:
+    result_path = Path(local_dir) / "results_3di.nc"
+    admin_path = Path(local_dir) / "gridadmin.h5"
+    if not result_path.exists() or not admin_path.exists():
+        return
+
+    ra_tool = get_threedi_results_analysis_tool_instance()
+    if ra_tool is None or not hasattr(ra_tool, "load_result"):
+        communication.bar_warn(
+            "Cannot add results as layer without Rana Results Analysis plugin."
+        )
+        return
+
+    group_path = [project.get("name", ""), "files"] + file_item["id"].split("/")
+    try:
+        ra_tool.load_result(
+            result_path,
+            admin_path,
+            group_path=group_path,
+        )
+    except TypeError as error:
+        if "group_path" not in str(error):
+            raise
+        try:
+            ra_tool.load_result(
+                result_path, admin_path, project=project.get("name", "")
+            )
+        except TypeError as error:
+            if "project" not in str(error):
+                raise
+            communication.bar_warn(
+                "Rana Results Analysis is not up to date; results will not be "
+                "organized by project. Please update the plugin."
+            )
+            ra_tool.load_result(result_path, admin_path)
+
+    if not ra_tool.dockwidget.isVisible():
+        ra_tool.toggle_results_manager.run()
 
 
 def get_vector_layer_names(local_file_path: str) -> list[str]:
