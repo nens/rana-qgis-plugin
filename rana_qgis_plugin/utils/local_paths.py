@@ -13,6 +13,20 @@ from threedi_mi_utils import (
 
 from rana_qgis_plugin.utils.settings import rana_cache_dir
 
+UNC_PREFIX = "\\\\?\\"
+
+
+def extended_length_path(path) -> str:
+    """Prefix a path with \\\\?\\ so paths built from it may exceed the Windows MAX_PATH limit.
+
+    bypass_max_path_limit() only prefixes when the given path itself is too long,
+    which is not enough when longer names get joined onto it later.
+    """
+    path_str = os.path.abspath(str(path))
+    if os.name == "nt" and not path_str.startswith(UNC_PREFIX):
+        path_str = f"{UNC_PREFIX}{path_str}"
+    return path_str
+
 
 def is_writable(working_dir: str) -> bool:
     """Try to write and remove an empty text file into given location."""

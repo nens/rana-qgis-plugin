@@ -24,6 +24,7 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
 )
+from rana_qgis_plugin.utils.local_paths import extended_length_path
 from rana_qgis_plugin.utils.qgis import (
     get_qml_name_for_layer,
     get_threedi_results_analysis_tool_instance,
@@ -148,10 +149,12 @@ class LayerManager(QObject):
         # if zip file, do nothing, else try to load in results analysis
         if local_file_path.endswith(".zip"):
             return
+
         ra_tool = get_threedi_results_analysis_tool_instance()
         # Check whether result and gridadmin exist in the target folder
-        result_path = Path(local_file_path).joinpath("results_3di.nc")
-        admin_path = Path(local_file_path).joinpath("gridadmin.h5")
+        results_dir = Path(extended_length_path(local_file_path))
+        result_path = results_dir.joinpath("results_3di.nc")
+        admin_path = results_dir.joinpath("gridadmin.h5")
         if result_path.exists() and admin_path.exists():
             if hasattr(ra_tool, "load_result"):
                 if self.communication.ask(

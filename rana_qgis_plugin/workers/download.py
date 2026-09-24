@@ -34,6 +34,7 @@ from rana_qgis_plugin.utils.generic import (
     split_scenario_extent,
 )
 from rana_qgis_plugin.utils.local_paths import (
+    extended_length_path,
     get_local_dir_structure,
     get_local_file_path,
     get_local_publication_dir_structure,
@@ -371,17 +372,17 @@ class RanaRawResultsDownloader(RanaDownloader):
     def postprocess(self):
         """Extract zip into local_dir, handle nested log zip, remove zip."""
         zip_path = self.download_context.local_file_path
-        target_dir = self.download_context.local_dir
+        target_dir = extended_length_path(self.download_context.local_dir)
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(str(target_dir))
+            zip_ref.extractall(target_dir)
         zip_path.unlink()
         descriptor = get_tenant_file_descriptor(self.file["descriptor_id"])
         try:
             sim_id = descriptor["meta"]["simulation"]["id"]
-            log_zip_path = target_dir / f"log_files_sim_{sim_id}.zip"
+            log_zip_path = Path(target_dir) / f"log_files_sim_{sim_id}.zip"
             if log_zip_path.is_file():
                 with zipfile.ZipFile(log_zip_path, "r") as log_zip_ref:
-                    log_zip_ref.extractall(str(target_dir))
+                    log_zip_ref.extractall(target_dir)
             else:
                 self._warning_signal.emit(
                     "Subarchive containing log files not present, ignoring."
