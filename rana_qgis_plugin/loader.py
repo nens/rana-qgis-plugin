@@ -48,6 +48,7 @@ from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWork
 from rana_qgis_plugin.utils.api import (
     ConflictError,
     RanaFetchError,
+    RanaPostError,
     copy_threedi_schematisation,
     create_folder,
     delete_tenant_project_directory,
@@ -1531,12 +1532,23 @@ class Loader(QObject):
         dialog = SchematisationBrowser(self.parent(), self.communication)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_schematisation = dialog.selected_schematisation
-            assert selected_schematisation
-            copy_threedi_schematisation(
-                project["id"],
-                selected_schematisation["id"],
-                selected_file["id"] + selected_schematisation["name"],
-            )
+            selected_revision = dialog.selected_revision
+            if not selected_schematisation or not selected_revision:
+                message = "No schematisation revision was selected for import."
+                self.communication.log_err(message)
+                self.communication.show_error(message)
+            else:
+                try:
+                    copy_threedi_schematisation(
+                        project_id=project["id"],
+                        schematisation_id=selected_schematisation["id"],
+                        revision_id=selected_revision.id,
+                        path=selected_file["id"]
+                        + selected_schematisation["name"]
+                        + f"_#{selected_revision.number}",
+                    )
+                except RanaPostError as error:
+                    self.communication.show_error(str(error))
         self.schematisation_import_finished.emit()
 
     def _get_threedi_api_and_organisations(self):

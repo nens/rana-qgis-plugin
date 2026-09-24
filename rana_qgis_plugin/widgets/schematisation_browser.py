@@ -1,24 +1,20 @@
-from functools import partial
-
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QDoubleValidator, QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
-    QDialogButtonBox,
-    QFormLayout,
     QGridLayout,
-    QGroupBox,
+    QLabel,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
 )
 
+from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
     get_schematisations,
 )
+from rana_qgis_plugin.utils.generic import get_threedi_api
 from rana_qgis_plugin.utils.time import format_activity_timestamp_str
 from rana_qgis_plugin.widgets.utils_search import DebouncedSearchBox
 
@@ -29,9 +25,11 @@ class SchematisationBrowser(QDialog):
         self.setWindowTitle("Import schematisation to project")
         self.setMinimumWidth(600)
         self.communication = communication
+        self.revisions = []
         layout = QGridLayout(self)
         self.setLayout(layout)
         self.selected_schematisation = None
+        self.selected_revision = None
 
         self.search_le = DebouncedSearchBox(
             parent=self,
@@ -56,39 +54,108 @@ class SchematisationBrowser(QDialog):
         self.table.setHorizontalHeaderLabels(["Name", "Updated", "Created by"])
         layout.addWidget(self.table, 1, 0, 1, 3)
 
+        layout.addWidget(QLabel("Available revisions"), 2, 0, 1, 3)
+        self.revisions_table = QTableWidget(self)
+        self.revisions_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.revisions_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.revisions_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.revisions_table.setColumnCount(4)
+        self.revisions_table.verticalHeader().setVisible(False)
+        self.revisions_table.horizontalHeader().setStretchLastSection(True)
+        self.revisions_table.setHorizontalHeaderLabels(
+            ["#", "Commit date", "Committed by", "Commit message"]
+        )
+        layout.addWidget(self.revisions_table, 3, 0, 1, 3)
+
         cancel_button = QPushButton("Cancel", self)
-        layout.addWidget(cancel_button, 2, 0, 1, 1)
+        layout.addWidget(cancel_button, 4, 0, 1, 1)
         cancel_button.clicked.connect(self.reject)
         cancel_button.setMaximumWidth(100)
 
         spacer = QSpacerItem(60, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        layout.addItem(spacer, 2, 1)
+        layout.addItem(spacer, 4, 1)
 
         self.ok_button = QPushButton("Ok", self)
         self.ok_button.setEnabled(False)
         self.ok_button.setMaximumWidth(100)
         self.ok_button.clicked.connect(self.ok_pressed)
-        layout.addWidget(self.ok_button, 2, 2, 1, 1)
+        layout.addWidget(self.ok_button, 4, 2, 1, 1)
 
-        self.table.itemSelectionChanged.connect(
-            partial(self.ok_button.setEnabled, True)
-        )
+        self.table.itemSelectionChanged.connect(self.schematisation_selected)
 
         self.populate_table()
 
     def ok_pressed(self):
-        self.selected_schematisation = self.table.item(self.table.currentRow(), 0).data(
+        schematisation_item = self.table.item(self.table.currentRow(), 0)
+        revision_item = self.revisions_table.item(self.revisions_table.currentRow(), 0)
+        if not schematisation_item or not revision_item:
+            return
+        self.selected_schematisation = schematisation_item.data(
             Qt.ItemDataRole.UserRole
         )
+        self.selected_revision = revision_item.data(Qt.ItemDataRole.UserRole)
         self.communication.log_warn("self.selected_schematisation")
         self.communication.log_warn(str(self.selected_schematisation))
         self.accept()
+
+    def schematisation_selected(self):
+        """Load revisions for the selected HCC schematisation."""
+        self.ok_button.setEnabled(False)
+        self.revisions = []
+        self.revisions_table.setRowCount(0)
+        item = self.table.item(self.table.currentRow(), 0)
+        if not item:
+            return
+        schematisation = item.data(Qt.ItemDataRole.UserRole)
+        revisions = ThreediCalls(get_threedi_api()).fetch_schematisation_revisions(
+            schematisation["id"]
+        )
+        self.revisions = sorted(
+            revisions, key=lambda revision: revision.number, reverse=True
+        )
+        self.populate_revisions_table()
+        self.ok_button.setEnabled(bool(self.revisions))
+
+    def populate_revisions_table(self):
+        """Populate the table with revisions retrieved from HCC."""
+        self.revisions_table.setRowCount(0)
+        for row, revision in enumerate(self.revisions):
+            self.revisions_table.insertRow(row)
+            items = [
+                QTableWidgetItem(str(revision.number)),
+                QTableWidgetItem(
+                    revision.commit_date.strftime("%d-%m-%Y")
+                    if revision.commit_date
+                    else ""
+                ),
+                QTableWidgetItem(self.revision_committer(revision)),
+                QTableWidgetItem(revision.commit_message or ""),
+            ]
+            items[0].setData(Qt.ItemDataRole.UserRole, revision)
+            for column, item in enumerate(items):
+                self.revisions_table.setItem(row, column, item)
+        if self.revisions:
+            self.revisions_table.selectRow(0)
+        for column in range(4):
+            self.revisions_table.resizeColumnToContents(column)
+
+    @staticmethod
+    def revision_committer(revision):
+        """Return the most descriptive available revision committer value."""
+        first_name = getattr(revision, "commit_first_name", "") or ""
+        last_name = getattr(revision, "commit_last_name", "") or ""
+        name = " ".join(part for part in (first_name, last_name) if part)
+        if name:
+            return name
+        return getattr(revision, "commit_user", "") or ""
 
     def populate_table(self):
         self.table.clear()
         self.table.setHorizontalHeaderLabels(["Name", "Updated", "Created by"])
         self.table.setRowCount(0)
         self.ok_button.setEnabled(False)
+        self.revisions = []
+        self.revisions_table.setRowCount(0)
         search_value = self.search_le.text()
         schematisations = get_schematisations(self.communication, search_value)
         for i, schematisation in enumerate(schematisations):
