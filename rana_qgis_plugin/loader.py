@@ -138,12 +138,68 @@ class Loader(QObject):
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
         self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
+        self.scenario_action_busy = False
+        self.scenario_action_pending = 0
+        self.results_analysis_queue: list[tuple[str, dict, dict]] = []
+        self.results_analysis_loading = False
 
     def shutdown(self) -> None:
         """Cancel pending work and drain the pool. Call on plugin unload."""
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def begin_scenario_action(self, count: int) -> bool:
+        if self.scenario_action_busy:
+            if count == 1:
+                msg = "A scenario result download is already in progress. Please wait for it to finish before opening another."
+                self.communication.show_warn(msg)
+            else:
+                msg = "A scenario download is still in process, no new scenario downloads will be added to the queue"
+                self.communication.bar_warn(msg)
+            return False
+        self.scenario_action_busy = True
+        self.scenario_action_pending = count
+        return True
+
+    def release_scenario_action(self, count: int = 1) -> None:
+        self.scenario_action_pending = max(0, self.scenario_action_pending - count)
+        if self.scenario_action_pending == 0:
+            self.scenario_action_busy = False
+            self.communication.clear_message_bar()
+
+    def enqueue_results_analysis_open(
+        self, target_dir: str, project: dict, file_item: dict
+    ) -> None:
+        self.results_analysis_queue.append((target_dir, project, file_item))
+        self.process_results_analysis_queue()
+
+    def process_results_analysis_queue(self) -> None:
+        if self.results_analysis_loading:
+            return
+        self.results_analysis_loading = True
+        try:
+            while self.results_analysis_queue:
+                target_dir, project, file_item = self.results_analysis_queue.pop(0)
+                self.set_progress_bar_busy(
+                    f"Opening {PurePosixPath(file_item['id']).name} in "
+                    "Rana Results Analysis…"
+                )
+                try:
+                    open_scenario_results_in_results_analysis(
+                        target_dir,
+                        project,
+                        file_item,
+                        self.communication,
+                    )
+                except Exception as error:
+                    self.communication.bar_error(
+                        f"Could not open scenario results: {error}"
+                    )
+                finally:
+                    self.release_scenario_action()
+        finally:
+            self.results_analysis_loading = False
 
     def save_revision(
         self,
@@ -935,11 +991,24 @@ class Loader(QObject):
             if answer != QMessageBox.StandardButton.Yes:
                 return None
 
+        scenario_requests = [
+            request for request in resolved if isinstance(request, OpenScenarioRequest)
+        ]
+        skip_scenario_requests = False
+        # If there are any scenario requests; try to begin a scenario action (only possible when there is no other scenario action in progress).
+        # If the user cancels, clear the scenario requests so they are not processed.
+        if scenario_requests:
+            skip_scenario_requests = not self.begin_scenario_action(
+                len(scenario_requests)
+            )
+
         # Phase 2: dispatch by type
         for request in resolved:
             if isinstance(request, OpenSchematisationRequest):
                 self.resolve_schematisation(request)
-            elif isinstance(request, OpenScenarioRequest):
+            elif (
+                isinstance(request, OpenScenarioRequest) and not skip_scenario_requests
+            ):
                 self.open_scenario_results_batch(request)
             elif isinstance(request, OpenFileRequest):
                 self.download_and_open_file(request)
@@ -1036,6 +1105,8 @@ class Loader(QObject):
 
     def open_scenario_results(self, request: OpenScenarioRequest) -> None:
         """Open one scenario with interactive result selection."""
+        if not self.begin_scenario_action(1):
+            return
         self.resolve_scenario_results(request, self.start_scenario_result_download)
 
     def open_scenario_wms(self, request: OpenScenarioWmsRequest) -> None:
@@ -1103,6 +1174,7 @@ class Loader(QObject):
         descriptor_id = file_item.get("descriptor_id")
         if not descriptor_id:
             self.communication.bar_error("Scenario descriptor is missing.")
+            self.release_scenario_action()
             return
 
         try:
@@ -1111,9 +1183,11 @@ class Loader(QObject):
             self.communication.bar_error(
                 f"Could not retrieve scenario metadata: {error}"
             )
+            self.release_scenario_action()
             return
         if not descriptor:
             self.communication.bar_error("Could not retrieve scenario metadata.")
+            self.release_scenario_action()
             return
 
         scenario_info = ScenarioInfo(descriptor)
@@ -1121,6 +1195,7 @@ class Loader(QObject):
             self.communication.bar_warn(
                 "Post-processing results cannot be retrieved yet."
             )
+            self.release_scenario_action()
             return
 
         if scenario_info.needs_threedi_resolution:
@@ -1136,6 +1211,7 @@ class Loader(QObject):
             task_manager = QgsApplication.taskManager()
             if task_manager is None:
                 self.communication.bar_error("Could not resolve scenario details.")
+                self.release_scenario_action()
                 return
 
             task = ScenarioResolveTask(scenario_info, threedi_api)
@@ -1171,6 +1247,7 @@ class Loader(QObject):
         else:
             self.communication.log_err("Scenario resolution terminated unexpectedly.")
             self.communication.bar_error("Scenario resolution terminated unexpectedly.")
+        self.release_scenario_action()
 
     def start_scenario_result_download(
         self, request: OpenScenarioRequest, scenario_info: ScenarioInfo
@@ -1183,11 +1260,13 @@ class Loader(QObject):
                 pixel_size=scenario_info.pixel_size,
             )
             if result_browser.exec() != QDialog.DialogCode.Accepted:
+                self.release_scenario_action()
                 return
             result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
             download_raw = result_browser.get_download_raw_result()
             if not result_ids and not download_raw:
                 self.communication.bar_warn("No scenario results selected.")
+                self.release_scenario_action()
                 return
             downloaders = self.build_scenario_result_downloaders(
                 request,
@@ -1221,6 +1300,7 @@ class Loader(QObject):
 
         if not downloaders:
             self.communication.bar_warn("No scenario results selected.")
+            self.release_scenario_action()
             return
         self.submit_scenario_result_download(
             request,
@@ -1236,22 +1316,26 @@ class Loader(QObject):
             self.communication.bar_warn(
                 "Skipping scenario because no 3Di working directory is configured."
             )
+            self.release_scenario_action()
             return
         if not scenario_info.has_3di_simulation:
             self.communication.bar_warn(
                 "Skipping scenario because it is not linked to a 3Di simulation."
             )
+            self.release_scenario_action()
             return
         default_result = get_default_result(scenario_info.lizard_results)
         if default_result is None:
             self.communication.bar_warn(
                 "Skipping scenario because the default result is unavailable."
             )
+            self.release_scenario_action()
             return
         downloaders = self.build_batch_scenario_result_downloaders(
             request, scenario_info, default_result
         )
         if not downloaders:
+            self.release_scenario_action()
             return
         self.submit_scenario_result_download(request, downloaders)
 
@@ -1371,6 +1455,7 @@ class Loader(QObject):
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
             self.communication.bar_error("Could not start scenario download.")
+            self.release_scenario_action()
             return
         target_dir = str(downloaders[0].download_context.local_dir)
         task = DownloadTask(downloaders)
@@ -1387,16 +1472,13 @@ class Loader(QObject):
                     "This is not a Rana simulation result and cannot be "
                     "opened in Rana Results Analysis."
                 )
+                self.release_scenario_action()
                 return
-            open_scenario_results_in_results_analysis(
-                target_dir,
-                request.project,
-                request.file_item,
-                self.communication,
+            self.enqueue_results_analysis_open(
+                target_dir, request.project, request.file_item
             )
 
         task.taskCompleted.connect(handle_download_completed)
-        task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(
             lambda: self.handle_scenario_result_download_terminated(task)
         )
@@ -1417,6 +1499,7 @@ class Loader(QObject):
             )
         else:
             self.communication.bar_error("Scenario results download failed.")
+        self.release_scenario_action()
 
     def resolve_schematisation(self, request: OpenSchematisationRequest) -> None:
         """Fetch metadata and resolve the local download directory for a schematisation.
