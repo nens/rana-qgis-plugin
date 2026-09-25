@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.21 (unreleased)
+1.2.21 (2026-09-25)
 -------------------
 
 - Properly handle long path names on Windows when downloading a scenario. (nens/rana#5008)
