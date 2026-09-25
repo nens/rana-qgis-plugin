@@ -39,6 +39,7 @@ from rana_qgis_plugin.utils.settings import (
     get_use_plugin_excepthook,
     initialize_settings,
     rana_cache_dir,
+    reset_settings,
     set_cleanup_cache_on_close,
     set_tenant_id,
 )
@@ -142,7 +143,8 @@ class RanaQgisPlugin:
     def logout(self):
         self.communication.clear_message_bar()
         # reset browser and stop processes before actual logout
-        self.rana_browser.reset()
+        if self.rana_browser:
+            self.rana_browser.reset()
         if self.dock_widget:
             self.dock_widget.close()
         if self.loader:
@@ -186,7 +188,14 @@ class RanaQgisPlugin:
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.iface.mainWindow())
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            if dialog.authenticationSettingsChanged():
+            if dialog.settingsReset():
+                # Credentials are removed first, they are looked up in the settings
+                self.logout()
+                reset_settings()
+                self.communication.bar_info(
+                    "Settings and authentication have been reset."
+                )
+            elif dialog.authenticationSettingsChanged():
                 self.logout()
                 self.login()
                 if self.rana_browser:

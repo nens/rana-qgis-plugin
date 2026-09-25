@@ -96,16 +96,43 @@ class SettingsDialog(QDialog):
             layout.addWidget(advanced_group)
 
         buttonBox = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+            | QDialogButtonBox.StandardButton.Reset
         )
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
+        buttonBox.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(
+            self.reset
+        )
         layout.addWidget(buttonBox)
 
         self._authenticationSettingsChanged = False
+        self._settingsReset = False
 
     def authenticationSettingsChanged(self):
         return self._authenticationSettingsChanged
+
+    def settingsReset(self):
+        return self._settingsReset
+
+    def reset(self) -> None:
+        answer = QMessageBox.warning(
+            self,
+            "Reset settings",
+            "This will restore all Rana plugin settings to their default values and "
+            "remove the Rana authentication configurations from the QGIS "
+            "authentication manager. You will have to sign in again.\n\n"
+            "Do you want to continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self._settingsReset = True
+        # Bypass self.accept(): the current widget values must not be stored
+        super().accept()
 
     def accept(self) -> None:
         if self.url_lineedit.text() != base_url():

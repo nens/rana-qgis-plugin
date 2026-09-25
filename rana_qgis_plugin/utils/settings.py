@@ -46,6 +46,13 @@ def initialize_settings():
     os.makedirs(settings.value("threedi/working_dir"), exist_ok=True)
 
 
+def reset_settings():
+    settings = QgsSettings()
+    settings.remove(RANA_SETTINGS_ENTRY)
+    settings.remove("threedi/working_dir")
+    initialize_settings()
+
+
 def set_tenant_id(tenant: str):
     QgsSettings().setValue(RANA_TENANT_ENTRY, tenant)
 
