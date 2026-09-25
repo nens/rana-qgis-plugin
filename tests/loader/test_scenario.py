@@ -92,6 +92,34 @@ def test_open_scenario_results_downloads_raw_results_without_3di_link():
     assert downloaders[0].download_context.filename == "results.zip"
 
 
+def test_open_scenario_results_rejects_second_action_while_busy():
+    loader, communication = make_loader()
+    request = scenario_request()
+    loader.begin_scenario_action(1)
+
+    with patch.object(loader, "resolve_scenario_results") as resolve:
+        loader.open_scenario_results(request)
+
+    resolve.assert_not_called()
+    communication.show_warn.assert_called_once_with(
+        "A scenario result download is already in progress. "
+        "Please wait for it to finish before opening another."
+    )
+
+
+def test_resolve_scenario_results_releases_gate_for_missing_descriptor():
+    loader, communication = make_loader()
+    loader.begin_scenario_action(1)
+    request = scenario_request()
+    request.file_item.pop("descriptor_id")
+
+    loader.resolve_scenario_results(request, MagicMock())
+
+    assert loader.scenario_action_busy is False
+    assert loader.scenario_action_pending == 0
+    communication.bar_error.assert_called_once_with("Scenario descriptor is missing.")
+
+
 def test_open_scenario_results_shows_dialog_and_builds_selected_downloaders(
     tmp_path,
 ):
@@ -200,6 +228,30 @@ def test_open_items_dispatches_scenario_requests_in_batch():
     open_batch.assert_called_once_with(request)
 
 
+def test_open_items_does_not_dispatch_scenarios_when_busy():
+    loader, communication = make_loader()
+    request = scenario_request()
+    loader.begin_scenario_action(1)
+
+    with patch.object(loader, "open_scenario_results_batch") as open_batch:
+        loader.open_items([request])
+
+    open_batch.assert_not_called()
+    communication.show_warn.assert_called_once()
+
+
+def test_begin_scenario_action_uses_message_bar_for_batch_warning():
+    loader, communication = make_loader()
+    loader.begin_scenario_action(2)
+
+    assert loader.begin_scenario_action(2) is False
+
+    communication.bar_warn.assert_called_once_with(
+        "A scenario download is still in process, no new scenario downloads "
+        "will be added to the queue"
+    )
+
+
 def test_batch_scenario_uses_raw_and_default_attached_result_without_dialog(
     tmp_path,
 ):
@@ -280,6 +332,7 @@ def test_batch_scenario_skips_when_default_result_is_missing():
 
 def test_failed_scenario_download_does_not_open_results_analysis():
     loader, communication = make_loader()
+    loader.begin_scenario_action(1)
     request = scenario_request()
     task = MagicMock()
     task.isCanceled.return_value = False
@@ -304,6 +357,7 @@ def test_failed_scenario_download_does_not_open_results_analysis():
     communication.bar_error.assert_called_once_with(
         "Scenario results download failed for: results.zip"
     )
+    assert loader.scenario_action_busy is False
 
 
 def test_scenario_download_completion_opens_results_analysis_once(tmp_path):
@@ -332,8 +386,9 @@ def test_scenario_download_completion_opens_results_analysis_once(tmp_path):
     )
 
 
-def test_scenario_download_task_completion_opens_results_analysis(tmp_path):
+def test_scenario_download_task_completion_queues_results_analysis(tmp_path):
     loader, _ = make_loader()
+    loader.begin_scenario_action(1)
     request = scenario_request()
     downloader = MagicMock()
     downloader.download_context.local_dir = tmp_path
@@ -346,21 +401,96 @@ def test_scenario_download_task_completion_opens_results_analysis(tmp_path):
             return_value=task_manager,
         ),
         patch("rana_qgis_plugin.loader.DownloadTask", return_value=task),
-        patch(
-            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis"
-        ) as open_results,
+        patch.object(loader, "enqueue_results_analysis_open") as enqueue,
     ):
         loader.submit_scenario_result_download(request, [downloader])
-        assert task.taskCompleted.connect.call_count == 2
+        assert task.taskCompleted.connect.call_count == 1
         completion_callback = task.taskCompleted.connect.call_args_list[0].args[0]
         completion_callback()
-        open_results.assert_called_once_with(
+        enqueue.assert_called_once_with(
             str(tmp_path),
             request.project,
             request.file_item,
-            loader.communication,
         )
         task_manager.addTask.assert_called_once_with(task)
+
+
+def test_results_analysis_queue_drains_in_order():
+    loader, _ = make_loader()
+    loader.begin_scenario_action(2)
+    opened = []
+
+    with (
+        patch.object(loader, "set_progress_bar_busy"),
+        patch(
+            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis",
+            side_effect=lambda target_dir, project, file_item, communication: (
+                opened.append(file_item["id"])
+            ),
+        ),
+    ):
+        loader.enqueue_results_analysis_open("one", {}, {"id": "one"})
+        loader.enqueue_results_analysis_open("two", {}, {"id": "two"})
+
+    assert opened == ["one", "two"]
+    assert loader.scenario_action_busy is False
+    assert loader.results_analysis_queue == []
+
+
+def test_results_analysis_queue_does_not_reenter():
+    loader, _ = make_loader()
+    loader.begin_scenario_action(2)
+    active = 0
+    max_active = 0
+    enqueued = False
+
+    def open_result(*args):
+        nonlocal active, enqueued, max_active
+        active += 1
+        max_active = max(max_active, active)
+        if not enqueued:
+            enqueued = True
+            loader.enqueue_results_analysis_open("two", {}, {"id": "two"})
+        active -= 1
+
+    with (
+        patch.object(loader, "set_progress_bar_busy"),
+        patch(
+            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis",
+            side_effect=open_result,
+        ),
+    ):
+        loader.enqueue_results_analysis_open("one", {}, {"id": "one"})
+
+    assert max_active == 1
+    assert loader.scenario_action_busy is False
+
+
+def test_results_analysis_queue_continues_after_failure():
+    loader, communication = make_loader()
+    loader.begin_scenario_action(2)
+    opened = []
+
+    def open_result(target_dir, project, file_item, communication):
+        if target_dir == "one":
+            raise RuntimeError("broken")
+        opened.append(target_dir)
+
+    with (
+        patch.object(loader, "set_progress_bar_busy"),
+        patch(
+            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis",
+            side_effect=open_result,
+        ),
+    ):
+        loader.enqueue_results_analysis_open("one", {}, {"id": "one"})
+        loader.enqueue_results_analysis_open("two", {}, {"id": "two"})
+
+    assert opened == ["two"]
+    communication.bar_error.assert_called_once_with(
+        "Could not open scenario results: broken"
+    )
+    assert loader.scenario_action_busy is False
 
 
 def test_raw_scenario_download_completion_reports_not_openable(tmp_path):
