@@ -5,7 +5,7 @@ History
 1.2.22 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Bumped required Dependency Loader plugin.
 
 
 1.2.21 (2026-09-25)
