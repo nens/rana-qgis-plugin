@@ -1222,7 +1222,11 @@ class Loader(QObject):
         if not downloaders:
             self.communication.bar_warn("No scenario results selected.")
             return
-        self.submit_scenario_result_download(request, downloaders)
+        self.submit_scenario_result_download(
+            request,
+            downloaders,
+            can_open_in_results_analysis=scenario_info.has_3di_simulation,
+        )
 
     def start_batch_scenario_result_download(
         self, request: OpenScenarioRequest, scenario_info: ScenarioInfo
@@ -1362,6 +1366,7 @@ class Loader(QObject):
         self,
         request: OpenScenarioRequest,
         downloaders: list[BaseDownloader],
+        can_open_in_results_analysis: bool = True,
     ) -> None:
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
@@ -1375,14 +1380,22 @@ class Loader(QObject):
             )
         )
         task.file_failed.connect(self.handle_download_file_failed)
-        task.taskCompleted.connect(
-            lambda: open_scenario_results_in_results_analysis(
+
+        def handle_download_completed() -> None:
+            if not can_open_in_results_analysis:
+                self.communication.show_info(
+                    "This is not a Rana simulation result and cannot be "
+                    "opened in Rana Results Analysis."
+                )
+                return
+            open_scenario_results_in_results_analysis(
                 target_dir,
                 request.project,
                 request.file_item,
                 self.communication,
             )
-        )
+
+        task.taskCompleted.connect(handle_download_completed)
         task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(
             lambda: self.handle_scenario_result_download_terminated(task)

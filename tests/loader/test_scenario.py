@@ -363,6 +363,38 @@ def test_scenario_download_task_completion_opens_results_analysis(tmp_path):
         task_manager.addTask.assert_called_once_with(task)
 
 
+def test_raw_scenario_download_completion_reports_not_openable(tmp_path):
+    loader, communication = make_loader()
+    request = scenario_request()
+    downloader = MagicMock()
+    downloader.download_context.local_dir = tmp_path
+    task_manager = MagicMock()
+    task = MagicMock()
+
+    with (
+        patch(
+            "rana_qgis_plugin.loader.QgsApplication.taskManager",
+            return_value=task_manager,
+        ),
+        patch("rana_qgis_plugin.loader.DownloadTask", return_value=task),
+        patch(
+            "rana_qgis_plugin.loader.open_scenario_results_in_results_analysis"
+        ) as open_results,
+    ):
+        loader.submit_scenario_result_download(
+            request, [downloader], can_open_in_results_analysis=False
+        )
+
+    completion_callback = task.taskCompleted.connect.call_args_list[0].args[0]
+    completion_callback()
+
+    open_results.assert_not_called()
+    communication.show_info.assert_called_once_with(
+        "This is not a Rana simulation result and cannot be opened "
+        "in Rana Results Analysis."
+    )
+
+
 def test_scenario_download_warns_when_results_analysis_is_missing(tmp_path):
     loader, communication = make_loader()
     (tmp_path / "results_3di.nc").touch()
