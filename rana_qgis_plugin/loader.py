@@ -48,6 +48,7 @@ from rana_qgis_plugin.simulation.workers import SchematisationUploadProgressWork
 from rana_qgis_plugin.utils.api import (
     ConflictError,
     RanaFetchError,
+    RanaPostError,
     copy_threedi_schematisation,
     create_folder,
     delete_tenant_project_directory,
@@ -1531,13 +1532,73 @@ class Loader(QObject):
         dialog = SchematisationBrowser(self.parent(), self.communication)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_schematisation = dialog.selected_schematisation
-            assert selected_schematisation
-            copy_threedi_schematisation(
-                project["id"],
-                selected_schematisation["id"],
-                selected_file["id"] + selected_schematisation["name"],
-            )
+            selected_revision = dialog.selected_revision
+            if not selected_schematisation or not selected_revision:
+                message = "No schematisation revision was selected for import."
+                self.communication.log_err(message)
+                self.communication.show_error(message)
+            else:
+                path = selected_file["id"] + selected_schematisation["name"]
+                file_exists = (
+                    get_tenant_project_file(project["id"], {"path": path}) is not None
+                )
+                if file_exists:
+                    existing_paths = [
+                        item["id"]
+                        for item in get_tenant_project_files(
+                            self.communication,
+                            project["id"],
+                            {"path": selected_file["id"]},
+                        )
+                    ]
+                    path = self.resolve_schematisation_import_path(path, existing_paths)
+                    if path is None:
+                        self.schematisation_import_finished.emit()
+                        return
+                try:
+                    copy_threedi_schematisation(
+                        project_id=project["id"],
+                        schematisation_id=selected_schematisation["id"],
+                        revision_id=selected_revision.id,
+                        path=path,
+                    )
+                except RanaPostError as error:
+                    self.communication.show_error(str(error))
         self.schematisation_import_finished.emit()
+
+    def resolve_schematisation_import_path(self, path, existing_paths):
+        """Resolve a destination collision before importing a schematisation."""
+        # set up candidate path with suffix (1), (2), etc. until a free path is found
+        suffix = 1
+        candidate = f"{path} ({suffix})"
+        while candidate in existing_paths:
+            suffix += 1
+            candidate = f"{path} ({suffix})"
+        candidate_name = Path(candidate).name
+        file_name = Path(path).name
+        dialog = QMessageBox(self.parent())
+        dialog.setIcon(QMessageBox.Icon.Question)
+        dialog.setWindowTitle("Schematisation already exists")
+        dialog.setText(f"The path {file_name} already exists.")
+        no_overwrite = dialog.addButton(
+            "Do not overwrite", QMessageBox.ButtonRole.RejectRole
+        )
+        modified_path = dialog.addButton(
+            f"Upload as {candidate_name}", QMessageBox.ButtonRole.ActionRole
+        )
+        overwrite = dialog.addButton("Overwrite", QMessageBox.ButtonRole.AcceptRole)
+        dialog.setDefaultButton(overwrite)
+        dialog.exec()
+        if dialog.clickedButton() == no_overwrite:
+            self.communication.show_info(
+                f"Import cancelled; existing path was preserved: {file_name}"
+            )
+            return None
+        if dialog.clickedButton() == overwrite:
+            return path
+        if dialog.clickedButton() == modified_path:
+            return candidate
+        return None
 
     def _get_threedi_api_and_organisations(self):
         """Fetch threedi API and available organisations for the current tenant.

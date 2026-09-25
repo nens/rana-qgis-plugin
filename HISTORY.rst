@@ -7,6 +7,7 @@ History
 
 - Properly handle long path names on Windows when downloading a scenario. (nens/rana#5008)
 - Added button to reset authentication and settings (nens/rana#4985)
+- Extend dialog for importing schematisation from HCC with revision picker. (nens/rana#5035)
 
 
 1.2.20 (2026-09-23)
