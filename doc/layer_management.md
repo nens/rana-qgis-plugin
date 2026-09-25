@@ -13,6 +13,7 @@ function for the downloaded resource:
 - `open_rana_vector_layers()` opens all layers in a vector file;
 - `open_rana_vector_layer()` opens one named vector layer; and
 - `open_rana_raster()` opens a raster file.
+- `open_scenario_results_in_results_analysis()` opens a scenario using the Results Analysis plugin. See [`scenario_results.md`](scenario_results.md) for all details.
 
 The functions receive the local file path, Rana reference, and display-path
 segments. They create QGIS layers, add them to the current project, and attach

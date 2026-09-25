@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, cast
 
-from qgis._core import QgsMapLayer
 from qgis.core import (
     QgsDataSourceUri,
     QgsLayerTreeGroup,
@@ -26,7 +25,6 @@ from rana_qgis_plugin.simulation.utils import (
 from rana_qgis_plugin.utils.api import (
     get_tenant_file_descriptor,
 )
-from rana_qgis_plugin.utils.log import plugin_log_info
 from rana_qgis_plugin.utils.qgis import (
     get_qml_name_for_layer,
     get_threedi_results_analysis_tool_instance,
@@ -36,7 +34,6 @@ if TYPE_CHECKING:
     from threedi_mi_utils import LocalSchematisation
 
     from rana_qgis_plugin.communication import UICommunication
-from rana_qgis_plugin.utils.scenario import get_is_3di_simulation
 
 
 class LayerManager(QObject):
@@ -263,35 +260,6 @@ class LayerManager(QObject):
             )
 
 
-class FileLayerManager(LayerManager):
-    def add_from_wms(self, project_name, file: dict):
-        descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-        parents = [project_name] + file["id"].split("/")
-        if descriptor is not None and isinstance(descriptor.get("meta"), dict):
-            super()._add_from_wms(
-                file, descriptor["meta"].get("layers", []), parents=parents
-            )
-
-    def add_from_file(self, project_name, local_file_path: str, file: dict):
-        self.communication.clear_message_bar()
-        parents = [project_name] + file["id"].split("/")[:-1]
-        # Save the last modified date of the downloaded file in QSettings
-        last_modified_key = f"{project_name}/{file['id']}/last_modified"
-        QSettings().setValue(last_modified_key, file["last_modified"])
-        if file.get("data_type") == "scenario":
-            descriptor = get_tenant_file_descriptor(file["descriptor_id"])
-            if descriptor is not None and get_is_3di_simulation(descriptor):
-                self._add_layer_from_scenario(
-                    local_file_path, file, project=project_name
-                )
-        elif file.get("data_type") == "raster":
-            self._add_layer_from_raster_file(local_file_path, file, parents=parents)
-        elif file.get("data_type") == "vector":
-            self._add_all_layers_from_vector_file(
-                local_file_path, file, parents=parents
-            )
-
-
 class PublicationLayerManager(LayerManager):
     def __init__(
         self,
@@ -515,6 +483,42 @@ def open_rana_raster(
     return layer
 
 
+def open_rana_wms(
+    descriptor: dict,
+    layers: list[dict] | None,
+    parents: list[str],
+    project_id: str,
+) -> list[QgsRasterLayer]:
+    """Open the descriptor's WMS layers into the Rana layer tree."""
+    links = descriptor.get("links")
+    if not isinstance(links, list):
+        return []
+    wms_link = next((link for link in links if link.get("rel") == "wms"), None)
+    if not isinstance(wms_link, dict) or not wms_link.get("href"):
+        return []
+
+    if not layers:
+        return []
+    group = find_or_create_rana_groups(parents, project_id)
+    opened_layers = []
+    for layer_info in layers:
+        quri = QgsDataSourceUri()
+        quri.setParam("layers", layer_info["code"])
+        quri.setParam("styles", "")
+        quri.setParam("format", "image/png")
+        quri.setParam("url", wms_link["href"])
+        quri.setAuthConfigId(get_authcfg_id())
+        layer = QgsRasterLayer(
+            bytes(quri.encodedUri()).decode(),
+            f"{layer_info['name']} ({layer_info['label']})",
+            "wms",
+        )
+        if layer.isValid():
+            add_layer_to_group(layer, group)
+            opened_layers.append(layer)
+    return opened_layers
+
+
 def open_rana_vector_layer(
     local_file_path: str,
     layer_name: str,
@@ -604,10 +608,53 @@ def open_rana_schematisation(
     if wip_revision is not None:
         settings = QSettings("3di", "qgisplugin")
         settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
+
     wip_revision = local_schematisation.wip_revision
     if wip_revision is not None:
         settings = QSettings("3di", "qgisplugin")
         settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
+
+
+def open_scenario_results_in_results_analysis(
+    local_dir: str, project: dict, file_item: dict, communication
+) -> None:
+    result_path = Path(local_dir) / "results_3di.nc"
+    admin_path = Path(local_dir) / "gridadmin.h5"
+    if not result_path.exists() or not admin_path.exists():
+        return
+
+    ra_tool = get_threedi_results_analysis_tool_instance()
+    if ra_tool is None or not hasattr(ra_tool, "load_result"):
+        communication.bar_warn(
+            "Cannot add results as layer without Rana Results Analysis plugin."
+        )
+        return
+
+    group_path = [project.get("name", ""), "files"] + file_item["id"].split("/")
+    try:
+        ra_tool.load_result(
+            result_path,
+            admin_path,
+            group_path=group_path,
+        )
+    except TypeError as error:
+        if "group_path" not in str(error):
+            raise
+        try:
+            ra_tool.load_result(
+                result_path, admin_path, project=project.get("name", "")
+            )
+        except TypeError as error:
+            if "project" not in str(error):
+                raise
+            communication.bar_warn(
+                "Rana Results Analysis is not up to date; results will not be "
+                "organized by project. Please update the plugin."
+            )
+            ra_tool.load_result(result_path, admin_path)
+
+    if not ra_tool.dockwidget.isVisible():
+        ra_tool.toggle_results_manager.run()
 
 
 def get_vector_layer_names(local_file_path: str) -> list[str]:

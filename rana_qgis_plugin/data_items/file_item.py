@@ -25,6 +25,8 @@ from rana_qgis_plugin.utils.api import (
 )
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
+    OpenScenarioRequest,
+    OpenScenarioWmsRequest,
     OpenSchematisationRequest,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name, get_rana_file_url
@@ -118,7 +120,12 @@ class RanaFileDataItem(QgsDataItem):
         )
 
     def handleDoubleClick(self) -> bool:
-        """Download and open this file in the QGIS layer panel."""
+        """Open this file through its single-file workflow."""
+        if self.data_type == "scenario":
+            self.loader.open_scenario_results(
+                OpenScenarioRequest(self.project, self.file_item)
+            )
+            return True
         if self.data_type not in ("vector", "raster", "threedi_schematisation"):
             return False
         request = (
@@ -156,6 +163,12 @@ class RanaFileDataItem(QgsDataItem):
                 )
             elif action is FileAction.OPEN_IN_QGIS:
                 q_action.triggered.connect(lambda: self.handleDoubleClick())
+            elif action is FileAction.OPEN_WMS:
+                q_action.triggered.connect(
+                    lambda: self.loader.open_scenario_wms(
+                        OpenScenarioWmsRequest(self.project, self.file_item)
+                    )
+                )
             actions.append(q_action)
         return actions
 
