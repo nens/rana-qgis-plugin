@@ -637,7 +637,7 @@ def open_scenario_results_in_results_analysis(
         ra_tool.load_result(
             result_path,
             admin_path,
-            group_path=group_path,
+            layer_path=group_path,
         )
     except TypeError as error:
         if "group_path" not in str(error):
@@ -649,7 +649,7 @@ def open_scenario_results_in_results_analysis(
         except TypeError as error:
             if "project" not in str(error):
                 raise
-            communication.bar_warn(
+            communication.log_warn(
                 "Rana Results Analysis is not up to date; results will not be "
                 "organized by project. Please update the plugin."
             )

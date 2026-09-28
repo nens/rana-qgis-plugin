@@ -463,7 +463,7 @@ def test_scenario_download_completion_opens_results_analysis_once(tmp_path):
     results_analysis.load_result.assert_called_once_with(
         Path(tmp_path) / "results_3di.nc",
         Path(tmp_path) / "gridadmin.h5",
-        group_path=["Project", "files", "folder", "result.zip"],
+        layer_path=["Project", "files", "folder", "result.zip"],
     )
 
 
@@ -675,7 +675,7 @@ def test_scenario_results_falls_back_to_two_argument_signature(tmp_path):
         )
 
     assert results_analysis.load_result.call_count == 3
-    communication.bar_warn.assert_called_once()
+    communication.log_warn.assert_called_once()
 
 
 def test_scenario_results_reraises_unrelated_type_error(tmp_path):
