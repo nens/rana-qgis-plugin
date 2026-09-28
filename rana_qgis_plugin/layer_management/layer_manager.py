@@ -616,11 +616,6 @@ def open_rana_schematisation(
         settings = QSettings("3di", "qgisplugin")
         settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
 
-    wip_revision = local_schematisation.wip_revision
-    if wip_revision is not None:
-        settings = QSettings("3di", "qgisplugin")
-        settings.setValue("last_used_geopackage_path", wip_revision.schematisation_dir)
-
 
 def open_scenario_results_in_results_analysis(
     local_dir: str, project: dict, file_item: dict, communication
