@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import QDialog
 from rana_qgis_plugin.layer_management.layer_manager import (
     open_scenario_results_in_results_analysis,
 )
+from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import RanaFetchError
 from rana_qgis_plugin.utils.data_models import OpenScenarioWmsRequest
 from rana_qgis_plugin.workers.download import (
@@ -22,7 +23,7 @@ def test_open_scenario_wms_opens_descriptor_layers_in_wms_group():
     request = scenario_wms_request()
     descriptor = {
         "links": [{"rel": "wms", "href": "https://example.test/wms"}],
-        "meta": {"layers": [{"code": "depth"}]},
+        "meta": {"layers": [{"code": "depth", "name": "Depth", "label": "Depth"}]},
     }
 
     with (
@@ -56,6 +57,86 @@ def test_open_scenario_wms_batch_continues_after_failure():
 
     assert open_wms.call_count == 2
     communication.bar_info.assert_called_once_with("Opened WMS for 1 of 2 scenario(s).")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RanaFetchError("fetch failed", "https://example.test", {}),
+        NetworkUnavailableError("network unavailable"),
+    ],
+)
+def test_open_scenario_wms_batch_continues_after_descriptor_fetch_error(error):
+    loader, communication = make_loader()
+    requests = [scenario_wms_request(), scenario_wms_request()]
+    descriptor = {
+        "links": [{"rel": "wms", "href": "https://example.test/wms"}],
+        "meta": {"layers": [{"code": "depth", "name": "Depth", "label": "Depth"}]},
+    }
+
+    with (
+        patch(
+            "rana_qgis_plugin.loader.get_tenant_file_descriptor",
+            side_effect=[error, descriptor],
+        ),
+        patch("rana_qgis_plugin.loader.open_rana_wms", return_value=[MagicMock()]),
+    ):
+        loader.open_scenario_wms_batch(requests)
+
+    communication.bar_error.assert_called_once_with(
+        "Could not open WMS for scenario scenario."
+    )
+    communication.log_err.assert_called_once_with(
+        f"Could not retrieve metadata for scenario scenario: {error}"
+    )
+    communication.bar_info.assert_called_once_with("Opened WMS for 1 of 2 scenario(s).")
+
+
+@pytest.mark.parametrize(
+    "descriptor",
+    [
+        {"links": [None], "meta": {"layers": []}},
+        {
+            "links": [{"rel": "wms", "href": "https://example.test/wms"}],
+            "meta": {"layers": [None, {"code": "depth"}]},
+        },
+    ],
+)
+def test_open_scenario_wms_skips_malformed_descriptor_data(descriptor):
+    loader, communication = make_loader()
+
+    with (
+        patch(
+            "rana_qgis_plugin.loader.get_tenant_file_descriptor",
+            return_value=descriptor,
+        ),
+        patch("rana_qgis_plugin.loader.open_rana_wms") as open_wms,
+    ):
+        assert loader._open_scenario_wms(scenario_wms_request()) is False
+
+    open_wms.assert_not_called()
+    communication.bar_warn.assert_called_once()
+
+
+def test_open_scenario_wms_warns_when_wms_link_is_missing():
+    loader, communication = make_loader()
+    descriptor = {
+        "links": [],
+        "meta": {"layers": [{"code": "depth", "name": "Depth", "label": "Depth"}]},
+    }
+
+    with patch(
+        "rana_qgis_plugin.loader.get_tenant_file_descriptor",
+        return_value=descriptor,
+    ):
+        assert loader._open_scenario_wms(scenario_wms_request()) is False
+
+    communication.bar_warn.assert_called_once_with(
+        "No WMS layers available for scenario."
+    )
+    communication.log_warn.assert_called_once_with(
+        "No WMS link found for scenario scenario."
+    )
 
 
 def test_open_scenario_wms_reports_missing_descriptor():

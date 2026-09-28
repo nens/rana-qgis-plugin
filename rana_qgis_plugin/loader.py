@@ -1134,17 +1134,51 @@ class Loader(QObject):
         if not descriptor_id:
             self.communication.bar_error("Scenario descriptor is missing.")
             return False
-        descriptor = get_tenant_file_descriptor(descriptor_id)
+        try:
+            descriptor = get_tenant_file_descriptor(descriptor_id)
+        except (NetworkUnavailableError, RanaFetchError) as error:
+            scenario_name = PurePosixPath(request.file_item["id"]).name
+            self.communication.log_err(
+                f"Could not retrieve metadata for scenario {scenario_name}: {error}"
+            )
+            self.communication.bar_error(
+                f"Could not open WMS for scenario {scenario_name}."
+            )
+            return False
         if not descriptor:
-            self.communication.bar_error("Could not retrieve scenario metadata.")
+            self.communication.bar_error(
+                "Could not open WMS: scenario metadata is unavailable."
+            )
+            self.communication.log_warn(
+                f"No metadata returned for scenario {PurePosixPath(request.file_item['id']).name}."
+            )
             return False
         links = descriptor.get("links")
         wms_link = next(
-            (link for link in links or [] if link.get("rel") == "wms"), None
+            (
+                link
+                for link in links or []
+                if isinstance(link, dict) and link.get("rel") == "wms"
+            ),
+            None,
         )
         metadata = descriptor.get("meta")
         layers = metadata.get("layers") if isinstance(metadata, dict) else None
+        layers = [
+            layer
+            for layer in layers or []
+            if isinstance(layer, dict)
+            and all(layer.get(key) for key in ("code", "name", "label"))
+        ]
         if not wms_link or not layers:
+            if not wms_link:
+                self.communication.log_warn(
+                    f"No WMS link found for scenario {PurePosixPath(request.file_item['id']).name}."
+                )
+            if not layers:
+                self.communication.log_warn(
+                    f"No valid WMS layers found for scenario {PurePosixPath(request.file_item['id']).name}."
+                )
             self.communication.bar_warn(
                 f"No WMS layers available for {PurePosixPath(request.file_item['id']).name}."
             )
@@ -1154,14 +1188,24 @@ class Loader(QObject):
             + list(PurePosixPath(request.file_item["id"]).parts)
             + ["wms"]
         )
-        return bool(
-            open_rana_wms(
-                descriptor,
-                layers,
-                parents,
-                request.project["id"],
+        try:
+            return bool(
+                open_rana_wms(
+                    descriptor,
+                    layers,
+                    parents,
+                    request.project["id"],
+                )
             )
-        )
+        except (KeyError, TypeError, ValueError) as error:
+            scenario_name = PurePosixPath(request.file_item["id"]).name
+            self.communication.log_err(
+                f"Could not open WMS layers for scenario {scenario_name}: {error}"
+            )
+            self.communication.bar_error(
+                f"Could not open WMS for scenario {scenario_name}."
+            )
+            return False
 
     def open_scenario_results_batch(self, request: OpenScenarioRequest) -> None:
         """Open one scenario from a batch using fixed result defaults."""

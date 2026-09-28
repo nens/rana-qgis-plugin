@@ -493,7 +493,10 @@ def open_rana_wms(
     links = descriptor.get("links")
     if not isinstance(links, list):
         return []
-    wms_link = next((link for link in links if link.get("rel") == "wms"), None)
+    wms_link = next(
+        (link for link in links if isinstance(link, dict) and link.get("rel") == "wms"),
+        None,
+    )
     if not isinstance(wms_link, dict) or not wms_link.get("href"):
         return []
 
@@ -502,6 +505,10 @@ def open_rana_wms(
     group = find_or_create_rana_groups(parents, project_id)
     opened_layers = []
     for layer_info in layers:
+        if not isinstance(layer_info, dict) or not all(
+            layer_info.get(key) for key in ("code", "name", "label")
+        ):
+            continue
         quri = QgsDataSourceUri()
         quri.setParam("layers", layer_info["code"])
         quri.setParam("styles", "")
