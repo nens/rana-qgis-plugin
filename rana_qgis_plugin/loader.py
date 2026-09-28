@@ -138,6 +138,7 @@ class Loader(QObject):
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
         self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
+        self._accept_async_callbacks = True
         self.scenario_action_busy = False
         self.scenario_action_pending = 0
         self.results_analysis_queue: list[tuple[str, dict, dict]] = []
@@ -145,6 +146,10 @@ class Loader(QObject):
 
     def shutdown(self) -> None:
         """Cancel pending work and drain the pool. Call on plugin unload."""
+        self._accept_async_callbacks = False
+        for task in self.scenario_resolve_tasks:
+            task.cancel()
+        self.scenario_resolve_tasks.clear()
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
@@ -1238,10 +1243,14 @@ class Loader(QObject):
         scenario_info: ScenarioInfo,
     ) -> None:
         self.scenario_resolve_tasks.discard(task)
+        if not self._accept_async_callbacks:
+            return
         continuation(request, scenario_info)
 
     def handle_scenario_resolution_terminated(self, task: ScenarioResolveTask) -> None:
         self.scenario_resolve_tasks.discard(task)
+        if not self._accept_async_callbacks:
+            return
         if task.isCanceled():
             self.communication.bar_warn("Scenario resolution cancelled.")
         else:
