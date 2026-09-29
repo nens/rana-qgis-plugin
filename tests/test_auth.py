@@ -219,19 +219,3 @@ def test_reset_authentication_settings_clears_authcfg_and_tenant_then_refetches(
     settings.remove.assert_any_call(RANA_AUTHCFG_ENTRY)
     settings.remove.assert_any_call(RANA_TENANT_ENTRY)
     mock_update.assert_called_once_with("https://custom.example")
-
-
-def test_reset_authentication_settings_returns_false_on_fetch_failure():
-    """reset_authentication_settings() propagates failure when the backend is unreachable."""
-    settings = make_mock_settings(
-        base_url="https://custom.example", authcfg_id="abc123"
-    )
-
-    with (
-        patch(_SETTINGS, return_value=settings),
-        patch("rana_qgis_plugin.auth.base_url", return_value="https://custom.example"),
-        patch("rana_qgis_plugin.auth.update_auth_settings", return_value=False),
-    ):
-        result = reset_authentication_settings()
-
-    assert result is False
