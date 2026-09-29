@@ -6,7 +6,7 @@ from rana_qgis_plugin.simulation.utils import download_required_files
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
-    OpenLayerRequest,
+    OpenLayersRequest,
     OpenSchematisationRequest,
 )
 
@@ -80,7 +80,7 @@ def test_open_items_deduplicates_same_file_requests():
         list[
             OpenFileRequest
             | OpenSchematisationRequest
-            | OpenLayerRequest
+            | OpenLayersRequest
             | OpenFolderRequest
         ],
         [OpenFileRequest(project, file_item), OpenFileRequest(project, file_item)],

@@ -102,13 +102,12 @@ class OpenScenarioWmsRequest:
 
 
 @dataclass(frozen=True)
-class OpenLayerRequest:
-    """Request to open a single layer from a Rana vector file."""
+class OpenLayersRequest:
+    """Request to open multiple layers from one Rana vector file."""
 
     project: dict
     file_item: dict
-    layer_name: str
-    layer_id: str | None = None
+    layers: tuple[tuple[str, str | None], ...]
 
 
 @dataclass(frozen=True)

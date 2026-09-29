@@ -15,11 +15,39 @@ from rana_qgis_plugin.data_items.gui_provider import (
     classify_selection,
     merge_multi_select_actions,
 )
+from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
 from rana_qgis_plugin.utils.data_models import (
+    OpenLayersRequest,
     OpenScenarioRequest,
     OpenScenarioWmsRequest,
 )
+
+
+def test_open_selected_layers_aggregates_by_file():
+    loader = MagicMock()
+    project = {"id": "project", "name": "Project"}
+    parent = Mock(spec=RanaFileDataItem)
+    parent.project = project
+    parent.file_item = {"id": "roads.gpkg", "data_type": "vector"}
+    layer_items = []
+    for name, layer_id in (("roads", "r"), ("buildings", "b")):
+        item = Mock(spec=RanaLayerDataItem)
+        item.parent.return_value = parent
+        item.name.return_value = name
+        item.layer_id = layer_id
+        item.loader = loader
+        layer_items.append(item)
+
+    RanaDataItemGuiProvider.open_selected_items(layer_items)
+
+    loader.open_items.assert_called_once_with(
+        [
+            OpenLayersRequest(
+                project, parent.file_item, (("roads", "r"), ("buildings", "b"))
+            )
+        ]
+    )
 
 
 def fake(cls):
