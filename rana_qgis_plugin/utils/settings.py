@@ -10,6 +10,7 @@ from qgis.core import QgsApplication, QgsSettings
 from rana_qgis_plugin.constant import (
     COGNITO_LOGOUT_ENDPOINT,
     RANA_API_VERSION_PREFIX,
+    RANA_AUTHCFG_ENTRY,
     RANA_CLENUP_CACHE_ON_CLOSE_ENTRY,
     RANA_SETTINGS_ENTRY,
     RANA_TENANT_ENTRY,
@@ -137,6 +138,19 @@ def set_hidden_projects(base_url: str, tenant_id: str, hidden_ids: set) -> None:
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f)
     tmp.replace(path)
+
+
+def reset_authentication_settings() -> None:
+    """Reset authentication settings while preserving local plugin preferences."""
+    settings = QgsSettings()
+    for key in (
+        RANA_AUTHCFG_ENTRY,
+        RANA_TENANT_ENTRY,
+        f"{RANA_SETTINGS_ENTRY}/cognito_client_id",
+        f"{RANA_SETTINGS_ENTRY}/cognito_client_id_native",
+    ):
+        settings.remove(key)
+    initialize_settings()
 
 
 def hide_project(base_url: str, tenant_id: str, project_id: str) -> None:

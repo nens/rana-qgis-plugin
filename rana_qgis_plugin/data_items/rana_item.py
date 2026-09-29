@@ -52,6 +52,7 @@ from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
     get_tenant_id,
+    reset_authentication_settings,
     set_tenant_id,
 )
 from rana_qgis_plugin.widgets.projects_selection_dialog import ProjectsSelectionDialog
@@ -175,7 +176,16 @@ class RanaRootDataItem(QgsDataItem):
         """Open the settings dialog; reset auth and re-login if the backend URL changed."""
         dlg = RanaSettingsDialog()
         was_authenticated = is_authenticated()
-        if dlg.exec() == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
+        result = dlg.exec()
+        if (
+            result == RanaSettingsDialog.DialogCode.Accepted
+            and dlg.authentication_reset()
+        ):
+            self.logout(delete_config=True)
+            reset_authentication_settings()
+            self.communication.show_info("Rana authentication has been reset.")
+            return
+        if result == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
             QgsSettings().remove(RANA_TENANT_ENTRY)
             clear_credentials()
             self.tenants = None

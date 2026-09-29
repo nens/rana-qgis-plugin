@@ -11,6 +11,7 @@ from rana_qgis_plugin.utils.settings import (
     get_hidden_projects,
     rana_open_cache_dir,
     read_hidden_projects,
+    reset_authentication_settings,
     set_base_url,
     set_hidden_projects,
     set_rana_open_cache_dir,
@@ -193,3 +194,17 @@ def test_unhide_project(hidden_file):
     set_hidden_projects(BASE_URL, TENANT, {"proj-1", "proj-2"})
     unhide_project(BASE_URL, TENANT, "proj-1")
     assert get_hidden_projects(BASE_URL, TENANT) == {"proj-2"}
+
+
+def test_reset_authentication_settings_preserves_local_settings(settings):
+    settings.setValue("Rana/base_url", "https://custom.example")
+    settings.setValue("Rana/cache_dir", "/tmp/cache")
+    settings.setValue("Rana/tenant", TENANT)
+    settings.setValue("threedi/working_dir", "/tmp/working")
+
+    reset_authentication_settings()
+
+    assert base_url() == "https://custom.example"
+    assert settings.value("Rana/cache_dir") == "/tmp/cache"
+    assert settings.value("Rana/tenant") is None
+    assert settings.value("threedi/working_dir") == "/tmp/working"
