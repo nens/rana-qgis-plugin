@@ -5,15 +5,20 @@ from unittest.mock import patch
 import pytest
 from qgis.core import QgsSettings
 
+from rana_qgis_plugin.constant import RANA_MODELS_DIR_NAME, RANA_PROJECTS_DIR_NAME
 from rana_qgis_plugin.utils.settings import (
     base_url,
     get_advanced_settings,
     get_hidden_projects,
+    hcc_working_dir,
+    rana_cache_dir,
     rana_open_cache_dir,
+    rana_root_dir,
     read_hidden_projects,
     set_base_url,
     set_hidden_projects,
     set_rana_open_cache_dir,
+    set_rana_root_dir,
     unhide_project,
 )
 
@@ -41,6 +46,25 @@ def test_set_rana_open_cache_dir(settings):
     custom_dir = "/tmp/custom-rana-open"
     set_rana_open_cache_dir(custom_dir)
     assert rana_open_cache_dir() == custom_dir
+
+
+def test_rana_root_dir_default(settings):
+    assert rana_root_dir() == str(Path.home() / "Rana")
+
+
+def test_set_rana_root_dir(settings, tmp_path):
+    set_rana_root_dir(str(tmp_path))
+
+    assert rana_root_dir() == str(tmp_path)
+
+
+def test_derived_storage_directories_are_created(settings, tmp_path):
+    set_rana_root_dir(str(tmp_path))
+
+    assert hcc_working_dir() == str(tmp_path / RANA_MODELS_DIR_NAME)
+    assert rana_cache_dir() == str(tmp_path / RANA_PROJECTS_DIR_NAME)
+    assert (tmp_path / RANA_MODELS_DIR_NAME).is_dir()
+    assert (tmp_path / RANA_PROJECTS_DIR_NAME).is_dir()
 
 
 @pytest.mark.parametrize(

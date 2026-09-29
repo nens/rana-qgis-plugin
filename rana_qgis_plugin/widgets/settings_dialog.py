@@ -3,6 +3,7 @@
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QGridLayout,
     QGroupBox,
     QLabel,
@@ -14,11 +15,12 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.auth import update_auth_settings
 from rana_qgis_plugin.constant import PLUGIN_NAME
-from rana_qgis_plugin.utils.settings import base_url
+from rana_qgis_plugin.utils.local_paths import is_writable
+from rana_qgis_plugin.utils.settings import base_url, rana_root_dir, set_rana_root_dir
 
 
 class RanaSettingsDialog(QDialog):
-    """Settings dialog for Rana. For this increment: backend URL only."""
+    """Settings dialog for Rana."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,6 +41,16 @@ class RanaSettingsDialog(QDialog):
         auth_layout.addWidget(note, 1, 0, 1, 2)
         layout.addWidget(auth_group)
 
+        storage_group = QGroupBox("Storage")
+        storage_layout = QGridLayout(storage_group)
+        storage_layout.addWidget(QLabel("Root directory"), 0, 0)
+        self._root_dir_edit = QLineEdit(rana_root_dir())
+        storage_layout.addWidget(self._root_dir_edit, 0, 1)
+        browse_button = QPushButton("Browse")
+        browse_button.clicked.connect(self.browse_root_dir)
+        storage_layout.addWidget(browse_button, 0, 2)
+        layout.addWidget(storage_group)
+
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -58,6 +70,21 @@ class RanaSettingsDialog(QDialog):
     def authentication_reset(self) -> bool:
         """Return whether authentication reset was confirmed."""
         return self._authentication_reset
+
+    def browse_root_dir(self) -> None:
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Root Directory", self._root_dir_edit.text()
+        )
+        if not directory:
+            return
+        if not is_writable(directory):
+            QMessageBox.warning(
+                self,
+                "Warning",
+                "Can't write to the selected location. Please select a folder to which you have write permission.",
+            )
+            return
+        self._root_dir_edit.setText(directory)
 
     def reset_authentication(self) -> None:
         title = "Reset authentication"
@@ -96,4 +123,5 @@ class RanaSettingsDialog(QDialog):
                     self._url_edit.setText(base_url())
                 return
             self._url_changed = True
+        set_rana_root_dir(self._root_dir_edit.text().strip())
         super().accept()
