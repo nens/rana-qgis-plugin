@@ -9,7 +9,7 @@ from time import sleep
 from typing import Optional, cast
 
 import requests
-from qgis.core import QgsSettings, QgsTask
+from qgis.core import QgsTask
 from qgis.PyQt.QtCore import (
     QObject,
     QThread,
@@ -42,6 +42,7 @@ from rana_qgis_plugin.utils.local_paths import (
 )
 from rana_qgis_plugin.utils.qgis import rescale_qml_file
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
+from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.zip import extract_flat
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB
@@ -194,7 +195,7 @@ class ResultsDownloadContext(AbstractDownloadContext):
         if self.scenario_info.has_3di_simulation:
             return Path(
                 get_local_results_dir(
-                    QgsSettings().value("threedi/working_dir"),
+                    hcc_working_dir(),
                     self.scenario_info.schematisation_id,
                     self.scenario_info.schematisation_name.replace("/", "-").replace(
                         "\\", "-"

@@ -1,5 +1,4 @@
 import json
-import os
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -11,6 +10,8 @@ from rana_qgis_plugin.constant import (
     COGNITO_LOGOUT_ENDPOINT,
     RANA_API_VERSION_PREFIX,
     RANA_CLENUP_CACHE_ON_CLOSE_ENTRY,
+    RANA_MODELS_DIR_NAME,
+    RANA_PROJECTS_DIR_NAME,
     RANA_SETTINGS_ENTRY,
     RANA_TENANT_ENTRY,
 )
@@ -29,24 +30,26 @@ def logout_url() -> str:
     return f"{COGNITO_LOGOUT_ENDPOINT}?client_id={cognito_client_id()}&logout_uri={logout_redirect_uri_encoded()}"
 
 
+def rana_root_dir() -> str:
+    default = str(Path.home() / "Rana")
+    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/root_dir", default)
+
+
+def set_rana_root_dir(root_dir: str) -> None:
+    root_dir = str(Path(root_dir).expanduser())
+    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/root_dir", root_dir)
+
+
 def hcc_working_dir() -> str:
-    # Backwards compatible to older software
-    return QgsSettings().value("threedi/working_dir")
-
-
-def set_hcc_working_dir(working_dir: str) -> None:
-    # Backwards compatible to older software
-    QgsSettings().setValue("threedi/working_dir", working_dir)
-    os.makedirs(hcc_working_dir(), exist_ok=True)
+    working_dir = Path(rana_root_dir()) / RANA_MODELS_DIR_NAME
+    working_dir.mkdir(parents=True, exist_ok=True)
+    return str(working_dir)
 
 
 def rana_cache_dir() -> str:
-    default = str(Path.home() / "Rana")
-    return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/cache_dir", default)
-
-
-def set_rana_cache_dir(cache_dir: str) -> None:
-    QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/cache_dir", cache_dir)
+    cache_dir = Path(rana_root_dir()) / RANA_PROJECTS_DIR_NAME
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return str(cache_dir)
 
 
 def rana_open_cache_dir() -> str:
@@ -177,12 +180,12 @@ def initialize_settings() -> None:
         ),
     )
 
-    documents_folder = os.path.join(os.path.expanduser("~"), "Documents", "Rana")
-    settings.setValue(
-        "threedi/working_dir",
-        settings.value("threedi/working_dir", Path(documents_folder).as_posix()),
+    root_dir = settings.value(
+        f"{RANA_SETTINGS_ENTRY}/root_dir", str(Path.home() / "Rana")
     )
-    os.makedirs(settings.value("threedi/working_dir"), exist_ok=True)
+    settings.setValue(f"{RANA_SETTINGS_ENTRY}/root_dir", root_dir)
+    Path(root_dir, RANA_MODELS_DIR_NAME).mkdir(parents=True, exist_ok=True)
+    Path(root_dir, RANA_PROJECTS_DIR_NAME).mkdir(parents=True, exist_ok=True)
 
 
 def set_tenant_id(tenant: str) -> None:

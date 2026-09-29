@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from rana_qgis_plugin.constant import RANA_PROJECTS_DIR_NAME
 from rana_qgis_plugin.utils import generic as utils
 from rana_qgis_plugin.utils import local_paths
 
@@ -50,7 +51,7 @@ def test_sanitize_path_for_filesystem(input_path, expected_output):
 
 
 def test_get_local_dir_structure():
-    rana_root = "/root/Rana/"
+    rana_root = f"/root/Rana/{RANA_PROJECTS_DIR_NAME}/"
     project = "foo"
     file_id = "baz/bar.txt"
     file_stem = Path(file_id).stem
@@ -60,7 +61,7 @@ def test_get_local_dir_structure():
 
 
 def test_get_local_file_path():
-    rana_root = "/root/Rana/"
+    rana_root = f"/root/Rana/{RANA_PROJECTS_DIR_NAME}/"
     project = "foo"
     file_id = "baz/bar.txt"
     file_name = Path(file_id).name
@@ -73,7 +74,7 @@ def test_get_local_file_path():
 
 
 def test_get_local_publication_dir_structure():
-    rana_root = "/root/Rana/"
+    rana_root = f"/root/Rana/{RANA_PROJECTS_DIR_NAME}/"
     project = "foo"
     file_id = "bar.txt"
     file_stem = Path(file_id).stem
@@ -89,7 +90,7 @@ def test_get_local_publication_dir_structure():
 
 
 def test_get_local_publication_file_path():
-    rana_root = "/root/Rana/"
+    rana_root = f"/root/Rana/{RANA_PROJECTS_DIR_NAME}/"
     project = "foo"
     file_id = "bar.txt"
     file_stem = Path(file_id).stem

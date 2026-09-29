@@ -26,6 +26,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from rana_qgis_plugin.utils.settings import hcc_working_dir
+
 
 def style_path(qml_filename):
     """Setting up path to the QML style with given filename."""
@@ -174,9 +176,7 @@ def get_filepath(
     if dialog_title is None:
         dialog_title = "Choose file"
 
-    working_dir = QSettings().value(
-        "threedi/working_dir", os.path.expanduser("~"), type=str
-    )
+    working_dir = hcc_working_dir()
     starting_dir = QSettings().value(
         "threedi/last_schematisation_folder", working_dir, type=str
     )
