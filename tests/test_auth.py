@@ -6,8 +6,13 @@ from rana_qgis_plugin.auth import (
     clear_credentials,
     create_oauth2_config,
     is_authenticated,
+    reset_authentication_settings,
 )
-from rana_qgis_plugin.constant import RANA_AUTHCFG_ENTRY, RANA_SETTINGS_ENTRY
+from rana_qgis_plugin.constant import (
+    RANA_AUTHCFG_ENTRY,
+    RANA_SETTINGS_ENTRY,
+    RANA_TENANT_ENTRY,
+)
 
 # Patch targets used throughout
 _SETTINGS = "rana_qgis_plugin.auth.QgsSettings"
@@ -189,3 +194,44 @@ def test_create_oauth2_config_store_failure_returns_none():
         result = create_oauth2_config(provider)
 
     assert result is None
+
+
+# --- reset_authentication_settings() ---
+
+
+def test_reset_authentication_settings_clears_authcfg_and_tenant_then_refetches():
+    """reset_authentication_settings() clears authcfg/tenant and re-fetches client IDs
+    for the currently configured (preserved) backend URL."""
+    settings = make_mock_settings(
+        base_url="https://custom.example", authcfg_id="abc123"
+    )
+
+    with (
+        patch(_SETTINGS, return_value=settings),
+        patch("rana_qgis_plugin.auth.base_url", return_value="https://custom.example"),
+        patch(
+            "rana_qgis_plugin.auth.update_auth_settings", return_value=True
+        ) as mock_update,
+    ):
+        result = reset_authentication_settings()
+
+    assert result is True
+    settings.remove.assert_any_call(RANA_AUTHCFG_ENTRY)
+    settings.remove.assert_any_call(RANA_TENANT_ENTRY)
+    mock_update.assert_called_once_with("https://custom.example")
+
+
+def test_reset_authentication_settings_returns_false_on_fetch_failure():
+    """reset_authentication_settings() propagates failure when the backend is unreachable."""
+    settings = make_mock_settings(
+        base_url="https://custom.example", authcfg_id="abc123"
+    )
+
+    with (
+        patch(_SETTINGS, return_value=settings),
+        patch("rana_qgis_plugin.auth.base_url", return_value="https://custom.example"),
+        patch("rana_qgis_plugin.auth.update_auth_settings", return_value=False),
+    ):
+        result = reset_authentication_settings()
+
+    assert result is False

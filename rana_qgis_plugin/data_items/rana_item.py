@@ -31,6 +31,7 @@ from rana_qgis_plugin.auth import (
     create_oauth2_config,
     fetch_identity_providers,
     is_authenticated,
+    reset_authentication_settings,
 )
 from rana_qgis_plugin.constant import (
     ICONS_DIR,
@@ -52,7 +53,6 @@ from rana_qgis_plugin.utils.settings import (
     base_url,
     get_hidden_projects,
     get_tenant_id,
-    reset_authentication_settings,
     set_tenant_id,
 )
 from rana_qgis_plugin.widgets.projects_selection_dialog import ProjectsSelectionDialog
@@ -182,8 +182,16 @@ class RanaRootDataItem(QgsDataItem):
             and dlg.authentication_reset()
         ):
             self.logout(delete_config=True)
-            reset_authentication_settings()
-            self.communication.show_info("Rana authentication has been reset.")
+            if reset_authentication_settings():
+                self.communication.show_info("Rana authentication has been reset.")
+            else:
+                self.communication.show_error(
+                    "Rana authentication was reset, but the current backend "
+                    "could not be reached to refresh authentication settings. "
+                    "Please check the connection and try again."
+                )
+            self.update_display()
+            self.refresh()
             return
         if result == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
             QgsSettings().remove(RANA_TENANT_ENTRY)

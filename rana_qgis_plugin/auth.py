@@ -10,11 +10,13 @@ from rana_qgis_plugin.constant import (
     COGNITO_TOKEN_ENDPOINT,
     RANA_AUTHCFG_ENTRY,
     RANA_SETTINGS_ENTRY,
+    RANA_TENANT_ENTRY,
 )
 from rana_qgis_plugin.network_manager import NetworkManager
 from rana_qgis_plugin.utils.log import plugin_log_info, plugin_log_warn
 from rana_qgis_plugin.utils.settings import (
     api_url,
+    base_url,
     cognito_client_id,
     cognito_client_id_native,
     set_base_url,
@@ -113,6 +115,20 @@ def update_auth_settings(new_url: str) -> bool:
     set_cognito_client_id(default_id)
     set_cognito_client_id_native(native_id)
     return True
+
+
+def reset_authentication_settings() -> bool:
+    """Reset authentication for the current backend, re-fetching its Cognito client IDs.
+
+    Clears the stored tenant and authcfg reference, then re-fetches the Cognito
+    client IDs for the currently configured backend URL (preserving it).
+    Returns True on success, False if the backend could not be reached; in the
+    failure case the backend URL and client IDs are left unchanged.
+    """
+    settings = QgsSettings()
+    settings.remove(RANA_AUTHCFG_ENTRY)
+    settings.remove(RANA_TENANT_ENTRY)
+    return update_auth_settings(base_url())
 
 
 def fetch_identity_providers(tenant_id: str) -> Optional[list]:
