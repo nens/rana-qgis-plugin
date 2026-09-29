@@ -1,6 +1,6 @@
 """Central loader: owns background workers and the avatar cache."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
@@ -55,7 +55,7 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
-    OpenLayerRequest,
+    OpenLayersRequest,
     OpenScenarioRequest,
     OpenScenarioWmsRequest,
     OpenSchematisationRequest,
@@ -929,11 +929,11 @@ class Loader(QObject):
 
     def open_items(
         self,
-        requests: list[
+        requests: Sequence[
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayerRequest
+            | OpenLayersRequest
             | OpenFolderRequest
         ],
     ) -> None:
@@ -947,55 +947,50 @@ class Loader(QObject):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayerRequest
+            | OpenLayersRequest
         ] = []
         for request in requests:
             if isinstance(request, OpenFolderRequest):
                 resolved += self._resolve_folder(request.project, request.folder_path)
             else:
                 resolved.append(request)
-
-        unique: dict[
-            tuple,
+        # Remove duplicates and subsumed requests (e.g. if a whole file is requested, ignore any selected layers).
+        requests_by_file: dict[
+            tuple[str, str],
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayerRequest,
+            | OpenLayersRequest,
         ] = {}
         for request in resolved:
-            if isinstance(request, OpenLayerRequest):
-                key = (
-                    "layer",
-                    request.project["id"],
-                    request.file_item["id"],
-                    request.layer_id,
-                )
-            else:
-                # include a fourth element so the key type is consistent
-                # with layer keys (tuple[str, Any, Any, str | None])
-                key = (
-                    "file",
-                    request.project["id"],
-                    request.file_item["id"],
-                    None,
-                )
-            unique.setdefault(key, request)
-        resolved = list(unique.values())
-
-        if len(resolved) > 50:
-            self.communication.bar_error("Selection contains more than 50 items.")
+            key = (request.project["id"], request.file_item["id"])
+            existing_request = requests_by_file.get(key)
+            if existing_request is None:
+                requests_by_file[key] = request
+                continue
+            if isinstance(existing_request, OpenFileRequest):
+                # Opening the whole file subsumes any selected layer requests.
+                continue
+            if isinstance(request, OpenFileRequest):
+                # A whole-file request subsumes previously selected layers.
+                requests_by_file[key] = request
+        resolved = list(requests_by_file.values())
+        # Warn the user if they are about to download a lot of files, and allow them to cancel.
+        download_count = len(resolved)
+        if download_count > 50:
+            self.communication.bar_error("Selection contains more than 50 files.")
             return
-        if len(resolved) > 10:
+        if download_count > 10:
             answer = QMessageBox.question(
                 None,
                 "Open in QGIS",
-                f"This will open {len(resolved)} items. Continue?",
+                f"This will download {download_count} files. Continue?",
                 QMessageBox.StandardButton.Yes,
                 QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return None
-
+        # Prevent multiple scenario actions from being started at the same time. If there are any scenario requests, try to begin a scenario action (only possible when there is no other scenario action in progress). If the user cancels, clear the scenario requests so they are not processed.
         scenario_requests = [
             request for request in resolved if isinstance(request, OpenScenarioRequest)
         ]
@@ -1017,8 +1012,8 @@ class Loader(QObject):
                 self.open_scenario_results_batch(request)
             elif isinstance(request, OpenFileRequest):
                 self.download_and_open_file(request)
-            elif isinstance(request, OpenLayerRequest):
-                self.download_and_open_layer(request)
+            elif isinstance(request, OpenLayersRequest):
+                self.download_and_open_layers(request)
 
     def _resolve_folder(
         self, project: dict, folder_path: str
@@ -1026,7 +1021,7 @@ class Loader(QObject):
         OpenFileRequest
         | OpenSchematisationRequest
         | OpenScenarioRequest
-        | OpenLayerRequest
+        | OpenLayersRequest
     ]:
         """Resolve a folder into individual open requests via the API (single level)."""
         params = {"path": folder_path} if folder_path else None
@@ -1040,7 +1035,7 @@ class Loader(QObject):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayerRequest
+            | OpenLayersRequest
         ] = []
         for item in files:
             if item.get("type") == "directory":
@@ -1059,13 +1054,18 @@ class Loader(QObject):
     def download_and_open_file(self, request: OpenFileRequest) -> None:
         self.download_and_open(request, self.open_file)
 
-    def download_and_open_layer(self, request: OpenLayerRequest) -> None:
-        self.download_and_open(
-            request,
-            lambda local_path, project, file_item: self.open_layer(
-                local_path, project, file_item, request.layer_name, request.layer_id
-            ),
-        )
+    def download_and_open_layers(self, request: OpenLayersRequest) -> None:
+        def open_layers(local_path, project, file_item):
+            for layer_name, layer_id in request.layers:
+                self.open_layer(
+                    local_path,
+                    project,
+                    file_item,
+                    layer_name,
+                    layer_id,
+                )
+
+        self.download_and_open(request, open_layers)
 
     def download_and_open(self, request, callback) -> None:
         project = request.project

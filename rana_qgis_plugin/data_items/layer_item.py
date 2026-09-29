@@ -9,7 +9,7 @@ from qgis.PyQt.QtWidgets import QAction
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.data_items.file_actions import FileAction
-from rana_qgis_plugin.utils.data_models import OpenLayerRequest
+from rana_qgis_plugin.utils.data_models import OpenLayersRequest
 from rana_qgis_plugin.utils.generic import get_file_icon_name
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
@@ -63,11 +63,10 @@ class RanaLayerDataItem(QgsDataItem):
 
         self.loader.open_items(
             [
-                OpenLayerRequest(
+                OpenLayersRequest(
                     project=file_item.project,
                     file_item=file_item.file_item,
-                    layer_name=self.name(),
-                    layer_id=self.layer_id,
+                    layers=((self.name(), self.layer_id),),
                 )
             ]
         )

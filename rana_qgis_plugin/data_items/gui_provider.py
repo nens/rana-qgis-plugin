@@ -20,7 +20,7 @@ from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
-    OpenLayerRequest,
+    OpenLayersRequest,
     OpenScenarioRequest,
     OpenScenarioWmsRequest,
     OpenSchematisationRequest,
@@ -151,23 +151,31 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayerRequest
+            | OpenLayersRequest
             | OpenFolderRequest
         ] = []
         loader = None
 
+        layer_requests: dict[tuple[str, str], OpenLayersRequest] = {}
         for item in items:
             if isinstance(item, RanaLayerDataItem):
                 parent = item.parent()
                 if isinstance(parent, RanaFileDataItem):
-                    requests.append(
-                        OpenLayerRequest(
+                    key = (parent.project["id"], parent.file_item["id"])
+                    layer_request = layer_requests.get(key)
+                    layer = (item.name(), item.layer_id)
+                    if layer_request is None:
+                        layer_requests[key] = OpenLayersRequest(
                             project=parent.project,
                             file_item=parent.file_item,
-                            layer_name=item.name(),
-                            layer_id=item.layer_id,
+                            layers=(layer,),
                         )
-                    )
+                    else:
+                        layer_requests[key] = OpenLayersRequest(
+                            project=layer_request.project,
+                            file_item=layer_request.file_item,
+                            layers=layer_request.layers + (layer,),
+                        )
                     loader = loader or item.loader
             elif isinstance(item, RanaFileDataItem):
                 if item.data_type in (
@@ -195,6 +203,7 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
                 )
                 loader = loader or item.loader
 
+        requests.extend(layer_requests.values())
         if requests and loader is not None:
             loader.open_items(requests)
 

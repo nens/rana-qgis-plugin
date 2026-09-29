@@ -138,10 +138,13 @@ sequenceDiagram
 ## Opening one or more files
 
 The Browser supports opening a vector file, raster file, or individual vector
-layer by double-clicking it or choosing **Open in QGIS**. Files and folders
-can also be selected together. Folder selections are traversed recursively,
-and overlapping selections are de-duplicated before one batch task is
-created. Larger or nested selections require confirmation.
+layer by double-clicking it or choosing **Open in QGIS**. Files, folders, and
+individual vector layers can also be selected together. Multiple layers
+selected from the same file are merged into a single download; selecting the
+whole file subsumes any individually selected layers from it. Folder
+selections are traversed recursively, and overlapping selections are
+de-duplicated before one batch task is created. Larger or nested selections
+require confirmation.
 
 The resulting layers are grouped according to their Rana path. See
 [`layer_management.md`](layer_management.md) for the layer-tree side of this
