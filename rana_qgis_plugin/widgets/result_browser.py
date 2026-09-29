@@ -1,5 +1,3 @@
-from typing import List
-
 from qgis.core import QgsCoordinateReferenceSystem
 from qgis.gui import QgsProjectionSelectionWidget
 from qgis.PyQt.QtCore import Qt
@@ -31,10 +29,10 @@ class ResultBrowser(QDialog):
         layout = QVBoxLayout(self)
         self.setLayout(layout)
 
-        self.selected_results = []
-        self.selected_nodata = None
-        self.selected_pixelsize = None
-        self.selected_crs = None
+        self.selected_results: list[int] = []
+        self.selected_nodata: float | None = None
+        self.selected_pixelsize: float | None = None
+        self.selected_crs: str | None = None
 
         self.download_raw_data_bx = QCheckBox("Download simulation results", self)
         self.download_raw_data_bx.setChecked(True)
@@ -63,7 +61,7 @@ class ResultBrowser(QDialog):
         )
 
         inputs_group = QGroupBox("Generated raster result settings", self)
-        inputs_form = QFormLayout(self)
+        inputs_form = QFormLayout()
         inputs_group.setLayout(inputs_form)
 
         self.no_data_box = QLineEdit(self)
@@ -75,7 +73,7 @@ class ResultBrowser(QDialog):
                 bottom=-1000000.0,
                 top=1000000.0,
                 decimals=1,
-                notation=QDoubleValidator.StandardNotation,
+                notation=QDoubleValidator.Notation.StandardNotation,
             )
         )
         self.pixelsize_box.setValidator(
@@ -83,7 +81,7 @@ class ResultBrowser(QDialog):
                 bottom=0.00001,
                 top=1000000.00000,
                 decimals=5,
-                notation=QDoubleValidator.StandardNotation,
+                notation=QDoubleValidator.Notation.StandardNotation,
             )
         )
 
@@ -94,9 +92,6 @@ class ResultBrowser(QDialog):
         inputs_form.addRow("NO DATA value:", self.no_data_box)
         inputs_form.addRow("Pixel size:", self.pixelsize_box)
         inputs_form.addRow("CRS:", self.crs_select_box)
-
-        # only show raster download options if raster is selected
-        self.raster_selected = False
 
         def check_raster_selected():
             select_states = [
@@ -141,9 +136,7 @@ class ResultBrowser(QDialog):
                 self.results_table.rowCount() - 1, 1, file_name_item
             )
 
-        # timeseries rasters
         excluded_rasters = ["depth-dtri", "rain-quad", "s1-dtri"]
-
         for i, result in enumerate(
             [
                 r
@@ -161,34 +154,29 @@ class ResultBrowser(QDialog):
             type_item.setCheckState(Qt.CheckState.Unchecked)
             type_item.setData(Qt.ItemDataRole.UserRole, int(result["id"]))
 
-            file_name = result["code"]
-            file_name_item = QTableWidgetItem(file_name)
+            file_name_item = QTableWidgetItem(result["code"])
             file_name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.postprocessed_rasters_table.setItem(i, 0, type_item)
             self.postprocessed_rasters_table.setItem(i, 1, file_name_item)
 
-        # When Lizard post-processing is still running, results is empty and only raw data can be downloaded
         if len(results) == 0:
-            # show a warning
             icon_label = QLabel()
             icon_label.setPixmap(
                 QIcon(":/images/themes/default/mIconWarning.svg").pixmap(16, 16)
             )
-            icon_label.setAlignment(Qt.AlignVCenter)
+            icon_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             warning_label = QLabel(
                 "Post-processing results are not available because they are still being processed."
             )
-            warning_label.setTextFormat(Qt.RichText)
+            warning_label.setTextFormat(Qt.TextFormat.RichText)
             warning_layout = QHBoxLayout()
             warning_layout.addWidget(icon_label)
             warning_layout.addWidget(warning_label)
-            warning_layout.setAlignment(Qt.AlignVCenter)
+            warning_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             layout.addLayout(warning_layout)
-            # disable raster settings
             self.no_data_box.setEnabled(False)
             self.pixelsize_box.setEnabled(False)
             self.crs_select_box.setEnabled(False)
-            # check download raw data by default
 
         self.results_table.resizeColumnsToContents()
         layout.addWidget(results_group)
@@ -196,14 +184,16 @@ class ResultBrowser(QDialog):
         self.postprocessed_rasters_table.resizeColumnsToContents()
         layout.addWidget(postprocessed_rasters_group)
 
-        buttonBox = QDialogButtonBox(
+        button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-        layout.addWidget(buttonBox)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
 
-    def get_selected_results(self) -> List[int]:
+    def get_selected_results(
+        self,
+    ) -> tuple[list[int], float | None, float | None, str | None]:
         return (
             self.selected_results,
             self.selected_nodata,
@@ -216,20 +206,20 @@ class ResultBrowser(QDialog):
 
     def accept(self) -> None:
         self.selected_results = []
-        for r in range(self.results_table.rowCount()):
-            name_item = self.results_table.item(r, 0)
+        for row in range(self.results_table.rowCount()):
+            name_item = self.results_table.item(row, 0)
             if name_item.checkState() == Qt.CheckState.Checked:
-                id = int(name_item.data(Qt.ItemDataRole.UserRole))
-                self.selected_results.append(id)
+                result_id = int(name_item.data(Qt.ItemDataRole.UserRole))
+                self.selected_results.append(result_id)
 
-        for r in range(self.postprocessed_rasters_table.rowCount()):
-            name_item = self.postprocessed_rasters_table.item(r, 0)
+        for row in range(self.postprocessed_rasters_table.rowCount()):
+            name_item = self.postprocessed_rasters_table.item(row, 0)
             if name_item.checkState() == Qt.CheckState.Checked:
-                id = int(name_item.data(Qt.ItemDataRole.UserRole))
-                self.selected_results.append(id)
+                result_id = int(name_item.data(Qt.ItemDataRole.UserRole))
+                self.selected_results.append(result_id)
 
         self.selected_nodata = float(self.no_data_box.text())
         self.selected_pixelsize = float(self.pixelsize_box.text())
         self.selected_crs = self.crs_select_box.crs().authid()
 
-        return super().accept()
+        super().accept()

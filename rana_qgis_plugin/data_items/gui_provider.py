@@ -21,11 +21,16 @@ from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
     OpenLayerRequest,
+    OpenScenarioRequest,
+    OpenScenarioWmsRequest,
     OpenSchematisationRequest,
 )
 
 # Actions permitted for a valid multi-select (files/folders/layers, no root)
-MULTI_SELECT_ACTIONS: list[FileAction] = [FileAction.OPEN_IN_QGIS]
+MULTI_SELECT_ACTIONS: list[FileAction] = [
+    FileAction.OPEN_IN_QGIS,
+    FileAction.OPEN_WMS,
+]
 
 
 class SelectionKind(Enum):
@@ -113,9 +118,11 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
             (actions for candidate, actions in actions_by_item if candidate is item),
             actions_by_item[0][1] if actions_by_item else [],
         )
+        per_item_action_texts = [
+            {action.text() for action in actions} for _, actions in actions_by_item
+        ]
         allowed_actions = merge_multi_select_actions(
-            primary_item_actions,
-            [{action.text() for action in actions} for _, actions in actions_by_item],
+            primary_item_actions, per_item_action_texts
         )
 
         menu.clear()
@@ -127,6 +134,13 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
                     lambda: RanaDataItemGuiProvider.open_selected_items(selected)
                 )
                 menu.addAction(batch_action)
+            elif action.text() == FileAction.OPEN_WMS.value:
+                batch_action = QAction(FileAction.OPEN_WMS.value, menu)
+                batch_action.setIcon(FileAction.OPEN_WMS.icon)
+                batch_action.triggered.connect(
+                    lambda: RanaDataItemGuiProvider.open_selected_wms(selected)
+                )
+                menu.addAction(batch_action)
             else:
                 menu.addAction(action)
 
@@ -136,6 +150,7 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
         requests: list[
             OpenFileRequest
             | OpenSchematisationRequest
+            | OpenScenarioRequest
             | OpenLayerRequest
             | OpenFolderRequest
         ] = []
@@ -155,10 +170,17 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
                     )
                     loader = loader or item.loader
             elif isinstance(item, RanaFileDataItem):
-                if item.data_type in ("vector", "raster", "threedi_schematisation"):
+                if item.data_type in (
+                    "vector",
+                    "raster",
+                    "threedi_schematisation",
+                    "scenario",
+                ):
                     request_type = (
                         OpenSchematisationRequest
                         if item.data_type == "threedi_schematisation"
+                        else OpenScenarioRequest
+                        if item.data_type == "scenario"
                         else OpenFileRequest
                     )
                     requests.append(
@@ -175,3 +197,20 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
 
         if requests and loader is not None:
             loader.open_items(requests)
+
+    @staticmethod
+    def open_selected_wms(items: Sequence[QgsDataItem]) -> None:
+        """Open WMS layers for the selected scenario files."""
+        requests = []
+        loader = None
+        for item in items:
+            if isinstance(item, RanaFileDataItem) and item.data_type == "scenario":
+                requests.append(
+                    OpenScenarioWmsRequest(
+                        project=item.project,
+                        file_item=item.file_item,
+                    )
+                )
+                loader = loader or item.loader
+        if requests and loader is not None:
+            loader.open_scenario_wms_batch(requests)
