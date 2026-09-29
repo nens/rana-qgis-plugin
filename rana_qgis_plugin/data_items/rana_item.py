@@ -31,6 +31,7 @@ from rana_qgis_plugin.auth import (
     create_oauth2_config,
     fetch_identity_providers,
     is_authenticated,
+    reset_authentication_settings,
 )
 from rana_qgis_plugin.constant import (
     ICONS_DIR,
@@ -175,7 +176,24 @@ class RanaRootDataItem(QgsDataItem):
         """Open the settings dialog; reset auth and re-login if the backend URL changed."""
         dlg = RanaSettingsDialog()
         was_authenticated = is_authenticated()
-        if dlg.exec() == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
+        result = dlg.exec()
+        if (
+            result == RanaSettingsDialog.DialogCode.Accepted
+            and dlg.authentication_reset()
+        ):
+            self.logout(delete_config=True)
+            if reset_authentication_settings():
+                self.communication.show_info("Rana authentication has been reset.")
+            else:
+                self.communication.show_error(
+                    "Rana authentication was reset, but the current backend "
+                    "could not be reached to refresh authentication settings. "
+                    "Please check the connection and try again."
+                )
+            self.update_display()
+            self.refresh()
+            return
+        if result == RanaSettingsDialog.DialogCode.Accepted and dlg.url_changed():
             QgsSettings().remove(RANA_TENANT_ENTRY)
             clear_credentials()
             self.tenants = None

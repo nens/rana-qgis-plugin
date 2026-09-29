@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
 )
 
@@ -24,6 +25,7 @@ class RanaSettingsDialog(QDialog):
         self.setWindowTitle(PLUGIN_NAME)
         self.setMinimumWidth(400)
         self._url_changed = False
+        self._authentication_reset = False
 
         layout = QVBoxLayout(self)
 
@@ -40,13 +42,40 @@ class RanaSettingsDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        reset_authentication = QPushButton("Reset authentication")
+        button_box.addButton(
+            reset_authentication, QDialogButtonBox.ButtonRole.ResetRole
+        )
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        reset_authentication.clicked.connect(self.reset_authentication)
         layout.addWidget(button_box)
 
     def url_changed(self) -> bool:
         """Return True if the backend URL was changed on accept."""
         return self._url_changed
+
+    def authentication_reset(self) -> bool:
+        """Return whether authentication reset was confirmed."""
+        return self._authentication_reset
+
+    def reset_authentication(self) -> None:
+        title = "Reset authentication"
+        text = (
+            "Reset Rana authentication and sign out? "
+            "Your backend URL and local plugin settings will be preserved."
+        )
+        message = QMessageBox(self)
+        message.setIcon(QMessageBox.Icon.Warning)
+        message.setWindowTitle(title)
+        message.setText(text)
+        message.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        message.setDefaultButton(QMessageBox.StandardButton.No)
+        if message.exec() == QMessageBox.StandardButton.Yes:
+            self._authentication_reset = True
+            super().accept()
 
     def accept(self) -> None:
         new_url = self._url_edit.text().strip().rstrip("/")
