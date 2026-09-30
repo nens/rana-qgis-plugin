@@ -1,5 +1,4 @@
 import io
-import shutil
 import tempfile
 import warnings
 import zipfile
@@ -12,11 +11,8 @@ import requests
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import (
     QObject,
-    QThread,
     pyqtSignal,
-    pyqtSlot,
 )
-from threedi_mi_utils import bypass_max_path_limit
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
@@ -36,9 +32,9 @@ from rana_qgis_plugin.utils.generic import (
 from rana_qgis_plugin.utils.local_paths import (
     get_local_dir_structure,
     get_local_file_path,
-    get_local_publication_dir_structure,
     get_local_publication_file_path,
     get_local_results_dir,
+    get_safe_local_path,
 )
 from rana_qgis_plugin.utils.qgis import rescale_qml_file
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
@@ -107,7 +103,7 @@ class FileDownloadContext(AbstractDownloadContext):
 
     @property
     def local_dir(self) -> Path:
-        return Path(get_local_dir_structure(self.project_slug, self.file_id))
+        return self.local_file_path.parent
 
     @property
     def local_file_path(self) -> Path:
@@ -130,13 +126,7 @@ class PublicationFileDownloadContext(AbstractDownloadContext):
 
     @property
     def local_dir(self) -> Path:
-        return Path(
-            get_local_publication_dir_structure(
-                self.project_slug,
-                self.file_data.file["id"],
-                self.file_data.file_tree,
-            )
-        )
+        return self.local_file_path.parent
 
     @property
     def local_file_path(self) -> Path:
@@ -197,13 +187,9 @@ class ResultsDownloadContext(AbstractDownloadContext):
                 get_local_results_dir(
                     hcc_working_dir(),
                     self.scenario_info.schematisation_id,
-                    self.scenario_info.schematisation_name.replace("/", "-").replace(
-                        "\\", "-"
-                    ),
+                    self.scenario_info.schematisation_name,
                     self.scenario_info.revision_number,
-                    self.scenario_info.simulation_name.replace("/", "-").replace(
-                        "\\", "-"
-                    ),
+                    self.scenario_info.simulation_name,
                     self.scenario_info.simulation_id,
                 )
             )
@@ -211,7 +197,7 @@ class ResultsDownloadContext(AbstractDownloadContext):
 
     @property
     def local_file_path(self) -> Path:
-        return Path(bypass_max_path_limit(str(self.local_dir / self.filename)))
+        return get_safe_local_path(self.local_dir / self.filename)
 
 
 class BaseDownloader:
@@ -387,8 +373,8 @@ class RanaRawResultsDownloader(RanaDownloader):
 
     def postprocess(self):
         """Extract zip into local_dir, handle nested log zip, remove zip."""
-        zip_path = self.download_context.local_file_path
-        target_dir = self.download_context.local_dir
+        zip_path = Path(self.download_context.local_file_path)
+        target_dir = Path(self.download_context.local_dir)
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(str(target_dir))
         zip_path.unlink()
@@ -445,17 +431,18 @@ class SchematisationGeopackageDownloader(BaseDownloader):
         super().download_file(signals, download_file)
 
     def postprocess(self):
-        zip_file = self.download_context.local_file_path
+        zip_file = Path(self.download_context.local_file_path)
+        target_dir = Path(self.download_context.local_dir)
         # Extract schematisation from zipped archive
         # If the downloaded file is not a zip, we assume it is already a geopackage and skip extraction
         if zipfile.is_zipfile(zip_file):
             with zipfile.ZipFile(zip_file, "r") as zip_ref:
-                zip_ref.extractall(self.download_context.local_dir)
+                zip_ref.extractall(target_dir)
             zip_file.unlink()
         # Assert that there is only one file in the directory
-        extracted_files = list(self.download_context.local_dir.iterdir())
+        extracted_files = list(target_dir.iterdir())
         assert len(extracted_files) == 1, (
-            f"Expected exactly one file in {self.download_context.local_dir}, found {len(extracted_files)}"
+            f"Expected exactly one file in {target_dir}, found {len(extracted_files)}"
         )
         schematisation_file = extracted_files[0]
         # Upgrade schematisation to latest; on failure warn and continue with original gpkg
@@ -563,11 +550,11 @@ class SchematisationRevisionDownloadContext(AbstractDownloadContext):
 
     @property
     def local_dir(self) -> Path:
-        return self.schematisation_db_dir
+        return Path(self.schematisation_db_dir)
 
     @property
     def local_file_path(self) -> Path:
-        return self.schematisation_db_dir / "schematisation.zip"
+        return self.local_dir / "schematisation.zip"
 
     def get_style_zip(self):
         return None
@@ -710,8 +697,8 @@ class LizardResultDownloader(BaseDownloader):
             rasters = {
                 raster_task_id: {
                     "downloaded": False,
-                    "filepath": bypass_max_path_limit(
-                        str(target_dir / f"{file_name}{task_number:02d}.tif")
+                    "filepath": get_safe_local_path(
+                        target_dir / f"{file_name}{task_number:02d}.tif"
                     ),
                 }
                 for task_number, raster_task_id in enumerate(raster_tasks)
@@ -760,7 +747,7 @@ class LizardResultDownloader(BaseDownloader):
 
         # Single-tile: poll and download
         else:
-            target_file = bypass_max_path_limit(str(target_dir / (file_name + ".tif")))
+            target_file = Path(get_safe_local_path(target_dir / (file_name + ".tif")))
             file_link = False
             while not file_link:
                 sleep(5)
@@ -772,7 +759,7 @@ class LizardResultDownloader(BaseDownloader):
                         continue
                     self.download_url(
                         file_link,
-                        Path(target_file),
+                        target_file,
                         signals.progress,
                         progress_min=10,
                         progress_max=100,
