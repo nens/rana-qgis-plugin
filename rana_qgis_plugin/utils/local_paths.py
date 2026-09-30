@@ -14,6 +14,54 @@ from threedi_mi_utils import (
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.utils.settings import rana_cache_dir
 
+UNC_PREFIX = "\\\\?\\"
+INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*]')
+
+
+def sanitize_path_segment(segment: str) -> str:
+    """Make one path segment valid on both Linux and Windows."""
+    return INVALID_PATH_CHARS.sub("_", str(segment)).rstrip(" .")
+
+
+def sanitize_path(path_str: str) -> str:
+    path_obj = Path(path_str)
+    anchor = path_obj.anchor
+    parts = path_obj.parts[1:] if anchor else path_obj.parts
+    sanitized_path = Path(*(sanitize_path_segment(part) for part in parts))
+    if anchor:
+        sanitized_path = Path(anchor) / sanitized_path
+    return str(sanitized_path)
+
+
+def extended_length_path(path: str | Path) -> str:
+    """Return an absolute path that supports paths longer than Windows MAX_PATH.
+
+    The extended-length prefix is only meaningful on Windows.  The function is
+    deliberately idempotent so callers can safely apply it at I/O boundaries.
+    """
+    path_str = os.fspath(path)
+    if path_str.startswith(UNC_PREFIX):
+        return path_str
+    path_str = os.path.abspath(path_str)
+    if os.name != "nt":
+        return path_str
+    if path_str.startswith("\\\\"):
+        return f"{UNC_PREFIX}UNC\\{path_str[2:]}"
+    return f"{UNC_PREFIX}{path_str}"
+
+
+def get_safe_local_path(path: str | Path) -> str:
+    """Sanitize a newly assembled local path and make it long-path safe."""
+    path_str = os.fspath(path)
+    # Remove extended-length prefix if present to safely sanitize the path
+    if path_str.startswith(UNC_PREFIX):
+        path_str = path_str[len(UNC_PREFIX) :]
+        if path_str.startswith("UNC\\"):
+            path_str = f"\\\\{path_str[4:]}"
+    result = sanitize_path(path_str)
+    # Extend path length; this will also restore the extended-length prefix if it was present before sanitization
+    return extended_length_path(result)
+
 
 def is_writable(working_dir: str) -> bool:
     """Try to write and remove an empty text file into given location."""
@@ -29,78 +77,51 @@ def is_writable(working_dir: str) -> bool:
         return True
 
 
-def sanitize_path_for_filesystem(path: str) -> str:
-    """
-    Sanitize a path to be valid for Linux and Windows
-    """
-
-    INVALID_CHARS = r'[<>:"/\\|?*]'
-
-    def clean_part(part: str) -> str:
-        # Replace invalid characters with underscore
-        part = re.sub(INVALID_CHARS, "_", part)
-        # Strip trailing spaces and dots (Windows limitation)
-        part = part.rstrip(" .")
-        return part
-
-    if not path:
-        return path
-    path_obj = Path(path)
-
-    parts = path_obj.parts
-
-    # Remove anchor (drive + root) from parts
-    anchor = path_obj.anchor  # e.g. "C:\\"
-    if anchor:
-        parts = parts[1:]
-
-    # Clean each part
-    sanitized_parts = [clean_part(p) for p in parts]
-
-    # Rebuild relative path first
-    sanitized_path = Path(*sanitized_parts)
-
-    # Restore full anchor (drive + root)
-    if anchor:
-        sanitized_path = Path(anchor) / sanitized_path
-
-    return str(sanitized_path)
-
-
 def get_local_dir_structure(project_slug: str, path: str) -> str:
-    file_name_without_extension = Path(path).stem
-    base_dir = Path(rana_cache_dir())
-    local_dir_structure = base_dir.joinpath(
-        project_slug, "files", Path(path).parent, file_name_without_extension
+    file_path = Path(path)
+    local_dir_structure = Path(rana_cache_dir()).joinpath(
+        project_slug, "files", file_path.parent, file_path.stem
     )
-    return sanitize_path_for_filesystem(str(local_dir_structure))
+    return get_safe_local_path(local_dir_structure)
 
 
 def get_local_file_path(project_slug: str, path: str) -> str:
-    local_dir_structure = Path(get_local_dir_structure(project_slug, path))
-    file_name = sanitize_path_for_filesystem(Path(path).name)
-    return str(local_dir_structure.joinpath(file_name))
+    file_path = Path(path)
+    local_file_path = Path(rana_cache_dir()).joinpath(
+        project_slug,
+        "files",
+        file_path.parent,
+        file_path.stem,
+        file_path.name,
+    )
+    return get_safe_local_path(local_file_path)
 
 
 def get_local_publication_dir_structure(
     project_slug: str, path: str, publication_tree: list[str]
 ) -> str:
-    file_name_without_extension = Path(path).stem
-    base_dir = Path(rana_cache_dir())
-    local_dir_structure = base_dir.joinpath(
-        project_slug, "publications", *publication_tree, file_name_without_extension
+    file_path = Path(path)
+    local_dir_structure = Path(rana_cache_dir()).joinpath(
+        project_slug,
+        "publications",
+        *publication_tree,
+        file_path.stem,
     )
-    return sanitize_path_for_filesystem(str(local_dir_structure))
+    return get_safe_local_path(local_dir_structure)
 
 
 def get_local_publication_file_path(
     project_slug: str, path: str, publication_tree: list[str]
 ) -> str:
-    local_dir_structure = Path(
-        get_local_publication_dir_structure(project_slug, path, publication_tree)
+    file_path = Path(path)
+    local_file_path = Path(rana_cache_dir()).joinpath(
+        project_slug,
+        "publications",
+        *publication_tree,
+        file_path.stem,
+        file_path.name,
     )
-    local_file_path = local_dir_structure.joinpath(Path(path).name)
-    return sanitize_path_for_filesystem(str(local_file_path))
+    return get_safe_local_path(local_file_path)
 
 
 def get_local_schematisation_revision_dir(
@@ -153,11 +174,13 @@ def get_local_results_dir(
     )
     if not revision_dir:
         return None
-    result = str(
-        Path(revision_dir / "results").joinpath(f"{simulation_name} ({simulation_id})")
+    return extended_length_path(
+        str(
+            revision_dir
+            / "results"
+            / sanitize_path_segment(f"{simulation_name} ({simulation_id})")
+        )
     )
-    # replace colons, invalid for Windows paths (don't replace drive colon)
-    return result[:3] + result[3:].replace(":", "_")
 
 
 def get_local_results_dir_from_meta(meta: dict, working_dir: str) -> Optional[str]:

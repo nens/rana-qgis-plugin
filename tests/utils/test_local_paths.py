@@ -1,7 +1,7 @@
 import json
 import shutil
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -45,9 +45,25 @@ def results_folder_subpath(result_folder_info):
         ("/folder/name /file.txt", "/folder/name/file.txt"),
     ],
 )
-def test_sanitize_path_for_filesystem(input_path, expected_output):
-    result = local_paths.sanitize_path_for_filesystem(input_path)
+def test_finalize_local_path(input_path, expected_output):
+    result = local_paths.get_safe_local_path(input_path)
     assert result == expected_output
+
+
+@pytest.mark.parametrize(
+    "input_path, expected_output",
+    [
+        ("C:/some/path", "\\\\?\\C:/some/path"),
+        (r"\\server\share\folder", r"\\?\UNC\server\share\folder"),
+    ],
+)
+def test_extended_length_path(input_path, expected_output):
+    with (
+        patch.object(local_paths.os, "name", "nt"),
+        patch.object(local_paths.os.path, "abspath", side_effect=lambda path: path),
+    ):
+        result = local_paths.extended_length_path(input_path)
+        assert result == expected_output
 
 
 def test_get_local_dir_structure():
@@ -71,6 +87,9 @@ def test_get_local_file_path():
         rana_root + project + "/files/baz/" + file_stem + "/" + file_name
     )
     assert local_path == expected_local_path
+    assert Path(local_path).parent == Path(
+        local_paths.get_local_dir_structure(project, file_id)
+    )
 
 
 def test_get_local_publication_dir_structure():
@@ -103,6 +122,11 @@ def test_get_local_publication_file_path():
         rana_root + project + "/publications/" + publication_tree_path + "/" + file_stem
     )
     assert local_path == expected_local_dir + "/" + file_id
+    assert Path(local_path).parent == Path(
+        local_paths.get_local_publication_dir_structure(
+            project, file_id, publication_tree
+        )
+    )
 
 
 def test_get_local_results_dir_no_local_data(
@@ -163,13 +187,15 @@ def test_get_local_results_dir_with_colon(
     tmp_path, result_folder_info, results_folder_subpath
 ):
     workdir = Path(tmp_path)
-    result_folder_info["schematisation_name"] = "foo:bar"
-    schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
+    result_folder_info["simulation_name"] = "foo:bar"
+    schemadir = workdir.joinpath("foo")
     schemadir.mkdir(parents=True, exist_ok=True)
     results_folder = local_paths.get_local_results_dir(
         str(workdir), **result_folder_info
     )
-    expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
+    expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(
+        "bar", "foo_bar"
+    )
     assert results_folder == expected_folder
 
 
