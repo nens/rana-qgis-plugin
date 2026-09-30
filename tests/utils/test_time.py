@@ -8,7 +8,15 @@ from rana_qgis_plugin.utils.time import (
     convert_timestamp_str_to_relative_time,
     convert_to_numeric_timestamp,
     format_activity_timestamp_str,
+    format_timestamp,
+    parse_timestamp_str,
 )
+
+
+def test_format_timestamp_uses_requested_format():
+    timestamp = parse_timestamp_str("2023-01-01T12:00:00+00:00")
+
+    assert format_timestamp(timestamp, "%Y-%m-%d %H:%M") == "2023-01-01 12:00"
 
 
 def test_convert_to_timestamp():

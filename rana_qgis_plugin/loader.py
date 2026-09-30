@@ -9,6 +9,7 @@ from qgis.core import QgsApplication, QgsProject
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
+from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
@@ -32,7 +33,10 @@ from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
-from rana_qgis_plugin.simulation.utils import resolve_schematisation_download_dir
+from rana_qgis_plugin.simulation.utils import (
+    extract_error_message,
+    resolve_schematisation_download_dir,
+)
 from rana_qgis_plugin.simulation.workers import SchematisationUploadTask
 from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
@@ -290,13 +294,16 @@ class Loader(QObject):
             if upload.exec() == QDialog.DialogCode.Accepted and upload.new_upload:
                 task = SchematisationUploadTask(api, local, upload.new_upload)
                 task.model_requested.connect(
-                    lambda: self.start_model_tracker_process(
-                        project_id,
-                        schematisation_id,
-                        schematisation.name,
-                        task.revision.id,
-                        task.upload_specification["cb_inherit_templates"],
-                    )
+                    lambda: (
+                        self.start_model_tracker_process(
+                            project_id,
+                            schematisation_id,
+                            schematisation.name,
+                            task.revision.id,
+                            task.upload_specification["cb_inherit_templates"],
+                        ),
+                        None,
+                    )[1]
                 )
                 task.progress_changed.connect(
                     lambda name, current, total, per_task: (
@@ -341,12 +348,13 @@ class Loader(QObject):
         schematisation_name: str,
         revision_id: int,
         inherit_from_previous_revision: bool = True,
-    ) -> None:
+    ) -> dict | None:
         """Start server-side model creation for an uploaded revision."""
         track_process = get_process_id_for_tag(self.communication, "model_tracker")
         if track_process is None:
             self.communication.log_err("No model tracker available")
             return None
+
         params = {
             "project_id": project_id,
             "inputs": {
@@ -358,11 +366,32 @@ class Loader(QObject):
             "name": f"{schematisation_name}_rev{revision_id}",
         }
         try:
-            start_tenant_process(track_process, params)
+            response = start_tenant_process(track_process, params)
             self.communication.bar_info("Revision uploaded; model creation started.")
+            return response
         except RanaPostError as e:
             self.communication.bar_error(f"Failed to start model tracker process")
             self.communication.log_err(f"{e.msg}")
+            return None
+
+    def delete_schematisation_revision_3di_model(
+        self, schematisation_id: int, revision_id: int
+    ) -> str | None:
+        """Delete the 3Di model belonging to a schematisation revision."""
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            return "Not authenticated with 3Di API — cannot delete the Rana model."
+        try:
+            calls = ThreediCalls(threedi_api)
+            models = calls.fetch_schematisation_revision_3di_models(
+                schematisation_id, revision_id
+            )
+            if not models:
+                return "No Rana model found for this revision."
+            calls.delete_3di_model(models[0].id)
+        except ApiException as error:
+            return extract_error_message(error)
+        return None
 
     def rename_item(
         self, project_id: str, old_path: str, new_name: str, is_folder: bool
@@ -1564,7 +1593,22 @@ class Loader(QObject):
         try:
             metadata = get_threedi_schematisation(request.file_item["descriptor_id"])
             schematisation = metadata["schematisation"]
-            revision = metadata["latest_revision"]
+            latest_revision = metadata["latest_revision"]
+            revision = latest_revision
+            if request.revision_id is not None:
+                threedi_api = get_threedi_api()
+                if threedi_api is None:
+                    self.communication.bar_error(
+                        "Not authenticated with 3Di API — cannot open schematisation."
+                    )
+                    return
+                revision = (
+                    ThreediCalls(threedi_api)
+                    .fetch_schematisation_revision(
+                        schematisation["id"], request.revision_id
+                    )
+                    .to_dict()
+                )
             if not all(field in schematisation for field in ("id", "name")):
                 raise ValueError("schematisation is missing required fields")
             if not all(
@@ -1599,7 +1643,7 @@ class Loader(QObject):
             self.communication,
             schematisation,
             revision,
-            True,  # is_latest_revision — we always fetch the latest
+            revision == metadata["latest_revision"],
             working_dir,
             threedi_api,
         )

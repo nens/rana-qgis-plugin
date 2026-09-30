@@ -310,3 +310,11 @@ def get_rana_file_url(project_slug: str, file_id: str) -> str:
     else:
         query_params["fileName"] = file_id
     return f"{base_url()}/{get_tenant_id()}/projects/{project_slug}?{urlencode(query_params)}"
+
+
+def get_rana_processes_url(project_slug: str, job_id: str | None = None) -> str:
+    """Get the Rana project processes URL, optionally focused on a job."""
+    query_params = {"tab": "2"}
+    if job_id:
+        query_params["job"] = job_id
+    return f"{base_url()}/{get_tenant_id()}/projects/{project_slug}?{urlencode(query_params)}"
