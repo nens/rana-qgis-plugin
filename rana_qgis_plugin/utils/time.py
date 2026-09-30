@@ -20,11 +20,16 @@ def parse_timestamp_str(timestamp: str) -> datetime:
 
 def convert_timestamp_str_to_local_time(timestamp: str) -> str:
     time = parse_timestamp_str(timestamp)
-    return convert_timestamp_to_local_time(time)
+    return format_timestamp(time)
 
 
 def convert_timestamp_to_local_time(time: datetime) -> str:
-    return time.astimezone().strftime("%d-%m-%Y %H:%M")
+    return format_timestamp(time)
+
+
+def format_timestamp(time: datetime, date_format: str = "%d-%m-%Y %H:%M") -> str:
+    """Convert a datetime to local time using the requested display format."""
+    return time.astimezone().strftime(date_format)
 
 
 def convert_timestamp_str_to_relative_time(timestamp: str) -> str:

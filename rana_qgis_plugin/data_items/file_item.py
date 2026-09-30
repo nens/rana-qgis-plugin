@@ -36,7 +36,10 @@ from rana_qgis_plugin.widgets.file_info_dialog import (
 )
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
-from rana_qgis_plugin.widgets.version_history_dialog import RanaHistoryDialog
+from rana_qgis_plugin.widgets.version_history_dialog import (
+    RanaHistoryDialog,
+    SchematisationRevisionHistoryDialog,
+)
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -148,10 +151,13 @@ class RanaFileDataItem(QgsDataItem):
             q_action.setToolTip(get_action_tooltip(action))
             if action is FileAction.VIEW_FILE_INFO:
                 q_action.triggered.connect(lambda: self.show_file_info(parent))
-            elif action is FileAction.VERSION_HISTORY and self.data_type != (
-                "threedi_schematisation"
-            ):
-                q_action.triggered.connect(lambda: self.show_history(parent))
+            elif action is FileAction.VERSION_HISTORY:
+                if self.data_type == "threedi_schematisation":
+                    q_action.triggered.connect(
+                        lambda: self.show_revision_history(parent)
+                    )
+                else:
+                    q_action.triggered.connect(lambda: self.show_history(parent))
             elif action is FileAction.DELETE:
                 q_action.triggered.connect(lambda: self.delete_file(parent))
             elif action is FileAction.RENAME:
@@ -182,6 +188,17 @@ class RanaFileDataItem(QgsDataItem):
         RanaHistoryDialog(
             self.project_id,
             self.file_item["id"],
+            self.error_signals,
+            parent,
+        ).exec()
+
+    def show_revision_history(self, parent) -> None:
+        """Open 3Di revision history for a schematisation file."""
+        SchematisationRevisionHistoryDialog(
+            cast(str, self.descriptor_id),
+            self.project,
+            self.file_item,
+            self.loader,
             self.error_signals,
             parent,
         ).exec()

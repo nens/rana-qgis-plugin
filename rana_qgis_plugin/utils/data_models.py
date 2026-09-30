@@ -83,6 +83,7 @@ class OpenSchematisationRequest:
 
     project: dict
     file_item: dict
+    revision_id: int | None = None
 
 
 @dataclass(frozen=True)
