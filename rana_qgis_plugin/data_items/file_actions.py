@@ -77,7 +77,9 @@ def get_file_actions(data_type: str) -> list[FileAction]:
     else:
         actions = [FileAction.OPEN_IN_BROWSER] if data_type == "other" else []
     return (
-        [FileAction.VIEW_FILE_INFO] + actions + [FileAction.RENAME, FileAction.DELETE]
+        [FileAction.VIEW_FILE_INFO, FileAction.VERSION_HISTORY]
+        + actions
+        + [FileAction.RENAME, FileAction.DELETE]
     )
 
 

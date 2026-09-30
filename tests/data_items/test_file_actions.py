@@ -14,6 +14,7 @@ from rana_qgis_plugin.data_items.file_actions import (
             "vector",
             [
                 FileAction.VIEW_FILE_INFO,
+                FileAction.VERSION_HISTORY,
                 FileAction.OPEN_IN_QGIS,
                 FileAction.OPEN_IN_BROWSER,
                 FileAction.RENAME,
@@ -24,6 +25,7 @@ from rana_qgis_plugin.data_items.file_actions import (
             "scenario",
             [
                 FileAction.VIEW_FILE_INFO,
+                FileAction.VERSION_HISTORY,
                 FileAction.OPEN_IN_QGIS,
                 FileAction.OPEN_WMS,
                 FileAction.RENAME,
@@ -34,6 +36,7 @@ from rana_qgis_plugin.data_items.file_actions import (
             "other",
             [
                 FileAction.VIEW_FILE_INFO,
+                FileAction.VERSION_HISTORY,
                 FileAction.OPEN_IN_BROWSER,
                 FileAction.RENAME,
                 FileAction.DELETE,

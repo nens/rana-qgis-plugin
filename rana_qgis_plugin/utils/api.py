@@ -351,19 +351,11 @@ def get_tenant_project_file(
         return None
 
 
-def get_tenant_project_file_history(project_id: str, params: dict) -> Optional[dict]:
-    authcfg_id = get_authcfg_id()
+def get_tenant_project_file_history_page(project_id: str, params: dict) -> dict:
+    """Fetch one cursor page of project file history."""
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/projects/{project_id}/files/history"
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, _ = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        return None
+    return simple_fetch(url, params.copy())
 
 
 def get_tenant_file_url(project_id: str, params: dict) -> Optional[str]:
