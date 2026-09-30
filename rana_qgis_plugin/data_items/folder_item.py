@@ -23,6 +23,7 @@ from rana_qgis_plugin.utils.api import RanaFetchError, get_tenant_project_files
 from rana_qgis_plugin.utils.data_models import OpenFolderRequest
 from rana_qgis_plugin.utils.generic import get_rana_file_url
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
+from rana_qgis_plugin.widgets.version_history_dialog import RanaHistoryDialog
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -120,8 +121,19 @@ class RanaFolderDataItem(QgsDataItem):
                         )
                     )
                 )
+            elif action is FileAction.VERSION_HISTORY:
+                q_action.triggered.connect(lambda: self.show_history(parent))
             actions.append(q_action)
         return actions
+
+    def show_history(self, parent) -> None:
+        """Open generic history for this folder or the Files root."""
+        RanaHistoryDialog(
+            self.project["id"],
+            self.folder_path,
+            self.error_signals,
+            parent,
+        ).exec()
 
     def refresh_if_populated(self) -> None:
         """Refresh this folder if it has already been populated."""
