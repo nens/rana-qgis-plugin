@@ -197,7 +197,7 @@ class ResultsDownloadContext(AbstractDownloadContext):
 
     @property
     def local_file_path(self) -> Path:
-        return get_safe_local_path(self.local_dir / self.filename)
+        return Path(get_safe_local_path(self.local_dir / self.filename))
 
 
 class BaseDownloader:

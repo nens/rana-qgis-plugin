@@ -187,13 +187,15 @@ def test_get_local_results_dir_with_colon(
     tmp_path, result_folder_info, results_folder_subpath
 ):
     workdir = Path(tmp_path)
-    result_folder_info["schematisation_name"] = "foo:bar"
-    schemadir = workdir.joinpath(result_folder_info["schematisation_name"])
+    result_folder_info["simulation_name"] = "foo:bar"
+    schemadir = workdir.joinpath("foo")
     schemadir.mkdir(parents=True, exist_ok=True)
     results_folder = local_paths.get_local_results_dir(
         str(workdir), **result_folder_info
     )
-    expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(":", "_")
+    expected_folder = str(schemadir.joinpath(*results_folder_subpath)).replace(
+        "bar", "foo_bar"
+    )
     assert results_folder == expected_folder
 
 
