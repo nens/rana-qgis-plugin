@@ -37,7 +37,10 @@ from rana_qgis_plugin.simulation.utils import (
     extract_error_message,
     resolve_schematisation_download_dir,
 )
-from rana_qgis_plugin.simulation.workers import SchematisationUploadTask
+from rana_qgis_plugin.simulation.workers import (
+    SchematisationUploadTask,
+    SimulationRunner,
+)
 from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     RanaFetchError,
@@ -127,6 +130,8 @@ class Loader(QObject):
     """
 
     avatar_updated = pyqtSignal(str, QPixmap)
+    simulations_initialized = pyqtSignal(list)
+    simulation_initialization_failed = pyqtSignal(str)
     item_renamed = pyqtSignal(
         str, str, str, bool
     )  # old_path, new_path, project_id, is_folder
@@ -142,6 +147,7 @@ class Loader(QObject):
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
         self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
+        self.simulation_runner_tasks: set[SimulationRunner] = set()
         self._accept_async_callbacks = True
         self.scenario_action_busy = False
         self.scenario_action_pending = 0
@@ -154,9 +160,85 @@ class Loader(QObject):
         for task in self.scenario_resolve_tasks:
             task.cancel()
         self.scenario_resolve_tasks.clear()
+        for simulation_task in self.simulation_runner_tasks:
+            simulation_task.cancel()
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def start_simulations(
+        self, threedi_api, simulations_to_run: list
+    ) -> SimulationRunner | None:
+        """Create and submit the simulation initialization task.
+
+        The task manager owns execution of the runner, while Loader owns the
+        signal receiver and task references so the wizard can close safely.
+        """
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self._handle_simulation_initialization_failed(
+                "Could not start simulation initialization."
+            )
+            return None
+
+        upload_timeout = QSettings().value("threedi/timeout", 900, type=int)
+        task = SimulationRunner(
+            threedi_api, simulations_to_run, upload_timeout=upload_timeout
+        )
+        self.simulation_runner_tasks.add(task)
+        task.signals.initializing_simulations_progress.connect(
+            self._handle_simulation_initialization_progress
+        )
+        task.signals.initializing_simulations_failed.connect(
+            self._handle_simulation_initialization_failed
+        )
+        task.signals.initializing_simulations_finished.connect(
+            self._handle_simulation_initialization_finished
+        )
+        task.taskCompleted.connect(lambda: self._forget_simulation_task(task))
+        task.taskTerminated.connect(lambda: self._forget_simulation_task(task))
+        task_manager.addTask(task)
+        return task
+
+    def _forget_simulation_task(self, task: SimulationRunner) -> None:
+        self.simulation_runner_tasks.discard(task)
+
+    def _handle_simulation_initialization_progress(
+        self,
+        new_simulation,
+        new_simulation_initialized,
+        current_progress,
+        total_progress,
+    ) -> None:
+        """Report simulation initialization progress after the wizard closes."""
+        if not self._accept_async_callbacks:
+            return
+        msg = f'Initializing simulation "{new_simulation.name}"...'
+        self.communication.progress_bar(
+            msg, 0, total_progress, current_progress, clear_msg_bar=True
+        )
+        if new_simulation_initialized:
+            self.communication.bar_info(
+                f"Simulation {new_simulation.name} added to queue!"
+            )
+
+    def _handle_simulation_initialization_failed(self, error_message: str) -> None:
+        """Report a simulation initialization failure and expose it to callers."""
+        if not self._accept_async_callbacks:
+            return
+        self.communication.clear_message_bar()
+        self.communication.bar_error(error_message)
+        self.simulation_initialization_failed.emit(error_message)
+
+    def _handle_simulation_initialization_finished(
+        self, message: str, simulations: list
+    ) -> None:
+        """Report completion and expose simulations for tracker integration."""
+        if not self._accept_async_callbacks:
+            return
+        self.communication.clear_message_bar()
+        self.communication.bar_info(message)
+        self.simulations_initialized.emit(simulations)
 
     def begin_scenario_action(self, count: int) -> bool:
         if self.scenario_action_busy:

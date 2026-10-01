@@ -12,7 +12,12 @@ from typing import List, Optional
 
 import pyqtgraph as pg
 from dateutil.relativedelta import relativedelta
-from qgis.core import QgsMapLayer, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
+from qgis.core import (
+    QgsMapLayer,
+    QgsMapLayerProxyModel,
+    QgsProject,
+    QgsVectorLayer,
+)
 from qgis.gui import QgsMapToolIdentifyFeature
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import (
@@ -99,7 +104,6 @@ from .utils_ui import (
     set_widget_background_color,
     set_widgets_parameters,
 )
-from .workers import SimulationRunner
 
 base_dir = os.path.dirname(os.path.dirname(__file__))
 uicls_name_page, basecls_name_page = uic.loadUiType(
@@ -3920,12 +3924,10 @@ class SummaryPage(QWizardPage):
 class SimulationWizard(QWizard):
     """New simulation wizard."""
 
-    simulation_created = pyqtSignal(list)
-    simulation_created_failed = pyqtSignal()
+    simulations_prepared = pyqtSignal(list)
 
     def __init__(
         self,
-        simulation_runner_pool,
         working_dir,
         simulation_template,
         organisation,
@@ -3943,7 +3945,6 @@ class SimulationWizard(QWizard):
         self.threedi_api = threedi_api
         self.communication = communication
         self.current_model = current_model
-        self.simulation_runner_pool = simulation_runner_pool
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
         self.working_dir = working_dir
@@ -4631,8 +4632,9 @@ class SimulationWizard(QWizard):
                     )
 
     def run_new_simulation(self):
-        """Getting data from the wizard and running new simulation."""
+        """Collect the configured simulations and hand them to the caller."""
         self.settings.setValue("threedi/wizard_size", self.size())
+        self.new_simulations = []
         events = self.init_conditions_dlg.events
         name = self.name_page.main_widget.le_sim_name.text().strip()
         project_name = self.name_page.main_widget.le_project.text().strip()
@@ -5040,7 +5042,9 @@ class SimulationWizard(QWizard):
             # )
             self.new_simulations.append(new_simulation)
         self.unload_breach_layers()
-        self.start_simulations(self.new_simulations)
+        self.simulations_prepared.emit(self.new_simulations)
+        self.accept()
+        return self.new_simulations
 
     def cancel_wizard(self):
         """Handling canceling wizard action."""
@@ -5188,48 +5192,3 @@ class SimulationWizard(QWizard):
         else:
             available_gridadming_gpkg_path = expected_gridadming_gpkg_path
         return available_gridadming_gpkg_path
-
-    def start_simulations(self, simulations_to_run):
-        """Start the simulations."""
-        upload_timeout = QSettings().value("threedi/timeout", 900, type=int)
-        simulations_runner = SimulationRunner(
-            self.threedi_api, simulations_to_run, upload_timeout=upload_timeout
-        )
-        simulations_runner.signals.initializing_simulations_progress.connect(
-            self.on_initializing_progress
-        )
-        simulations_runner.signals.initializing_simulations_failed.connect(
-            self.on_initializing_failed
-        )
-        simulations_runner.signals.initializing_simulations_finished.connect(
-            self.on_initializing_finished
-        )
-        self.simulation_runner_pool.start(simulations_runner)
-
-    def on_initializing_progress(
-        self,
-        new_simulation,
-        new_simulation_initialized,
-        current_progress,
-        total_progress,
-    ):
-        """Feedback on new simulation(s) initialization progress signal."""
-        msg = f'Initializing simulation "{new_simulation.name}"...'
-        self.communication.progress_bar(
-            msg, 0, total_progress, current_progress, clear_msg_bar=True
-        )
-        if new_simulation_initialized:
-            info_msg = f"Simulation {new_simulation.name} added to queue!"
-            self.communication.bar_info(info_msg)
-
-    def on_initializing_failed(self, error_message):
-        """Feedback on new simulation(s) initialization failure signal."""
-        self.communication.clear_message_bar()
-        self.communication.bar_error(error_message)
-        self.simulation_created_failed.emit()
-
-    def on_initializing_finished(self, message, simulations):
-        """Feedback on new simulation(s) initialization finished signal."""
-        self.communication.clear_message_bar()
-        self.communication.bar_info(message)
-        self.simulation_created.emit(simulations)
