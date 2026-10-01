@@ -307,8 +307,8 @@ class RanaHistoryDialog(HistoryDialog):
         # The API sometimes returns a None cursor even when there are more items,
         # so we increase the limit until we get a next cursor or fewer items than the limit.
         while (len(page["items"]) == params["limit"]) and not page.get("next"):
-            params["limit"] = int(params["limit"]) + 1
-            if int(params["limit"]) > 100:
+            params["limit"] = min(int(params["limit"]) + 10, 100)
+            if int(params["limit"]) == len(page["items"]):
                 break
             page = get_tenant_project_file_history_page(self.project_id, params)
         rows = [
@@ -558,17 +558,16 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         deleted_metadata = deleted_item.data(Qt.ItemDataRole.UserRole)
         if not deleted_metadata:
             return
-        # count the number of existing models
-        model_count = sum(
-            bool((item.data(Qt.ItemDataRole.UserRole) or {})["has_model"])
-            for row_number in range(self.model.rowCount())
-            if (item := self.model.item(row_number, 0)) is not None
-        )
         model_limit = deleted_metadata["model_limit"]
         deleted_metadata["has_model"] = False
         deleted_metadata["simulation_enabled"] = False
         deleted_metadata["simulation_tooltip"] = (
             "A Rana model must be created before a simulation can be started."
+        )
+        model_count = sum(
+            bool((item.data(Qt.ItemDataRole.UserRole) or {})["has_model"])
+            for row_number in range(self.model.rowCount())
+            if (item := self.model.item(row_number, 0)) is not None
         )
         deleted_metadata["model_enabled"] = model_count < model_limit
         deleted_metadata["model_tooltip"] = ""

@@ -1621,6 +1621,7 @@ class Loader(QObject):
             ValueError,
             NetworkUnavailableError,
             RanaFetchError,
+            ApiException,
         ) as exc:
             self.communication.bar_error(f"Invalid schematisation metadata: {exc}")
             return None
