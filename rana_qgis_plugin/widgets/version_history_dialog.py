@@ -631,6 +631,9 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         button.setEnabled(False)
         button.setToolTip("Model creation requested — click Refresh to check status")
         job_id = response.get("job_id") or response.get("id")
+        self.show_process_url_popup(job_id)
+
+    def show_process_url_popup(self, job_id: str) -> None:
         url = get_rana_processes_url(self.project.get("slug", ""), job_id)
         QMessageBox.information(
             self,
