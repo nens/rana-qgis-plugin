@@ -60,6 +60,7 @@ from qgis.utils import iface
 from threedi_api_client.openapi import ApiException, Threshold
 from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 
+from rana_qgis_plugin.layer_management.layer_manager import add_layer_to_qgs_project
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
 from .custom_items import FilteredComboBox
@@ -3934,8 +3935,6 @@ class SimulationWizard(QWizard):
         current_model,
         threedi_api,
         communication,
-        layer_manager,
-        layer_parents,
         init_conditions_dlg,
         parent,
     ):
@@ -3948,8 +3947,6 @@ class SimulationWizard(QWizard):
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
         self.working_dir = working_dir
-        self.layer_manager = layer_manager
-        self.layer_parents = layer_parents
         self.local_schematisations = list_local_schematisations(
             self.working_dir, use_config_for_revisions=False
         )
@@ -5067,9 +5064,7 @@ class SimulationWizard(QWizard):
                 self.potential_breaches_layer.setFlags(
                     QgsMapLayer.Searchable | QgsMapLayer.Identifiable
                 )
-                self.layer_manager.add_layer(
-                    self.potential_breaches_layer, self.layer_parents
-                )
+                add_layer_to_qgs_project(self.potential_breaches_layer)
         if self.current_model_gridadmin_gpkg is not None:
             flowlines_uri = f"{self.current_model_gridadmin_gpkg}|layername=flowline"
             flowlines_layer = QgsVectorLayer(flowlines_uri, "1D2D flowlines", "ogr")
@@ -5080,7 +5075,7 @@ class SimulationWizard(QWizard):
                 self.flowlines_layer.setFlags(
                     QgsMapLayer.Searchable | QgsMapLayer.Identifiable
                 )
-                self.layer_manager.add_layer(self.flowlines_layer, self.layer_parents)
+                add_layer_to_qgs_project(self.flowlines_layer)
             else:
                 self.flowlines_layer = None
 
@@ -5093,23 +5088,6 @@ class SimulationWizard(QWizard):
             if self.flowlines_layer is not None:
                 QgsProject.instance().removeMapLayer(self.flowlines_layer)
                 self.flowlines_layer = None
-            # clean added groups
-            if self.layer_parents:
-                root = QgsProject.instance().layerTreeRoot()
-                group_map = {}
-                # collect all the groups that may be removed
-                for layer_parent in self.layer_parents:
-                    group = root.findGroup(layer_parent)
-                    group_map[layer_parent] = group
-                    root = group
-                # go over groups in reverse order and remove empty ones
-                for layer_parent in reversed(self.layer_parents):
-                    group = group_map[layer_parent]
-                    if not group.children():
-                        group.parent().removeChildNode(group)
-                    else:
-                        # no need to keep on removing stuff if we don't remove the child
-                        break
             # self.plugin_dock.iface.mapCanvas().refresh()
         except (AttributeError, RuntimeError):
             pass
