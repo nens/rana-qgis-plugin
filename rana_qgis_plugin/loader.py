@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Sequence
 from enum import Enum
+from html import escape
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -31,13 +32,21 @@ from rana_qgis_plugin.layer_management.layer_manager import (
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
+from rana_qgis_plugin.simulation.simulation_init import SimulationInit
+from rana_qgis_plugin.simulation.simulation_wizard import SimulationWizard
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
+    CACHE_PATH,
     extract_error_message,
+    get_simulation_data_from_template,
     resolve_schematisation_download_dir,
 )
-from rana_qgis_plugin.simulation.workers import SchematisationUploadTask
+from rana_qgis_plugin.simulation.workers import (
+    SchematisationUploadTask,
+    SimulationRunner,
+)
 from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     RanaFetchError,
@@ -69,7 +78,9 @@ from rana_qgis_plugin.utils.data_models import (
 from rana_qgis_plugin.utils.filesystem import ensure_writable_directory
 from rana_qgis_plugin.utils.generic import (
     get_editable_layers_for_file,
+    get_rana_processes_url,
     get_threedi_api,
+    get_threedi_organisations,
     save_layer_changes,
 )
 from rana_qgis_plugin.utils.qgis import (
@@ -105,6 +116,9 @@ from rana_qgis_plugin.workers.upload import (
     prepare_new_file_upload,
 )
 
+if TYPE_CHECKING:
+    from rana_qgis_plugin.communication import UICommunication
+
 
 class UploadChoice(Enum):
     """Choices presented while resolving an upload conflict."""
@@ -115,10 +129,6 @@ class UploadChoice(Enum):
     ABORT = "Cancel"
 
 
-if TYPE_CHECKING:
-    from rana_qgis_plugin.communication import UICommunication
-
-
 class Loader(QObject):
     """Signal-based orchestrator for background work.
 
@@ -127,6 +137,8 @@ class Loader(QObject):
     """
 
     avatar_updated = pyqtSignal(str, QPixmap)
+    simulations_initialized = pyqtSignal(list)
+    simulation_initialization_failed = pyqtSignal(str)
     item_renamed = pyqtSignal(
         str, str, str, bool
     )  # old_path, new_path, project_id, is_folder
@@ -142,6 +154,7 @@ class Loader(QObject):
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
         self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
+        self.simulation_runner_tasks: set[SimulationRunner] = set()
         self._accept_async_callbacks = True
         self.scenario_action_busy = False
         self.scenario_action_pending = 0
@@ -154,9 +167,288 @@ class Loader(QObject):
         for task in self.scenario_resolve_tasks:
             task.cancel()
         self.scenario_resolve_tasks.clear()
+        for simulation_task in self.simulation_runner_tasks:
+            simulation_task.cancel()
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def start_simulations(
+        self,
+        threedi_api,
+        simulations_to_run: list,
+        project: dict | None = None,
+        file_item: dict | None = None,
+        parent=None,
+    ) -> SimulationRunner | None:
+        """Create and submit the simulation initialization task.
+
+        The task manager owns execution of the runner, while Loader owns the
+        signal receiver and task references so the wizard can close safely.
+        """
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self._handle_simulation_initialization_failed(
+                "Could not start simulation initialization."
+            )
+            return None
+
+        upload_timeout = QSettings().value("threedi/timeout", 900, type=int)
+        task = SimulationRunner(
+            threedi_api, simulations_to_run, upload_timeout=upload_timeout
+        )
+        self.simulation_runner_tasks.add(task)
+        task.signals.initializing_simulations_progress.connect(
+            self._handle_simulation_initialization_progress
+        )
+        task.signals.initializing_simulations_failed.connect(
+            self._handle_simulation_initialization_failed
+        )
+        task.signals.initializing_simulations_finished.connect(
+            self._handle_simulation_initialization_finished
+        )
+        if project is not None and file_item is not None:
+            task.signals.initializing_simulations_finished.connect(
+                lambda _message, simulations: self.start_simulation_tracker_process(
+                    project, file_item, simulations, parent
+                )
+            )
+        task.taskCompleted.connect(lambda: self._forget_simulation_task(task))
+        task.taskTerminated.connect(lambda: self._forget_simulation_task(task))
+        task_manager.addTask(task)
+        return task
+
+    def _forget_simulation_task(self, task: SimulationRunner) -> None:
+        self.simulation_runner_tasks.discard(task)
+
+    def _handle_simulation_initialization_progress(
+        self,
+        new_simulation,
+        new_simulation_initialized,
+        current_progress,
+        total_progress,
+    ) -> None:
+        """Report simulation initialization progress after the wizard closes."""
+        if not self._accept_async_callbacks:
+            return
+        msg = f'Initializing simulation "{new_simulation.name}"...'
+        self.communication.progress_bar(
+            msg, 0, total_progress, current_progress, clear_msg_bar=True
+        )
+        if new_simulation_initialized:
+            self.communication.bar_info(
+                f"Simulation {new_simulation.name} added to queue!"
+            )
+
+    def _handle_simulation_initialization_failed(self, error_message: str) -> None:
+        """Report a simulation initialization failure and expose it to callers."""
+        if not self._accept_async_callbacks:
+            return
+        self.communication.clear_message_bar()
+        self.communication.bar_error(error_message)
+        self.simulation_initialization_failed.emit(error_message)
+
+    def _handle_simulation_initialization_finished(
+        self, message: str, simulations: list
+    ) -> None:
+        """Report completion and expose simulations for tracker integration."""
+        if not self._accept_async_callbacks:
+            return
+        self.communication.clear_message_bar()
+        self.communication.bar_info(message)
+        self.simulations_initialized.emit(simulations)
+
+    def _start_simulations_from_wizard(
+        self,
+        threedi_api,
+        simulations: list,
+        project: dict,
+        file_item: dict,
+        parent,
+    ) -> None:
+        """Submit simulations prepared by the wizard to the task manager."""
+        self.start_simulations(threedi_api, simulations, project, file_item, parent)
+
+    def start_simulation(
+        self,
+        project: dict,
+        file_item: dict,
+        schematisation_id: int,
+        revision_id: int,
+        parent,
+    ) -> None:
+        """Open the simulation setup dialogs after validating prerequisites."""
+        if not hcc_working_dir():
+            self.communication.show_warn(
+                "Working directory not yet set, please configure this in the plugin settings."
+            )
+            return
+
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.show_warn(
+                "Not authenticated with 3Di API — cannot start simulation."
+            )
+            return
+
+        try:
+            CACHE_PATH.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            self.communication.show_error(
+                f"Could not create simulation cache directory: {error}"
+            )
+            return
+
+        try:
+            tc = ThreediCalls(threedi_api)
+            allowed_org_ids = get_threedi_organisations()
+            organisations = {
+                org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
+            }
+            if len(organisations) == 0:
+                self.communication.show_warn(
+                    "No organisation available for this simulation"
+                )
+                return
+            models = tc.fetch_schematisation_revision_3di_models(
+                schematisation_id, revision_id
+            )
+        except ApiException as error:
+            self.communication.show_warn(
+                f"Could not retrieve simulation prerequisites: {extract_error_message(error)}"
+            )
+            return
+        except (RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_warn(
+                f"Could not retrieve simulation prerequisites: {error}"
+            )
+            return
+
+        current_model = next(
+            (model for model in models if not model.disabled and model.is_valid), None
+        )
+        if current_model is None:
+            self.communication.show_warn(
+                "No enabled valid model for this schematisation revision"
+            )
+            return
+
+        try:
+            template_dialog = ModelSelectionDialog(
+                self.communication,
+                current_model.id,
+                threedi_api,
+                organisations,
+                schematisation_id,
+                parent,
+            )
+            if template_dialog.exec() == QDialog.DialogCode.Rejected:
+                return
+
+            simulation_template = template_dialog.get_selected_template()
+            organisation = template_dialog.get_selected_organisation()
+            template_data = get_simulation_data_from_template(tc, simulation_template)
+            simulation_init = SimulationInit(
+                current_model,
+                simulation_template,
+                template_data.settings_overview,
+                template_data.events,
+                template_data.lizard_post_processing_overview,
+                organisation,
+                api=tc,
+                parent=parent,
+            )
+            if simulation_init.exec() == QDialog.DialogCode.Rejected:
+                return
+            if not simulation_init.open_wizard:
+                return
+
+            simulation_wizard = SimulationWizard(
+                hcc_working_dir(),
+                simulation_template,
+                organisation,
+                current_model,
+                threedi_api,
+                self.communication,
+                simulation_init,
+                parent,
+            )
+            if template_data.simulation is not None:
+                simulation_wizard.load_template_parameters(
+                    template_data.simulation,
+                    template_data.settings_overview,
+                    template_data.events,
+                    template_data.lizard_post_processing_overview,
+                )
+            simulation_wizard.simulations_prepared.connect(
+                lambda simulations: self._start_simulations_from_wizard(
+                    threedi_api, simulations, project, file_item, parent
+                )
+            )
+            simulation_wizard.exec()
+        except ApiException as error:
+            self.communication.show_error(
+                f"Could not prepare simulation: {extract_error_message(error)}"
+            )
+        except (RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_error(f"Could not prepare simulation: {error}")
+
+    def start_simulation_tracker_process(
+        self, project: dict, file_item: dict, simulations: list, parent=None
+    ) -> None:
+        """Start a Rana tracker process for each initialized simulation."""
+        try:
+            track_process = get_process_id_for_tag("simulation_tracker")
+        except RanaFetchError as error:
+            self.communication.bar_error(
+                f"Failed to retrieve simulation tracker process: {error.msg}"
+            )
+            self.communication.log_err(str(error))
+            return
+        if track_process is None:
+            self.communication.log_err("No simulation tracker available")
+            return
+
+        output_file_path = (
+            file_item["id"].rpartition("/")[0] + file_item["id"].rpartition("/")[1]
+        )
+        links = []
+        for simulation in simulations:
+            simulation_name = simulation.simulation.name
+            params = {
+                "project_id": project["id"],
+                "inputs": {"simulation_id": simulation.simulation.id_to_start},
+                "outputs": {
+                    "results": {
+                        "id": (
+                            f"{output_file_path}{simulation_name}_"
+                            f"{simulation.simulation.id}_results.zip"
+                        )
+                    }
+                },
+                "name": simulation_name,
+            }
+            try:
+                response = start_tenant_process(track_process, params)
+            except RanaPostError as error:
+                self.communication.log_err(
+                    f"Failed to start simulation tracker: {error.msg}"
+                )
+                continue
+            job_id = (response or {}).get("job_id") or (response or {}).get("id")
+            if not job_id:
+                self.communication.log_err(
+                    f"Simulation tracker started without a job ID for {simulation_name}"
+                )
+                continue
+            url = get_rana_processes_url(project.get("slug", ""), job_id)
+            links.append(
+                f'<a href="{escape(url, quote=True)}">'
+                f"Track simulation {escape(simulation_name)} in Rana</a>"
+            )
+
+        if links:
+            QMessageBox.information(parent, "Rana simulation", "<br>".join(links))
 
     def begin_scenario_action(self, count: int) -> bool:
         if self.scenario_action_busy:
@@ -350,7 +642,14 @@ class Loader(QObject):
         inherit_from_previous_revision: bool = True,
     ) -> dict | None:
         """Start server-side model creation for an uploaded revision."""
-        track_process = get_process_id_for_tag(self.communication, "model_tracker")
+        try:
+            track_process = get_process_id_for_tag("model_tracker")
+        except RanaFetchError as error:
+            self.communication.bar_error(
+                f"Failed to retrieve model tracker process: {error.msg}"
+            )
+            self.communication.log_err(str(error))
+            return None
         if track_process is None:
             self.communication.log_err("No model tracker available")
             return None

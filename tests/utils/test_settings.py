@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from qgis.core import QgsSettings
+from qgis.core import QgsApplication, QgsSettings
 
 from rana_qgis_plugin.constant import RANA_MODELS_DIR_NAME, RANA_PROJECTS_DIR_NAME
 from rana_qgis_plugin.utils.settings import (
@@ -19,6 +19,7 @@ from rana_qgis_plugin.utils.settings import (
     set_hidden_projects,
     set_rana_open_cache_dir,
     set_rana_root_dir,
+    simulation_cache_dir,
     unhide_project,
 )
 
@@ -46,6 +47,12 @@ def test_set_rana_open_cache_dir(settings):
     custom_dir = "/tmp/custom-rana-open"
     set_rana_open_cache_dir(custom_dir)
     assert rana_open_cache_dir() == custom_dir
+
+
+def test_simulation_cache_dir_uses_qgis_profile_directory():
+    expected = Path(QgsApplication.qgisSettingsDirPath()) / "rana" / "simulation_cache"
+
+    assert simulation_cache_dir() == expected
 
 
 def test_rana_root_dir_default(settings):

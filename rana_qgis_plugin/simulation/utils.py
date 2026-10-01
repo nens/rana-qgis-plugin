@@ -31,10 +31,41 @@ from threedi_mi_utils import (
     list_local_schematisations,
 )
 
+from rana_qgis_plugin.simulation.data_models.simulation_data_models import (
+    SimulationTemplateData,
+)
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
+from rana_qgis_plugin.utils.settings import simulation_cache_dir
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.communication import UICommunication
+
+
+def get_simulation_data_from_template(
+    tc: ThreediCalls, template
+) -> SimulationTemplateData:
+    """Fetch the data needed to initialize a simulation from a template."""
+    simulation = settings_overview = events = lizard_post_processing_overview = None
+    try:
+        simulation = template.simulation
+        simulation_id = simulation.id
+        settings_overview = tc.fetch_simulation_settings_overview(str(simulation_id))
+        events = tc.fetch_simulation_events(simulation_id)
+        if simulation.cloned_from:
+            source_simulation_id = simulation.cloned_from.strip("/").split("/")[-1]
+            lizard_post_processing_overview = (
+                tc.fetch_simulation_lizard_postprocessing_overview(source_simulation_id)
+            )
+    except ApiException as error:
+        error_message = extract_error_message(error)
+        if "No basic post-processing resource found" not in error_message:
+            raise
+    return SimulationTemplateData(
+        simulation,
+        settings_overview,
+        events,
+        lizard_post_processing_overview,
+    )
 
 
 class SchematisationLike(Protocol):
@@ -109,16 +140,13 @@ class TreeViewLogger(object):
 
 
 TEMPDIR = tempfile.gettempdir()
-PLUGIN_PATH = os.path.dirname(os.path.realpath(__file__))
-CACHE_PATH = os.path.join(PLUGIN_PATH, "_cached_data")
-TEMPLATE_PATH = os.path.join(CACHE_PATH, "templates.json")
-INITIAL_WATERLEVELS_TEMPLATE = os.path.join(CACHE_PATH, "initial_waterlevels.json")
-INITIAL_CONCENTRATIONS_TEMPLATE = os.path.join(
-    CACHE_PATH, "initial_concentrations.json"
-)
-BOUNDARY_CONDITIONS_TEMPLATE = os.path.join(CACHE_PATH, "boundary_conditions.json")
-LATERALS_FILE_TEMPLATE = os.path.join(CACHE_PATH, "laterals.json")
-DWF_FILE_TEMPLATE = os.path.join(CACHE_PATH, "dwf.json")
+CACHE_PATH = simulation_cache_dir()
+TEMPLATE_PATH = CACHE_PATH / "templates.json"
+INITIAL_WATERLEVELS_TEMPLATE = CACHE_PATH / "initial_waterlevels.json"
+INITIAL_CONCENTRATIONS_TEMPLATE = CACHE_PATH / "initial_concentrations.json"
+BOUNDARY_CONDITIONS_TEMPLATE = CACHE_PATH / "boundary_conditions.json"
+LATERALS_FILE_TEMPLATE = CACHE_PATH / "laterals.json"
+DWF_FILE_TEMPLATE = CACHE_PATH / "dwf.json"
 CHUNK_SIZE = 1024**2
 RADAR_ID = "d6c2347d-7bd1-4d9d-a1f6-b342c865516f"
 API_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"

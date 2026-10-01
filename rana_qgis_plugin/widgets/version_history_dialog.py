@@ -507,7 +507,11 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         button.setEnabled(enabled)
         button.setToolTip(tooltip)
         if column == 4:
-            button.clicked.connect(self.show_simulation_placeholder)
+            button.clicked.connect(
+                lambda _checked=False, row=row, button=button: self.start_simulation(
+                    row, button
+                )
+            )
         elif column == 5 and row.values[column] == "Create" and enabled:
             button.clicked.connect(
                 lambda _checked=False, row=row, button=button: self.create_model(
@@ -531,7 +535,7 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
             item = self.model.item(row_number, 0)
             if item is None:
                 continue
-            metadata = item.data(Qt.ItemDataRole.UserRole) or {}
+            metadata = item.data(Qt.ItemDataRole.UserRole)
             if metadata.get("revision_id") == revision_id:
                 return row_number
         return None
@@ -610,13 +614,19 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
                     button.setEnabled(True)
                     button.setToolTip("")
 
-    def show_simulation_placeholder(self) -> None:
-        """Explain that simulation creation is deferred."""
-        QMessageBox.information(
-            self,
-            "Simulation",
-            "Simulation creation is not implemented yet.",
-        )
+    def start_simulation(self, row: HistoryRow, button: QPushButton) -> None:
+        """Start simulation setup for one schematisation revision."""
+        button.setEnabled(False)
+        try:
+            self.loader.start_simulation(
+                self.project,
+                self.file_item,
+                row.metadata["schematisation_id"],
+                row.metadata["revision_id"],
+                self,
+            )
+        finally:
+            button.setEnabled(True)
 
     def create_model(self, row: HistoryRow, button: QPushButton) -> None:
         """Start model creation and show the online process link."""
@@ -631,6 +641,9 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         button.setEnabled(False)
         button.setToolTip("Model creation requested — click Refresh to check status")
         job_id = response.get("job_id") or response.get("id")
+        self.show_process_url_popup(job_id)
+
+    def show_process_url_popup(self, job_id: str) -> None:
         url = get_rana_processes_url(self.project.get("slug", ""), job_id)
         QMessageBox.information(
             self,
