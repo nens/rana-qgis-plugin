@@ -3,7 +3,6 @@
 import os
 
 from qgis.PyQt.QtCore import QModelIndex, QPoint, Qt, QTimer
-from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import QApplication, QFileDialog, QMessageBox, QTreeView
 
 from rana_qgis_plugin.data_items.file_actions import FileAction
