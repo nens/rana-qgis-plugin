@@ -174,20 +174,16 @@ def get_user_tenants(user_id: str) -> list:
     return network_manager.content["items"]
 
 
-def get_tenant_details(communication: UICommunication) -> dict:
+def get_tenant_details() -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}"
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
-
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        communication.show_error(f"Failed to get tenant details: {error}")
-        return {}
+    if error:
+        raise RanaFetchError(error, url, {})
+    return network_manager.content
 
 
 def get_tenant_projects(params: Optional[dict] = None) -> dict:
@@ -474,7 +470,7 @@ def get_raster_file_link(descriptor_id: str, task_id: str) -> Any:
         raise Exception(f"Failed to retrieve raster: {error}")
 
 
-def get_tenant_processes(communication: UICommunication) -> list:
+def get_tenant_processes() -> list:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/processes"
@@ -487,9 +483,7 @@ def get_tenant_processes(communication: UICommunication) -> list:
         response = network_manager.content
         items = response["items"]
         return items
-    else:
-        communication.show_error(f"Failed to get processes: {error}")
-        return []
+    raise RanaFetchError(error or "Failed to get processes", url, params)
 
 
 def start_tenant_process(process_id: str, params: dict) -> Optional[dict]:
@@ -803,8 +797,8 @@ def get_project_publications(project_id: str, params: Optional[dict] = None) -> 
     return paginated_fetch(url, 100, merged)
 
 
-def get_process_id_for_tag(communication: UICommunication, tag: str) -> Optional[str]:
-    processes = get_tenant_processes(communication)
+def get_process_id_for_tag(tag: str) -> Optional[str]:
+    processes = get_tenant_processes()
     for process in processes:
         if tag in process["tags"]:
             return process["id"]

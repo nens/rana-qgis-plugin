@@ -57,6 +57,11 @@ def rana_open_cache_dir() -> str:
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/open_cache_dir", default)
 
 
+def simulation_cache_dir() -> Path:
+    """Return the QGIS-profile cache directory used by simulations."""
+    return Path(QgsApplication.qgisSettingsDirPath()) / "rana" / "simulation_cache"
+
+
 def set_rana_open_cache_dir(cache_dir: str) -> None:
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/open_cache_dir", cache_dir)
 

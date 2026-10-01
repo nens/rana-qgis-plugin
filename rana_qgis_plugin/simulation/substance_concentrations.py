@@ -46,7 +46,7 @@ class SubstanceConcentrationsWidget(QWidget):
         layout = QGridLayout()
         self.groupbox = QGroupBox("Substance concentrations")
         self.groupbox.setLayout(layout)
-        self.groupbox.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        self.groupbox.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         self.add_help_texts(layout)
         if self.parent_widget.current_model.extent_one_d:
             self.create_substance_concentrations(layout, "1D")
@@ -55,7 +55,7 @@ class SubstanceConcentrationsWidget(QWidget):
 
     def add_help_texts(self, layout: QGridLayout):
         """Help texts for substance concentrations."""
-        font = QFont("Segoe UI", 10, QFont.Normal)
+        font = QFont("Segoe UI", 10, QFont.Weight.Normal)
         text_layout = QHBoxLayout()
         text1 = QLabel(
             f"Specify the same constant substance concentrations for all {self.widget_name}s"
@@ -82,7 +82,7 @@ class SubstanceConcentrationsWidget(QWidget):
 
     def create_substance_concentrations(self, layout: QGridLayout, var_type: str):
         """Create substance concentrations for 1D and 2D laterals type."""
-        font = QFont("Segoe UI", 10, QFont.Normal)
+        font = QFont("Segoe UI", 10, QFont.Weight.Normal)
         for i, substance in enumerate(self.parent_widget.substances):
             name = substance.get("name")
             units = substance.get("units", "")
@@ -102,7 +102,7 @@ class SubstanceConcentrationsWidget(QWidget):
 
             # validator for constant value
             validator = QDoubleValidator()
-            validator.setNotation(QDoubleValidator.StandardNotation)
+            validator.setNotation(QDoubleValidator.Notation.StandardNotation)
             line_edit_constant.setValidator(validator)
             line_edit_constant.textChanged.connect(
                 partial(self.handle_constant_value, name, var_type)

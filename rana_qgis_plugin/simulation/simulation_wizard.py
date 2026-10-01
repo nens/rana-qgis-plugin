@@ -12,7 +12,12 @@ from typing import List, Optional
 
 import pyqtgraph as pg
 from dateutil.relativedelta import relativedelta
-from qgis.core import QgsMapLayer, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
+from qgis.core import (
+    QgsMapLayer,
+    QgsMapLayerProxyModel,
+    QgsProject,
+    QgsVectorLayer,
+)
 from qgis.gui import QgsMapToolIdentifyFeature
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import (
@@ -55,6 +60,7 @@ from qgis.utils import iface
 from threedi_api_client.openapi import ApiException, Threshold
 from threedi_mi_utils import LocalSchematisation, list_local_schematisations
 
+from rana_qgis_plugin.layer_management.layer_manager import add_layer_to_qgs_project
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 
 from .custom_items import FilteredComboBox
@@ -99,7 +105,6 @@ from .utils_ui import (
     set_widget_background_color,
     set_widgets_parameters,
 )
-from .workers import SimulationRunner
 
 base_dir = os.path.dirname(os.path.dirname(__file__))
 uicls_name_page, basecls_name_page = uic.loadUiType(
@@ -326,7 +331,7 @@ class SubstancesWidget(uicls_substances, basecls_substances):
             self.NUMERICAL_DIFFUSION_LIMITER_COLUMN,
             EnumDelegate(self.tw_substances, numerical_diffusion_limiter_to_int.keys()),
         )
-        self.tw_substances.setEditTriggers(QTableView.AllEditTriggers)
+        self.tw_substances.setEditTriggers(QTableView.EditTrigger.AllEditTriggers)
 
     def prepopulate_substances_table(self, substances):
         self.tw_substances.setRowCount(0)
@@ -2860,7 +2865,7 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.setLayout(QHBoxLayout())
             name_label = QLabel(name, self)
             name_label.setFixedWidth(200)
-            name_label.setFont(QFont("Segoe UI", 10, QFont.Normal))
+            name_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
             self.layout().addWidget(name_label)
             self.line_edit = QLineEdit(str(value), self)
             # Connect signal to signal
@@ -2871,7 +2876,7 @@ class PrecipitationWidget(uicls_precipitation_page, basecls_precipitation_page):
             self.layout().addWidget(self.line_edit)
             self.unit_label = QLabel(unit, self)
             self.unit_label.setFixedWidth(30)
-            self.unit_label.setFont(QFont("Segoe UI", 10, QFont.Normal))
+            self.unit_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
             self.layout().addWidget(self.unit_label)
 
         def set_unit_label(self, label: str) -> None:
@@ -3238,7 +3243,7 @@ class SettingsWidget(uicls_settings_page, basecls_settings_page):
         ]
 
         wq_validator = QDoubleValidator(0.0, 100.0, 14, self)
-        wq_validator.setNotation(QDoubleValidator.ScientificNotation)
+        wq_validator.setNotation(QDoubleValidator.Notation.ScientificNotation)
         self.time_step_2.setValidator(wq_validator)
         self.time_step_2.setText(QLocale().toString(1.0))
         self.min_time_step_2.setValidator(wq_validator)
@@ -3645,7 +3650,7 @@ class NamePage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField("simulation_name*", self.main_widget.le_sim_name)
         self.adjustSize()
 
@@ -3662,7 +3667,7 @@ class SimulationDurationPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3678,7 +3683,7 @@ class SubstancesPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3694,7 +3699,7 @@ class BoundaryConditionsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
     def validatePage(self):
@@ -3742,7 +3747,7 @@ class StructureControlsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3760,12 +3765,12 @@ class InitialConditionsPage(QWizardPage):
         # Create a scroll area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameStyle(QScrollArea.NoFrame)
+        self.scroll_area.setFrameStyle(QScrollArea.Shape.NoFrame)
         self.scroll_area.setWidget(self.main_widget)
         layout = QGridLayout()
         layout.addWidget(self.scroll_area)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3781,7 +3786,7 @@ class LateralsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3797,7 +3802,7 @@ class DWFPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField("dwf_upload*", self.main_widget.dwf_upload)
         self.adjustSize()
 
@@ -3814,7 +3819,7 @@ class BreachesPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3832,7 +3837,7 @@ class PrecipitationPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget, 0, 0)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3848,7 +3853,7 @@ class WindPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3864,7 +3869,7 @@ class SettingsPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3880,7 +3885,7 @@ class SavedStatePage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.registerField("saved_state_name*", self.main_widget.le_saved_state_name)
         self.adjustSize()
 
@@ -3897,7 +3902,7 @@ class LizardPostProcessingPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
@@ -3913,45 +3918,40 @@ class SummaryPage(QWizardPage):
         layout = QGridLayout()
         layout.addWidget(self.main_widget)
         self.setLayout(layout)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.adjustSize()
 
 
 class SimulationWizard(QWizard):
     """New simulation wizard."""
 
-    simulation_created = pyqtSignal(list)
-    simulation_created_failed = pyqtSignal()
+    simulations_prepared = pyqtSignal(list)
 
     def __init__(
         self,
-        simulation_runner_pool,
         working_dir,
         simulation_template,
         organisation,
         current_model,
         threedi_api,
         communication,
-        layer_manager,
-        layer_parents,
         init_conditions_dlg,
         parent,
     ):
         super().__init__(parent)
         self.settings = QSettings()
-        self.setWizardStyle(QWizard.ClassicStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
         self.threedi_api = threedi_api
         self.communication = communication
         self.current_model = current_model
-        self.simulation_runner_pool = simulation_runner_pool
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
         self.working_dir = working_dir
-        self.layer_manager = layer_manager
-        self.layer_parents = layer_parents
         self.local_schematisations = list_local_schematisations(
             self.working_dir, use_config_for_revisions=False
         )
+        self.potential_breaches_layer = None
+        self.flowlines_layer = None
         self.unload_breach_layers()
         self.current_model_gridadmin_gpkg = self.get_gridadmin_gpkg_path(
             current_model.schematisation_id,
@@ -4009,14 +4009,16 @@ class SimulationWizard(QWizard):
         self.summary_page = SummaryPage(self, initial_conditions=init_conditions)
         self.addPage(self.summary_page)
         self.currentIdChanged.connect(self.page_changed)
-        self.setButtonText(QWizard.FinishButton, "Start simulation in Rana")
-        self.finish_btn = self.button(QWizard.FinishButton)
+        self.setButtonText(
+            QWizard.WizardButton.FinishButton, "Start simulation in Rana"
+        )
+        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
         self.finish_btn.clicked.connect(self.run_new_simulation)
-        self.cancel_btn = self.button(QWizard.CancelButton)
+        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
         self.cancel_btn.clicked.connect(self.cancel_wizard)
         self.new_simulations = []
         self.setWindowTitle("New simulation")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.resize(self.settings.value("threedi/wizard_size", QSize(1000, 750)))
         self.first_simulation = init_conditions.simulations_list[0]
         self.init_conditions = init_conditions
@@ -4039,7 +4041,7 @@ class SimulationWizard(QWizard):
             for other_page_id, other_page in self.wizard_pages_mapping.items():
                 label = QLabel()
                 label.setFont(font)
-                label.setTextFormat(Qt.RichText)
+                label.setTextFormat(Qt.TextFormat.RichText)
                 if page_id > other_page_id:
                     label.setText(f"✓ {other_page.STEP_NAME}")
                 elif page_id < other_page_id:
@@ -4051,7 +4053,9 @@ class SimulationWizard(QWizard):
                 page_step_labels.append(label)
             for page_label in page_step_labels:
                 wizard_steps_layout.addWidget(page_label)
-            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            spacer = QSpacerItem(
+                20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
+            )
             wizard_steps_layout.addItem(spacer)
 
     def page_changed(self):
@@ -4631,8 +4635,9 @@ class SimulationWizard(QWizard):
                     )
 
     def run_new_simulation(self):
-        """Getting data from the wizard and running new simulation."""
+        """Collect the configured simulations and hand them to the caller."""
         self.settings.setValue("threedi/wizard_size", self.size())
+        self.new_simulations = []
         events = self.init_conditions_dlg.events
         name = self.name_page.main_widget.le_sim_name.text().strip()
         project_name = self.name_page.main_widget.le_project.text().strip()
@@ -5040,7 +5045,9 @@ class SimulationWizard(QWizard):
             # )
             self.new_simulations.append(new_simulation)
         self.unload_breach_layers()
-        self.start_simulations(self.new_simulations)
+        self.simulations_prepared.emit(self.new_simulations)
+        self.accept()
+        return self.new_simulations
 
     def cancel_wizard(self):
         """Handling canceling wizard action."""
@@ -5063,9 +5070,7 @@ class SimulationWizard(QWizard):
                 self.potential_breaches_layer.setFlags(
                     QgsMapLayer.Searchable | QgsMapLayer.Identifiable
                 )
-                self.layer_manager.add_layer(
-                    self.potential_breaches_layer, self.layer_parents
-                )
+                add_layer_to_qgs_project(self.potential_breaches_layer)
         if self.current_model_gridadmin_gpkg is not None:
             flowlines_uri = f"{self.current_model_gridadmin_gpkg}|layername=flowline"
             flowlines_layer = QgsVectorLayer(flowlines_uri, "1D2D flowlines", "ogr")
@@ -5076,7 +5081,7 @@ class SimulationWizard(QWizard):
                 self.flowlines_layer.setFlags(
                     QgsMapLayer.Searchable | QgsMapLayer.Identifiable
                 )
-                self.layer_manager.add_layer(self.flowlines_layer, self.layer_parents)
+                add_layer_to_qgs_project(self.flowlines_layer)
             else:
                 self.flowlines_layer = None
 
@@ -5089,23 +5094,6 @@ class SimulationWizard(QWizard):
             if self.flowlines_layer is not None:
                 QgsProject.instance().removeMapLayer(self.flowlines_layer)
                 self.flowlines_layer = None
-            # clean added groups
-            if self.layer_parents:
-                root = QgsProject.instance().layerTreeRoot()
-                group_map = {}
-                # collect all the groups that may be removed
-                for layer_parent in self.layer_parents:
-                    group = root.findGroup(layer_parent)
-                    group_map[layer_parent] = group
-                    root = group
-                # go over groups in reverse order and remove empty ones
-                for layer_parent in reversed(self.layer_parents):
-                    group = group_map[layer_parent]
-                    if not group.children():
-                        group.parent().removeChildNode(group)
-                    else:
-                        # no need to keep on removing stuff if we don't remove the child
-                        break
             # self.plugin_dock.iface.mapCanvas().refresh()
         except (AttributeError, RuntimeError):
             pass
@@ -5188,48 +5176,3 @@ class SimulationWizard(QWizard):
         else:
             available_gridadming_gpkg_path = expected_gridadming_gpkg_path
         return available_gridadming_gpkg_path
-
-    def start_simulations(self, simulations_to_run):
-        """Start the simulations."""
-        upload_timeout = QSettings().value("threedi/timeout", 900, type=int)
-        simulations_runner = SimulationRunner(
-            self.threedi_api, simulations_to_run, upload_timeout=upload_timeout
-        )
-        simulations_runner.signals.initializing_simulations_progress.connect(
-            self.on_initializing_progress
-        )
-        simulations_runner.signals.initializing_simulations_failed.connect(
-            self.on_initializing_failed
-        )
-        simulations_runner.signals.initializing_simulations_finished.connect(
-            self.on_initializing_finished
-        )
-        self.simulation_runner_pool.start(simulations_runner)
-
-    def on_initializing_progress(
-        self,
-        new_simulation,
-        new_simulation_initialized,
-        current_progress,
-        total_progress,
-    ):
-        """Feedback on new simulation(s) initialization progress signal."""
-        msg = f'Initializing simulation "{new_simulation.name}"...'
-        self.communication.progress_bar(
-            msg, 0, total_progress, current_progress, clear_msg_bar=True
-        )
-        if new_simulation_initialized:
-            info_msg = f"Simulation {new_simulation.name} added to queue!"
-            self.communication.bar_info(info_msg)
-
-    def on_initializing_failed(self, error_message):
-        """Feedback on new simulation(s) initialization failure signal."""
-        self.communication.clear_message_bar()
-        self.communication.bar_error(error_message)
-        self.simulation_created_failed.emit()
-
-    def on_initializing_finished(self, message, simulations):
-        """Feedback on new simulation(s) initialization finished signal."""
-        self.communication.clear_message_bar()
-        self.communication.bar_info(message)
-        self.simulation_created.emit(simulations)

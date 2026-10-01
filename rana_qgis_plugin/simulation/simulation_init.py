@@ -52,8 +52,8 @@ class SimulationInit(uicls, basecls):
     def setup_initial_options(self):
         """Setup initial options dialog."""
         self.dd_number_of_simulation.addItems([str(i) for i in range(2, 10)])
-        self.cb_boundary.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.cb_boundary.setFocusPolicy(Qt.NoFocus)
+        self.cb_boundary.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.cb_boundary.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         # Disable substance if not in organisation contract
         contracts = self.api.fetch_contracts(

@@ -7,7 +7,7 @@ import time
 from functools import partial
 
 from qgis.core import QgsTask
-from qgis.PyQt.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QObject, pyqtSignal, pyqtSlot
 from threedi_api_client.files import upload_file
 from threedi_api_client.openapi import ApiException
 
@@ -64,11 +64,11 @@ class SimulationRunnerSignals(QObject):
     initializing_simulations_finished = pyqtSignal(str, list)
 
 
-class SimulationRunner(QRunnable):
+class SimulationRunner(QgsTask):
     """Worker object responsible for running simulations."""
 
     def __init__(self, threedi_api, simulations_to_run, upload_timeout=900):
-        super().__init__()
+        super().__init__("Initialize 3Di simulations")
         self.threedi_api = threedi_api
         self.simulations_to_run = simulations_to_run
         self.current_simulation: dm.NewSimulation = None
@@ -1091,7 +1091,7 @@ class SimulationRunner(QRunnable):
         return None
 
     @pyqtSlot()
-    def run(self):
+    def run(self) -> bool:
         """Run new simulation(s)."""
         try:
             self.tc = ThreediCalls(self.threedi_api)
@@ -1133,12 +1133,15 @@ class SimulationRunner(QRunnable):
                 msg += f" Created template ID: {template_id}"
 
             self.report_finished(msg)
+            return True
         except ApiException as e:
             error_msg = extract_error_message(e)
             self.report_failure(error_msg)
+            return False
         except Exception as e:
             error_msg = f"Error: {e}"
             self.report_failure(error_msg)
+            return False
 
     def report_progress(self, simulation_initialized=False, increase_current_step=True):
         """Report worker progress."""

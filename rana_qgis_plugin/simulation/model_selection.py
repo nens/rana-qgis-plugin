@@ -72,7 +72,7 @@ class ModelSelectionDialog(uicls, basecls):
         if self.templates_model.rowCount() > 0:
             row_idx = self.templates_model.index(0, 0)
             self.templates_tv.selectionModel().setCurrentIndex(
-                row_idx, QItemSelectionModel.ClearAndSelect
+                row_idx, QItemSelectionModel.SelectionFlag.ClearAndSelect
             )
         self.toggle_load_model()
         self.switch_to_model_organisation()
@@ -133,7 +133,7 @@ class ModelSelectionDialog(uicls, basecls):
             for template in sorted(templates, key=attrgetter("id"), reverse=True):
                 id_item = QStandardItem(str(template.id))
                 name_item = QStandardItem(template.name)
-                name_item.setData(template, role=Qt.UserRole)
+                name_item.setData(template, role=Qt.ItemDataRole.UserRole)
                 creation_date = (
                     template.created.strftime("%d-%m-%Y") if template.created else ""
                 )
@@ -155,7 +155,7 @@ class ModelSelectionDialog(uicls, basecls):
         if index.isValid():
             current_row = index.row()
             name_item = self.templates_model.item(current_row, NAME_COLUMN_IDX)
-            selected_template = name_item.data(Qt.UserRole)
+            selected_template = name_item.data(Qt.ItemDataRole.UserRole)
         else:
             selected_template = None
         return selected_template

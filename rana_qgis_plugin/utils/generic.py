@@ -35,11 +35,11 @@ def get_threedi_api() -> Any:
     return get_api_client_with_personal_api_token(personal_api_token, hcc_url)
 
 
-def get_threedi_organisations(communication: Any) -> list[str]:
+def get_threedi_organisations() -> list[str]:
     """Retrieve threedi organisations linked to rana tenant and fromat the uuids to match threedi-api"""
     return [
         org_id.replace("-", "")
-        for org_id in get_tenant_details(communication).get("threedi_organisations", [])
+        for org_id in get_tenant_details().get("threedi_organisations", [])
     ]
 
 
