@@ -27,9 +27,14 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QWidget" name="tenants_widget">
-     <layout class="QVBoxLayout" name="tenants_widget_layout"/>
+    <widget class="QLabel" name="organisation_label">
+     <property name="text">
+      <string>Choose an organisation:</string>
+     </property>
     </widget>
+   </item>
+   <item>
+    <widget class="QComboBox" name="organisations_box"/>
    </item>
    <item>
     <spacer name="verticalSpacer">
