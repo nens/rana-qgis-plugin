@@ -20,12 +20,7 @@ output.mp4
 _cached_data
 symbology-style.db
 # AI stuff
-.minispec
-.minispec.minispec/
 .opencode
-specs/
-docs/
-AGENTS.md
 # IDE / local dev
 .envrc
 .idea/
