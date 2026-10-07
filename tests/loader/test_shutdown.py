@@ -16,6 +16,24 @@ def test_shutdown_cancels_scenario_resolution_tasks():
     assert loader.scenario_resolve_tasks == set()
 
 
+def test_tracked_task_is_retained_until_completion_or_termination():
+    loader, _ = make_loader()
+    task = MagicMock()
+
+    loader._track_task(task)
+
+    assert task in loader.active_tasks
+    completed = task.taskCompleted.connect.call_args.args[0]
+    terminated = task.taskTerminated.connect.call_args.args[0]
+
+    completed()
+    assert task not in loader.active_tasks
+
+    loader.active_tasks.add(task)
+    terminated()
+    assert task not in loader.active_tasks
+
+
 def test_scenario_resolution_completion_is_ignored_after_shutdown():
     loader, _ = make_loader()
     task = MagicMock()

@@ -432,7 +432,7 @@ def test_failed_scenario_download_does_not_open_results_analysis():
     ):
         loader.submit_scenario_result_download(request, [MagicMock()])
 
-    termination_callback = task.taskTerminated.connect.call_args.args[0]
+    termination_callback = task.taskTerminated.connect.call_args_list[0].args[0]
     termination_callback()
     open_results.assert_not_called()
     communication.bar_error.assert_called_once_with(
@@ -485,7 +485,7 @@ def test_scenario_download_task_completion_queues_results_analysis(tmp_path):
         patch.object(loader, "enqueue_results_analysis_open") as enqueue,
     ):
         loader.submit_scenario_result_download(request, [downloader])
-        assert task.taskCompleted.connect.call_count == 1
+        assert task.taskCompleted.connect.call_count == 2
         completion_callback = task.taskCompleted.connect.call_args_list[0].args[0]
         completion_callback()
         enqueue.assert_called_once_with(

@@ -5,12 +5,12 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from qgis.core import QgsApplication, QgsProject
+from qgis.core import QgsApplication, QgsProject, QgsTask
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException
-from threedi_mi_utils import LocalSchematisation, list_local_schematisations
+from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
     DATA_DIRTY_PROPERTY,
@@ -73,7 +73,6 @@ from rana_qgis_plugin.utils.generic import (
     save_layer_changes,
 )
 from rana_qgis_plugin.utils.qgis import (
-    get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
 )
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
@@ -141,6 +140,7 @@ class Loader(QObject):
         self.avatar_pool = QThreadPool()
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
+        self.active_tasks: set[QgsTask] = set()
         self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
         self._accept_async_callbacks = True
         self.scenario_action_busy = False
@@ -151,12 +151,21 @@ class Loader(QObject):
     def shutdown(self) -> None:
         """Cancel pending work and drain the pool. Call on plugin unload."""
         self._accept_async_callbacks = False
-        for task in self.scenario_resolve_tasks:
+        for task in set(self.active_tasks) | set(self.scenario_resolve_tasks):
             task.cancel()
         self.scenario_resolve_tasks.clear()
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def _track_task(self, task: QgsTask) -> None:
+        """Keep a Python reference to a task until it completes or terminates."""
+        self.active_tasks.add(task)
+        task.taskCompleted.connect(lambda task=task: self._untrack_task(task))
+        task.taskTerminated.connect(lambda task=task: self._untrack_task(task))
+
+    def _untrack_task(self, task: QgsTask) -> None:
+        self.active_tasks.discard(task)
 
     def begin_scenario_action(self, count: int) -> bool:
         if self.scenario_action_busy:
@@ -332,6 +341,7 @@ class Loader(QObject):
                         "Could not start schematisation upload."
                     )
                     return None
+                self._track_task(task)
                 task_manager.addTask(task)
                 return task
             return None
@@ -639,6 +649,7 @@ class Loader(QObject):
             )
         )
         task.taskTerminated.connect(lambda: self.handle_upload_completed(False, task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     @pyqtSlot(str, str)
@@ -776,6 +787,7 @@ class Loader(QObject):
         task.taskCompleted.connect(lambda: self.update_descriptor_ids(task))
         task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
         task.taskTerminated.connect(lambda: self.handle_data_sync_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def upload_styles(self, items: list[StyleUploadItem]) -> None:
@@ -821,6 +833,7 @@ class Loader(QObject):
         )
         task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
         task.taskTerminated.connect(lambda: self.handle_style_sync_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def acquire_sync_keys(self, keys: list[tuple[str, str]]) -> bool:
@@ -1059,7 +1072,6 @@ class Loader(QObject):
         except (NetworkUnavailableError, RanaFetchError) as e:
             self.communication.bar_error(f"Could not list folder contents: {e}")
             return []
-
         result: list[
             OpenFileRequest
             | OpenSchematisationRequest
@@ -1135,6 +1147,7 @@ class Loader(QObject):
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def open_scenario_results(self, request: OpenScenarioRequest) -> None:
@@ -1564,6 +1577,7 @@ class Loader(QObject):
         task.taskTerminated.connect(
             lambda: self.handle_scenario_result_download_terminated(task)
         )
+        self._track_task(task)
         task_manager.addTask(task)
 
     def handle_scenario_result_download_terminated(self, task: DownloadTask) -> None:
@@ -1705,6 +1719,7 @@ class Loader(QObject):
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def open_file(self, local_file_path: str, project: dict, file_item: dict) -> None:
