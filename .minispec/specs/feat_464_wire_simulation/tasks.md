@@ -185,10 +185,24 @@ estimated_lines: 215
   `simulation_wizard.py`.
 
 ## Progress
-- [x] T001: Shared process-link popup helper
+- [x] T001: Shared process-link popup helper (implemented for simulations in Loader.start_simulation_tracker_process; the minimal Create Model popup was intentionally left dialog-local)
 - [x] T002: Convert `SimulationRunner` to `QgsTask` and move orchestration to Loader
 - [x] T003: Add temporary breach layers directly [P]
-- [ ] T004: Pre-flight checks + template data helper
-- [ ] T005: `Loader.start_simulation` dialog chain
-- [ ] T006: `Loader.start_simulation_tracker_process`
-- [ ] T007: Wire the Simulation button
+- [x] T004: Pre-flight checks + template data helper
+- [x] T005: `Loader.start_simulation` dialog chain
+- [x] T006: `Loader.start_simulation_tracker_process`
+- [x] T007: Wire the Simulation button
+
+Notes on implementation decisions:
+
+- The revision-history dialog remains open while the modal simulation
+  dialogs are presented (the dialog-local button is disabled during
+  the call). This preserves the current UI behavior and is intentional.
+- The small Create Model popup was left as a dialog-local helper
+  (version_history_dialog.show_process_url_popup) instead of extracting
+  a tiny Loader.show_process_link_popup helper. Loader.start_simulation_tracker_process
+  renders the multi-simulation popup directly for simulations.
+
+Manual UI validation: a full manual UI regression (history dialog ->
+simulation wizard -> tracker popup flows, including cancellation paths)
+still remains to be performed and should be done before merging to main.

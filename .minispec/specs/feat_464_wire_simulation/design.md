@@ -1,6 +1,6 @@
 ---
 feature: wire-simulation-button
-status: planned
+status: complete
 created: 2026-10-01
 decisions:
   - 20261001-1400-simulation-layer-manager-bridge
@@ -223,3 +223,18 @@ def start_simulation(self, row: HistoryRow, button: QPushButton) -> None:
   wizard pages themselves beyond the `layer_manager` bridge.
 - Polling/persisted tracking of in-flight simulations across dialog
   close/reopen or QGIS restart.
+
+## Implementation status
+
+- The implementation in rana_qgis_plugin/loader.py and supporting modules
+  implements the orchestration, task submission via QgsTask, and the
+  simulation-tracker process startup. The design is therefore marked
+  complete.
+- Intentional decisions preserved: the history dialog remains open while
+  the modal simulation dialogs are shown (the action button is disabled
+  during the call), and the small Create Model single-link popup was kept
+  as a dialog-local helper rather than extracting a tiny shared Loader
+  helper.
+- Manual UI validation of the full flow (history dialog → ModelSelection →
+  SimulationInit → SimulationWizard → tracker popup, and cancellation
+  paths) remains to be performed before merging to main.
