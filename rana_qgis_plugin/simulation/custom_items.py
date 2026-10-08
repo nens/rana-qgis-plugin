@@ -13,7 +13,7 @@ from qgis.PyQt.QtWidgets import (
 
 from .data_models.enumerators import SimulationStatusName
 
-PROGRESS_ROLE = Qt.UserRole + 1000
+PROGRESS_ROLE = Qt.ItemDataRole.UserRole + 1000
 
 
 class SimulationProgressDelegate(QStyledItemDelegate):
@@ -53,23 +53,25 @@ class SimulationProgressDelegate(QStyledItemDelegate):
             pbar_color = Qt.GlobalColor.red
             ptext = f"{new_percentage}% (crashed)"
         else:
-            pbar_color = Qt.lightGray
+            pbar_color = Qt.GlobalColor.lightGray
             ptext = f"{status_name}"
 
         pbar.progress = new_percentage
         pbar.text = ptext
         pbar.textVisible = True
         palette = pbar.palette
-        palette.setColor(QPalette.Highlight, pbar_color)
+        palette.setColor(QPalette.ColorRole.Highlight, pbar_color)
         pbar.palette = palette
-        QApplication.style().drawControl(QStyle.CE_ProgressBar, pbar, painter)
+        QApplication.style().drawControl(
+            QStyle.ControlElement.CE_ProgressBar, pbar, painter
+        )
 
 
 class DownloadProgressDelegate(QStyledItemDelegate):
     """Class with definition of the custom downloading results progress bar item that can be inserted into the model."""
 
     def paint(self, painter, option, index):
-        new_percentage = int(index.data(Qt.UserRole))
+        new_percentage = int(index.data(Qt.ItemDataRole.UserRole))
         pbar = QStyleOptionProgressBar()
         pbar.rect = option.rect
         pbar.minimum = 0
@@ -78,7 +80,7 @@ class DownloadProgressDelegate(QStyledItemDelegate):
 
         if new_percentage < 0:
             new_percentage = 0
-            pbar_color = Qt.lightGray
+            pbar_color = Qt.GlobalColor.lightGray
             ptext = f"Ready to download"
         elif 0 <= new_percentage < 100:
             pbar_color = default_color
@@ -95,9 +97,11 @@ class DownloadProgressDelegate(QStyledItemDelegate):
         pbar.text = ptext
         pbar.textVisible = True
         palette = pbar.palette
-        palette.setColor(QPalette.Highlight, pbar_color)
+        palette.setColor(QPalette.ColorRole.Highlight, pbar_color)
         pbar.palette = palette
-        QApplication.style().drawControl(QStyle.CE_ProgressBar, pbar, painter)
+        QApplication.style().drawControl(
+            QStyle.ControlElement.CE_ProgressBar, pbar, painter
+        )
 
 
 class FilteredComboBox(QComboBox):
@@ -105,15 +109,23 @@ class FilteredComboBox(QComboBox):
 
     def __init__(self, parent=None):
         super(FilteredComboBox, self).__init__(parent)
-        self.setFocusPolicy(Qt.StrongFocus)
-        self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self.setEditable(True)
         self.filter_proxy_model = QSortFilterProxyModel(self)
-        self.filter_proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        self.filter_proxy_model.setSortCaseSensitivity(Qt.CaseInsensitive)
+        self.filter_proxy_model.setFilterCaseSensitivity(
+            Qt.CaseSensitivity.CaseInsensitive
+        )
+        self.filter_proxy_model.setSortCaseSensitivity(
+            Qt.CaseSensitivity.CaseInsensitive
+        )
         self.filter_proxy_model.setSourceModel(self.model())
         self.completer = QCompleter(self.filter_proxy_model, self)
-        self.completer.setCompletionMode(QCompleter.UnfilteredPopupCompletion)
+        self.completer.setCompletionMode(
+            QCompleter.CompletionMode.UnfilteredPopupCompletion
+        )
         self.setCompleter(self.completer)
         self.setMinimumSize(150, 25)
         self.setFont(QFont("Segoe UI", 10))

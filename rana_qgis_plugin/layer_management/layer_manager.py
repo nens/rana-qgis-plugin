@@ -460,6 +460,13 @@ def add_layer_to_group(layer: QgsMapLayer, group: QgsLayerTreeGroup) -> None:
 
     project.addMapLayer(layer, False)
     group.insertLayer(insert_index, layer)
+
+
+def add_layer_to_qgs_project(layer: QgsMapLayer) -> None:
+    """Add a temporary layer directly to the current project root."""
+    project = QgsProject.instance()
+    assert project is not None
+    project.addMapLayer(layer)
     layer.setFlags(layer.flags() | QgsMapLayer.LayerFlag.Removable)
 
 

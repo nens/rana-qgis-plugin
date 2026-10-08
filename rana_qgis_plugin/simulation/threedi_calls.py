@@ -467,11 +467,8 @@ class ThreediCalls:
         """Fetch all Organisations available for current user."""
         params = {}
         if id_list is not None:
-            params["unique_id__in"] = ",".join(id_list)
-        organisations = self.paginated_fetch(
-            self.threedi_api.organisations_list, **params
-        )
-        return organisations
+            params["unique_id__in"] = id_list
+        return self.paginated_fetch(self.threedi_api.organisations_list, **params)
 
     def fetch_lateral_files(self, simulation_pk: int) -> List[FileLateral]:
         """Get list of the lateral files of the given simulation."""

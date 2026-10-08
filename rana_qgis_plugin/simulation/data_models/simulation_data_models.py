@@ -6,6 +6,7 @@ from typing import List
 
 from threedi_api_client.openapi import (
     CurrentStatus,
+    Event,
     FileBoundaryCondition,
     FileRasterLeakage,
     FileRasterSourcesSinks,
@@ -20,13 +21,25 @@ from threedi_api_client.openapi import (
     LocalRain,
     MemoryStructureControl,
     ObstacleEdit,
+    PostProcessingOverview,
     RasterEdit,
     Simulation,
+    SimulationSettingsOverview,
     TableStructureControl,
     TimedStructureControl,
     TimeseriesLeakageOverview,
     TimeseriesSourcesSinks,
 )
+
+
+@dataclass(frozen=True)
+class SimulationTemplateData:
+    """Data fetched from a simulation template for wizard initialization."""
+
+    simulation: Simulation | None
+    settings_overview: SimulationSettingsOverview | None
+    events: Event | None
+    lizard_post_processing_overview: PostProcessingOverview | None
 
 
 @dataclass

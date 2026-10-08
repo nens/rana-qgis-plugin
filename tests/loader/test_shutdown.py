@@ -3,17 +3,17 @@ from unittest.mock import MagicMock, patch
 from .helpers import make_loader
 
 
-def test_shutdown_cancels_scenario_resolution_tasks():
+def test_shutdown_cancels_active_tasks_without_dropping_references():
     loader, _ = make_loader()
     tasks = [MagicMock(), MagicMock()]
-    loader.scenario_resolve_tasks.update(tasks)
+    loader.active_tasks.update(tasks)
 
     with patch.object(loader.avatar_pool, "waitForDone"):
         loader.shutdown()
 
     for task in tasks:
         task.cancel.assert_called_once_with()
-    assert loader.scenario_resolve_tasks == set()
+    assert loader.active_tasks == set(tasks)
 
 
 def test_tracked_task_is_retained_until_completion_or_termination():
@@ -40,7 +40,7 @@ def test_scenario_resolution_completion_is_ignored_after_shutdown():
     continuation = MagicMock()
     request = MagicMock()
     scenario_info = MagicMock()
-    loader.scenario_resolve_tasks.add(task)
+    loader._track_task(task)
 
     with patch.object(loader.avatar_pool, "waitForDone"):
         loader.shutdown()
