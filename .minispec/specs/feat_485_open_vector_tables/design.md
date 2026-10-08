@@ -12,28 +12,28 @@ decisions: []
 Extend the Rana QGIS Browser and vector-file opening flow to support
 geometryless tables in addition to spatial vector layers.
 
-The feature has three goals:
+The feature has four goals:
 
 1. Show tables when a Rana vector file is expanded in the Browser.
 2. Allow an individual table to be opened, including selections containing a
    mixture of layers and tables.
 3. Open all spatial layers and supported tables when a vector file is opened.
+4. Align Browser layer discovery with the layer manager by reading layers
+   from `descriptor["meta"]["layers"]` instead of the root-level
+   `descriptor["layers"]` field.
 
 The design extends the existing vector-file flow. Tables are not introduced
 as a new top-level Rana file type.
 
 ## Current API/schema observation
 
-The `file_descriptor_retrieve` response is confusing because layer metadata is
-exposed in more than one place, while table metadata is only present in the
-vector metadata.
+The vector descriptor's `meta` field is confirmed to be structured as
+follows:
 
-The current code uses the descriptor-level `layers` field when expanding a
-Browser vector file (`file_item.py`), while the layer manager uses
-`descriptor["meta"]["layers"]` in its opening path. This discrepancy must be
-resolved or explicitly handled during implementation.
-
-The API research found the following vector metadata shape:
+- `meta["layers"]` (required): array of layer entries, each with `id`,
+  `name`, and `type`.
+- `meta["tables"]` (optional): dict keyed by table ID, each value containing
+  `layer_id`, `table_id` (matching the dict key), and `columns`.
 
 ```python
 descriptor["meta"]["layers"] = [
@@ -45,21 +45,78 @@ descriptor["meta"]["layers"] = [
 ]
 
 descriptor["meta"]["tables"] = {
-    "<provider-defined-key>": {
-        "layer_id": "parent-layer-id",
-        "table_id": "table-child-id",
+    "<table-id>": {
+        "layer_id": "base-table-name-of-related-layer",
+        "table_id": "table-id",
         "columns": {...},
     },
 }
 ```
 
-The exact meaning of the outer `meta["tables"]` map key is not yet
-confirmed. In particular, it is not yet known whether that key is the
-canonical local GeoPackage table name. Table records do not currently expose
-a documented table-level `name`, `label`, or `type` field.
+### Backend source: Rana ADR 046 (Tabular Data in Vector Files)
 
-This uncertainty is intentionally recorded as an open question rather than
-being hidden behind an assumed data model.
+[ADR 046](https://github.com/nens/rana/blob/main/design/046_vector_table_data.md)
+describes the backend's source of `meta["tables"]` and confirms/refines parts
+of the schema above:
+
+- Tables originate from the GeoPackage **Related Tables Extension (RTE)**: a
+  process emits a GeoPackage with a geometry layer, a related non-spatial
+  table, and an entry in `gpkgext_relations` linking them via a
+  `relation_name` (currently only `simple_attributes` exists; the ADR
+  reserves the field for future relation types).
+- The backend scans `gpkgext_relations` and adds one entry to
+  `meta["tables"]` per relation, keyed by `table_id`. Related tables are
+  excluded from `meta["layers"]`.
+- The ADR's backend model:
+  ```python
+  class Table:
+      table_id: str  # related_table_name in gpkgext_relations
+      layer_id: str  # base_table_name in gpkgext_relations
+      columns: dict[str, TableColumn]  # keyed by column name
+
+  class TableColumn:
+      column_id: str
+      label: str | None
+      unit: UnitOfMeasure | None
+  ```
+- The full related table still physically exists in the downloaded
+  GeoPackage (the S3/JSON extraction is only for a separate backend
+  `gpkg-table` chart view used by the web frontend). This confirms the
+  plugin's local-file, OGR-based opening approach does not need to call any
+  new API.
+
+**What this resolves:** the `meta["tables"]` dict key is confirmed to be
+`table_id`, and `table_id` is the literal GeoPackage related-table name. The
+`name=table_map_key` construction in the Data Model section below is
+confirmed, not just a candidate mapping.
+
+**What this does not resolve, and in fact complicates:** the ADR describes
+`layer_id` as `base_table_name` — a *physical GeoPackage table name*, the
+same kind of value as `table_id`. That strongly suggests `layer_id` should be
+matched against `meta["layers"][].name` (the layer's physical table name),
+**not** `meta["layers"][].id` (Rana's generated layer id), despite both being
+named `*_id`. This has not been confirmed against a real descriptor payload
+and must be verified before writing any table-to-layer association code. See
+Open Questions.
+
+The ADR's `Table`/`TableColumn` model also has no `relation_name` field, so
+the file descriptor does not expose which relation type a table came from.
+Today that's immaterial (only `simple_attributes` exists), but it is a
+forward-compatibility gap if the backend introduces other relation types
+later. See Open Questions.
+
+### Root vs. meta layers discrepancy (to be fixed by this feature)
+
+`data_items/file_item.py` currently expands vector file Browser children
+from the descriptor-level `layers` field (`descriptor.get("layers", [])`),
+while `layer_management/layer_manager.py` opens layers from
+`descriptor["meta"]["layers"]`. These are confirmed to be two different
+locations in the descriptor, and `meta["layers"]` is authoritative.
+
+As part of this feature, `file_item.py` will be updated to read from
+`descriptor["meta"]["layers"]` instead of the root-level field, so Browser
+expansion and layer opening use the same source. This resolves the
+discrepancy previously recorded as an open question.
 
 ## User Scenarios & Testing
 
@@ -80,6 +137,9 @@ correct names and item types.
    expanded, **then** existing layer expansion is unchanged.
 3. **Given** descriptor fetch failure, **when** the file is expanded, **then**
    the existing error-item behavior is preserved.
+4. **Given** a descriptor where the root-level `layers` field and
+   `meta["layers"]` differ, **when** the file is expanded, **then** Browser
+   children are built from `meta["layers"]`.
 
 ### User Story 2 - Open selected vector children (Priority: P1)
 
@@ -215,8 +275,8 @@ RanaLayerRef
 
 Browser expansion will use Rana descriptor metadata, not a download and local
 file inspection. Spatial layers continue to use the existing layer metadata;
-tables will be created from `meta["tables"]` once the table-name mapping is
-confirmed.
+tables will be created from `meta["tables"]`, keyed by `table_id` (confirmed
+by ADR 046).
 
 This preserves the current lazy descriptor-fetch behavior and avoids making
 simple Browser expansion download a complete file.
@@ -245,7 +305,9 @@ This is deliberately safer than loading every `QgsWkbTypes.NoGeometry`
 ### Browser data items
 
 - `data_items/file_item.py`: fetch descriptor metadata and create both layer
-  and table children.
+  and table children, reading layers from `descriptor["meta"]["layers"]`
+  (replacing the previous root-level `descriptor["layers"]` lookup) and
+  tables from `descriptor["meta"]["tables"]`.
 - `data_items/layer_item.py`: create `VectorLayerRef` when opening a layer.
 - `data_items/table_item.py`: new leaf item creating `VectorTableRef` when
   opening a table.
@@ -278,12 +340,12 @@ class OpenVectorChildrenRequest:
     children: tuple[VectorLayerRef | VectorTableRef, ...]
 ```
 
-The exact table construction is pending confirmation of the API's
-`meta["tables"]` map-key semantics. Candidate mapping:
+The table construction, per ADR 046 (see Current API/schema observation), is:
 
 ```python
 VectorTableRef(
-    name=table_map_key,              # pending confirmation
+    name=table_map_key,               # confirmed: equals table_id, the
+                                       # literal GeoPackage related-table name
     id=table_metadata["table_id"],
 )
 ```
@@ -308,6 +370,8 @@ layers and geometryless tables where QGIS/OGR is available.
 Planned coverage:
 
 - Browser expansion creates both layer and table children.
+- Browser expansion sources layers from `meta["layers"]`, not the root-level
+  `layers` field.
 - Table item uses the existing theme icon path.
 - Layer-only behavior remains unchanged.
 - Single table opening.
@@ -324,19 +388,41 @@ selection, file-level opening, and folder opening of vector files.
 
 ## Open Questions
 
-1. What is the exact source of the canonical local table name? Is the outer
-   key of `descriptor["meta"]["tables"]` guaranteed to be the GeoPackage
-   table name?
-2. Is the descriptor-level `layers` field equivalent to
-   `descriptor["meta"]["layers"]`, and which one is authoritative for each
-   current code path?
-3. How should a table be associated with the descriptor's layer metadata when
-   `meta["tables"][key]["layer_id"]` refers to a parent layer?
-4. Is `table_id` stable and suitable for persistent `RanaLayerRef.layer_id`?
-5. Which QGIS 4.x theme key is the correct native table icon for
+1. **`layer_id` matching field (undecided, needs developer input).** ADR 046
+   describes `meta["tables"][key]["layer_id"]` as the RTE relation's
+   `base_table_name` — a physical GeoPackage table name, the same kind of
+   value as `table_id`. This suggests it should be matched against
+   `meta["layers"][].name`, not `meta["layers"][].id`, despite the `*_id`
+   naming. Not yet confirmed against a real descriptor payload. This
+   determines how (and whether) a table can be reliably associated with its
+   parent layer.
+2. **Browser hierarchy (undecided, needs developer input).** Should table
+   items be nested under their associated layer item (reflecting the RTE
+   parent/child relation), or remain flat siblings of layers directly under
+   the vector file item (current design assumption, see Components)? This
+   affects `file_item.py`/`layer_item.py` structure and whether Story 2's
+   "mixed layer/table multi-select" still applies as-is.
+3. Is `table_id` stable across reprocessing and suitable for persistent
+   `RanaLayerRef.layer_id`? ADR 046 does not discuss ID stability across
+   reprocessing/versions.
+4. Which QGIS 4.x theme key is the correct native table icon for
    `get_file_icon_name()`?
-6. Does the descriptor include views or other geometryless sublayers that
-   should be treated differently from ordinary tables?
+5. **Forward-compatibility gap.** ADR 046 reserves `relation_name` for future
+   relation types beyond `simple_attributes`, but the file descriptor's
+   `Table` model does not expose `relation_name`. The plugin currently cannot
+   distinguish table "kinds" from the descriptor alone. Not a blocker today
+   (only one relation type exists), but a design should be revisited if the
+   backend introduces semantically different tabular relations.
+
+### Resolved since initial draft
+
+- Whether the descriptor-level `layers` field is equivalent to
+  `descriptor["meta"]["layers"]`, and which is authoritative: `meta["layers"]`
+  is authoritative. `file_item.py` will be updated to read from it, removing
+  the root-level `layers` lookup (see goal 4 and Components).
+- Whether the `meta["tables"]` dict key is guaranteed to equal the canonical
+  local GeoPackage table name: confirmed by ADR 046. The key is `table_id`,
+  which is the literal `related_table_name` from `gpkgext_relations`.
 
 ## Scope Boundaries
 
@@ -347,6 +433,7 @@ Included:
 - Mixed layer/table opening.
 - Opening all descriptor-listed layers and tables.
 - Native QGIS icon reuse.
+- Switching `file_item.py` Browser layer discovery to `meta["layers"]`.
 - Unit/integration coverage for the above.
 
 Not included:
