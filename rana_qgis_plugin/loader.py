@@ -6,12 +6,12 @@ from html import escape
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from qgis.core import QgsApplication, QgsProject
+from qgis.core import QgsApplication, QgsProject, QgsTask
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
 from threedi_api_client.openapi import ApiException
-from threedi_mi_utils import LocalSchematisation, list_local_schematisations
+from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
     DATA_DIRTY_PROPERTY,
@@ -84,7 +84,6 @@ from rana_qgis_plugin.utils.generic import (
     save_layer_changes,
 )
 from rana_qgis_plugin.utils.qgis import (
-    get_threedi_results_analysis_tool_instance,
     is_loaded_in_schematisation_editor,
 )
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
@@ -153,8 +152,7 @@ class Loader(QObject):
         self.avatar_pool = QThreadPool()
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_worker: AvatarWorker | None = None
-        self.scenario_resolve_tasks: set[ScenarioResolveTask] = set()
-        self.simulation_runner_tasks: set[SimulationRunner] = set()
+        self.active_tasks: set[QgsTask] = set()
         self._accept_async_callbacks = True
         self.scenario_action_busy = False
         self.scenario_action_pending = 0
@@ -164,14 +162,20 @@ class Loader(QObject):
     def shutdown(self) -> None:
         """Cancel pending work and drain the pool. Call on plugin unload."""
         self._accept_async_callbacks = False
-        for task in self.scenario_resolve_tasks:
+        for task in list(self.active_tasks):
             task.cancel()
-        self.scenario_resolve_tasks.clear()
-        for simulation_task in self.simulation_runner_tasks:
-            simulation_task.cancel()
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def _track_task(self, task: QgsTask) -> None:
+        """Keep a Python reference to a task until it completes or terminates."""
+        self.active_tasks.add(task)
+        task.taskCompleted.connect(lambda task=task: self._untrack_task(task))
+        task.taskTerminated.connect(lambda task=task: self._untrack_task(task))
+
+    def _untrack_task(self, task: QgsTask) -> None:
+        self.active_tasks.discard(task)
 
     def start_simulations(
         self,
@@ -197,7 +201,7 @@ class Loader(QObject):
         task = SimulationRunner(
             threedi_api, simulations_to_run, upload_timeout=upload_timeout
         )
-        self.simulation_runner_tasks.add(task)
+        self._track_task(task)
         task.signals.initializing_simulations_progress.connect(
             self._handle_simulation_initialization_progress
         )
@@ -213,13 +217,8 @@ class Loader(QObject):
                     project, file_item, simulations, parent
                 )
             )
-        task.taskCompleted.connect(lambda: self._forget_simulation_task(task))
-        task.taskTerminated.connect(lambda: self._forget_simulation_task(task))
         task_manager.addTask(task)
         return task
-
-    def _forget_simulation_task(self, task: SimulationRunner) -> None:
-        self.simulation_runner_tasks.discard(task)
 
     def _handle_simulation_initialization_progress(
         self,
@@ -624,6 +623,7 @@ class Loader(QObject):
                         "Could not start schematisation upload."
                     )
                     return None
+                self._track_task(task)
                 task_manager.addTask(task)
                 return task
             return None
@@ -938,6 +938,7 @@ class Loader(QObject):
             )
         )
         task.taskTerminated.connect(lambda: self.handle_upload_completed(False, task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     @pyqtSlot(str, str)
@@ -1075,6 +1076,7 @@ class Loader(QObject):
         task.taskCompleted.connect(lambda: self.update_descriptor_ids(task))
         task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
         task.taskTerminated.connect(lambda: self.handle_data_sync_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def upload_styles(self, items: list[StyleUploadItem]) -> None:
@@ -1120,6 +1122,7 @@ class Loader(QObject):
         )
         task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
         task.taskTerminated.connect(lambda: self.handle_style_sync_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def acquire_sync_keys(self, keys: list[tuple[str, str]]) -> bool:
@@ -1358,7 +1361,6 @@ class Loader(QObject):
         except (NetworkUnavailableError, RanaFetchError) as e:
             self.communication.bar_error(f"Could not list folder contents: {e}")
             return []
-
         result: list[
             OpenFileRequest
             | OpenSchematisationRequest
@@ -1434,6 +1436,7 @@ class Loader(QObject):
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def open_scenario_results(self, request: OpenScenarioRequest) -> None:
@@ -1592,7 +1595,7 @@ class Loader(QObject):
                 return
 
             task = ScenarioResolveTask(scenario_info, threedi_api)
-            self.scenario_resolve_tasks.add(task)
+            self._track_task(task)
             task.taskCompleted.connect(
                 lambda: self.finish_scenario_resolution(
                     task, continuation, request, scenario_info
@@ -1614,13 +1617,11 @@ class Loader(QObject):
         request: OpenScenarioRequest,
         scenario_info: ScenarioInfo,
     ) -> None:
-        self.scenario_resolve_tasks.discard(task)
         if not self._accept_async_callbacks:
             return
         continuation(request, scenario_info)
 
     def handle_scenario_resolution_terminated(self, task: ScenarioResolveTask) -> None:
-        self.scenario_resolve_tasks.discard(task)
         if not self._accept_async_callbacks:
             return
         if task.isCanceled():
@@ -1863,6 +1864,7 @@ class Loader(QObject):
         task.taskTerminated.connect(
             lambda: self.handle_scenario_result_download_terminated(task)
         )
+        self._track_task(task)
         task_manager.addTask(task)
 
     def handle_scenario_result_download_terminated(self, task: DownloadTask) -> None:
@@ -2004,6 +2006,7 @@ class Loader(QObject):
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
+        self._track_task(task)
         task_manager.addTask(task)
 
     def open_file(self, local_file_path: str, project: dict, file_item: dict) -> None:

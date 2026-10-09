@@ -10,7 +10,14 @@ from qgis.core import (  # type: ignore[attr-defined]
     QgsNetworkAccessManager,
     QgsProcessingException,
 )
-from qgis.PyQt.QtCore import QCoreApplication, QFile, QIODevice, QJsonDocument, QUrl
+from qgis.PyQt.QtCore import (
+    QEventLoop,
+    QFile,
+    QIODevice,
+    QJsonDocument,
+    QThread,
+    QUrl,
+)
 from qgis.PyQt.QtGui import QImage
 from qgis.PyQt.QtNetwork import (
     QHttpMultiPart,
@@ -220,41 +227,67 @@ class NetworkManager(object):
 
     def process_request(self) -> tuple[bool, str | None]:
         assert self._reply is not None
-        self._reply.finished.connect(self.fetch_finished)
-        self._network_manager.requestTimedOut.connect(self.request_timeout)
+        # Keep the reply in a local variable while the nested event loop runs.
+        # The NetworkManager instance may be accessed again from code handling
+        # events, so response processing must remain tied to this request.
+        reply = self._reply
+        event_loop = QEventLoop()
 
-        while not self._reply.isFinished():
-            QCoreApplication.processEvents()
+        def on_finished() -> None:
+            # QNetworkReply is asynchronous, but callers of this class expect
+            # fetch/post/etc. to return only after their request is complete.
+            self.fetch_finished()
+            event_loop.quit()
+
+        def on_timeout(timed_out_reply=None) -> None:
+            # QgsNetworkAccessManager emits this signal for all requests made
+            # through that manager. Only handle a timeout for this reply.
+            if timed_out_reply is None or timed_out_reply is reply:
+                self.request_timeout()
+
+        reply.finished.connect(on_finished)
+        self._network_manager.requestTimedOut.connect(on_timeout)
+        try:
+            if not reply.isFinished():
+                # Process events until this reply finishes without allowing
+                # mouse/keyboard input to re-enter the initiating action.
+                # Other queued events may still be delivered by this loop.
+                event_loop.exec(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+        finally:
+            # These handlers are only needed while this request is pending.
+            # Disconnect them even when event processing raises or is stopped.
+            reply.finished.disconnect(on_finished)
+            self._network_manager.requestTimedOut.disconnect(on_timeout)
 
         description = None
-        self.last_http_status = self._reply.attribute(
+        self.last_http_status = reply.attribute(
             QNetworkRequest.Attribute.HttpStatusCodeAttribute
         )
         # Check for redirect status codes FIRST (before checking for errors)
-        if self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) in (
+        if reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute) in (
             301,
             302,
             303,
             307,
             308,
         ):
-            location = self._reply.rawHeader(b"Location")
+            location = reply.rawHeader(b"Location")
             if location:
                 redirect_url = str(location, "utf-8")
-                self._reply.deleteLater()
+                reply.deleteLater()
                 return True, redirect_url
             else:
-                self._reply.deleteLater()
+                reply.deleteLater()
                 return False, "Redirect response missing Location header"
 
-        if self._reply.error() != QNetworkReply.NetworkError.NoError:
-            error_code = self._reply.error()
-            description = self._reply.errorString()
-            self._reply.deleteLater()
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            error_code = reply.error()
+            description = reply.errorString()
+            reply.deleteLater()
             if error_code in CONNECTIVITY_ERRORS:
                 raise NetworkUnavailableError(description)
             status = False
-            raw_content = self._reply.readAll()
+            raw_content = reply.readAll()
             try:
                 self._content = json.loads(str(raw_content, "utf-8"))
             except json.JSONDecodeError:
@@ -262,16 +295,14 @@ class NetworkManager(object):
         else:
             status = True
             if (
-                self._reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+                reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
                 == 204
             ):
-                self._reply.deleteLater()
+                reply.deleteLater()
                 return status, description
 
-            raw_content = self._reply.readAll()
-            content_type = self._reply.header(
-                QNetworkRequest.KnownHeaders.ContentTypeHeader
-            )
+            raw_content = reply.readAll()
+            content_type = reply.header(QNetworkRequest.KnownHeaders.ContentTypeHeader)
             content_type = str(content_type) if content_type else ""
             if content_type.startswith("application/json"):
                 json_doc = QJsonDocument.fromJson(raw_content)
@@ -303,7 +334,7 @@ class NetworkManager(object):
                         f"{self.last_http_status}, content-type="
                         f"{content_type!r}, {len(raw_content)} bytes)"
                     )
-        self._reply.deleteLater()
+        reply.deleteLater()
         return status, description
 
     def fetch_finished(self):
