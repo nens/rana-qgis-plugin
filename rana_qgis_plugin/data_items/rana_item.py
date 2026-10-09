@@ -13,14 +13,13 @@ from qgis.core import (
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QAction,
-    QButtonGroup,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QInputDialog,
     QLabel,
     QMessageBox,
     QPushButton,
-    QRadioButton,
     QVBoxLayout,
 )
 
@@ -329,25 +328,22 @@ class RanaRootDataItem(QgsDataItem):
             self.refresh()
 
     def prompt_switch_tenant(self) -> Optional[str]:
-        """Show a radio-button dialog to pick a tenant. Returns tenant ID or None if cancelled."""
+        """Show a dropdown dialog to pick a tenant. Returns tenant ID or None if cancelled."""
         current = active_tenant()
         dlg = QDialog()
         dlg.setWindowTitle("Switch tenant")
         layout = QVBoxLayout(dlg)
         layout.addWidget(QLabel("Select a tenant:"))
-
-        group = QButtonGroup(dlg)
-        buttons: dict[QRadioButton, str] = {}
+        combo = QComboBox(dlg)
         for tenant in self.tenants or []:
             tenant_id = tenant.get("id", "")
-            label = f"{tenant.get('name', tenant_id).replace('&', '&&')} ({tenant_id})"
-            btn = QRadioButton(label)
-            btn.setObjectName(tenant_id)
-            if tenant_id == current:
-                btn.setChecked(True)
-            group.addButton(btn)
-            layout.addWidget(btn)
-            buttons[btn] = tenant_id
+            label = f"{tenant.get('name', tenant_id)} ({tenant_id})"
+            combo.addItem(label, tenant_id)
+        if current:
+            current_index = combo.findData(current)
+            if current_index >= 0:
+                combo.setCurrentIndex(current_index)
+        layout.addWidget(combo)
 
         box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -358,8 +354,8 @@ class RanaRootDataItem(QgsDataItem):
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return None
-        checked = group.checkedButton()
-        return buttons.get(checked) if checked else None
+        selected_tenant = combo.currentData()
+        return selected_tenant if isinstance(selected_tenant, str) else None
 
     def switch_tenant(self) -> None:
         """Switch to a different tenant: snapshot, logout, re-login, rollback on failure."""
