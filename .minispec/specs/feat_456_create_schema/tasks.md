@@ -3,8 +3,8 @@ feature: feat_456_create_schema
 status: planned
 created: 2026-10-08
 chunk_size: adaptive
-total_tasks: 11
-estimated_lines: 1250
+total_tasks: 12
+estimated_lines: 1450
 ---
 
 # Add Schematisation Tasks
@@ -192,6 +192,16 @@ Two different migration approaches apply here:
   Upload existing (`.gpkg` and `.sqlite`); From scratch; cancellation,
   validation errors, API conflicts, and successful Browser refresh.
 
+### Shared orchestration refactor
+
+#### Task 12: Consolidate Loader orchestration and wizard shared interface
+- **Estimate:** ~200 lines including focused test updates
+- **Files:** `rana_qgis_plugin/loader.py`, `rana_qgis_plugin/widgets/schematisation_new_wizard.py`, `tests/loader/test_schematisation.py`, `tests/widgets/test_schematisation_new_wizard.py`, `.minispec/knowledge/decisions/20260511-1413-split-schematisation-wizard.md`, `.minispec/knowledge/decisions/20261008-1630-shared-schematisation-creation-flow.md`
+- **Description:** Add `Loader._run_schematisation_wizard(...)` to share authentication, organisation lookup, wizard execution/result validation, and initial-revision handoff. Introduce `SchematisationWizardBase(QWizard)` for common constructor state/output attributes, the name page and shared button wiring, window-size lifecycle, and a build-error wrapper that resets the result attributes. The subclasses provide their title/settings key and retain route-specific pages, validation, abort behavior, and build logic. Keep `prepare_existing_schematisation` and `copy_existing_schematisation_content` with the Upload existing wizard. Put the shared `get_paths_from_geopackage` static method on the base class, removing the cross-class dependency without promoting helpers to module-level functions. Record the accepted design decision and mark its two predecessors superseded.
+- **Depends on:** Tasks 9 and 10 (both flows implemented); independent of the HCC import tasks.
+- **Acceptance:** Existing route behavior is preserved; loader and wizard tests pass; both wizard classes expose the same result interface; their remembered sizes do not collide; superseded decisions link to the new decision record.
+- **Evidence:** `pytest tests/loader/test_schematisation.py tests/widgets/test_schematisation_new_wizard.py` passes. Manual tests cover both wizard routes, cancel/close, and independent remembered sizes.
+
 ## Progress
 
 - [x] Task 1: Add the Add schematisation submenu to folder items
@@ -205,3 +215,4 @@ Two different migration approaches apply here:
 - [x] Task 9: Integrate Upload existing with registration and initial upload
 - [x] Task 10: Integrate From scratch with registration and initial upload
 - [ ] Task 11: Verify route integration and manual UI paths
+- [x] Task 12: Consolidate Loader orchestration and wizard shared interface
