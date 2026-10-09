@@ -198,7 +198,7 @@ Two different migration approaches apply here:
 - [x] Task 2: Port upstream HCC revision selection behavior into current UI
 - [x] Task 3: Copy the selected HCC revision and refresh the Browser
 - [x] Task 4: Copy legacy wizard/page modules and port shared metadata UI to Qt 6
-- [ ] Task 5: Port Upload existing input validation and local preparation
+- [x] Task 5: Port Upload existing input validation and local preparation
 - [ ] Task 6: Reuse SchematisationUploadTask for initial revision upload
 - [ ] Task 7: Port the From scratch explanation and settings wizard to Qt 6
 - [ ] Task 8: Create and populate the From scratch GeoPackage
