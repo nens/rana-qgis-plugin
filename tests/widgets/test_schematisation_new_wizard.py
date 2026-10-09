@@ -238,3 +238,56 @@ def test_create_and_populate_schematisation_geopackage(tmp_path):
         ).fetchone()
     assert row == (1, 0)
     assert (raster_dir / "dem.tif").read_bytes() == b"test raster"
+
+
+def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
+    qgis_application, tmp_path
+):
+    communication = MagicMock()
+    wizard = NewSchematisationWizard(
+        object(),
+        str(tmp_path),
+        communication,
+        {"owner": MagicMock()},
+        "project",
+        "target/",
+    )
+    wizard.schematisation_name_page = MagicMock()
+    wizard.schematisation_name_page.name = "New model"
+    wizard.schematisation_name_page.description = "Description"
+    wizard.schematisation_name_page.owner = "owner"
+    wizard.schematisation_settings_page = MagicMock()
+    wizard.schematisation_settings_page.settings_are_valid = True
+    wizard.schematisation_settings_page.main_widget.collect_new_schematisation_settings.return_value = {}
+    wizard.schematisation_settings_page.main_widget.raster_filepaths.return_value = (
+        "dem.tif",
+        "",
+    )
+    schematisation = MagicMock(id="schema-id", name="New model")
+    local_schematisation = MagicMock()
+    wip_revision = MagicMock(
+        schematisation_dir=str(tmp_path / "schema"),
+        raster_dir=str(tmp_path / "rasters"),
+    )
+    raster_paths = {"model_settings": {"dem_file": "dem.tif"}}
+
+    with (
+        patch(
+            "rana_qgis_plugin.widgets.schematisation_new_wizard._create_schematisation_base",
+            return_value=(schematisation, local_schematisation, wip_revision),
+        ),
+        patch.object(wizard, "create_and_populate_schematisation_geopackage"),
+        patch(
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage",
+            return_value=raster_paths,
+        ) as get_raster_paths,
+        patch("rana_qgis_plugin.widgets.schematisation_new_wizard.time.sleep"),
+    ):
+        wizard.create_new_schematisation()
+
+    get_raster_paths.assert_called_once_with(
+        str(tmp_path / "schema" / "New model.gpkg")
+    )
+    assert wizard.new_schematisation is schematisation
+    assert wizard.new_local_schematisation is local_schematisation
+    assert wizard.raster_paths == raster_paths

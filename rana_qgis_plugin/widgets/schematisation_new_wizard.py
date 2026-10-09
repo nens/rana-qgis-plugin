@@ -96,6 +96,7 @@ class NewSchematisationWizard(QWizard):
         self.communication = communication
         self.project_id = project_id
         self.rana_path = rana_path
+        self.raster_paths = None
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
@@ -226,17 +227,24 @@ class NewSchematisationWizard(QWizard):
                 wip_revision.raster_dir,
                 self.communication,
             )
+            self.raster_paths = (
+                UploadExistingSchematisationWizard.get_paths_from_geopackage(
+                    geopackage_filepath
+                )
+            )
             time.sleep(0.5)
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
             self.communication.bar_info(msg)
         except (ApiException, RanaPostError) as e:
+            self.raster_paths = None
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = extract_error_message(e)
             self.communication.bar_error(error_msg)
         except Exception as e:
+            self.raster_paths = None
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = f"Error: {e}"
