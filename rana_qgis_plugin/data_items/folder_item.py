@@ -118,13 +118,19 @@ class RanaFolderDataItem(QgsDataItem):
                     (
                         "Upload existing",
                         lambda: self.loader.upload_existing_schematisation(
-                            self.project, self.folder_path, parent
+                            self.project,
+                            self.folder_path,
+                            parent,
+                            refresh_callback=self.refresh_if_populated,
                         ),
                     ),
                     (
                         "From scratch",
                         lambda: self.loader.create_schematisation_from_scratch(
-                            self.project, self.folder_path, parent
+                            self.project,
+                            self.folder_path,
+                            parent,
+                            refresh_callback=self.refresh_if_populated,
                         ),
                     ),
                 )
