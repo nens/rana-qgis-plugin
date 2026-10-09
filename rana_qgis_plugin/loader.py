@@ -89,6 +89,7 @@ from rana_qgis_plugin.utils.qgis import (
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
+from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.workers.avatars import AvatarWorker
 from rana_qgis_plugin.workers.download import (
@@ -267,6 +268,22 @@ class Loader(QObject):
     ) -> None:
         """Submit simulations prepared by the wizard to the task manager."""
         self.start_simulations(threedi_api, simulations, project, file_item, parent)
+
+    def import_schematisation_from_hcc(
+        self, project: dict, folder_path: str, parent
+    ) -> tuple[object, object] | None:
+        """Let the user choose an HCC schematisation revision to import."""
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.show_warn(
+                "Not authenticated with 3Di API — cannot import from HCC."
+            )
+            return None
+
+        dialog = SchematisationBrowser(threedi_api, parent)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.selected_schematisation, dialog.selected_revision
 
     def start_simulation(
         self,

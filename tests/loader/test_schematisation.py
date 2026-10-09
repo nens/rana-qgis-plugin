@@ -72,6 +72,42 @@ def test_save_revision_requires_authenticated_api():
     )
 
 
+def test_import_schematisation_from_hcc_requires_authenticated_api():
+    communication = MagicMock()
+    loader = Loader(communication)
+
+    with patch("rana_qgis_plugin.loader.get_threedi_api", return_value=None):
+        result = loader.import_schematisation_from_hcc(
+            {"id": "project"}, "folder/", None
+        )
+
+    assert result is None
+    communication.show_warn.assert_called_once_with(
+        "Not authenticated with 3Di API — cannot import from HCC."
+    )
+
+
+def test_import_schematisation_from_hcc_returns_selection():
+    communication = MagicMock()
+    loader = Loader(communication)
+    schematisation = MagicMock()
+    revision = MagicMock()
+
+    with (
+        patch("rana_qgis_plugin.loader.get_threedi_api", return_value=MagicMock()),
+        patch("rana_qgis_plugin.loader.SchematisationBrowser") as dialog_type,
+    ):
+        dialog = dialog_type.return_value
+        dialog.exec.return_value = 1
+        dialog.selected_schematisation = schematisation
+        dialog.selected_revision = revision
+        result = loader.import_schematisation_from_hcc(
+            {"id": "project"}, "folder/", None
+        )
+
+    assert result == (schematisation, revision)
+
+
 def test_open_items_deduplicates_same_file_requests():
     loader = Loader(MagicMock())
     project = {"id": "project"}
