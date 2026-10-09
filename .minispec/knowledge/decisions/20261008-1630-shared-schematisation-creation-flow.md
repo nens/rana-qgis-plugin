@@ -2,9 +2,9 @@
 type: decision
 id: 20261008-1630-shared-schematisation-creation-flow
 date: 2026-10-08
-status: accepted
+status: superseded
 supersedes: null
-superseded_by: null
+superseded_by: 20261009-1200-unify-schematisation-wizard-base-and-flow
 impacts:
   - rana_qgis_plugin/widgets/
   - rana_qgis_plugin/loader.py

@@ -15,6 +15,7 @@ decisions:
   - 20261008-1630-shared-schematisation-creation-flow
   - 20261008-1640-schematisation-metadata-inputs
   - 20261008-1650-port-schematisation-dialogs-qt6
+  - 20261009-1200-unify-schematisation-wizard-base-and-flow
 ---
 
 # Add Schematisation Design
@@ -191,8 +192,50 @@ and useful validation. Replace legacy browser/loader wiring, authentication
 helpers, and threading/lifecycle patterns with current-plugin equivalents.
 
 Keep the From scratch explanation step. The two flows remain separate, with
-shared module-level schematisation setup and initial-revision upload logic;
-avoid a combined mode-driven wizard or a generalized wizard framework.
+route-specific page setup and preparation logic. A focused
+`SchematisationWizardBase` owns only their shared wizard interface and common
+QWizard setup/lifecycle; it is not a mode-driven or generalized wizard
+framework. Loader shares authentication, organisation lookup, wizard execution,
+and initial-revision upload orchestration through one helper.
+
+### Post-implementation consolidation
+
+The two Loader entry methods and wizard classes now share a common calling
+contract. Use a private Loader orchestration helper with route-specific wizard
+factories. `SchematisationWizardBase` owns common constructor state and output
+attributes (`new_schematisation`, `new_local_schematisation`, `raster_paths`),
+the shared name page and button wiring, and close lifecycle. Each subclass
+provides its own title and settings key and adds its own route-specific pages.
+Keep validation and local preparation in their respective wizard subclasses;
+the base must not turn the two flows into a mode-driven wizard.
+
+The base also owns the common build-error handling helper used by each
+subclass's build method. That helper catches the existing API/Rana exceptions
+and general exceptions, clears all three output attributes on failure, and
+reports the error using the existing communication methods. Route-specific
+early aborts (such as invalid existing-file preparation returning `None`)
+remain in the Upload existing flow and should not be converted into exceptions
+just to fit the shared helper.
+
+Local name-conflict validation and shared Rana/local schematisation setup are
+also methods on `SchematisationWizardBase`, since both wizard routes use them
+and their dependencies (working directory, communication, API client, project
+ID, and destination path) are already base-class state. The setup method does
+not accept an owner argument: Rana registration currently uses path and
+description, while the selected owner is part of the wizard metadata/UI rather
+than this create call.
+
+Give each wizard a distinct QSettings key for remembered window size. Persist
+the size consistently via the shared `done()` lifecycle when a wizard closes.
+Keep upload-specific preparation
+and copy helpers with the Upload existing flow. Put
+`get_paths_from_geopackage`, which is called by both wizard flows, on the base
+class as a static method so neither subclass needs to depend on the other's
+class. No helpers need to become module-level functions for this consolidation.
+
+This consolidation supersedes decisions `20260511-1413-split-schematisation-wizard`
+and `20261008-1630-shared-schematisation-creation-flow`; see
+`20261009-1200-unify-schematisation-wizard-base-and-flow`.
 
 ### Import a specific HCC revision
 

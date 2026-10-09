@@ -1,8 +1,11 @@
 import sqlite3
 from unittest.mock import MagicMock, patch
 
+from qgis.PyQt.QtWidgets import QDialog
+
 from rana_qgis_plugin.widgets.schematisation_new_wizard import (
     NewSchematisationWizard,
+    SchematisationWizardBase,
     UploadExistingSchematisationWizard,
 )
 
@@ -29,7 +32,7 @@ def test_get_paths_from_geopackage_extracts_referenced_raster_fields(tmp_path):
             return_value=layer,
         ),
     ):
-        paths = UploadExistingSchematisationWizard.get_paths_from_geopackage(
+        paths = SchematisationWizardBase.get_paths_from_geopackage(
             tmp_path / "input.gpkg"
         )
 
@@ -56,7 +59,7 @@ def test_prepare_validates_sqlite_and_uses_adjacent_geopackage(tmp_path):
             return_value=True,
         ) as validate_schema,
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.SchematisationWizardBase.get_paths_from_geopackage",
             return_value=raster_paths,
         ) as get_raster_paths,
     ):
@@ -82,7 +85,7 @@ def test_prepare_stops_when_schema_is_invalid(tmp_path):
             return_value=False,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage"
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.SchematisationWizardBase.get_paths_from_geopackage"
         ) as get_raster_paths,
     ):
         prepared = UploadExistingSchematisationWizard.prepare_existing_schematisation(
@@ -104,7 +107,7 @@ def test_prepare_stops_if_sqlite_has_no_adjacent_geopackage(tmp_path):
             return_value=True,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage"
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.SchematisationWizardBase.get_paths_from_geopackage"
         ) as get_raster_paths,
     ):
         prepared = UploadExistingSchematisationWizard.prepare_existing_schematisation(
@@ -127,7 +130,7 @@ def test_prepare_blocks_missing_referenced_rasters(tmp_path):
             return_value=True,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.SchematisationWizardBase.get_paths_from_geopackage",
             return_value={"model_settings": {"dem_file": "missing-dem.tif"}},
         ),
     ):
@@ -161,17 +164,8 @@ def test_upload_existing_checks_inputs_before_registering_remote_schematisation(
     )
 
     with (
-        patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.check_name_available",
-            return_value=True,
-        ),
-        patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard",
-            return_value=None,
-        ),
-        patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard._create_schematisation_base"
-        ) as create_base,
+        patch.object(wizard, "check_name_available", return_value=True),
+        patch.object(wizard, "_create_schematisation_base") as create_base,
     ):
         wizard.create_schematisation()
 
@@ -273,15 +267,14 @@ def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
 
     with (
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard._create_schematisation_base",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.SchematisationWizardBase._create_schematisation_base",
             return_value=(schematisation, local_schematisation, wip_revision),
         ),
         patch.object(wizard, "create_and_populate_schematisation_geopackage"),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.SchematisationWizardBase.get_paths_from_geopackage",
             return_value=raster_paths,
         ) as get_raster_paths,
-        patch("rana_qgis_plugin.widgets.schematisation_new_wizard.time.sleep"),
     ):
         wizard.create_new_schematisation()
 
@@ -291,3 +284,120 @@ def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
     assert wizard.new_schematisation is schematisation
     assert wizard.new_local_schematisation is local_schematisation
     assert wizard.raster_paths == raster_paths
+
+
+def test_wizard_base_resets_outputs_and_reports_build_errors(
+    qgis_application, tmp_path
+):
+    communication = MagicMock()
+    wizard = NewSchematisationWizard(
+        object(),
+        str(tmp_path),
+        communication,
+        {"owner": MagicMock()},
+        "project",
+        "target/",
+    )
+    wizard.new_schematisation = MagicMock()
+    wizard.new_local_schematisation = MagicMock()
+    wizard.raster_paths = {"model_settings": {"dem_file": "dem.tif"}}
+
+    wizard.run_build(lambda: (_ for _ in ()).throw(RuntimeError("build failed")))
+
+    assert wizard.new_schematisation is None
+    assert wizard.new_local_schematisation is None
+    assert wizard.raster_paths is None
+    communication.bar_error.assert_called_once_with("Error: build failed")
+
+
+def test_wizard_sizes_use_distinct_settings_keys():
+    assert NewSchematisationWizard.SETTINGS_KEY != (
+        UploadExistingSchematisationWizard.SETTINGS_KEY
+    )
+
+
+def test_wizard_base_rejects_name_that_exists_in_working_directory(
+    qgis_application, tmp_path
+):
+    communication = MagicMock()
+    wizard = NewSchematisationWizard(
+        object(),
+        str(tmp_path),
+        communication,
+        {"owner": MagicMock()},
+        "project",
+        "target/",
+    )
+    (tmp_path / "Existing model").mkdir()
+
+    assert not wizard.check_name_available("Existing model")
+
+    communication.show_error.assert_called_once()
+    assert "Existing model" in communication.show_error.call_args.args[0]
+
+
+def test_wizard_base_registers_remote_and_initializes_local_schematisation(
+    qgis_application, tmp_path
+):
+    wizard = NewSchematisationWizard(
+        object(),
+        str(tmp_path),
+        MagicMock(),
+        {"owner": MagicMock()},
+        "project-id",
+        "target/",
+    )
+    local_schematisation = MagicMock()
+    wip_revision = MagicMock()
+    local_schematisation.wip_revision = wip_revision
+    tc = MagicMock()
+    tc.fetch_schematisation.return_value = MagicMock(id="schema-id")
+    wizard.tc = tc
+
+    with (
+        patch(
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.create_rana_schematisation",
+            return_value={"schematisation_id": "schema-id"},
+        ) as create_remote,
+        patch(
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.LocalSchematisation",
+            return_value=local_schematisation,
+        ) as create_local,
+    ):
+        result = wizard._create_schematisation_base("Schema", "Description")
+
+    create_remote.assert_called_once_with(
+        project_id="project-id", path="target/Schema", description="Description"
+    )
+    create_local.assert_called_once_with(
+        str(tmp_path),
+        "schema-id",
+        "Schema",
+        parent_revision_number=0,
+        create=True,
+    )
+    assert result == (
+        tc.fetch_schematisation.return_value,
+        local_schematisation,
+        wip_revision,
+    )
+
+
+def test_wizard_base_persists_size_on_close(qgis_application, tmp_path):
+    wizard = NewSchematisationWizard(
+        object(),
+        str(tmp_path),
+        MagicMock(),
+        {"owner": MagicMock()},
+        "project",
+        "target/",
+    )
+
+    with patch(
+        "rana_qgis_plugin.widgets.schematisation_new_wizard.QSettings"
+    ) as settings:
+        wizard.done(QDialog.DialogCode.Rejected)
+
+    settings.return_value.setValue.assert_called_once_with(
+        NewSchematisationWizard.SETTINGS_KEY, wizard.size()
+    )

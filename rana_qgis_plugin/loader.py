@@ -101,6 +101,7 @@ from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import (
     NewSchematisationWizard,
+    SchematisationWizardBase,
     UploadExistingSchematisationWizard,
 )
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
@@ -324,6 +325,56 @@ class Loader(QObject):
         self.communication.bar_info("Schematisation imported from HCC.")
         refresh_callback()
 
+    def run_new_schematisation_wizard(
+        self,
+        project: dict,
+        parent,
+        refresh_callback: Callable[[], None],
+        wizard_factory: Callable[[ThreediApi, dict], SchematisationWizardBase],
+        action_verb: str,
+        schematisation_kind: str,
+    ) -> SchematisationUploadTask | None:
+        """Run common setup and upload orchestration for a creation wizard."""
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.show_warn(
+                f"Not authenticated with HCC API — cannot {action_verb} a schematisation."
+            )
+            return None
+
+        try:
+            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
+        except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_error(
+                f"Could not retrieve HCC organisations: {error}", parent=parent
+            )
+            return None
+
+        if not organisations:
+            self.communication.show_error(
+                "No HCC organisations are available for this Rana tenant.",
+                parent=parent,
+            )
+            return None
+
+        wizard = wizard_factory(threedi_api, organisations)
+        if wizard.exec() != QDialog.DialogCode.Accepted:
+            return None
+        if wizard.new_schematisation is None or wizard.new_local_schematisation is None:
+            self.communication.show_error(
+                f"Could not prepare the {schematisation_kind} schematisation for upload.",
+                parent=parent,
+            )
+            return None
+
+        return self.save_initial_revision(
+            project,
+            wizard.new_schematisation,
+            wizard.new_local_schematisation,
+            wizard.raster_paths or {},
+            refresh_callback,
+        )
+
     def upload_existing_schematisation(
         self,
         project: dict,
@@ -340,52 +391,23 @@ class Loader(QObject):
         if source_path is None:
             return None
 
-        threedi_api = get_threedi_api()
-        if threedi_api is None:
-            self.communication.show_warn(
-                "Not authenticated with HCC API — cannot upload a schematisation."
-            )
-            return None
-
-        try:
-            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
-        except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
-            self.communication.show_error(
-                f"Could not retrieve HCC organisations: {error}", parent=parent
-            )
-            return None
-
-        if not organisations:
-            self.communication.show_error(
-                "No HCC organisations are available for this Rana tenant.",
-                parent=parent,
-            )
-            return None
-
-        wizard = UploadExistingSchematisationWizard(
-            threedi_api,
-            hcc_working_dir(),
-            self.communication,
-            organisations,
-            source_path,
-            project["id"],
-            folder_path,
-        )
-        if wizard.exec() != QDialog.DialogCode.Accepted:
-            return None
-        if wizard.new_schematisation is None or wizard.new_local_schematisation is None:
-            self.communication.show_error(
-                "Could not prepare the existing schematisation for upload.",
-                parent=parent,
-            )
-            return None
-
-        return self.save_initial_revision(
+        return self.run_new_schematisation_wizard(
             project,
-            wizard.new_schematisation,
-            wizard.new_local_schematisation,
-            wizard.raster_paths or {},
+            parent,
             refresh_callback,
+            wizard_factory=lambda api, organisations: (
+                UploadExistingSchematisationWizard(
+                    api,
+                    hcc_working_dir(),
+                    self.communication,
+                    organisations,
+                    source_path,
+                    project["id"],
+                    folder_path,
+                )
+            ),
+            action_verb="upload",
+            schematisation_kind="existing",
         )
 
     def create_schematisation_from_scratch(
@@ -396,49 +418,20 @@ class Loader(QObject):
         refresh_callback: Callable[[], None],
     ) -> SchematisationUploadTask | None:
         """Run the From scratch wizard and upload its initial revision."""
-        threedi_api = get_threedi_api()
-        if threedi_api is None:
-            self.communication.show_warn(
-                "Not authenticated with HCC API — cannot create a schematisation."
-            )
-            return None
-        try:
-            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
-        except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
-            self.communication.show_error(
-                f"Could not retrieve HCC organisations: {error}", parent=parent
-            )
-            return None
-
-        if not organisations:
-            self.communication.show_error(
-                "No HCC organisations are available for this Rana tenant.",
-                parent=parent,
-            )
-            return None
-
-        wizard = NewSchematisationWizard(
-            threedi_api,
-            hcc_working_dir(),
-            self.communication,
-            organisations,
-            project["id"],
-            folder_path,
-        )
-        if wizard.exec() != QDialog.DialogCode.Accepted:
-            return None
-        if wizard.new_schematisation is None or wizard.new_local_schematisation is None:
-            self.communication.show_error(
-                "Could not prepare the new schematisation for upload.", parent=parent
-            )
-            return None
-
-        return self.save_initial_revision(
+        return self.run_new_schematisation_wizard(
             project,
-            wizard.new_schematisation,
-            wizard.new_local_schematisation,
-            wizard.raster_paths or {},
+            parent,
             refresh_callback,
+            wizard_factory=lambda api, organisations: NewSchematisationWizard(
+                api,
+                hcc_working_dir(),
+                self.communication,
+                organisations,
+                project["id"],
+                folder_path,
+            ),
+            action_verb="create",
+            schematisation_kind="new",
         )
 
     def start_simulation(

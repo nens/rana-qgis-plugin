@@ -1,7 +1,7 @@
 import os
 import shutil
-import time
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 from qgis.core import QgsFeature
@@ -40,44 +40,11 @@ class GeoPackageError(Exception):
     pass
 
 
-def check_name_available(name, working_dir, communication):
-    """Check if schematisation name is available in the working directory.
+class SchematisationWizardBase(QWizard):
+    """Shared interface and lifecycle for schematisation creation wizards."""
 
-    Returns True if available, False if not (and shows an error).
-    """
-    if (Path(working_dir) / name).exists():
-        communication.show_error(
-            f"Schematisation with name {name} already exists in working directory. Please choose a different name and try again."
-        )
-        return False
-    return True
-
-
-def _create_schematisation_base(
-    tc, working_dir, name, owner, description, project_id, rana_path
-):
-    """Create schematisation via Rana and set up local directory structure.
-
-    Returns a tuple of (schematisation, local_schematisation, wip_revision).
-    """
-    path = f"{rana_path}{name}" if rana_path else name
-    rana_response = create_rana_schematisation(
-        project_id=project_id, path=path, description=description
-    )
-    schematisation = tc.fetch_schematisation(rana_response["schematisation_id"])
-    local_schematisation = LocalSchematisation(
-        working_dir,
-        rana_response["schematisation_id"],
-        name,
-        parent_revision_number=0,
-        create=True,
-    )
-    wip_revision = local_schematisation.wip_revision
-    return schematisation, local_schematisation, wip_revision
-
-
-class NewSchematisationWizard(QWizard):
-    """New schematisation wizard."""
+    SETTINGS_KEY = ""
+    WINDOW_TITLE = ""
 
     def __init__(
         self,
@@ -96,13 +63,117 @@ class NewSchematisationWizard(QWizard):
         self.communication = communication
         self.project_id = project_id
         self.rana_path = rana_path
-        self.raster_paths = None
+        self.raster_paths: dict | None = None
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
 
-        self.schematisation_name_page = SchematisationNamePage(
-            self.available_organisations, self
+        self.schematisation_name_page = SchematisationNamePage(organisations, self)
+        self.setButtonText(QWizard.WizardButton.FinishButton, "Create schematisation")
+        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
+        self.finish_btn.clicked.connect(self.create_schematisation)
+        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
+        self.cancel_btn.clicked.connect(self.reject)
+        self.setWindowTitle(self.WINDOW_TITLE)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.resize(QSettings().value(self.SETTINGS_KEY, QSize(790, 700)))
+
+    def create_schematisation(self):
+        raise NotImplementedError
+
+    def check_name_available(self, name: str) -> bool:
+        """Return whether the name is available locally, reporting conflicts."""
+        if (Path(self.working_dir) / name).exists():
+            self.communication.show_error(
+                f"Schematisation with name {name} already exists in working directory. Please choose a different name and try again."
+            )
+            return False
+        return True
+
+    def _create_schematisation_base(self, name, description):
+        """Register the schematisation and create its local WIP structure."""
+        path = f"{self.rana_path}{name}" if self.rana_path else name
+        rana_response = create_rana_schematisation(
+            project_id=self.project_id, path=path, description=description
+        )
+        schematisation_id = rana_response["schematisation_id"]
+        schematisation = self.tc.fetch_schematisation(schematisation_id)
+        local_schematisation = LocalSchematisation(
+            self.working_dir,
+            schematisation_id,
+            name,
+            parent_revision_number=0,
+            create=True,
+        )
+        return schematisation, local_schematisation, local_schematisation.wip_revision
+
+    def run_build(self, build: Callable[[], None]) -> None:
+        """Run a wizard-specific build and report failures consistently."""
+        self._reset_outputs()
+        try:
+            build()
+        except (ApiException, RanaPostError) as error:
+            self._reset_outputs()
+            self.communication.bar_error(extract_error_message(error))
+        except Exception as error:
+            self._reset_outputs()
+            self.communication.bar_error(f"Error: {error}")
+
+    def _reset_outputs(self) -> None:
+        self.raster_paths = None
+        self.new_schematisation = None
+        self.new_local_schematisation = None
+
+    def done(self, result):
+        """Remember size for Finish, Cancel, Escape, and title-bar close."""
+        QSettings().setValue(self.SETTINGS_KEY, self.size())
+        super().done(result)
+
+    @staticmethod
+    def get_paths_from_geopackage(geopackage_path) -> defaultdict[str, dict]:
+        """Search GeoPackage database tables for attributes with file paths."""
+        paths: defaultdict[str, dict] = defaultdict(dict)
+        for (
+            table_name,
+            raster_info,
+        ) in SchematisationApiMapper.raster_reference_tables().items():
+            settings_lyr = geopackage_layer(geopackage_path, table_name)
+            if not settings_lyr.isValid():
+                raise GeoPackageError(
+                    f"'{table_name}' table could not be loaded from {geopackage_path}"
+                )
+            try:
+                set_feat = next(settings_lyr.getFeatures())
+            except StopIteration:
+                continue
+            for field_name in raster_info:
+                field_value = set_feat[field_name]
+                paths[table_name][field_name] = field_value if field_value else None
+        return paths
+
+
+class NewSchematisationWizard(SchematisationWizardBase):
+    """Wizard for creating a new schematisation from scratch."""
+
+    SETTINGS_KEY = "threedi/new_schematisation_wizard_size"
+    WINDOW_TITLE = "New schematisation"
+
+    def __init__(
+        self,
+        threedi_api,
+        working_dir,
+        communication,
+        organisations,
+        project_id,
+        rana_path,
+    ):
+        super().__init__(
+            threedi_api,
+            working_dir,
+            communication,
+            organisations,
+            project_id,
+            rana_path,
         )
         self.schematisation_explain_page = SchematisationExplainPage(self)
         self.schematisation_settings_page = SchematisationSettingsPage(
@@ -111,17 +182,7 @@ class NewSchematisationWizard(QWizard):
         self.addPage(self.schematisation_name_page)
         self.addPage(self.schematisation_explain_page)
         self.addPage(self.schematisation_settings_page)
-        self.setButtonText(QWizard.WizardButton.FinishButton, "Create schematisation")
-        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
-        self.finish_btn.clicked.connect(self.create_schematisation)
-        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
-        self.cancel_btn.clicked.connect(self.cancel_wizard)
-        self.setWindowTitle("New schematisation")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setOption(QWizard.WizardOption.HaveNextButtonOnLastPage, False)
-        self.resize(
-            QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))
-        )
 
     @staticmethod
     def create_and_populate_schematisation_geopackage(
@@ -185,7 +246,8 @@ class NewSchematisationWizard(QWizard):
 
     def create_schematisation(self):
         name = self.schematisation_name_page.name
-        if not check_name_available(name, self.working_dir, self.communication):
+        self._reset_outputs()
+        if not self.check_name_available(name):
             return
         self.create_new_schematisation()
 
@@ -194,70 +256,44 @@ class NewSchematisationWizard(QWizard):
         if not self.schematisation_settings_page.settings_are_valid:
             return
 
+        self.run_build(self._build_new_schematisation)
+
+    def _build_new_schematisation(self):
         name = self.schematisation_name_page.name
         description = self.schematisation_name_page.description
-        owner = self.schematisation_name_page.owner
 
         schematisation_settings = self.schematisation_settings_page.main_widget.collect_new_schematisation_settings()
         raster_filepaths = (
             self.schematisation_settings_page.main_widget.raster_filepaths()
         )
-        try:
-            schematisation, local_schematisation, wip_revision = (
-                _create_schematisation_base(
-                    self.tc,
-                    self.working_dir,
-                    name,
-                    owner,
-                    description,
-                    self.project_id,
-                    self.rana_path,
-                )
-            )
+        schematisation, local_schematisation, wip_revision = (
+            self._create_schematisation_base(name, description)
+        )
 
-            schematisation_filename = f"{name}.gpkg"
-            geopackage_filepath = os.path.join(
-                wip_revision.schematisation_dir, schematisation_filename
-            )
+        schematisation_filename = f"{name}.gpkg"
+        geopackage_filepath = os.path.join(
+            wip_revision.schematisation_dir, schematisation_filename
+        )
 
-            self.create_and_populate_schematisation_geopackage(
-                geopackage_filepath,
-                schematisation_settings,
-                raster_filepaths,
-                wip_revision.raster_dir,
-                self.communication,
-            )
-            self.raster_paths = (
-                UploadExistingSchematisationWizard.get_paths_from_geopackage(
-                    geopackage_filepath
-                )
-            )
-            time.sleep(0.5)
-            self.new_schematisation = schematisation
-            self.new_local_schematisation = local_schematisation
-            msg = f"Schematisation '{name} ({schematisation.id})' created!"
-            self.communication.bar_info(msg)
-        except (ApiException, RanaPostError) as e:
-            self.raster_paths = None
-            self.new_schematisation = None
-            self.new_local_schematisation = None
-            error_msg = extract_error_message(e)
-            self.communication.bar_error(error_msg)
-        except Exception as e:
-            self.raster_paths = None
-            self.new_schematisation = None
-            self.new_local_schematisation = None
-            error_msg = f"Error: {e}"
-            self.communication.bar_error(error_msg)
-
-    def cancel_wizard(self):
-        """Handling canceling wizard action."""
-        QSettings().setValue("threedi/new_schematisation_wizard_size", self.size())
-        self.reject()
+        self.create_and_populate_schematisation_geopackage(
+            geopackage_filepath,
+            schematisation_settings,
+            raster_filepaths,
+            wip_revision.raster_dir,
+            self.communication,
+        )
+        self.raster_paths = self.get_paths_from_geopackage(geopackage_filepath)
+        self.new_schematisation = schematisation
+        self.new_local_schematisation = local_schematisation
+        msg = f"Schematisation '{name} ({schematisation.id})' created!"
+        self.communication.bar_info(msg)
 
 
-class UploadExistingSchematisationWizard(QWizard):
+class UploadExistingSchematisationWizard(SchematisationWizardBase):
     """Wizard for creating a new schematisation from an existing GeoPackage."""
+
+    SETTINGS_KEY = "threedi/upload_existing_schematisation_wizard_size"
+    WINDOW_TITLE = "Upload existing schematisation"
 
     def __init__(
         self,
@@ -269,32 +305,17 @@ class UploadExistingSchematisationWizard(QWizard):
         project_id,
         rana_path,
     ):
-        super().__init__()
-        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
-        self.working_dir = working_dir
-        self.threedi_api = threedi_api
-        self.tc = ThreediCalls(threedi_api)
-        self.communication = communication
-        self.gpkg_path = gpkg_path
-        self.project_id = project_id
-        self.rana_path = rana_path
-        self.raster_paths = None
-        self.new_schematisation = None
-        self.new_local_schematisation = None
-        self.available_organisations = organisations
-
-        self.schematisation_name_page = SchematisationNamePage(
-            self.available_organisations, self
+        super().__init__(
+            threedi_api,
+            working_dir,
+            communication,
+            organisations,
+            project_id,
+            rana_path,
         )
+        self.gpkg_path = gpkg_path
         self.schematisation_name_page.setFinalPage(True)
         self.addPage(self.schematisation_name_page)
-        self.setButtonText(QWizard.WizardButton.FinishButton, "Create schematisation")
-        self.finish_btn = self.button(QWizard.WizardButton.FinishButton)
-        self.finish_btn.clicked.connect(self.create_schematisation)
-        self.cancel_btn = self.button(QWizard.WizardButton.CancelButton)
-        self.cancel_btn.clicked.connect(self.cancel_wizard)
-        self.setWindowTitle("Upload existing schematisation")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setButtonLayout(
             [
                 QWizard.WizardButton.Stretch,
@@ -302,32 +323,6 @@ class UploadExistingSchematisationWizard(QWizard):
                 QWizard.WizardButton.CancelButton,
             ]
         )
-        self.resize(
-            QSettings().value("threedi/new_schematisation_wizard_size", QSize(790, 700))
-        )
-
-    @staticmethod
-    def get_paths_from_geopackage(geopackage_path):
-        """Search GeoPackage database tables for attributes with file paths."""
-        paths: defaultdict[str, dict] = defaultdict(dict)
-        for (
-            table_name,
-            raster_info,
-        ) in SchematisationApiMapper.raster_reference_tables().items():
-            settings_fields = list(raster_info.keys())
-            settings_lyr = geopackage_layer(geopackage_path, table_name)
-            if not settings_lyr.isValid():
-                raise GeoPackageError(
-                    f"'{table_name}' table could not be loaded from {geopackage_path}"
-                )
-            try:
-                set_feat = next(settings_lyr.getFeatures())
-            except StopIteration:
-                continue
-            for field_name in settings_fields:
-                field_value = set_feat[field_name]
-                paths[table_name][field_name] = field_value if field_value else None
-        return paths
 
     @staticmethod
     def prepare_existing_schematisation(source_path, communication):
@@ -348,7 +343,7 @@ class UploadExistingSchematisationWizard(QWizard):
             return None
 
         try:
-            raster_paths = UploadExistingSchematisationWizard.get_paths_from_geopackage(
+            raster_paths = SchematisationWizardBase.get_paths_from_geopackage(
                 str(geopackage_path)
             )
         except GeoPackageError as error:
@@ -395,52 +390,31 @@ class UploadExistingSchematisationWizard(QWizard):
     def create_schematisation(self):
         """Create a new schematisation from the provided GeoPackage."""
         name = self.schematisation_name_page.name
-        if not check_name_available(name, self.working_dir, self.communication):
+        self._reset_outputs()
+        if not self.check_name_available(name):
             return
 
-        description = self.schematisation_name_page.description
-        owner = self.schematisation_name_page.owner
+        self.run_build(self._build_existing_schematisation)
 
-        try:
-            prepared_input = self.prepare_existing_schematisation(
-                self.gpkg_path, self.communication
-            )
-            if prepared_input is None:
-                return
-            src_db, raster_paths = prepared_input
-            self.raster_paths = raster_paths
+    def _build_existing_schematisation(self):
+        name = self.schematisation_name_page.name
+        prepared_input = self.prepare_existing_schematisation(
+            self.gpkg_path, self.communication
+        )
+        if prepared_input is None:
+            return
+        src_db, raster_paths = prepared_input
+        self.raster_paths = raster_paths
 
-            schematisation, local_schematisation, wip_revision = (
-                _create_schematisation_base(
-                    self.tc,
-                    self.working_dir,
-                    name,
-                    owner,
-                    description,
-                    self.project_id,
-                    self.rana_path,
-                )
+        schematisation, local_schematisation, wip_revision = (
+            self._create_schematisation_base(
+                name, self.schematisation_name_page.description
             )
-            self.copy_existing_schematisation_content(
-                src_db, raster_paths, name, wip_revision
-            )
-            self.new_schematisation = schematisation
-            self.new_local_schematisation = local_schematisation
-            msg = f"Schematisation '{name} ({schematisation.id})' created!"
-            self.communication.bar_info(msg)
-        except (ApiException, RanaPostError) as e:
-            self.new_schematisation = None
-            self.new_local_schematisation = None
-            error_msg = extract_error_message(e)
-            self.communication.bar_error(error_msg)
-        except Exception as e:
-            self.raster_paths = None
-            self.new_schematisation = None
-            self.new_local_schematisation = None
-            error_msg = f"Error: {e}"
-            self.communication.bar_error(error_msg)
-
-    def cancel_wizard(self):
-        """Handling canceling wizard action."""
-        QSettings().setValue("threedi/new_schematisation_wizard_size", self.size())
-        self.reject()
+        )
+        self.copy_existing_schematisation_content(
+            src_db, raster_paths, name, wip_revision
+        )
+        self.new_schematisation = schematisation
+        self.new_local_schematisation = local_schematisation
+        msg = f"Schematisation '{name} ({schematisation.id})' created!"
+        self.communication.bar_info(msg)
