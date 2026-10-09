@@ -71,7 +71,7 @@ def test_save_revision_requires_authenticated_api():
 
     assert result is None
     communication.bar_error.assert_called_once_with(
-        "Not authenticated with 3Di API — cannot save schematisation revision."
+        "Not authenticated with HCC API — cannot save schematisation revision."
     )
 
 
@@ -86,7 +86,7 @@ def test_import_schematisation_from_hcc_requires_authenticated_api():
 
     assert result is None
     communication.show_warn.assert_called_once_with(
-        "Not authenticated with 3Di API — cannot import from HCC."
+        "Not authenticated with HCC API — cannot import from HCC."
     )
 
 

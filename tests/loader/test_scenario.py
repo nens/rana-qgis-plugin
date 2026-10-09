@@ -386,7 +386,7 @@ def test_batch_scenario_skips_without_working_directory():
         )
 
     communication.bar_warn.assert_called_once_with(
-        "Skipping scenario because no 3Di working directory is configured."
+        "Skipping scenario because no HCC working directory is configured."
     )
 
 
