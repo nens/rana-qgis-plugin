@@ -10,7 +10,12 @@ from qgis.core import QgsApplication, QgsProject, QgsTask
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
-from threedi_api_client.openapi import ApiException, SchematisationRevision
+from threedi_api_client import ThreediApi
+from threedi_api_client.openapi import (
+    ApiException,
+    Organisation,
+    SchematisationRevision,
+)
 from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
@@ -343,12 +348,7 @@ class Loader(QObject):
             return None
 
         try:
-            allowed_organisation_ids = get_threedi_organisations()
-            tc = ThreediCalls(threedi_api)
-            organisations = {
-                organisation.unique_id: organisation
-                for organisation in tc.fetch_organisations(allowed_organisation_ids)
-            }
+            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
         except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
             self.communication.show_error(
                 f"Could not retrieve HCC organisations: {error}", parent=parent
@@ -403,12 +403,7 @@ class Loader(QObject):
             )
             return None
         try:
-            allowed_organisation_ids = get_threedi_organisations()
-            tc = ThreediCalls(threedi_api)
-            organisations = {
-                organisation.unique_id: organisation
-                for organisation in tc.fetch_organisations(allowed_organisation_ids)
-            }
+            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
         except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
             self.communication.show_error(
                 f"Could not retrieve HCC organisations: {error}", parent=parent
@@ -478,10 +473,7 @@ class Loader(QObject):
 
         try:
             tc = ThreediCalls(threedi_api)
-            allowed_org_ids = get_threedi_organisations()
-            organisations = {
-                org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
-            }
+            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
             if len(organisations) == 0:
                 self.communication.show_warn(
                     "No organisation available for this simulation"
@@ -2379,3 +2371,14 @@ class Loader(QObject):
             self.communication.bar_error("File download failed.")
         else:
             self.communication.bar_error("File download failed (unknown reason).")
+
+    @staticmethod
+    def get_allowed_threedi_organisations(
+        threedi_api: ThreediApi,
+    ) -> dict[str, Organisation]:
+        allowed_organisation_ids = get_threedi_organisations()
+        tc = ThreediCalls(threedi_api)
+        return {
+            organisation.unique_id: organisation
+            for organisation in tc.fetch_organisations(allowed_organisation_ids)
+        }
