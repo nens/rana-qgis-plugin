@@ -106,16 +106,32 @@ class RanaFolderDataItem(QgsDataItem):
             elif action is FileAction.ADD_SCHEMATISATION:
                 submenu = QMenu(parent)
                 routes = (
-                    ("Import from HCC", "import_schematisation_from_hcc"),
-                    ("Upload existing", "upload_existing_schematisation"),
-                    ("From scratch", "create_schematisation_from_scratch"),
+                    (
+                        "Import from HCC",
+                        lambda: self.loader.import_schematisation_from_hcc(
+                            self.project,
+                            self.folder_path,
+                            parent,
+                            refresh_callback=self.refresh_if_populated,
+                        ),
+                    ),
+                    (
+                        "Upload existing",
+                        lambda: self.loader.upload_existing_schematisation(
+                            self.project, self.folder_path, parent
+                        ),
+                    ),
+                    (
+                        "From scratch",
+                        lambda: self.loader.create_schematisation_from_scratch(
+                            self.project, self.folder_path, parent
+                        ),
+                    ),
                 )
-                for label, handler_name in routes:
+                for label, handler in routes:
                     route_action = submenu.addAction(label)
                     route_action.triggered.connect(
-                        lambda checked=False, method=handler_name: getattr(
-                            self.loader, method
-                        )(self.project, self.folder_path, parent)
+                        lambda checked=False, callback=handler: callback()
                     )
                 q_action.setMenu(submenu)
             elif action is FileAction.REFRESH:

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.simulation.utils import download_required_files
+from rana_qgis_plugin.utils.api import RanaPostError
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
@@ -78,7 +79,7 @@ def test_import_schematisation_from_hcc_requires_authenticated_api():
 
     with patch("rana_qgis_plugin.loader.get_threedi_api", return_value=None):
         result = loader.import_schematisation_from_hcc(
-            {"id": "project"}, "folder/", None
+            {"id": "project"}, "folder/", None, refresh_callback=MagicMock()
         )
 
     assert result is None
@@ -87,25 +88,67 @@ def test_import_schematisation_from_hcc_requires_authenticated_api():
     )
 
 
-def test_import_schematisation_from_hcc_returns_selection():
+def test_import_schematisation_from_hcc_copies_selected_revision_and_refreshes():
     communication = MagicMock()
     loader = Loader(communication)
-    schematisation = MagicMock()
-    revision = MagicMock()
+    schematisation = {"id": "source-schema", "name": "My model"}
+    revision = MagicMock(id=31, number=4)
+    refresh_callback = MagicMock()
 
     with (
         patch("rana_qgis_plugin.loader.get_threedi_api", return_value=MagicMock()),
         patch("rana_qgis_plugin.loader.SchematisationBrowser") as dialog_type,
+        patch("rana_qgis_plugin.loader.copy_threedi_schematisation") as copy_schema,
     ):
         dialog = dialog_type.return_value
         dialog.exec.return_value = 1
         dialog.selected_schematisation = schematisation
         dialog.selected_revision = revision
-        result = loader.import_schematisation_from_hcc(
-            {"id": "project"}, "folder/", None
+        loader.import_schematisation_from_hcc(
+            {"id": "project"},
+            "folder/",
+            None,
+            refresh_callback=refresh_callback,
         )
 
-    assert result == (schematisation, revision)
+    copy_schema.assert_called_once_with(
+        project_id="project",
+        schematisation_id="source-schema",
+        revision_id=31,
+        path="folder/My model_#4",
+    )
+    refresh_callback.assert_called_once_with()
+    communication.show_error.assert_not_called()
+
+
+def test_import_schematisation_from_hcc_does_not_refresh_when_copy_fails():
+    communication = MagicMock()
+    loader = Loader(communication)
+    refresh_callback = MagicMock()
+    error = RanaPostError("copy failed", "url", {})
+
+    with (
+        patch("rana_qgis_plugin.loader.get_threedi_api", return_value=MagicMock()),
+        patch("rana_qgis_plugin.loader.SchematisationBrowser") as dialog_type,
+        patch(
+            "rana_qgis_plugin.loader.copy_threedi_schematisation",
+            side_effect=error,
+        ) as copy_schema,
+    ):
+        dialog = dialog_type.return_value
+        dialog.exec.return_value = 1
+        dialog.selected_schematisation = {"id": "source-schema", "name": "My model"}
+        dialog.selected_revision = MagicMock(id=31, number=4)
+        loader.import_schematisation_from_hcc(
+            {"id": "project"},
+            "folder/",
+            None,
+            refresh_callback=refresh_callback,
+        )
+
+    copy_schema.assert_called_once()
+    communication.show_error.assert_called_once_with(str(error), parent=None)
+    refresh_callback.assert_not_called()
 
 
 def test_open_items_deduplicates_same_file_requests():
