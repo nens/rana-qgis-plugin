@@ -1,10 +1,9 @@
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 from rana_qgis_plugin.widgets.schematisation_new_wizard import (
+    NewSchematisationWizard,
     UploadExistingSchematisationWizard,
-    copy_existing_schematisation_content,
-    get_paths_from_geopackage,
-    prepare_existing_schematisation,
 )
 
 
@@ -30,7 +29,9 @@ def test_get_paths_from_geopackage_extracts_referenced_raster_fields(tmp_path):
             return_value=layer,
         ),
     ):
-        paths = get_paths_from_geopackage(tmp_path / "input.gpkg")
+        paths = UploadExistingSchematisationWizard.get_paths_from_geopackage(
+            tmp_path / "input.gpkg"
+        )
 
     assert paths["model_settings"] == {
         "dem_file": "dem.tif",
@@ -55,11 +56,13 @@ def test_prepare_validates_sqlite_and_uses_adjacent_geopackage(tmp_path):
             return_value=True,
         ) as validate_schema,
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.get_paths_from_geopackage",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage",
             return_value=raster_paths,
         ) as get_raster_paths,
     ):
-        prepared = prepare_existing_schematisation(sqlite_path, communication)
+        prepared = UploadExistingSchematisationWizard.prepare_existing_schematisation(
+            sqlite_path, communication
+        )
 
     validate_schema.assert_called_once_with(str(sqlite_path), communication)
     get_raster_paths.assert_called_once_with(str(gpkg_path))
@@ -79,10 +82,12 @@ def test_prepare_stops_when_schema_is_invalid(tmp_path):
             return_value=False,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.get_paths_from_geopackage"
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage"
         ) as get_raster_paths,
     ):
-        prepared = prepare_existing_schematisation(source_path, communication)
+        prepared = UploadExistingSchematisationWizard.prepare_existing_schematisation(
+            source_path, communication
+        )
 
     assert prepared is None
     get_raster_paths.assert_not_called()
@@ -99,10 +104,12 @@ def test_prepare_stops_if_sqlite_has_no_adjacent_geopackage(tmp_path):
             return_value=True,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.get_paths_from_geopackage"
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage"
         ) as get_raster_paths,
     ):
-        prepared = prepare_existing_schematisation(source_path, communication)
+        prepared = UploadExistingSchematisationWizard.prepare_existing_schematisation(
+            source_path, communication
+        )
 
     assert prepared is None
     communication.show_error.assert_called_once()
@@ -120,11 +127,13 @@ def test_prepare_blocks_missing_referenced_rasters(tmp_path):
             return_value=True,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.get_paths_from_geopackage",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard.get_paths_from_geopackage",
             return_value={"model_settings": {"dem_file": "missing-dem.tif"}},
         ),
     ):
-        prepared = prepare_existing_schematisation(source_path, communication)
+        prepared = UploadExistingSchematisationWizard.prepare_existing_schematisation(
+            source_path, communication
+        )
 
     assert prepared is None
     communication.show_warn.assert_called_once()
@@ -157,7 +166,7 @@ def test_upload_existing_checks_inputs_before_registering_remote_schematisation(
             return_value=True,
         ),
         patch(
-            "rana_qgis_plugin.widgets.schematisation_new_wizard.prepare_existing_schematisation",
+            "rana_qgis_plugin.widgets.schematisation_new_wizard.UploadExistingSchematisationWizard",
             return_value=None,
         ),
         patch(
@@ -189,7 +198,7 @@ def test_copy_prepared_geopackage_and_rasters_into_local_revision(tmp_path):
     revision.schematisation_dir = str(local_dir)
     revision.raster_dir = str(local_raster_dir)
 
-    copy_existing_schematisation_content(
+    UploadExistingSchematisationWizard.copy_existing_schematisation_content(
         source_gpkg,
         {"model_settings": {"dem_file": "dem.tif"}},
         "Local model",
@@ -198,3 +207,34 @@ def test_copy_prepared_geopackage_and_rasters_into_local_revision(tmp_path):
 
     assert (local_dir / "Local model.gpkg").read_bytes() == b"geopackage data"
     assert (local_raster_dir / "dem.tif").read_bytes() == b"raster data"
+
+
+def test_create_and_populate_schematisation_geopackage(tmp_path):
+    geopackage = tmp_path / "generated.gpkg"
+    dem = tmp_path / "dem.tif"
+    dem.write_bytes(b"test raster")
+    raster_dir = tmp_path / "rasters"
+    raster_dir.mkdir()
+
+    settings = {
+        "model_settings": {
+            "epsg_code": 28992,
+            "use_1d_flow": 1,
+            "use_2d_flow": 0,
+        }
+    }
+    NewSchematisationWizard.create_and_populate_schematisation_geopackage(
+        geopackage,
+        settings,
+        (str(dem), ""),
+        raster_dir,
+        MagicMock(),
+    )
+
+    assert geopackage.is_file()
+    with sqlite3.connect(geopackage) as connection:
+        row = connection.execute(
+            "SELECT use_1d_flow, use_2d_flow FROM model_settings"
+        ).fetchone()
+    assert row == (1, 0)
+    assert (raster_dir / "dem.tif").read_bytes() == b"test raster"
