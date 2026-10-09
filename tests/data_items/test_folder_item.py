@@ -35,12 +35,14 @@ def test_add_schematisation_submenu_routes_with_folder_context(
         "From scratch",
     ]
 
-    for action in route_actions:
-        action.trigger()
+    route_actions[0].trigger()
+    route_actions[1].trigger()
+    route_actions[2].trigger()
 
-    loader.import_schematisation_from_hcc.assert_called_once_with(
-        project, folder_path, parent
-    )
+    loader.import_schematisation_from_hcc.assert_called_once()
+    hcc_call = loader.import_schematisation_from_hcc.call_args
+    assert hcc_call.args == (project, folder_path, parent)
+    assert callable(hcc_call.kwargs["refresh_callback"])
     loader.upload_existing_schematisation.assert_called_once_with(
         project, folder_path, parent
     )

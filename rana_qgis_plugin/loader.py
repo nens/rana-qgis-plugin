@@ -51,6 +51,7 @@ from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     RanaFetchError,
     RanaPostError,
+    copy_threedi_schematisation,
     create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
@@ -270,20 +271,46 @@ class Loader(QObject):
         self.start_simulations(threedi_api, simulations, project, file_item, parent)
 
     def import_schematisation_from_hcc(
-        self, project: dict, folder_path: str, parent
-    ) -> tuple[object, object] | None:
-        """Let the user choose an HCC schematisation revision to import."""
+        self,
+        project: dict,
+        folder_path: str,
+        parent,
+        refresh_callback: Callable[[], None],
+    ) -> None:
+        """Copy the selected HCC revision into the invoking project folder."""
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
                 "Not authenticated with 3Di API — cannot import from HCC."
             )
-            return None
+            return
 
         dialog = SchematisationBrowser(threedi_api, parent)
         if dialog.exec() != QDialog.DialogCode.Accepted:
-            return None
-        return dialog.selected_schematisation, dialog.selected_revision
+            return
+
+        schematisation = dialog.selected_schematisation
+        revision = dialog.selected_revision
+        if not schematisation or not revision:
+            self.communication.show_error(
+                "No schematisation revision was selected for import.", parent=parent
+            )
+            return
+
+        destination = f"{folder_path}{schematisation['name']}_#{revision.number}"
+        try:
+            copy_threedi_schematisation(
+                project_id=project["id"],
+                schematisation_id=schematisation["id"],
+                revision_id=revision.id,
+                path=destination,
+            )
+        except (NetworkUnavailableError, RanaPostError) as error:
+            self.communication.show_error(str(error), parent=parent)
+            return
+
+        self.communication.bar_info("Schematisation imported from HCC.")
+        refresh_callback()
 
     def start_simulation(
         self,

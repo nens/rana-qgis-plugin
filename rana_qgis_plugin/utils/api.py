@@ -643,7 +643,7 @@ def get_threedi_schematisation(descriptor_id: str) -> dict:
 
 
 def copy_threedi_schematisation(
-    project_id: str, schematisation_id: str, path: str
+    project_id: str, schematisation_id: str, revision_id: int, path: str
 ) -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -651,7 +651,11 @@ def copy_threedi_schematisation(
         f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations/copy"
     )
     network_manager = NetworkManager(url, authcfg_id)
-    params = {"schematisation_id": schematisation_id, "path": path}
+    params = {
+        "schematisation_id": schematisation_id,
+        "revision_id": revision_id,
+        "path": path,
+    }
     status, error = network_manager.post(params)
     if status:
         return network_manager.content
