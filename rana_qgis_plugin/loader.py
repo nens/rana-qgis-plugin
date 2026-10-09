@@ -10,7 +10,7 @@ from qgis.core import QgsApplication, QgsProject, QgsTask
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
-from threedi_api_client.openapi import ApiException
+from threedi_api_client.openapi import ApiException, SchematisationRevision
 from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
@@ -39,6 +39,8 @@ from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
+    UploadFileStatus,
+    UploadFileType,
     extract_error_message,
     get_simulation_data_from_template,
     resolve_schematisation_download_dir,
@@ -676,6 +678,127 @@ class Loader(QObject):
                 f"Could not open the local schematisation: {error}"
             )
             return None
+
+    def save_initial_revision(
+        self,
+        project: dict,
+        schematisation,
+        local_schematisation: LocalSchematisation,
+        raster_paths: dict,
+        refresh_callback: Callable[[], None],
+    ) -> SchematisationUploadTask | None:
+        """Build and submit the initial revision through the current upload task."""
+        api = get_threedi_api()
+        if api is None:
+            self.communication.show_warn(
+                "Not authenticated with 3Di API — cannot upload the initial revision."
+            )
+            return None
+
+        wip_revision = local_schematisation.wip_revision
+        if wip_revision is None:
+            self.communication.show_error(
+                "The local schematisation has no working revision."
+            )
+            return None
+
+        selected_files = {
+            "geopackage": {
+                "filepath": local_schematisation.schematisation_db_filepath,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.DB,
+            }
+        }
+        missing_rasters = []
+        for raster_fields in raster_paths.values():
+            for raster_name, relative_path in raster_fields.items():
+                if not relative_path:
+                    continue
+                raster_path = Path(wip_revision.raster_dir) / relative_path
+                if not raster_path.is_file():
+                    missing_rasters.append((raster_name, relative_path))
+                selected_files[raster_name] = {
+                    "filepath": str(raster_path),
+                    "make_action": True,
+                    "remote_raster": None,
+                    "status": UploadFileStatus.NEW,
+                    "type": UploadFileType.RASTER,
+                }
+
+        if missing_rasters:
+            missing = "\n".join(
+                f"{name}: {path}" for name, path in sorted(missing_rasters)
+            )
+            self.communication.show_warn(
+                f"The following raster files were not found:\n{missing}"
+            )
+            return None
+
+        upload_specification = {
+            "schematisation": schematisation,
+            "latest_revision": SchematisationRevision(number=0),
+            "selected_files": selected_files,
+            "commit_message": "Initial commit",
+            "create_revision": True,
+            "make_3di_model": True,
+            "cb_inherit_templates": False,
+        }
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self.communication.bar_error("Could not start schematisation upload.")
+            return None
+
+        task = SchematisationUploadTask(api, local_schematisation, upload_specification)
+        task.progress_changed.connect(
+            lambda name, current, total, per_task: self.communication.progress_bar(
+                f"Uploading revision: {name}",
+                0,
+                100,
+                int(total + current * per_task / 100),
+            )
+        )
+        task.model_requested.connect(
+            lambda: self.start_model_tracker_process(
+                project["id"],
+                schematisation.id,
+                schematisation.name,
+                task.revision.id,
+                upload_specification["cb_inherit_templates"],
+            )
+        )
+        task.upload_succeeded.connect(
+            lambda _revision_number: self.handle_initial_revision_upload_success(
+                refresh_callback
+            )
+        )
+        task.taskTerminated.connect(
+            lambda: self.handle_initial_revision_upload_failure(task)
+        )
+        self._track_task(task)
+        task_manager.addTask(task)
+        return task
+
+    def handle_initial_revision_upload_success(
+        self, refresh_callback: Callable[[], None]
+    ) -> None:
+        """Report initial upload success and refresh the invoking Browser item."""
+        self.communication.clear_message_bar()
+        self.communication.bar_info("Initial schematisation revision uploaded.")
+        refresh_callback()
+
+    def handle_initial_revision_upload_failure(
+        self, task: SchematisationUploadTask
+    ) -> None:
+        """Report cancellation or failure of an initial revision upload."""
+        self.communication.clear_message_bar()
+        if task.isCanceled():
+            self.communication.bar_warn("Initial schematisation upload cancelled.")
+        else:
+            self.communication.show_error(
+                task.error_message or "Initial schematisation upload failed."
+            )
 
     def start_model_tracker_process(
         self,
