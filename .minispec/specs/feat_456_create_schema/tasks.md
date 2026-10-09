@@ -195,8 +195,8 @@ Two different migration approaches apply here:
 ## Progress
 
 - [x] Task 1: Add the Add schematisation submenu to folder items
-- [ ] Task 2: Port upstream HCC revision selection behavior into current UI
-- [ ] Task 3: Copy the selected HCC revision and refresh the Browser
+- [x] Task 2: Port upstream HCC revision selection behavior into current UI
+- [x] Task 3: Copy the selected HCC revision and refresh the Browser
 - [ ] Task 4: Copy legacy wizard/page modules and port shared metadata UI to Qt 6
 - [ ] Task 5: Port Upload existing input validation and local preparation
 - [ ] Task 6: Reuse SchematisationUploadTask for initial revision upload
