@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import QWidget
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.folder_item import RanaFolderDataItem
+from rana_qgis_plugin.icons import download_icon, new_icon, upload_icon
 
 
 @pytest.mark.parametrize("folder_path", ["", "nested/folder/"])
