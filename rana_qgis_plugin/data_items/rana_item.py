@@ -39,6 +39,7 @@ from rana_qgis_plugin.constant import (
     RANA_TENANT_ENTRY,
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.icons import refresh_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     RanaFetchError,
@@ -155,7 +156,7 @@ class RanaRootDataItem(QgsDataItem):
 
         if is_authenticated():
             refresh_action = QAction("Refresh", parent)
-            refresh_action.setIcon(QIcon(str(ICONS_DIR / "refresh.svg")))
+            refresh_action.setIcon(refresh_icon)
             refresh_action.triggered.connect(self.refresh)
 
             select_projects_action = QAction("Select projects", parent)
@@ -163,7 +164,7 @@ class RanaRootDataItem(QgsDataItem):
 
             actions = [refresh_action, logout_action]
             if self.tenants is not None and len(self.tenants) >= 2:
-                switch_action = QAction("Switch tenant", parent)
+                switch_action = QAction("Switch organisation", parent)
                 switch_action.triggered.connect(lambda: self.switch_tenant())
                 actions.append(switch_action)
             actions.append(select_projects_action)
@@ -218,7 +219,7 @@ class RanaRootDataItem(QgsDataItem):
     def prompt_tenant(self) -> Optional[str]:
         """Prompt the user to enter a tenant code. Returns tenant ID or None if cancelled."""
         tenant_id, ok = QInputDialog.getText(
-            None, "Rana Authentication", "Please provide your tenant code."
+            None, "Rana Authentication", "Please provide your organisation code."
         )
         return tenant_id.strip() if ok and tenant_id.strip() else None
 
@@ -277,7 +278,7 @@ class RanaRootDataItem(QgsDataItem):
             providers = fetch_identity_providers(tenant_id)
             if providers is None:
                 self.communication.show_error(
-                    f"Unable to retrieve identity providers for tenant {tenant_id}."
+                    f"Unable to retrieve identity providers for organisation {tenant_id}."
                 )
                 return False
 
@@ -305,7 +306,9 @@ class RanaRootDataItem(QgsDataItem):
             except RanaFetchError as e:
                 self.error_signals.fetch_error_occurred.emit(str(e), False)
             self.communication.bar_info(f"Signed in to Rana")
-            self.communication.log_info(f"Signed in to Rana (tenant: {tenant_id}).")
+            self.communication.log_info(
+                f"Signed in to Rana (organisation: {tenant_id})."
+            )
             # Log in to HCC
             self.communication.clear_message_bar()
             self.communication.bar_info("Getting HCC access...")
@@ -331,9 +334,9 @@ class RanaRootDataItem(QgsDataItem):
         """Show a dropdown dialog to pick a tenant. Returns tenant ID or None if cancelled."""
         current = active_tenant()
         dlg = QDialog()
-        dlg.setWindowTitle("Switch tenant")
+        dlg.setWindowTitle("Switch organisation")
         layout = QVBoxLayout(dlg)
-        layout.addWidget(QLabel("Select a tenant:"))
+        layout.addWidget(QLabel("Select a organisation:"))
         combo = QComboBox(dlg)
         for tenant in self.tenants or []:
             tenant_id = tenant.get("id", "")
@@ -371,7 +374,7 @@ class RanaRootDataItem(QgsDataItem):
         if not self.login(start_tenant_id=new_tenant):
             # Rollback: restore previous credentials and tenant
             self.communication.show_error(
-                f"Failed to sign in to tenant '{new_tenant}'. Restoring previous session."
+                f"Failed to sign in to organisation '{new_tenant}'. Restoring previous session."
             )
             if snapshot_authcfg:
                 QgsSettings().setValue(RANA_AUTHCFG_ENTRY, snapshot_authcfg)

@@ -5,26 +5,17 @@ from enum import Enum
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
-from rana_qgis_plugin.icons import (
-    add_icon,
-    download_icon,
-    edit_icon,
-    history_icon,
-    link_icon,
-    trash_icon,
-    upload_icon,
-    wms_icon,
-)
+import rana_qgis_plugin.icons as icons
 
 
 class FileAction(Enum):
-    OPEN_IN_QGIS = "Open in QGIS"
+    OPEN_IN_QGIS = "Open"
     OPEN_WMS = "Open WMS in QGIS"
-    OPEN_IN_BROWSER = "Open in web viewer"
+    OPEN_IN_BROWSER = "Open in Rana (web)"
     RENAME = "Rename"
     DELETE = "Delete"
     REFRESH = "Refresh"
-    CREATE_DIRECTORY = "Create directory"
+    CREATE_DIRECTORY = "Create folder"
     UPLOAD_FILES = "Upload file(s)"
     VERSION_HISTORY = "Version history"
     VIEW_FILE_INFO = "View file info"
@@ -35,15 +26,15 @@ class FileAction(Enum):
 
 
 _ICONS = {
-    FileAction.OPEN_IN_QGIS: download_icon,
-    FileAction.OPEN_WMS: wms_icon,
-    FileAction.OPEN_IN_BROWSER: link_icon,
-    FileAction.RENAME: edit_icon,
-    FileAction.DELETE: trash_icon,
-    FileAction.REFRESH: link_icon,
-    FileAction.CREATE_DIRECTORY: add_icon,
-    FileAction.UPLOAD_FILES: upload_icon,
-    FileAction.VERSION_HISTORY: history_icon,
+    FileAction.OPEN_IN_QGIS: icons.download_icon,
+    FileAction.OPEN_WMS: icons.wms_icon,
+    FileAction.OPEN_IN_BROWSER: icons.link_icon,
+    FileAction.RENAME: icons.edit_icon,
+    FileAction.DELETE: icons.trash_icon,
+    FileAction.REFRESH: icons.refresh_icon,
+    FileAction.CREATE_DIRECTORY: icons.add_icon,
+    FileAction.UPLOAD_FILES: icons.upload_icon,
+    FileAction.VERSION_HISTORY: icons.history_icon,
 }
 
 _TOOLTIPS = {
