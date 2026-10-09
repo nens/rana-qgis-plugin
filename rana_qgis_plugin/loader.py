@@ -288,7 +288,7 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
-                "Not authenticated with 3Di API — cannot import from HCC."
+                "Not authenticated with HCC API — cannot import from HCC."
             )
             return
 
@@ -338,7 +338,7 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
-                "Not authenticated with 3Di API — cannot upload a schematisation."
+                "Not authenticated with HCC API — cannot upload a schematisation."
             )
             return None
 
@@ -351,13 +351,13 @@ class Loader(QObject):
             }
         except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
             self.communication.show_error(
-                f"Could not retrieve 3Di organisations: {error}", parent=parent
+                f"Could not retrieve HCC organisations: {error}", parent=parent
             )
             return None
 
         if not organisations:
             self.communication.show_error(
-                "No 3Di organisations are available for this Rana tenant.",
+                "No HCC organisations are available for this Rana tenant.",
                 parent=parent,
             )
             return None
@@ -399,10 +399,9 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
-                "Not authenticated with 3Di API — cannot create a schematisation."
+                "Not authenticated with HCC API — cannot create a schematisation."
             )
             return None
-
         try:
             allowed_organisation_ids = get_threedi_organisations()
             tc = ThreediCalls(threedi_api)
@@ -412,13 +411,13 @@ class Loader(QObject):
             }
         except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
             self.communication.show_error(
-                f"Could not retrieve 3Di organisations: {error}", parent=parent
+                f"Could not retrieve HCC organisations: {error}", parent=parent
             )
             return None
 
         if not organisations:
             self.communication.show_error(
-                "No 3Di organisations are available for this Rana tenant.",
+                "No HCC organisations are available for this Rana tenant.",
                 parent=parent,
             )
             return None
@@ -465,7 +464,7 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
-                "Not authenticated with 3Di API — cannot start simulation."
+                "Not authenticated with HCC API — cannot start simulation."
             )
             return
 
@@ -695,7 +694,7 @@ class Loader(QObject):
             api = get_threedi_api()
             if api is None:
                 self.communication.bar_error(
-                    "Not authenticated with 3Di API — cannot save schematisation revision."
+                    "Not authenticated with HCC API — cannot save schematisation revision."
                 )
                 return None
             tc = ThreediCalls(api)
@@ -824,7 +823,7 @@ class Loader(QObject):
         api = get_threedi_api()
         if api is None:
             self.communication.show_warn(
-                "Not authenticated with 3Di API — cannot upload the initial revision."
+                "Not authenticated with HCC API — cannot upload the initial revision."
             )
             return None
 
@@ -976,10 +975,10 @@ class Loader(QObject):
     def delete_schematisation_revision_3di_model(
         self, schematisation_id: int, revision_id: int
     ) -> str | None:
-        """Delete the 3Di model belonging to a schematisation revision."""
+        """Delete the HCC model belonging to a schematisation revision."""
         threedi_api = get_threedi_api()
         if threedi_api is None:
-            return "Not authenticated with 3Di API — cannot delete the Rana model."
+            return "Not authenticated with HCC API — cannot delete the Rana model."
         try:
             calls = ThreediCalls(threedi_api)
             models = calls.fetch_schematisation_revision_3di_models(
@@ -1849,7 +1848,7 @@ class Loader(QObject):
         request: OpenScenarioRequest,
         continuation: Callable[[OpenScenarioRequest, ScenarioInfo], None],
     ) -> None:
-        """Resolve descriptor and optional 3Di metadata before opening results."""
+        """Resolve descriptor and optional HCC metadata before opening results."""
         file_item = request.file_item
         descriptor_id = file_item.get("descriptor_id")
         if not descriptor_id:
@@ -1883,7 +1882,7 @@ class Loader(QObject):
             if threedi_api is None:
                 scenario_info.has_3di_simulation = False
                 self.communication.bar_warn(
-                    "3Di API is unavailable. Only raw results will be downloaded."
+                    "HCC API is unavailable. Only raw results will be downloaded."
                 )
                 continuation(request, scenario_info)
                 return
@@ -1962,7 +1961,7 @@ class Loader(QObject):
         else:
             if not scenario_info.has_3di_simulation:
                 self.communication.bar_info(
-                    "This scenario is not linked to a 3Di simulation. Only raw results "
+                    "This scenario is not linked to a HCC simulation. Only raw results "
                     "will be downloaded to the cache directory."
                 )
             else:
@@ -1996,13 +1995,13 @@ class Loader(QObject):
         """Build fixed defaults for one scenario in a batch and submit them."""
         if not hcc_working_dir():
             self.communication.bar_warn(
-                "Skipping scenario because no 3Di working directory is configured."
+                "Skipping scenario because no HCC working directory is configured."
             )
             self.release_scenario_action()
             return
         if not scenario_info.has_3di_simulation:
             self.communication.bar_warn(
-                "Skipping scenario because it is not linked to a 3Di simulation."
+                "Skipping scenario because it is not linked to a HCC simulation."
             )
             self.release_scenario_action()
             return
@@ -2200,7 +2199,7 @@ class Loader(QObject):
                 threedi_api = get_threedi_api()
                 if threedi_api is None:
                     self.communication.bar_error(
-                        "Not authenticated with 3Di API — cannot open schematisation."
+                        "Not authenticated with HCC API — cannot open schematisation."
                     )
                     return
                 revision = (
@@ -2230,14 +2229,14 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.bar_error(
-                "Not authenticated with 3Di API — cannot open schematisation."
+                "Not authenticated with HCC API — cannot open schematisation."
             )
             return
 
         working_dir = hcc_working_dir()
         if not working_dir:
             self.communication.bar_error(
-                "No working directory configured — set it in the 3Di settings."
+                "No working directory configured — set it in the HCC settings."
             )
             return
 
