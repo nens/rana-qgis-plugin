@@ -48,15 +48,17 @@ def test_get_file_actions(data_type, expected):
     assert get_file_actions(data_type) == expected
 
 
-def test_get_folder_actions_excludes_delete_and_rename_for_root():
+def test_get_folder_actions_root():
     root_actions = get_folder_actions(is_root=True)
+    assert FileAction.ADD_SCHEMATISATION in root_actions
     assert FileAction.DELETE not in root_actions
     assert FileAction.RENAME not in root_actions
     assert FileAction.OPEN_WMS not in root_actions
 
 
-def test_get_folder_actions_includes_delete_and_rename_for_non_root():
+def test_get_folder_actions_non_root():
     non_root_actions = get_folder_actions(is_root=False)
+    assert FileAction.ADD_SCHEMATISATION in non_root_actions
     assert FileAction.DELETE in non_root_actions
     assert FileAction.RENAME in non_root_actions
     assert FileAction.OPEN_WMS not in non_root_actions
