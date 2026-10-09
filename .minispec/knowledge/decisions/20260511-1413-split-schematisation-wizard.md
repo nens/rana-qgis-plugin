@@ -1,7 +1,7 @@
 # Decision: Split schematisation wizard into two independent classes
 
 **Date**: 2026-05-11  
-**Status**: Accepted  
+**Status**: Superseded by `20261009-1200-unify-schematisation-wizard-base-and-flow`
 **Feature**: Split schematisation creation (feat_4224_upload_existing_)
 
 ---

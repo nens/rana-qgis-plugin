@@ -10,7 +10,12 @@ from qgis.core import QgsApplication, QgsProject, QgsTask
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
-from threedi_api_client.openapi import ApiException
+from threedi_api_client import ThreediApi
+from threedi_api_client.openapi import (
+    ApiException,
+    Organisation,
+    SchematisationRevision,
+)
 from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.layer_management.dirty_tracking import (
@@ -39,10 +44,13 @@ from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.simulation.upload_wizard.upload_wizard import UploadWizard
 from rana_qgis_plugin.simulation.utils import (
     CACHE_PATH,
+    UploadFileStatus,
+    UploadFileType,
     extract_error_message,
     get_simulation_data_from_template,
     resolve_schematisation_download_dir,
 )
+from rana_qgis_plugin.simulation.utils_ui import get_filepath
 from rana_qgis_plugin.simulation.workers import (
     SchematisationUploadTask,
     SimulationRunner,
@@ -51,6 +59,7 @@ from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
     RanaFetchError,
     RanaPostError,
+    copy_threedi_schematisation,
     create_tenant_project_directory,
     delete_tenant_project_directory,
     delete_tenant_project_file,
@@ -89,6 +98,12 @@ from rana_qgis_plugin.utils.qgis import (
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
+from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
+from rana_qgis_plugin.widgets.schematisation_new_wizard import (
+    NewSchematisationWizard,
+    SchematisationWizardBase,
+    UploadExistingSchematisationWizard,
+)
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.workers.avatars import AvatarWorker
 from rana_qgis_plugin.workers.download import (
@@ -268,6 +283,157 @@ class Loader(QObject):
         """Submit simulations prepared by the wizard to the task manager."""
         self.start_simulations(threedi_api, simulations, project, file_item, parent)
 
+    def import_schematisation_from_hcc(
+        self,
+        project: dict,
+        folder_path: str,
+        parent,
+        refresh_callback: Callable[[], None],
+    ) -> None:
+        """Copy the selected HCC revision into the invoking project folder."""
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.show_warn(
+                "Not authenticated with HCC API — cannot import from HCC."
+            )
+            return
+
+        dialog = SchematisationBrowser(threedi_api, parent)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        schematisation = dialog.selected_schematisation
+        revision = dialog.selected_revision
+        if not schematisation or not revision:
+            self.communication.show_error(
+                "No schematisation revision was selected for import.", parent=parent
+            )
+            return
+
+        destination = f"{folder_path}{schematisation['name']}_#{revision.number}"
+        try:
+            copy_threedi_schematisation(
+                project_id=project["id"],
+                schematisation_id=schematisation["id"],
+                revision_id=revision.id,
+                path=destination,
+            )
+        except (NetworkUnavailableError, RanaPostError) as error:
+            self.communication.show_error(str(error), parent=parent)
+            return
+
+        self.communication.bar_info("Schematisation imported from HCC.")
+        refresh_callback()
+
+    def run_new_schematisation_wizard(
+        self,
+        project: dict,
+        parent,
+        refresh_callback: Callable[[], None],
+        wizard_factory: Callable[[ThreediApi, dict], SchematisationWizardBase],
+        action_verb: str,
+        schematisation_kind: str,
+    ) -> SchematisationUploadTask | None:
+        """Run common setup and upload orchestration for a creation wizard."""
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.show_warn(
+                f"Not authenticated with HCC API — cannot {action_verb} a schematisation."
+            )
+            return None
+
+        try:
+            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
+        except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_error(
+                f"Could not retrieve HCC organisations: {error}", parent=parent
+            )
+            return None
+
+        if not organisations:
+            self.communication.show_error(
+                "No HCC organisations are available for this Rana tenant.",
+                parent=parent,
+            )
+            return None
+
+        wizard = wizard_factory(threedi_api, organisations)
+        if wizard.exec() != QDialog.DialogCode.Accepted:
+            return None
+        if wizard.new_schematisation is None or wizard.new_local_schematisation is None:
+            self.communication.show_error(
+                f"Could not prepare the {schematisation_kind} schematisation for upload.",
+                parent=parent,
+            )
+            return None
+
+        return self.save_initial_revision(
+            project,
+            wizard.new_schematisation,
+            wizard.new_local_schematisation,
+            wizard.raster_paths or {},
+            refresh_callback,
+        )
+
+    def upload_existing_schematisation(
+        self,
+        project: dict,
+        folder_path: str,
+        parent,
+        refresh_callback: Callable[[], None],
+    ) -> SchematisationUploadTask | None:
+        """Run Upload existing and hand its registered result to the upload task."""
+        source_path = get_filepath(
+            parent,
+            dialog_title="Select Schematisation file",
+            extension_filter="GeoPackage/SQLite (*.gpkg *.GPKG *.sqlite *.SQLITE)",
+        )
+        if source_path is None:
+            return None
+
+        return self.run_new_schematisation_wizard(
+            project,
+            parent,
+            refresh_callback,
+            wizard_factory=lambda api, organisations: (
+                UploadExistingSchematisationWizard(
+                    api,
+                    hcc_working_dir(),
+                    self.communication,
+                    organisations,
+                    source_path,
+                    project["id"],
+                    folder_path,
+                )
+            ),
+            action_verb="upload",
+            schematisation_kind="existing",
+        )
+
+    def create_schematisation_from_scratch(
+        self,
+        project: dict,
+        folder_path: str,
+        parent,
+        refresh_callback: Callable[[], None],
+    ) -> SchematisationUploadTask | None:
+        """Run the From scratch wizard and upload its initial revision."""
+        return self.run_new_schematisation_wizard(
+            project,
+            parent,
+            refresh_callback,
+            wizard_factory=lambda api, organisations: NewSchematisationWizard(
+                api,
+                hcc_working_dir(),
+                self.communication,
+                organisations,
+                project["id"],
+                folder_path,
+            ),
+            action_verb="create",
+            schematisation_kind="new",
+        )
+
     def start_simulation(
         self,
         project: dict,
@@ -286,7 +452,7 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
-                "Not authenticated with 3Di API — cannot start simulation."
+                "Not authenticated with HCC API — cannot start simulation."
             )
             return
 
@@ -300,10 +466,7 @@ class Loader(QObject):
 
         try:
             tc = ThreediCalls(threedi_api)
-            allowed_org_ids = get_threedi_organisations()
-            organisations = {
-                org.unique_id: org for org in tc.fetch_organisations(allowed_org_ids)
-            }
+            organisations = Loader.get_allowed_threedi_organisations(threedi_api)
             if len(organisations) == 0:
                 self.communication.show_warn(
                     "No organisation available for this simulation"
@@ -516,7 +679,7 @@ class Loader(QObject):
             api = get_threedi_api()
             if api is None:
                 self.communication.bar_error(
-                    "Not authenticated with 3Di API — cannot save schematisation revision."
+                    "Not authenticated with HCC API — cannot save schematisation revision."
                 )
                 return None
             tc = ThreediCalls(api)
@@ -633,6 +796,127 @@ class Loader(QObject):
             )
             return None
 
+    def save_initial_revision(
+        self,
+        project: dict,
+        schematisation,
+        local_schematisation: LocalSchematisation,
+        raster_paths: dict,
+        refresh_callback: Callable[[], None],
+    ) -> SchematisationUploadTask | None:
+        """Build and submit the initial revision through the current upload task."""
+        api = get_threedi_api()
+        if api is None:
+            self.communication.show_warn(
+                "Not authenticated with HCC API — cannot upload the initial revision."
+            )
+            return None
+
+        wip_revision = local_schematisation.wip_revision
+        if wip_revision is None:
+            self.communication.show_error(
+                "The local schematisation has no working revision."
+            )
+            return None
+
+        selected_files = {
+            "geopackage": {
+                "filepath": local_schematisation.schematisation_db_filepath,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.DB,
+            }
+        }
+        missing_rasters = []
+        for raster_fields in raster_paths.values():
+            for raster_name, relative_path in raster_fields.items():
+                if not relative_path:
+                    continue
+                raster_path = Path(wip_revision.raster_dir) / relative_path
+                if not raster_path.is_file():
+                    missing_rasters.append((raster_name, relative_path))
+                selected_files[raster_name] = {
+                    "filepath": str(raster_path),
+                    "make_action": True,
+                    "remote_raster": None,
+                    "status": UploadFileStatus.NEW,
+                    "type": UploadFileType.RASTER,
+                }
+
+        if missing_rasters:
+            missing = "\n".join(
+                f"{name}: {path}" for name, path in sorted(missing_rasters)
+            )
+            self.communication.show_warn(
+                f"The following raster files were not found:\n{missing}"
+            )
+            return None
+
+        upload_specification = {
+            "schematisation": schematisation,
+            "latest_revision": SchematisationRevision(number=0),
+            "selected_files": selected_files,
+            "commit_message": "Initial commit",
+            "create_revision": True,
+            "make_3di_model": True,
+            "cb_inherit_templates": False,
+        }
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self.communication.bar_error("Could not start schematisation upload.")
+            return None
+
+        task = SchematisationUploadTask(api, local_schematisation, upload_specification)
+        task.progress_changed.connect(
+            lambda name, current, total, per_task: self.communication.progress_bar(
+                f"Uploading revision: {name}",
+                0,
+                100,
+                int(total + current * per_task / 100),
+            )
+        )
+        task.model_requested.connect(
+            lambda: self.start_model_tracker_process(
+                project["id"],
+                schematisation.id,
+                schematisation.name,
+                task.revision.id,
+                upload_specification["cb_inherit_templates"],
+            )
+        )
+        task.upload_succeeded.connect(
+            lambda _revision_number: self.handle_initial_revision_upload_success(
+                refresh_callback
+            )
+        )
+        task.taskTerminated.connect(
+            lambda: self.handle_initial_revision_upload_failure(task)
+        )
+        self._track_task(task)
+        task_manager.addTask(task)
+        return task
+
+    def handle_initial_revision_upload_success(
+        self, refresh_callback: Callable[[], None]
+    ) -> None:
+        """Report initial upload success and refresh the invoking Browser item."""
+        self.communication.clear_message_bar()
+        self.communication.bar_info("Initial schematisation revision uploaded.")
+        refresh_callback()
+
+    def handle_initial_revision_upload_failure(
+        self, task: SchematisationUploadTask
+    ) -> None:
+        """Report cancellation or failure of an initial revision upload."""
+        self.communication.clear_message_bar()
+        if task.isCanceled():
+            self.communication.bar_warn("Initial schematisation upload cancelled.")
+        else:
+            self.communication.show_error(
+                task.error_message or "Initial schematisation upload failed."
+            )
+
     def start_model_tracker_process(
         self,
         project_id: str,
@@ -676,10 +960,10 @@ class Loader(QObject):
     def delete_schematisation_revision_3di_model(
         self, schematisation_id: int, revision_id: int
     ) -> str | None:
-        """Delete the 3Di model belonging to a schematisation revision."""
+        """Delete the HCC model belonging to a schematisation revision."""
         threedi_api = get_threedi_api()
         if threedi_api is None:
-            return "Not authenticated with 3Di API — cannot delete the Rana model."
+            return "Not authenticated with HCC API — cannot delete the Rana model."
         try:
             calls = ThreediCalls(threedi_api)
             models = calls.fetch_schematisation_revision_3di_models(
@@ -1549,7 +1833,7 @@ class Loader(QObject):
         request: OpenScenarioRequest,
         continuation: Callable[[OpenScenarioRequest, ScenarioInfo], None],
     ) -> None:
-        """Resolve descriptor and optional 3Di metadata before opening results."""
+        """Resolve descriptor and optional HCC metadata before opening results."""
         file_item = request.file_item
         descriptor_id = file_item.get("descriptor_id")
         if not descriptor_id:
@@ -1583,7 +1867,7 @@ class Loader(QObject):
             if threedi_api is None:
                 scenario_info.has_3di_simulation = False
                 self.communication.bar_warn(
-                    "3Di API is unavailable. Only raw results will be downloaded."
+                    "HCC API is unavailable. Only raw results will be downloaded."
                 )
                 continuation(request, scenario_info)
                 return
@@ -1662,7 +1946,7 @@ class Loader(QObject):
         else:
             if not scenario_info.has_3di_simulation:
                 self.communication.bar_info(
-                    "This scenario is not linked to a 3Di simulation. Only raw results "
+                    "This scenario is not linked to a HCC simulation. Only raw results "
                     "will be downloaded to the cache directory."
                 )
             else:
@@ -1696,13 +1980,13 @@ class Loader(QObject):
         """Build fixed defaults for one scenario in a batch and submit them."""
         if not hcc_working_dir():
             self.communication.bar_warn(
-                "Skipping scenario because no 3Di working directory is configured."
+                "Skipping scenario because no HCC working directory is configured."
             )
             self.release_scenario_action()
             return
         if not scenario_info.has_3di_simulation:
             self.communication.bar_warn(
-                "Skipping scenario because it is not linked to a 3Di simulation."
+                "Skipping scenario because it is not linked to a HCC simulation."
             )
             self.release_scenario_action()
             return
@@ -1900,7 +2184,7 @@ class Loader(QObject):
                 threedi_api = get_threedi_api()
                 if threedi_api is None:
                     self.communication.bar_error(
-                        "Not authenticated with 3Di API — cannot open schematisation."
+                        "Not authenticated with HCC API — cannot open schematisation."
                     )
                     return
                 revision = (
@@ -1930,14 +2214,14 @@ class Loader(QObject):
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.bar_error(
-                "Not authenticated with 3Di API — cannot open schematisation."
+                "Not authenticated with HCC API — cannot open schematisation."
             )
             return
 
         working_dir = hcc_working_dir()
         if not working_dir:
             self.communication.bar_error(
-                "No working directory configured — set it in the 3Di settings."
+                "No working directory configured — set it in the HCC settings."
             )
             return
 
@@ -2080,3 +2364,14 @@ class Loader(QObject):
             self.communication.bar_error("File download failed.")
         else:
             self.communication.bar_error("File download failed (unknown reason).")
+
+    @staticmethod
+    def get_allowed_threedi_organisations(
+        threedi_api: ThreediApi,
+    ) -> dict[str, Organisation]:
+        allowed_organisation_ids = get_threedi_organisations()
+        tc = ThreediCalls(threedi_api)
+        return {
+            organisation.unique_id: organisation
+            for organisation in tc.fetch_organisations(allowed_organisation_ids)
+        }

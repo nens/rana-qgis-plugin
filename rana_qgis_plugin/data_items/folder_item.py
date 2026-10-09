@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtGui import QDesktopServices
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtWidgets import QAction, QMenu, QMessageBox
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.data_items.file_actions import (
@@ -17,7 +17,7 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_folder_actions,
 )
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
-from rana_qgis_plugin.icons import dir_icon
+from rana_qgis_plugin.icons import dir_icon, download_icon, new_icon, upload_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import RanaFetchError, get_tenant_project_files
 from rana_qgis_plugin.utils.data_models import OpenFolderRequest
@@ -103,6 +103,46 @@ class RanaFolderDataItem(QgsDataItem):
                         refresh_callback=self.refresh_if_populated,
                     )
                 )
+            elif action is FileAction.ADD_SCHEMATISATION:
+                submenu = QMenu(parent)
+                routes = (
+                    (
+                        download_icon,
+                        "Import from HCC",
+                        lambda: self.loader.import_schematisation_from_hcc(
+                            self.project,
+                            self.folder_path,
+                            parent,
+                            refresh_callback=self.refresh_if_populated,
+                        ),
+                    ),
+                    (
+                        upload_icon,
+                        "Upload existing",
+                        lambda: self.loader.upload_existing_schematisation(
+                            self.project,
+                            self.folder_path,
+                            parent,
+                            refresh_callback=self.refresh_if_populated,
+                        ),
+                    ),
+                    (
+                        new_icon,
+                        "From scratch",
+                        lambda: self.loader.create_schematisation_from_scratch(
+                            self.project,
+                            self.folder_path,
+                            parent,
+                            refresh_callback=self.refresh_if_populated,
+                        ),
+                    ),
+                )
+                for icon, label, handler in routes:
+                    route_action = submenu.addAction(icon, label)
+                    route_action.triggered.connect(
+                        lambda checked=False, callback=handler: callback()
+                    )
+                q_action.setMenu(submenu)
             elif action is FileAction.REFRESH:
                 q_action.triggered.connect(lambda: self.refresh())
             elif action is FileAction.DELETE:
