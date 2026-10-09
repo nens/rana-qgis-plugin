@@ -202,6 +202,6 @@ Two different migration approaches apply here:
 - [x] Task 6: Reuse SchematisationUploadTask for initial revision upload
 - [x] Task 7: Port the From scratch explanation and settings wizard to Qt 6
 - [x] Task 8: Create and populate the From scratch GeoPackage
-- [ ] Task 9: Integrate Upload existing with registration and initial upload
-- [ ] Task 10: Integrate From scratch with registration and initial upload
+- [x] Task 9: Integrate Upload existing with registration and initial upload
+- [x] Task 10: Integrate From scratch with registration and initial upload
 - [ ] Task 11: Verify route integration and manual UI paths

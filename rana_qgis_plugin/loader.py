@@ -95,6 +95,7 @@ from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import (
+    NewSchematisationWizard,
     UploadExistingSchematisationWizard,
 )
 from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
@@ -376,6 +377,65 @@ class Loader(QObject):
             self.communication.show_error(
                 "Could not prepare the existing schematisation for upload.",
                 parent=parent,
+            )
+            return None
+
+        return self.save_initial_revision(
+            project,
+            wizard.new_schematisation,
+            wizard.new_local_schematisation,
+            wizard.raster_paths or {},
+            refresh_callback,
+        )
+
+    def create_schematisation_from_scratch(
+        self,
+        project: dict,
+        folder_path: str,
+        parent,
+        refresh_callback: Callable[[], None],
+    ) -> SchematisationUploadTask | None:
+        """Run the From scratch wizard and upload its initial revision."""
+        threedi_api = get_threedi_api()
+        if threedi_api is None:
+            self.communication.show_warn(
+                "Not authenticated with 3Di API — cannot create a schematisation."
+            )
+            return None
+
+        try:
+            allowed_organisation_ids = get_threedi_organisations()
+            tc = ThreediCalls(threedi_api)
+            organisations = {
+                organisation.unique_id: organisation
+                for organisation in tc.fetch_organisations(allowed_organisation_ids)
+            }
+        except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_error(
+                f"Could not retrieve 3Di organisations: {error}", parent=parent
+            )
+            return None
+
+        if not organisations:
+            self.communication.show_error(
+                "No 3Di organisations are available for this Rana tenant.",
+                parent=parent,
+            )
+            return None
+
+        wizard = NewSchematisationWizard(
+            threedi_api,
+            hcc_working_dir(),
+            self.communication,
+            organisations,
+            project["id"],
+            folder_path,
+        )
+        if wizard.exec() != QDialog.DialogCode.Accepted:
+            return None
+        if wizard.new_schematisation is None or wizard.new_local_schematisation is None:
+            self.communication.show_error(
+                "Could not prepare the new schematisation for upload.", parent=parent
             )
             return None
 
