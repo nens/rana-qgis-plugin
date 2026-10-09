@@ -80,6 +80,65 @@ def get_paths_from_geopackage(geopackage_path):
     return paths
 
 
+def prepare_existing_schematisation(source_path, communication):
+    """Validate an existing input and resolve its GeoPackage and raster references."""
+    source_path = Path(source_path)
+    if not ensure_valid_schema(str(source_path), communication):
+        return None
+
+    geopackage_path = (
+        source_path.with_suffix(".gpkg")
+        if source_path.suffix.lower() == ".sqlite"
+        else source_path
+    )
+    if not geopackage_path.is_file():
+        communication.show_error(
+            f"Expected GeoPackage was not found: {geopackage_path}"
+        )
+        return None
+
+    try:
+        raster_paths = get_paths_from_geopackage(str(geopackage_path))
+    except GeoPackageError as error:
+        communication.show_error(str(error))
+        return None
+
+    raster_directory = source_path.parent / "rasters"
+    missing_rasters = [
+        (field_name, relative_path)
+        for table_rasters in raster_paths.values()
+        for field_name, relative_path in table_rasters.items()
+        if relative_path and not (raster_directory / relative_path).is_file()
+    ]
+    if missing_rasters:
+        missing_rasters.sort(key=lambda raster: raster[0])
+        missing = "\n".join(
+            f"{field_name}: {relative_path}"
+            for field_name, relative_path in missing_rasters
+        )
+        communication.show_warn(
+            f"The following referenced raster files were not found:\n{missing}"
+        )
+        return None
+
+    return geopackage_path, raster_paths
+
+
+def copy_existing_schematisation_content(
+    geopackage_path, raster_paths, name, wip_revision
+):
+    """Copy a validated GeoPackage and its referenced rasters into a local WIP."""
+    geopackage_destination = Path(wip_revision.schematisation_dir) / f"{name}.gpkg"
+    shutil.copyfile(geopackage_path, geopackage_destination)
+    for table_rasters in raster_paths.values():
+        for relative_path in table_rasters.values():
+            if relative_path:
+                raster_path = Path(geopackage_path).parent / "rasters" / relative_path
+                shutil.copyfile(
+                    raster_path, Path(wip_revision.raster_dir) / raster_path.name
+                )
+
+
 def check_name_available(name, working_dir, communication):
     """Check if schematisation name is available in the working directory.
 
@@ -326,13 +385,12 @@ class UploadExistingSchematisationWizard(QWizard):
         owner = self.schematisation_name_page.owner
 
         try:
-            src_db = self.gpkg_path
-            schema_is_valid = ensure_valid_schema(src_db, self.communication)
-            if schema_is_valid is True:
-                if src_db.lower().endswith(".sqlite"):
-                    src_db = src_db.rsplit(".", 1)[0] + ".gpkg"
-            else:
-                return  # ensure_valid_schema deals with showing errors.
+            prepared_input = prepare_existing_schematisation(
+                self.gpkg_path, self.communication
+            )
+            if prepared_input is None:
+                return
+            src_db, raster_paths = prepared_input
 
             schematisation, local_schematisation, wip_revision = (
                 _create_schematisation_base(
@@ -345,34 +403,9 @@ class UploadExistingSchematisationWizard(QWizard):
                     self.rana_path,
                 )
             )
-            geopackage_filepath = os.path.join(
-                wip_revision.schematisation_dir, f"{name}.gpkg"
+            copy_existing_schematisation_content(
+                src_db, raster_paths, name, wip_revision
             )
-            raster_paths = get_paths_from_geopackage(src_db)
-            src_dir = os.path.dirname(src_db)
-            shutil.copyfile(src_db, geopackage_filepath)
-            missing_rasters = []
-            for table_name, raster_paths_info in raster_paths.items():
-                for raster_name, raster_rel_path in raster_paths_info.items():
-                    if not raster_rel_path:
-                        continue
-                    raster_full_path = os.path.join(src_dir, "rasters", raster_rel_path)
-                    if os.path.exists(raster_full_path):
-                        new_raster_filepath = os.path.join(
-                            wip_revision.raster_dir, os.path.basename(raster_rel_path)
-                        )
-                        shutil.copyfile(raster_full_path, new_raster_filepath)
-                    else:
-                        missing_rasters.append((raster_name, raster_rel_path))
-            if missing_rasters:
-                missing_rasters.sort(key=itemgetter(0))
-                missing_rasters_string = "\n".join(
-                    f"{rname}: {rpath}" for rname, rpath in missing_rasters
-                )
-                warn_msg = f"Warning: the following raster files where not found:\n{missing_rasters_string}"
-                self.communication.show_warn(warn_msg, self, "Warning")
-                self.communication.bar_warn("Schematisation creation aborted!")
-                return
             self.new_schematisation = schematisation
             self.new_local_schematisation = local_schematisation
             msg = f"Schematisation '{name} ({schematisation.id})' created!"
