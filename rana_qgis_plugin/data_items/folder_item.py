@@ -17,7 +17,7 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_folder_actions,
 )
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
-from rana_qgis_plugin.icons import dir_icon
+from rana_qgis_plugin.icons import dir_icon, download_icon, new_icon, upload_icon
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import RanaFetchError, get_tenant_project_files
 from rana_qgis_plugin.utils.data_models import OpenFolderRequest
@@ -107,6 +107,7 @@ class RanaFolderDataItem(QgsDataItem):
                 submenu = QMenu(parent)
                 routes = (
                     (
+                        download_icon,
                         "Import from HCC",
                         lambda: self.loader.import_schematisation_from_hcc(
                             self.project,
@@ -116,6 +117,7 @@ class RanaFolderDataItem(QgsDataItem):
                         ),
                     ),
                     (
+                        upload_icon,
                         "Upload existing",
                         lambda: self.loader.upload_existing_schematisation(
                             self.project,
@@ -125,6 +127,7 @@ class RanaFolderDataItem(QgsDataItem):
                         ),
                     ),
                     (
+                        new_icon,
                         "From scratch",
                         lambda: self.loader.create_schematisation_from_scratch(
                             self.project,
@@ -134,8 +137,8 @@ class RanaFolderDataItem(QgsDataItem):
                         ),
                     ),
                 )
-                for label, handler in routes:
-                    route_action = submenu.addAction(label)
+                for icon, label, handler in routes:
+                    route_action = submenu.addAction(icon, label)
                     route_action.triggered.connect(
                         lambda checked=False, callback=handler: callback()
                     )
