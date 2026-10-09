@@ -270,6 +270,7 @@ class UploadExistingSchematisationWizard(QWizard):
         self.gpkg_path = gpkg_path
         self.project_id = project_id
         self.rana_path = rana_path
+        self.raster_paths = None
         self.new_schematisation = None
         self.new_local_schematisation = None
         self.available_organisations = organisations
@@ -399,6 +400,7 @@ class UploadExistingSchematisationWizard(QWizard):
             if prepared_input is None:
                 return
             src_db, raster_paths = prepared_input
+            self.raster_paths = raster_paths
 
             schematisation, local_schematisation, wip_revision = (
                 _create_schematisation_base(
@@ -424,6 +426,7 @@ class UploadExistingSchematisationWizard(QWizard):
             error_msg = extract_error_message(e)
             self.communication.bar_error(error_msg)
         except Exception as e:
+            self.raster_paths = None
             self.new_schematisation = None
             self.new_local_schematisation = None
             error_msg = f"Error: {e}"
