@@ -1,6 +1,6 @@
 ---
 feature: feat_485_open_vector_tables
-status: draft
+status: planned
 created: 2026-09-29
 decisions: []
 ---
@@ -34,6 +34,10 @@ follows:
   `name`, and `type`.
 - `meta["tables"]` (optional): dict keyed by table ID, each value containing
   `layer_id`, `table_id` (matching the dict key), and `columns`.
+
+For this feature, only `table_id` is needed: it matches the corresponding
+table name in the GeoPackage. `layer_id` and `columns` are intentionally not
+used, and tables are not linked to layers in the Browser.
 
 ```python
 descriptor["meta"]["layers"] = [
@@ -86,18 +90,12 @@ of the schema above:
   new API.
 
 **What this resolves:** the `meta["tables"]` dict key is confirmed to be
-`table_id`, and `table_id` is the literal GeoPackage related-table name. The
-`name=table_map_key` construction in the Data Model section below is
-confirmed, not just a candidate mapping.
+`table_id`, and `table_id` is the literal GeoPackage related-table name used
+to open the table from the local GeoPackage.
 
-**What this does not resolve, and in fact complicates:** the ADR describes
-`layer_id` as `base_table_name` — a *physical GeoPackage table name*, the
-same kind of value as `table_id`. That strongly suggests `layer_id` should be
-matched against `meta["layers"][].name` (the layer's physical table name),
-**not** `meta["layers"][].id` (Rana's generated layer id), despite both being
-named `*_id`. This has not been confirmed against a real descriptor payload
-and must be verified before writing any table-to-layer association code. See
-Open Questions.
+The table-to-layer association described by `layer_id` is intentionally out
+of scope. The feature will not inspect or use `layer_id` to associate tables
+with layers.
 
 The ADR's `Table`/`TableColumn` model also has no `relation_name` field, so
 the file descriptor does not expose which relation type a table came from.
@@ -194,9 +192,13 @@ Tables will be represented by a new `RanaTableDataItem`, separate from
 This keeps geometry-bearing layers and geometryless tables explicit in the
 Browser model and allows their opening behavior to be selected by type.
 
+Table items are flat siblings of layer items directly under the vector file
+item. They are not nested under or otherwise linked to layer items.
+
 ### Reuse the existing icon mechanism
 
-Table items will use the same path as spatial layer items:
+Table items will use the same path as spatial layer items, using the native
+QGIS `mIconTableLayer.svg` theme icon:
 
 ```text
 table metadata/type
@@ -204,9 +206,8 @@ table metadata/type
     -> get_icon_from_theme(...)
 ```
 
-The implementation should add the appropriate table mapping to the existing
-generic icon map and use a QGIS-native theme icon. No separate icon helper or
-bundled plugin asset is planned unless QGIS 4.x has no suitable theme icon.
+The implementation should add the table mapping to the existing generic icon
+map. No separate icon helper or bundled plugin asset is needed.
 
 ### Unified selected-child request
 
@@ -258,6 +259,7 @@ descriptor and is shared by all children. Layer IDs come from
 
 No new persistent `table_id` field is planned. Opened tables reuse the
 existing `RanaLayerRef.layer_id` field for their individual child identifier.
+For this feature, `table_id` is assumed to remain stable across reprocessing.
 The child type remains available at request/opening time through
 `VectorLayerRef` versus `VectorTableRef`.
 
@@ -275,8 +277,8 @@ RanaLayerRef
 
 Browser expansion will use Rana descriptor metadata, not a download and local
 file inspection. Spatial layers continue to use the existing layer metadata;
-tables will be created from `meta["tables"]`, keyed by `table_id` (confirmed
-by ADR 046).
+tables will be created from `meta["tables"]`, using `table_id` as the local
+GeoPackage table name. `layer_id` and `columns` are ignored.
 
 This preserves the current lazy descriptor-fetch behavior and avoids making
 simple Browser expansion download a complete file.
@@ -293,8 +295,9 @@ Opening a complete vector file will use both sources of information:
 4. Geometryless local sublayers are opened only when they match a
    descriptor-listed table.
 5. Unlisted/internal geometryless sublayers are ignored.
-6. A descriptor-listed table missing locally produces a warning, while other
-   valid layers and tables continue opening.
+6. A descriptor-listed table missing locally is reported using the existing
+   layer-opening failure mechanism; other valid layers and tables continue
+   opening.
 
 This is deliberately safer than loading every `QgsWkbTypes.NoGeometry`
  sublayer reported by the provider, while retaining the legacy implementation's
@@ -344,8 +347,7 @@ The table construction, per ADR 046 (see Current API/schema observation), is:
 
 ```python
 VectorTableRef(
-    name=table_map_key,               # confirmed: equals table_id, the
-                                       # literal GeoPackage related-table name
+    name=table_metadata["table_id"],  # local GeoPackage table name
     id=table_metadata["table_id"],
 )
 ```
@@ -358,8 +360,8 @@ the researched API schema.
 - Descriptor fetch errors retain the existing Browser error-item behavior.
 - A selected table that cannot be opened reports an item-specific error and
   does not add an invalid QGIS layer.
-- A missing table during open-all warns and does not abort the complete file
-  open.
+- A missing table during open-all is reported like a failed layer open, is
+  skipped, and does not abort opening the remaining contents.
 - The existing communication/message-bar mechanism is reused.
 
 ## Testing Strategy
@@ -388,26 +390,7 @@ selection, file-level opening, and folder opening of vector files.
 
 ## Open Questions
 
-1. **`layer_id` matching field (undecided, needs developer input).** ADR 046
-   describes `meta["tables"][key]["layer_id"]` as the RTE relation's
-   `base_table_name` — a physical GeoPackage table name, the same kind of
-   value as `table_id`. This suggests it should be matched against
-   `meta["layers"][].name`, not `meta["layers"][].id`, despite the `*_id`
-   naming. Not yet confirmed against a real descriptor payload. This
-   determines how (and whether) a table can be reliably associated with its
-   parent layer.
-2. **Browser hierarchy (undecided, needs developer input).** Should table
-   items be nested under their associated layer item (reflecting the RTE
-   parent/child relation), or remain flat siblings of layers directly under
-   the vector file item (current design assumption, see Components)? This
-   affects `file_item.py`/`layer_item.py` structure and whether Story 2's
-   "mixed layer/table multi-select" still applies as-is.
-3. Is `table_id` stable across reprocessing and suitable for persistent
-   `RanaLayerRef.layer_id`? ADR 046 does not discuss ID stability across
-   reprocessing/versions.
-4. Which QGIS 4.x theme key is the correct native table icon for
-   `get_file_icon_name()`?
-5. **Forward-compatibility gap.** ADR 046 reserves `relation_name` for future
+1. **Forward-compatibility gap.** ADR 046 reserves `relation_name` for future
    relation types beyond `simple_attributes`, but the file descriptor's
    `Table` model does not expose `relation_name`. The plugin currently cannot
    distinguish table "kinds" from the descriptor alone. Not a blocker today
@@ -423,6 +406,12 @@ selection, file-level opening, and folder opening of vector files.
 - Whether the `meta["tables"]` dict key is guaranteed to equal the canonical
   local GeoPackage table name: confirmed by ADR 046. The key is `table_id`,
   which is the literal `related_table_name` from `gpkgext_relations`.
+- Whether tables should be associated/nested under layers: not for this
+  feature. Table items are flat siblings, and `layer_id` is ignored.
+- Whether `table_id` is stable across reprocessing: assumed stable for this
+  feature and reused as the persistent `RanaLayerRef.layer_id`.
+- Which native QGIS theme icon to use for table items: use
+  `mIconTableLayer.svg`, QGIS's icon for non-spatial table layers.
 
 ## Scope Boundaries
 
