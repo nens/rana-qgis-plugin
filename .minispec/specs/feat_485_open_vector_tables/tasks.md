@@ -11,10 +11,11 @@ estimated_lines: 500
 
 ## Overview
 
-Implement the approved design in `design.md`: discover vector layers from
-`meta["layers"]`, show descriptor-listed tables as flat Browser siblings, open
-selected layers and tables through one request flow, and include supported
-tables when opening a complete vector file.
+Implement the approved design in `design.md`: discover Browser layers and
+tables from descriptor metadata and open selected layers/tables through one
+request flow. Whole-file opening currently treats the downloaded GeoPackage
+as authoritative; whether to filter it using descriptor metadata is pending
+PM/designer input.
 
 Implementation should reuse the current Browser item, loader, OGR, layer
 reference, and error-reporting patterns. Add/extend unit tests alongside each
@@ -103,22 +104,19 @@ implementation task. Do not add E2E tests without explicit approval.
 
 ### Complete-file opening
 
-#### Task 6: Include descriptor-listed tables in open-all
+#### Task 6: Revisit whole-file authority after product/design decision
 - **Estimate:** ~60–100 lines
-- **Files:** `rana_qgis_plugin/layer_management/layer_manager.py`,
-  `tests/test_layer_manager.py`
-- **Description:** Extend complete vector-file opening to inspect local
-  provider sublayers and open descriptor-listed tables that are actually
-  present. Ignore unlisted geometryless sublayers. Report descriptor-listed
-  tables missing locally using the existing layer-opening failure mechanism,
-  skip them, and continue with remaining valid children.
-- **Depends on:** Task 4
-- **Acceptance:** Full-file opening adds available listed layers and tables,
-  ignores unlisted tables, and reports/skips a missing listed table while
-  continuing with remaining contents.
-- **Evidence:** Layer-manager tests verify listed/missing/unlisted table
-  behavior with a GeoPackage fixture or the repository's established QGIS
-  provider test pattern.
+- **Files:** To be determined after the policy decision
+- **Description:** The current implementation opens sublayers discovered in
+  the downloaded GeoPackage, including geometryless tables. Await PM/designer
+  decision on whether the descriptor should filter whole-file contents before
+  changing this behavior.
+- **Depends on:** PM/designer decision on authority
+- **Acceptance:** Update the design and implementation only after the policy
+  is confirmed; if descriptor-authoritative, open listed items only and report
+  missing listed tables while continuing with available contents.
+- **Evidence:** Product/design decision is documented and the resulting
+  whole-file behavior is covered by focused tests.
 
 ## Dependencies & Execution Order
 
@@ -127,7 +125,8 @@ implementation task. Do not add E2E tests without explicit approval.
 - Task 4 (table layer-manager primitive) can proceed after Task 1, in parallel
   with Browser work.
 - Task 5 integrates all selected-child paths and depends on Tasks 1–4.
-- Task 6 depends on Task 4 and can be implemented before or after Task 5.
+- Task 6 is deferred until the PM/designer decide whether the GeoPackage or
+  descriptor is authoritative for whole-file opening.
 - No task changes the deferred `relation_name` behavior.
 
 ## Notes
@@ -150,4 +149,5 @@ implementation task. Do not add E2E tests without explicit approval.
 - [x] Task 3: Discover children from descriptor `meta`
 - [x] Task 4: Open an individual geometryless table
 - [x] Task 5: Unify selected-vector aggregation and opening
-- [ ] Task 6: Include descriptor-listed tables in open-all
+- [ ] Task 6: Revisit whole-file authority after product/design decision
+  (deferred; GeoPackage is authoritative for now)

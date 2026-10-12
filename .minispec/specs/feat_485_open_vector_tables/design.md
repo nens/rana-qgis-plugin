@@ -17,7 +17,8 @@ The feature has four goals:
 1. Show tables when a Rana vector file is expanded in the Browser.
 2. Allow an individual table to be opened, including selections containing a
    mixture of layers and tables.
-3. Open all spatial layers and supported tables when a vector file is opened.
+3. Keep whole-file opening GeoPackage-authoritative for now: open the local
+   sublayers discovered from the downloaded GeoPackage.
 4. Align Browser layer discovery with the layer manager by reading layers
    from `descriptor["meta"]["layers"]` instead of the root-level
    `descriptor["layers"]` field.
@@ -161,26 +162,24 @@ download.
    together, **then** each file is downloaded once and its requested children
    are opened.
 
-### User Story 3 - Open a complete vector file (Priority: P1)
+### User Story 3 - Open a complete vector file (Priority: P1; authority pending)
 
-As a user, I want opening a vector file to include all supported spatial
-layers and tables, rather than silently omitting tables.
+As a user, I want opening a vector file to include its spatial layers and
+geometryless tables. Whether descriptor metadata filters which local
+sublayers are included is pending PM/designer input; for now the GeoPackage is
+authoritative.
 
 **Independent Test**: Open a downloaded GeoPackage containing spatial layers
-and geometryless tables and verify that all descriptor-listed children are
-present in the QGIS layer tree.
+and geometryless tables and verify that its local sublayers are present in the
+QGIS layer tree.
 
 **Acceptance Scenarios**:
 
-1. **Given** a vector file with descriptor-listed layers and tables, **when**
-   the file is opened, **then** all available listed layers and tables are
-   added to the existing Rana group hierarchy.
-2. **Given** a descriptor-listed table that is absent from the downloaded
-   file, **when** the file is opened, **then** the missing table is reported
-   and the remaining valid children are still opened.
-3. **Given** geometryless local sublayers that are not listed in the
-   descriptor, **when** the file is opened, **then** those unlisted/internal
-   tables are not opened.
+1. **Given** a vector GeoPackage with spatial and geometryless sublayers,
+   **when** the file is opened, **then** the existing OGR-based path attempts
+   to open all local sublayers.
+2. The descriptor-vs-GeoPackage filtering behavior remains undecided and is
+   deferred as described in Whole-file opening policy (temporary).
 
 ## Design Decisions So Far
 
@@ -286,25 +285,17 @@ GeoPackage table name. `layer_id` and `columns` are ignored.
 This preserves the current lazy descriptor-fetch behavior and avoids making
 simple Browser expansion download a complete file.
 
-### Hybrid open-all verification
+### Whole-file opening policy (temporary)
 
-Opening a complete vector file will use both sources of information:
+For now, the downloaded GeoPackage is authoritative when opening a complete
+vector file. The existing whole-file flow discovers and opens its local
+sublayers through OGR, including geometryless tables. It does not filter those
+sublayers against the Rana descriptor, so a local sublayer absent from
+`meta["layers"]` or `meta["tables"]` may also be opened.
 
-1. Descriptor metadata defines which layers and tables are supported and
-   should be opened.
-2. `QgsProviderRegistry.instance().querySublayers(local_file_path)` verifies
-   the sublayers actually present in the downloaded file.
-3. Spatial layers are opened from the descriptor layer entries.
-4. Geometryless local sublayers are opened only when they match a
-   descriptor-listed table.
-5. Unlisted/internal geometryless sublayers are ignored.
-6. A descriptor-listed table missing locally is reported using the existing
-   layer-opening failure mechanism; other valid layers and tables continue
-   opening.
-
-This is deliberately safer than loading every `QgsWkbTypes.NoGeometry`
- sublayer reported by the provider, while retaining the legacy implementation's
- local-provider verification approach.
+This is a temporary scope decision while product/design input is pending. The
+alternative is to make the Rana descriptor authoritative and open only its
+listed layers and tables. Revisit the policy after the PM and designer decide.
 
 ## Components
 
@@ -335,7 +326,8 @@ This is deliberately safer than loading every `QgsWkbTypes.NoGeometry`
 ### Layer management
 
 - Add selected-table opening using a geometryless OGR `QgsVectorLayer`.
-- Extend complete vector-file opening with provider sublayer inspection.
+- Whole-file opening currently treats the GeoPackage as authoritative; the
+  descriptor-vs-GeoPackage policy remains pending product/design confirmation.
 - Reuse the existing group hierarchy, Rana reference storage, error reporting,
   and layer-unlocking behavior.
 
@@ -368,8 +360,9 @@ the researched API schema.
 - Descriptor fetch errors retain the existing Browser error-item behavior.
 - A selected table that cannot be opened reports an item-specific error and
   does not add an invalid QGIS layer.
-- A missing table during open-all is reported like a failed layer open, is
-  skipped, and does not abort opening the remaining contents.
+- Whole-file opening follows the current GeoPackage-authoritative behavior;
+  opening only descriptor-listed tables is deferred pending product/design
+  confirmation.
 - The existing communication/message-bar mechanism is reused.
 
 ## Testing Strategy
@@ -387,9 +380,8 @@ Planned coverage:
 - Single table opening.
 - Mixed layer/table selection with one download per file.
 - File-level open subsumes child requests without duplication.
-- Open-all loads descriptor-listed layers and tables.
-- Unlisted geometryless sublayers are ignored.
-- Missing descriptor-listed tables warn and do not abort other opens.
+- Whole-file opening behavior follows the GeoPackage-authoritative policy for
+  now; descriptor filtering is deferred pending product/design confirmation.
 - Opened tables receive the same Rana reference/group behavior as layers.
 
 E2E tests are not included in this design without explicit approval. Manual
@@ -398,7 +390,11 @@ selection, file-level opening, and folder opening of vector files.
 
 ## Open Questions
 
-1. **Forward-compatibility gap.** ADR 046 reserves `relation_name` for future
+1. **Whole-file authority (pending PM/designer decision).** Should opening a
+   complete vector file use every sublayer in the downloaded GeoPackage, as it
+   currently does, or only layers/tables listed in the Rana descriptor? For
+   now, the GeoPackage is authoritative so implementation can proceed.
+2. **Forward-compatibility gap.** ADR 046 reserves `relation_name` for future
    relation types beyond `simple_attributes`, but the file descriptor's
    `Table` model does not expose `relation_name`. The plugin currently cannot
    distinguish table "kinds" from the descriptor alone. Not a blocker today
