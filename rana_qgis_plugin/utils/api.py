@@ -619,20 +619,16 @@ def upload_publication_style(
         raise RanaUploadError(msg or "")
 
 
-def get_schematisations(communication: UICommunication, icontains: str = "") -> list:
+def get_schematisations(icontains: str = "") -> list:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/threedi-schematisations"
     network_manager = NetworkManager(url, authcfg_id)
     params = {"name__icontains": icontains, "limit": 100}
     status, error = network_manager.fetch(params)
-    if status:
-        response = network_manager.content
-        items = response["results"]
-        return items
-    else:
-        communication.show_error(f"Failed to retrieve schematisation: {error}")
-        return []
+    if error:
+        raise RanaFetchError(f"Failed to fetch schematisations: {error}", url, params)
+    return network_manager.content.get("results", [])
 
 
 def get_threedi_schematisation(descriptor_id: str) -> dict:
@@ -647,7 +643,7 @@ def get_threedi_schematisation(descriptor_id: str) -> dict:
 
 
 def copy_threedi_schematisation(
-    project_id: str, schematisation_id: str, path: str
+    project_id: str, schematisation_id: str, revision_id: int, path: str
 ) -> dict:
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
@@ -655,7 +651,11 @@ def copy_threedi_schematisation(
         f"{api_url()}/tenants/{tenant}/projects/{project_id}/model-schematisations/copy"
     )
     network_manager = NetworkManager(url, authcfg_id)
-    params = {"schematisation_id": schematisation_id, "path": path}
+    params = {
+        "schematisation_id": schematisation_id,
+        "revision_id": revision_id,
+        "path": path,
+    }
     status, error = network_manager.post(params)
     if status:
         return network_manager.content
