@@ -424,7 +424,8 @@ Included:
 - Browser table children for vector files.
 - Opening individual tables.
 - Mixed layer/table opening.
-- Opening all descriptor-listed layers and tables.
+- Opening all local GeoPackage sublayers when a whole file is opened
+  (GeoPackage-authoritative; see Open Questions #1).
 - Native QGIS icon reuse.
 - Switching `file_item.py` Browser layer discovery to `meta["layers"]`.
 - Unit/integration coverage for the above.

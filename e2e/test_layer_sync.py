@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from qgis.core import (
-    Qgis,
     QgsApplication,
     QgsFeature,
     QgsGeometry,
@@ -23,7 +22,6 @@ from qgis.PyQt.QtWidgets import QMenu, QTreeView
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.data_items.table_item import RanaTableDataItem
 from rana_qgis_plugin.layer_management.dirty_tracking import (
     is_data_dirty,
     is_style_dirty,
@@ -160,15 +158,15 @@ def wait_for_openable_files(project_id, folder_name, expected_files, timeout=120
 
 @pytest.fixture
 def layer_sync_setup(qgis_application):
-    yield from _create_layer_sync_setup(qgis_application, VECTOR_FIXTURE)
+    yield from create_layer_sync_setup(qgis_application, VECTOR_FIXTURE)
 
 
 @pytest.fixture
 def layer_sync_table_setup(qgis_application):
-    yield from _create_layer_sync_setup(qgis_application, VECTOR_TABLE_FIXTURE)
+    yield from create_layer_sync_setup(qgis_application, VECTOR_TABLE_FIXTURE)
 
 
-def _create_layer_sync_setup(qgis_application, vector_fixture):
+def create_layer_sync_setup(qgis_application, vector_fixture):
     """Create an isolated project and upload fixtures for one test."""
     configure_rana_auth(qgis_application)
     project = create_project(
