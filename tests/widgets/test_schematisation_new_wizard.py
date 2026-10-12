@@ -328,9 +328,6 @@ def test_wizard_base_resets_outputs_and_reports_build_errors(
         "project",
         "target/",
     )
-    wizard.new_schematisation = MagicMock()
-    wizard.new_local_schematisation = MagicMock()
-    wizard.raster_paths = {"model_settings": {"dem_file": "dem.tif"}}
 
     wizard.run_build(lambda: (_ for _ in ()).throw(RuntimeError("build failed")))
 
@@ -338,6 +335,41 @@ def test_wizard_base_resets_outputs_and_reports_build_errors(
     assert wizard.new_local_schematisation is None
     assert wizard.raster_paths is None
     communication.bar_error.assert_called_once_with("Error: build failed")
+
+
+def test_wizard_base_flags_already_registered_schematisation_on_later_failure(
+    qgis_application, tmp_path
+):
+    """A failure after remote registration should mention the orphaned record."""
+    communication = MagicMock()
+    wizard = NewSchematisationWizard(
+        object(),
+        str(tmp_path),
+        communication,
+        {"owner": MagicMock()},
+        "project",
+        "target/",
+    )
+    schematisation = MagicMock()
+    schematisation.id = "schema-id"
+    schematisation.name = "New model"
+
+    def build():
+        # Mirrors _build_new_schematisation: outputs are set as soon as the
+        # remote schematisation is registered, before the riskier local steps.
+        wizard.new_schematisation = schematisation
+        wizard.new_local_schematisation = MagicMock()
+        raise RuntimeError("geopackage population failed")
+
+    wizard.run_build(build)
+
+    assert wizard.new_schematisation is None
+    assert wizard.new_local_schematisation is None
+    communication.bar_error.assert_called_once()
+    message = communication.bar_error.call_args.args[0]
+    assert "Error: geopackage population failed" in message
+    assert "New model" in message
+    assert "schema-id" in message
 
 
 def test_wizard_sizes_use_distinct_settings_keys():

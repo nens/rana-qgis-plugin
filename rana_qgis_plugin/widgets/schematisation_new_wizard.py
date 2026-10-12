@@ -113,11 +113,20 @@ class SchematisationWizardBase(QWizard):
         try:
             build()
         except (ApiException, RanaPostError) as error:
-            self._reset_outputs()
-            self.communication.bar_error(extract_error_message(error))
+            self._fail_build(extract_error_message(error))
         except Exception as error:
-            self._reset_outputs()
-            self.communication.bar_error(f"Error: {error}")
+            self._fail_build(f"Error: {error}")
+
+    def _fail_build(self, message: str) -> None:
+        """Report a build failure, flagging an already-registered schematisation."""
+        if self.new_schematisation is not None:
+            message = (
+                f"{message}\n\nA schematisation was already registered "
+                f"('{self.new_schematisation.name}', id {self.new_schematisation.id}) "
+                "before this error occurred."
+            )
+        self._reset_outputs()
+        self.communication.bar_error(message)
 
     def _reset_outputs(self) -> None:
         self.raster_paths = None
@@ -269,6 +278,8 @@ class NewSchematisationWizard(SchematisationWizardBase):
         schematisation, local_schematisation, wip_revision = (
             self._create_schematisation_base(name, description)
         )
+        self.new_schematisation = schematisation
+        self.new_local_schematisation = local_schematisation
 
         schematisation_filename = f"{name}.gpkg"
         geopackage_filepath = os.path.join(
@@ -283,8 +294,6 @@ class NewSchematisationWizard(SchematisationWizardBase):
             self.communication,
         )
         self.raster_paths = self.get_paths_from_geopackage(geopackage_filepath)
-        self.new_schematisation = schematisation
-        self.new_local_schematisation = local_schematisation
         msg = f"Schematisation '{name} ({schematisation.id})' created!"
         self.communication.bar_info(msg)
 
@@ -411,10 +420,10 @@ class UploadExistingSchematisationWizard(SchematisationWizardBase):
                 name, self.schematisation_name_page.description
             )
         )
+        self.new_schematisation = schematisation
+        self.new_local_schematisation = local_schematisation
         self.copy_existing_schematisation_content(
             src_db, raster_paths, name, wip_revision
         )
-        self.new_schematisation = schematisation
-        self.new_local_schematisation = local_schematisation
         msg = f"Schematisation '{name} ({schematisation.id})' created!"
         self.communication.bar_info(msg)
