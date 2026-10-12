@@ -26,15 +26,16 @@ implementation task. Do not add E2E tests without explicit approval.
 
 #### Task 1: Add unified vector-child request models
 - **Estimate:** ~40–70 lines
-- **Files:** `rana_qgis_plugin/utils/data_models.py`, relevant model tests
+- **Files:** `rana_qgis_plugin/utils/data_models.py`
 - **Description:** Add immutable `VectorLayerRef` and `VectorTableRef` value
   objects and `OpenVectorChildrenRequest` containing project, parent file,
-  and a tuple of either child reference. Add focused tests for construction
-  and values.
+  and a tuple of either child reference. Keep the existing `OpenLayersRequest`
+  until Task 6 migrates its callers.
 - **Depends on:** None
 - **Acceptance:** Both child types can be represented in one request without
   losing their names or child IDs.
-- **Evidence:** Focused model tests pass.
+- **Evidence:** The model module compiles, and the existing selected-layer
+  request tests continue to pass while migration is deferred to Task 6.
 
 #### Task 2: Add the table Browser item and native icon mapping
 - **Estimate:** ~50–90 lines
@@ -153,7 +154,9 @@ implementation task. Do not add E2E tests without explicit approval.
 
 ## Progress
 
-- [ ] Task 1: Add unified vector-child request models
+- [x] Task 1: Add unified vector-child request models (existing layer request
+  retained temporarily for compatibility until Task 6 migrates its callers;
+  no standalone model test retained per engineer review)
 - [ ] Task 2: Add the table Browser item and native icon mapping
 - [ ] Task 3: Discover children from descriptor `meta`
 - [ ] Task 4: Open an individual geometryless table
