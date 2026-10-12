@@ -103,6 +103,31 @@ class OpenScenarioWmsRequest:
 
 
 @dataclass(frozen=True)
+class VectorLayerRef:
+    """Identify one spatial layer in a Rana vector file."""
+
+    name: str
+    id: str
+
+
+@dataclass(frozen=True)
+class VectorTableRef:
+    """Identify one geometryless table in a Rana vector file."""
+
+    name: str
+    id: str
+
+
+@dataclass(frozen=True)
+class OpenVectorChildrenRequest:
+    """Request to open selected layers and tables from one vector file."""
+
+    project: dict
+    file_item: dict
+    children: tuple[VectorLayerRef | VectorTableRef, ...]
+
+
+@dataclass(frozen=True)
 class OpenLayersRequest:
     """Request to open multiple layers from one Rana vector file."""
 
