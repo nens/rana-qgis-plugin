@@ -554,24 +554,6 @@ def open_rana_vector_layer(
     return layer
 
 
-def open_rana_vector_table(
-    local_file_path: str,
-    table_name: str,
-    parents: list[str],
-    ref: RanaLayerRef,
-) -> Optional[QgsVectorLayer]:
-    """Open a single geometryless table from a Rana vector file."""
-    table_uri = f"{local_file_path}|layername={table_name}"
-    table = QgsVectorLayer(table_uri, table_name, "ogr")
-    if not table.isValid():
-        return None
-    group = find_or_create_rana_groups(parents, ref.project_id)
-    set_rana_refs(table, ref)
-    attach_dirty_tracking(table)
-    add_layer_to_group(table, group)
-    return table
-
-
 def open_rana_vector_layers(
     local_file_path: str,
     layer_names: list[str],

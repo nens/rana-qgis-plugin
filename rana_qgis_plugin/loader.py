@@ -32,7 +32,6 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     open_rana_schematisation,
     open_rana_vector_layer,
     open_rana_vector_layers,
-    open_rana_vector_table,
     open_rana_wms,
     open_scenario_results_in_results_analysis,
 )
@@ -2369,7 +2368,7 @@ class Loader(QObject):
             layer_id=table_id,
         )
         parents = [project["name"], "files"] + file_item["id"].split("/")
-        open_rana_vector_table(local_file_path, table_name, parents, ref)
+        open_rana_vector_layer(local_file_path, table_name, parents, ref)
         self._store_server_timestamp(project["name"], file_item)
 
     @staticmethod

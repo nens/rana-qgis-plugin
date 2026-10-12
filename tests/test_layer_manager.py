@@ -149,32 +149,10 @@ def test_open_vector_layer_invalid(tmp_path):
     assert layer is None
 
 
-def test_open_rana_vector_table(tmp_path):
-    gpkg = _create_test_gpkg(
-        tmp_path, "test.gpkg", "points", tables=("road_attributes",)
-    )
-    ref = lm.RanaLayerRef(
-        project_id=REF.project_id,
-        file_id=REF.file_id,
-        descriptor_id=REF.descriptor_id,
-        layer_id="road_attributes",
-    )
-
-    table = lm.open_rana_vector_table(str(gpkg), "road_attributes", PARENTS, ref)
-
-    assert table is not None
-    assert table.isValid()
-    assert table.name() == "road_attributes"
-    assert table.geometryType() == Qgis.GeometryType.Null
-    assert lm.get_rana_refs(table) == ref
-    group = lm.find_or_create_rana_groups(PARENTS, REF.project_id)
-    assert [child.layer().name() for child in group.children()] == ["road_attributes"]
-
-
 def test_open_rana_vector_table_invalid(tmp_path):
     gpkg = _create_test_gpkg(tmp_path, "test.gpkg", "points")
 
-    table = lm.open_rana_vector_table(str(gpkg), "missing_table", PARENTS, REF)
+    table = lm.open_rana_vector_layer(str(gpkg), "missing_table", PARENTS, REF)
 
     assert table is None
 
