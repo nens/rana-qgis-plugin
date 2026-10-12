@@ -161,7 +161,7 @@ implementation task. Do not add E2E tests without explicit approval.
   action intentionally deferred to Task 6)
   (selected-table opening action is deferred to Task 6)
 - [x] Task 3: Discover children from descriptor `meta`
-- [ ] Task 4: Open an individual geometryless table
+- [x] Task 4: Open an individual geometryless table
 - [ ] Task 5: Aggregate selected layers and tables by parent file
 - [ ] Task 6: Download once and dispatch selected vector children
 - [ ] Task 7: Include descriptor-listed tables in open-all
