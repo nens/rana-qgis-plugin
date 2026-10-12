@@ -17,6 +17,7 @@ class FileAction(Enum):
     REFRESH = "Refresh"
     CREATE_DIRECTORY = "Create folder"
     UPLOAD_FILES = "Upload file(s)"
+    ADD_SCHEMATISATION = "Add schematisation"
     VERSION_HISTORY = "Version history"
     VIEW_FILE_INFO = "View file info"
 
@@ -35,6 +36,7 @@ _ICONS = {
     FileAction.CREATE_DIRECTORY: icons.add_icon,
     FileAction.UPLOAD_FILES: icons.upload_icon,
     FileAction.VERSION_HISTORY: icons.history_icon,
+    FileAction.ADD_SCHEMATISATION: icons.add_icon,
 }
 
 _TOOLTIPS = {
@@ -42,6 +44,7 @@ _TOOLTIPS = {
     FileAction.OPEN_IN_BROWSER: "Open file in Rana web viewer",
     FileAction.CREATE_DIRECTORY: "Create a new folder",
     FileAction.UPLOAD_FILES: "Upload files to this location",
+    FileAction.ADD_SCHEMATISATION: "Add a schematisation to this location",
     FileAction.VERSION_HISTORY: "View file version history",
     FileAction.VIEW_FILE_INFO: "View file metadata",
 }
@@ -81,6 +84,7 @@ def get_folder_actions(is_root: bool = False) -> list[FileAction]:
         FileAction.REFRESH,
         FileAction.CREATE_DIRECTORY,
         FileAction.UPLOAD_FILES,
+        FileAction.ADD_SCHEMATISATION,
         FileAction.VERSION_HISTORY,
         FileAction.OPEN_IN_BROWSER,
     ]

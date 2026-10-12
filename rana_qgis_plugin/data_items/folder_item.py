@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtGui import QDesktopServices
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtWidgets import QAction, QMenu, QMessageBox
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.data_items.file_actions import (
@@ -103,6 +103,21 @@ class RanaFolderDataItem(QgsDataItem):
                         refresh_callback=self.refresh_if_populated,
                     )
                 )
+            elif action is FileAction.ADD_SCHEMATISATION:
+                submenu = QMenu(parent)
+                routes = (
+                    ("Import from HCC", "import_schematisation_from_hcc"),
+                    ("Upload existing", "upload_existing_schematisation"),
+                    ("From scratch", "create_schematisation_from_scratch"),
+                )
+                for label, handler_name in routes:
+                    route_action = submenu.addAction(label)
+                    route_action.triggered.connect(
+                        lambda checked=False, method=handler_name: getattr(
+                            self.loader, method
+                        )(self.project, self.folder_path, parent)
+                    )
+                q_action.setMenu(submenu)
             elif action is FileAction.REFRESH:
                 q_action.triggered.connect(lambda: self.refresh())
             elif action is FileAction.DELETE:
