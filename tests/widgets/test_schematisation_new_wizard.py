@@ -203,6 +203,36 @@ def test_copy_prepared_geopackage_and_rasters_into_local_revision(tmp_path):
     assert (local_raster_dir / "dem.tif").read_bytes() == b"raster data"
 
 
+def test_copy_prepared_rasters_preserves_nested_relative_paths(tmp_path):
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    source_gpkg = source_dir / "source.gpkg"
+    source_gpkg.write_bytes(b"geopackage data")
+    nested_raster_dir = source_dir / "rasters" / "sub"
+    nested_raster_dir.mkdir(parents=True)
+    source_raster = nested_raster_dir / "dem.tif"
+    source_raster.write_bytes(b"raster data")
+
+    local_dir = tmp_path / "local"
+    local_dir.mkdir()
+    local_raster_dir = tmp_path / "local_rasters"
+    local_raster_dir.mkdir()
+    revision = MagicMock()
+    revision.schematisation_dir = str(local_dir)
+    revision.raster_dir = str(local_raster_dir)
+
+    UploadExistingSchematisationWizard.copy_existing_schematisation_content(
+        source_gpkg,
+        {"model_settings": {"dem_file": "sub/dem.tif"}},
+        "Local model",
+        revision,
+    )
+
+    # The relative path (including subdirectory) must be preserved so that
+    # later lookups by the same relative path can find the copied file.
+    assert (local_raster_dir / "sub" / "dem.tif").read_bytes() == b"raster data"
+
+
 def test_create_and_populate_schematisation_geopackage(tmp_path):
     geopackage = tmp_path / "generated.gpkg"
     dem = tmp_path / "dem.tif"

@@ -383,9 +383,9 @@ class UploadExistingSchematisationWizard(SchematisationWizardBase):
                     raster_path = (
                         Path(geopackage_path).parent / "rasters" / relative_path
                     )
-                    shutil.copyfile(
-                        raster_path, Path(wip_revision.raster_dir) / raster_path.name
-                    )
+                    destination = Path(wip_revision.raster_dir) / relative_path
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(raster_path, destination)
 
     def create_schematisation(self):
         """Create a new schematisation from the provided GeoPackage."""
