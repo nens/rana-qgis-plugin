@@ -17,6 +17,7 @@ from rana_qgis_plugin.data_items.file_actions import (
     get_file_actions,
 )
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
+from rana_qgis_plugin.data_items.table_item import RanaTableDataItem
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     RanaFetchError,
@@ -85,7 +86,7 @@ class RanaFileDataItem(QgsDataItem):
             self.setState(Qgis.BrowserItemState.Populated)
 
     def createChildren(self) -> list:
-        """Fetch and return the layers contained in a vector file."""
+        """Fetch and return layer and table items contained in a vector file."""
         if self.data_type != "vector" or not self.descriptor_id:
             return []
         try:
@@ -98,7 +99,8 @@ class RanaFileDataItem(QgsDataItem):
             return [QgsErrorItem(self, "Failed to load layers", self.path())]
         if not descriptor:
             return []
-        return [
+        metadata = descriptor.get("meta") or {}
+        layers = [
             RanaLayerDataItem(
                 self,
                 self.loader,
@@ -108,8 +110,18 @@ class RanaFileDataItem(QgsDataItem):
                 layer.get("type"),
                 self.error_signals,
             )
-            for layer in descriptor.get("layers", [])
+            for layer in metadata.get("layers", [])
         ]
+        tables = [
+            RanaTableDataItem(
+                self,
+                self.loader,
+                table_metadata["table_id"],
+                table_metadata["table_id"],
+            )
+            for table_metadata in metadata.get("tables", {}).values()
+        ]
+        return layers + tables
 
     def equal(self, other: QgsDataItem | None) -> bool:
         """Compare mutable file metadata when browser children are refreshed."""

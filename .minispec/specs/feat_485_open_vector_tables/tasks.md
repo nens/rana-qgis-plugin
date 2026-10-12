@@ -160,7 +160,7 @@ implementation task. Do not add E2E tests without explicit approval.
 - [x] Task 2: Add the table Browser item and native icon mapping (opening
   action intentionally deferred to Task 6)
   (selected-table opening action is deferred to Task 6)
-- [ ] Task 3: Discover children from descriptor `meta`
+- [x] Task 3: Discover children from descriptor `meta`
 - [ ] Task 4: Open an individual geometryless table
 - [ ] Task 5: Aggregate selected layers and tables by parent file
 - [ ] Task 6: Download once and dispatch selected vector children
