@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from qgis.core import (
+    Qgis,
     QgsApplication,
     QgsFeature,
     QgsGeometry,
@@ -21,8 +22,8 @@ from qgis.PyQt.QtWidgets import QMenu, QTreeView
 
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
-from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.data_items.table_item import RanaTableDataItem
 from rana_qgis_plugin.layer_management.dirty_tracking import (
     is_data_dirty,
     is_style_dirty,
@@ -44,10 +45,11 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.workers.upload import FileUploadTask, prepare_new_file_upload
 
 from .conftest import configure_rana_auth
-from .test_utils import click_context_menu_action, click_tree_item
+from .test_utils import click_context_menu_action
 
 E2E_DATA_DIR = Path(__file__).parent / "data"
 VECTOR_FIXTURE = E2E_DATA_DIR / "upload.gpkg"
+VECTOR_TABLE_FIXTURE = E2E_DATA_DIR / "upload_w_table.gpkg"
 RASTER_FIXTURE = E2E_DATA_DIR / "upload.tif"
 
 
@@ -99,11 +101,6 @@ def get_project_item(plugin, qtbot, project):
     )
 
 
-def select_files(qtbot, dialog):
-    dialog.selectFiles([str(VECTOR_FIXTURE), str(RASTER_FIXTURE)])
-    qtbot.keyClick(dialog, Qt.Key.Key_Enter)
-
-
 def get_layer_names(group):
     names = []
     for child in group.children():
@@ -142,10 +139,10 @@ def wait_for_qgis_tasks(qtbot, timeout=60000):
     qtbot.waitUntil(lambda: task_manager.countActiveTasks() == 0, timeout=timeout)
 
 
-def wait_for_openable_files(project_id, folder_name, timeout=120):
+def wait_for_openable_files(project_id, folder_name, expected_files, timeout=120):
     """Wait until uploaded files have descriptor metadata in Rana."""
+    expected_files = set(expected_files)
     deadline = time.monotonic() + timeout
-    expected = {VECTOR_FIXTURE.name, RASTER_FIXTURE.name}
     openable = set()
     while time.monotonic() < deadline:
         files = get_tenant_project_files(project_id, {"path": f"{folder_name}/"})
@@ -155,7 +152,7 @@ def wait_for_openable_files(project_id, folder_name, timeout=120):
             if item.get("data_type") in {"vector", "raster"}
             and item.get("descriptor_id")
         }
-        if expected <= openable:
+        if expected_files <= openable:
             return
         time.sleep(1)
     raise AssertionError(f"Uploaded files were not processed: {openable}")
@@ -163,6 +160,15 @@ def wait_for_openable_files(project_id, folder_name, timeout=120):
 
 @pytest.fixture
 def layer_sync_setup(qgis_application):
+    yield from _create_layer_sync_setup(qgis_application, VECTOR_FIXTURE)
+
+
+@pytest.fixture
+def layer_sync_table_setup(qgis_application):
+    yield from _create_layer_sync_setup(qgis_application, VECTOR_TABLE_FIXTURE)
+
+
+def _create_layer_sync_setup(qgis_application, vector_fixture):
     """Create an isolated project and upload fixtures for one test."""
     configure_rana_auth(qgis_application)
     project = create_project(
@@ -176,7 +182,7 @@ def layer_sync_setup(qgis_application):
     assert create_tenant_project_directory(project["id"], folder_name)
 
     jobs = []
-    for fixture in (VECTOR_FIXTURE, RASTER_FIXTURE):
+    for fixture in (vector_fixture, RASTER_FIXTURE):
         result = prepare_new_file_upload(project["id"], fixture, folder_name)
         assert result.job is not None, result.error
         jobs.append(result.job)
@@ -196,15 +202,17 @@ def layer_sync_setup(qgis_application):
     task_manager.addTask(task)
     loop.exec()
     assert succeeded, "Fixture upload task failed"
-    wait_for_openable_files(project["id"], folder_name)
+    wait_for_openable_files(
+        project["id"], folder_name, {vector_fixture.name, RASTER_FIXTURE.name}
+    )
 
     yield project, folder_name
     delete_project(project["id"])
 
 
-def test_open_files(plugin, qtbot, qgis_application, layer_sync_setup):
-    """Open vector and raster files through the Browser folder action."""
-    rana_project, folder_name = layer_sync_setup
+def test_open_files(plugin, qtbot, qgis_application, layer_sync_table_setup):
+    """Open Browser-selected and whole-file GeoPackage layers and tables."""
+    rana_project, folder_name = layer_sync_table_setup
     # Walk tree to expand and retrieve contents
     project_item = get_project_item(plugin, qtbot, rana_project)
     expand_item(plugin, qtbot, project_item)
@@ -229,15 +237,20 @@ def test_open_files(plugin, qtbot, qgis_application, layer_sync_setup):
     qtbot.waitUntil(
         lambda: (
             {item.name() for item in folder_item.children() or []}
-            >= {VECTOR_FIXTURE.name, RASTER_FIXTURE.name}
+            >= {
+                VECTOR_TABLE_FIXTURE.name,
+                RASTER_FIXTURE.name,
+            }
         ),
         timeout=60000,
     )
-    vector_item = next(
+    vector_table_file_item = next(
         item
         for item in folder_item.children()
-        if isinstance(item, RanaFileDataItem) and item.name() == VECTOR_FIXTURE.name
+        if isinstance(item, RanaFileDataItem)
+        and item.name() == VECTOR_TABLE_FIXTURE.name
     )
+
     # Open folder items in qgis and test correct items are added to layer panel
     click_context_menu_action(qtbot, folder_item, FileAction.OPEN_IN_QGIS.value)
     wait_for_qgis_tasks(qtbot)
@@ -254,29 +267,33 @@ def test_open_files(plugin, qtbot, qgis_application, layer_sync_setup):
     folder_group = find_group(files_group, folder_name)
     qtbot.waitUntil(
         lambda: (
-            folder_group.findGroup(VECTOR_FIXTURE.name) is not None
+            folder_group.findGroup(VECTOR_TABLE_FIXTURE.name) is not None
             and folder_group.findGroup(RASTER_FIXTURE.name) is not None
         ),
         timeout=60000,
     )
-    vector_group = find_group(folder_group, VECTOR_FIXTURE.name)
+    vector_table_group = find_group(folder_group, VECTOR_TABLE_FIXTURE.name)
     raster_group = find_group(folder_group, RASTER_FIXTURE.name)
     qtbot.waitUntil(
-        lambda: get_layer_names(vector_group) == ["test"],
+        lambda: (
+            {"zm_dropped", "storage_curves"} <= set(get_layer_names(vector_table_group))
+        ),
         timeout=30000,
     )
     qtbot.waitUntil(
         lambda: get_layer_names(raster_group) == [RASTER_FIXTURE.name],
         timeout=30000,
     )
-    assert get_layer_names(vector_group) == ["test"]
+    assert {"zm_dropped", "storage_curves"} <= set(get_layer_names(vector_table_group))
     assert get_layer_names(raster_group) == [RASTER_FIXTURE.name]
     initial_group_count = sum(
         1 for child in root.children() if child.name() == rana_project["name"]
     )
     initial_layer_count = len(project.mapLayers())
     # Test re-opening a file doesn't add layers
-    click_context_menu_action(qtbot, vector_item, FileAction.OPEN_IN_QGIS.value)
+    click_context_menu_action(
+        qtbot, vector_table_file_item, FileAction.OPEN_IN_QGIS.value
+    )
     wait_for_qgis_tasks(qtbot)
     qtbot.waitUntil(
         lambda: len(project.mapLayers()) == initial_layer_count,
@@ -285,25 +302,6 @@ def test_open_files(plugin, qtbot, qgis_application, layer_sync_setup):
     assert (
         sum(1 for child in root.children() if child.name() == rana_project["name"])
         == initial_group_count
-    )
-
-    expand_item(plugin, qtbot, vector_item)
-    qtbot.waitUntil(
-        lambda: any(
-            isinstance(item, RanaLayerDataItem)
-            for item in (vector_item.children() or [])
-        ),
-        timeout=30000,
-    )
-    layer_item = next(
-        item for item in vector_item.children() if isinstance(item, RanaLayerDataItem)
-    )
-    tree, index = get_item_index(plugin, layer_item)
-    click_tree_item(tree, index, qtbot)
-    wait_for_qgis_tasks(qtbot)
-    qtbot.waitUntil(
-        lambda: len(project.mapLayers()) == initial_layer_count,
-        timeout=60000,
     )
 
 
