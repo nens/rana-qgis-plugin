@@ -119,21 +119,12 @@ class VectorTableRef:
 
 
 @dataclass(frozen=True)
-class OpenVectorChildrenRequest:
+class OpenVectorFileRequest:
     """Request to open selected layers and tables from one vector file."""
 
     project: dict
     file_item: dict
     children: tuple[VectorLayerRef | VectorTableRef, ...]
-
-
-@dataclass(frozen=True)
-class OpenLayersRequest:
-    """Request to open multiple layers from one Rana vector file."""
-
-    project: dict
-    file_item: dict
-    layers: tuple[tuple[str, str | None], ...]
 
 
 @dataclass(frozen=True)

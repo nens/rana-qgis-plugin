@@ -17,13 +17,16 @@ from rana_qgis_plugin.data_items.folder_item import (
 )
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.data_items.table_item import RanaTableDataItem
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
-    OpenLayersRequest,
     OpenScenarioRequest,
     OpenScenarioWmsRequest,
     OpenSchematisationRequest,
+    OpenVectorFileRequest,
+    VectorLayerRef,
+    VectorTableRef,
 )
 
 # Actions permitted for a valid multi-select (files/folders/layers, no root)
@@ -52,7 +55,15 @@ def classify_selection(selected_items: Sequence[QgsDataItem]) -> SelectionKind:
     if any(isinstance(item, RanaFilesDataItem) for item in selected_items):
         return SelectionKind.INVALID_MULTI
     if all(
-        isinstance(item, (RanaFolderDataItem, RanaFileDataItem, RanaLayerDataItem))
+        isinstance(
+            item,
+            (
+                RanaFolderDataItem,
+                RanaFileDataItem,
+                RanaLayerDataItem,
+                RanaTableDataItem,
+            ),
+        )
         for item in selected_items
     ):
         return SelectionKind.VALID_MULTI
@@ -151,31 +162,29 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayersRequest
+            | OpenVectorFileRequest
             | OpenFolderRequest
         ] = []
         loader = None
 
-        layer_requests: dict[tuple[str, str], OpenLayersRequest] = {}
+        vector_files: dict[tuple[str, str], tuple[dict, dict]] = {}
+        vector_children: dict[
+            tuple[str, str], list[VectorLayerRef | VectorTableRef]
+        ] = {}
         for item in items:
-            if isinstance(item, RanaLayerDataItem):
+            if isinstance(item, (RanaLayerDataItem, RanaTableDataItem)):
                 parent = item.parent()
                 if isinstance(parent, RanaFileDataItem):
                     key = (parent.project["id"], parent.file_item["id"])
-                    layer_request = layer_requests.get(key)
-                    layer = (item.name(), item.layer_id)
-                    if layer_request is None:
-                        layer_requests[key] = OpenLayersRequest(
-                            project=parent.project,
-                            file_item=parent.file_item,
-                            layers=(layer,),
-                        )
+                    child: VectorLayerRef | VectorTableRef
+                    if isinstance(item, RanaLayerDataItem):
+                        child = VectorLayerRef(name=item.name(), id=item.layer_id)
                     else:
-                        layer_requests[key] = OpenLayersRequest(
-                            project=layer_request.project,
-                            file_item=layer_request.file_item,
-                            layers=layer_request.layers + (layer,),
-                        )
+                        child = VectorTableRef(name=item.table_id, id=item.table_id)
+                    if key not in vector_children:
+                        vector_files[key] = (parent.project, parent.file_item)
+                        vector_children[key] = []
+                    vector_children[key].append(child)
                     loader = loader or item.loader
             elif isinstance(item, RanaFileDataItem):
                 if item.data_type in (
@@ -203,7 +212,15 @@ class RanaDataItemGuiProvider(QgsDataItemGuiProvider):
                 )
                 loader = loader or item.loader
 
-        requests.extend(layer_requests.values())
+        for key, children in vector_children.items():
+            project, file_item = vector_files[key]
+            requests.append(
+                OpenVectorFileRequest(
+                    project=project,
+                    file_item=file_item,
+                    children=tuple(children),
+                )
+            )
         if requests and loader is not None:
             loader.open_items(requests)
 

@@ -3,8 +3,8 @@ feature: feat_485_open_vector_tables
 status: planned
 created: 2026-10-12
 chunk_size: adaptive
-total_tasks: 7
-estimated_lines: 450
+total_tasks: 6
+estimated_lines: 500
 ---
 
 # Open Vector Tables Tasks
@@ -24,32 +24,30 @@ implementation task. Do not add E2E tests without explicit approval.
 
 ### Foundation and Browser discovery
 
-#### Task 1: Add unified vector-child request models
+#### Task 1: Add unified selected-vector request models
 - **Estimate:** ~40–70 lines
 - **Files:** `rana_qgis_plugin/utils/data_models.py`
 - **Description:** Add immutable `VectorLayerRef` and `VectorTableRef` value
-  objects and `OpenVectorChildrenRequest` containing project, parent file,
-  and a tuple of either child reference. Keep the existing `OpenLayersRequest`
-  until Task 6 migrates its callers.
+  objects and `OpenVectorFileRequest` containing project, parent file, and a
+  tuple of either child reference.
 - **Depends on:** None
 - **Acceptance:** Both child types can be represented in one request without
   losing their names or child IDs.
-- **Evidence:** The model module compiles, and the existing selected-layer
-  request tests continue to pass while migration is deferred to Task 6.
+- **Evidence:** The model module compiles; selected-vector request behavior is
+  verified in Task 5's aggregation and loader tests.
 
 #### Task 2: Add the table Browser item and native icon mapping
 - **Estimate:** ~50–90 lines
 - **Files:** `rana_qgis_plugin/data_items/table_item.py` (new),
   `rana_qgis_plugin/utils/generic.py`, `tests/utils/test_generic.py`
 - **Description:** Implement a leaf `RanaTableDataItem`, using
-  `mIconTableLayer.svg` through the existing icon mechanism. The selected-table
-  opening action is deferred until Task 6, when the loader accepts the unified
-  request type.
+  `mIconTableLayer.svg` through the existing icon mechanism. Its open action
+  sends a one-child `OpenVectorFileRequest`.
 - **Depends on:** Task 1
 - **Acceptance:** A leaf table item can be constructed and uses the native
   table icon mapping.
-- **Evidence:** The generic icon mapping test passes; the item is exercised
-  when Browser discovery is covered in Task 3.
+- **Evidence:** The generic icon mapping test passes; table action behavior is
+  exercised with selected-child flow in Task 5.
 
 #### Task 3: Discover children from descriptor `meta`
 - **Estimate:** ~40–80 lines
@@ -63,8 +61,8 @@ implementation task. Do not add E2E tests without explicit approval.
 - **Acceptance:** A descriptor with different root and `meta` layers yields
   children from `meta`; tables appear as siblings; descriptors with no tables
   still show their layers.
-- **Evidence:** File-item tests cover mixed children, authoritative `meta`,
-  no tables, and existing fetch-error handling.
+- **Evidence:** Implementation review confirms Browser discovery reads the
+  descriptor's `meta` fields; no dict-shape-only test was retained.
 
 ### Selected-child opening
 
@@ -76,44 +74,36 @@ implementation task. Do not add E2E tests without explicit approval.
   invalid layers, attach the existing Rana layer reference with `table_id`,
   and reuse current group, dirty-tracking, and layer-add behavior where
   appropriate.
-- **Depends on:** None; can proceed in parallel with Task 5 after Task 1
+- **Depends on:** None; can proceed after Task 1
 - **Acceptance:** A valid geometryless table opens with the expected Rana
   reference; an invalid table is not added.
 - **Evidence:** Layer-manager tests verify valid and invalid table behavior.
 
-#### Task 5: Aggregate selected layers and tables by parent file
-- **Estimate:** ~40–80 lines
-- **Files:** `rana_qgis_plugin/data_items/gui_provider.py`,
-  `tests/data_items/test_gui_provider.py`
-- **Description:** Extend selection aggregation to include both
-  `RanaLayerDataItem` and `RanaTableDataItem`, producing one unified
-  `OpenVectorChildrenRequest` per parent vector file.
-- **Depends on:** Tasks 1–3
-- **Acceptance:** Layer-only, table-only, and mixed selections are grouped by
-  parent file without duplicate file requests.
-- **Evidence:** GUI-provider tests cover same-file aggregation and separate
-  files.
-
-#### Task 6: Download once and dispatch selected vector children
-- **Estimate:** ~60–100 lines
+#### Task 5: Unify selected-vector aggregation and opening
+- **Estimate:** ~120–180 lines
 - **Files:** `rana_qgis_plugin/data_items/layer_item.py`,
+  `rana_qgis_plugin/data_items/table_item.py`,
+  `rana_qgis_plugin/data_items/gui_provider.py`,
   `rana_qgis_plugin/loader.py`, `rana_qgis_plugin/utils/data_models.py`,
-  `tests/loader/test_mixed_opening.py`, relevant data-item tests
-- **Description:** Migrate the existing selected-layer caller and loader from
-  `OpenLayersRequest` to `OpenVectorChildrenRequest`. Dispatch `VectorLayerRef`
-  and `VectorTableRef` after downloading each parent once. Preserve
-  `OpenFileRequest` precedence so a whole-file request subsumes child
-  requests. Remove `OpenLayersRequest` if no remaining callers use it.
-- **Depends on:** Tasks 4–5
-- **Acceptance:** Selected layers, tables, and mixed children open after one
-  download per file; whole-file requests still subsume selected-child
-  requests regardless of request order.
-- **Evidence:** Loader and layer-item tests pass, including download count and
-  file-request precedence cases.
+  `tests/data_items/test_gui_provider.py`, `tests/loader/test_mixed_opening.py`
+- **Description:** Use `OpenVectorFileRequest` for every selected-vector
+  request, whether it contains only layers, only tables, or both. Aggregate
+  children into exactly one request per parent file; remove `OpenLayersRequest`
+  and the conditional request-type branch. Make the loader dispatch child refs
+  after one download, merge duplicate child requests for the same file, and
+  preserve whole-file `OpenFileRequest` subsumption. Wire table item opening
+  to the same request.
+- **Depends on:** Tasks 1–4
+- **Acceptance:** Layer-only, table-only, and mixed selections each produce
+  one `OpenVectorFileRequest` per parent; loader opens the requested children
+  after one download; duplicate requests merge; whole-file requests subsume
+  selected-vector requests regardless of order.
+- **Evidence:** GUI-provider and loader tests pass for request aggregation,
+  child dispatch, single download, merging, and whole-file precedence.
 
 ### Complete-file opening
 
-#### Task 7: Include descriptor-listed tables in open-all
+#### Task 6: Include descriptor-listed tables in open-all
 - **Estimate:** ~60–100 lines
 - **Files:** `rana_qgis_plugin/layer_management/layer_manager.py`,
   `tests/test_layer_manager.py`
@@ -133,11 +123,11 @@ implementation task. Do not add E2E tests without explicit approval.
 ## Dependencies & Execution Order
 
 - Task 1 is the foundation.
-- Tasks 2 and the initial work on Task 4 can proceed independently after Task
-  1 (Task 4's implementation uses the reference metadata contract).
-- Task 3 depends on Task 2; Task 5 depends on Tasks 1–3.
-- Task 6 integrates selected-child paths and depends on Tasks 4–5.
-- Task 7 depends on Task 4 and can be implemented before or after Task 6.
+- Task 2 depends on Task 1; Task 3 depends on Task 2.
+- Task 4 (table layer-manager primitive) can proceed after Task 1, in parallel
+  with Browser work.
+- Task 5 integrates all selected-child paths and depends on Tasks 1–4.
+- Task 6 depends on Task 4 and can be implemented before or after Task 5.
 - No task changes the deferred `relation_name` behavior.
 
 ## Notes
@@ -154,14 +144,10 @@ implementation task. Do not add E2E tests without explicit approval.
 
 ## Progress
 
-- [x] Task 1: Add unified vector-child request models (existing layer request
-  retained temporarily for compatibility until Task 6 migrates its callers;
-  no standalone model test retained per engineer review)
-- [x] Task 2: Add the table Browser item and native icon mapping (opening
-  action intentionally deferred to Task 6)
-  (selected-table opening action is deferred to Task 6)
+- [x] Task 1: Add unified selected-vector request models (no standalone model
+  test retained per engineer review)
+- [x] Task 2: Add the table Browser item and native icon mapping
 - [x] Task 3: Discover children from descriptor `meta`
 - [x] Task 4: Open an individual geometryless table
-- [ ] Task 5: Aggregate selected layers and tables by parent file
-- [ ] Task 6: Download once and dispatch selected vector children
-- [ ] Task 7: Include descriptor-listed tables in open-all
+- [x] Task 5: Unify selected-vector aggregation and opening
+- [ ] Task 6: Include descriptor-listed tables in open-all

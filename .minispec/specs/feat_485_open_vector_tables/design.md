@@ -212,8 +212,11 @@ map. No separate icon helper or bundled plugin asset is needed.
 ### Unified selected-child request
 
 Selected layers and tables will use one request type named
-`OpenVectorChildrenRequest`, rather than separate layer and table request
-pipelines.
+`OpenVectorFileRequest`, rather than separate layer and table request
+pipelines. Each request is for one parent vector file and its selected
+children; the loader downloads the file once and dispatches each child by its
+reference type. `OpenFileRequest` remains the request for opening every
+supported content in a file.
 
 The request represents one parent vector file and a collection of selected
 children. It permits one download per file and naturally supports mixed
@@ -319,10 +322,15 @@ This is deliberately safer than loading every `QgsWkbTypes.NoGeometry`
 ### Request and loader flow
 
 - `utils/data_models.py`: add `VectorLayerRef`, `VectorTableRef`, and
-  `OpenVectorChildrenRequest`.
-- `data_items/gui_provider.py`: aggregate mixed vector children by parent file.
-- `loader.py`: download each parent file once and dispatch each child based on
-  its concrete reference type; preserve file-level request deduplication.
+  `OpenVectorFileRequest`.
+- `data_items/gui_provider.py`: aggregate every selected vector child
+  (layer-only, table-only, or mixed) into exactly one `OpenVectorFileRequest`
+  per parent file.
+- `data_items/layer_item.py` and `data_items/table_item.py`: submit a one-child
+  `OpenVectorFileRequest` for their selected child.
+- `loader.py`: download each parent file once, merge child refs when duplicate
+  requests target the same file, and dispatch each child by its concrete ref
+  type; a whole-file `OpenFileRequest` subsumes the selected-vector request.
 
 ### Layer management
 
@@ -337,7 +345,7 @@ The intended request model is:
 
 ```python
 @dataclass(frozen=True)
-class OpenVectorChildrenRequest:
+class OpenVectorFileRequest:
     project: dict
     file_item: dict
     children: tuple[VectorLayerRef | VectorTableRef, ...]

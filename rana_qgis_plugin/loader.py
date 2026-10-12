@@ -32,6 +32,7 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     open_rana_schematisation,
     open_rana_vector_layer,
     open_rana_vector_layers,
+    open_rana_vector_table,
     open_rana_wms,
     open_scenario_results_in_results_analysis,
 )
@@ -77,12 +78,14 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
-    OpenLayersRequest,
     OpenScenarioRequest,
     OpenScenarioWmsRequest,
     OpenSchematisationRequest,
+    OpenVectorFileRequest,
     StyleUploadItem,
     UploadableLayerItem,
+    VectorLayerRef,
+    VectorTableRef,
 )
 from rana_qgis_plugin.utils.filesystem import ensure_writable_directory
 from rana_qgis_plugin.utils.generic import (
@@ -1557,7 +1560,7 @@ class Loader(QObject):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayersRequest
+            | OpenVectorFileRequest
             | OpenFolderRequest
         ],
     ) -> None:
@@ -1571,7 +1574,7 @@ class Loader(QObject):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayersRequest
+            | OpenVectorFileRequest
         ] = []
         for request in requests:
             if isinstance(request, OpenFolderRequest):
@@ -1584,7 +1587,7 @@ class Loader(QObject):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayersRequest,
+            | OpenVectorFileRequest,
         ] = {}
         for request in resolved:
             key = (request.project["id"], request.file_item["id"])
@@ -1592,11 +1595,24 @@ class Loader(QObject):
             if existing_request is None:
                 requests_by_file[key] = request
                 continue
+            if isinstance(existing_request, OpenVectorFileRequest) and isinstance(
+                request, OpenVectorFileRequest
+            ):
+                children = list(existing_request.children)
+                children.extend(
+                    child for child in request.children if child not in children
+                )
+                requests_by_file[key] = OpenVectorFileRequest(
+                    project=existing_request.project,
+                    file_item=existing_request.file_item,
+                    children=tuple(children),
+                )
+                continue
             if isinstance(existing_request, OpenFileRequest):
-                # Opening the whole file subsumes any selected layer requests.
+                # Opening the whole file subsumes any selected child requests.
                 continue
             if isinstance(request, OpenFileRequest):
-                # A whole-file request subsumes previously selected layers.
+                # A whole-file request subsumes previously selected children.
                 requests_by_file[key] = request
         resolved = list(requests_by_file.values())
         # Warn the user if they are about to download a lot of files, and allow them to cancel.
@@ -1636,8 +1652,8 @@ class Loader(QObject):
                 self.open_scenario_results_batch(request)
             elif isinstance(request, OpenFileRequest):
                 self.download_and_open_file(request)
-            elif isinstance(request, OpenLayersRequest):
-                self.download_and_open_layers(request)
+            elif isinstance(request, OpenVectorFileRequest):
+                self.download_and_open_vector_file(request)
 
     def _resolve_folder(
         self, project: dict, folder_path: str
@@ -1645,7 +1661,7 @@ class Loader(QObject):
         OpenFileRequest
         | OpenSchematisationRequest
         | OpenScenarioRequest
-        | OpenLayersRequest
+        | OpenVectorFileRequest
     ]:
         """Resolve a folder into individual open requests via the API (single level)."""
         params = {"path": folder_path} if folder_path else None
@@ -1658,7 +1674,7 @@ class Loader(QObject):
             OpenFileRequest
             | OpenSchematisationRequest
             | OpenScenarioRequest
-            | OpenLayersRequest
+            | OpenVectorFileRequest
         ] = []
         for item in files:
             if item.get("type") == "directory":
@@ -1677,18 +1693,19 @@ class Loader(QObject):
     def download_and_open_file(self, request: OpenFileRequest) -> None:
         self.download_and_open(request, self.open_file)
 
-    def download_and_open_layers(self, request: OpenLayersRequest) -> None:
-        def open_layers(local_path, project, file_item):
-            for layer_name, layer_id in request.layers:
-                self.open_layer(
-                    local_path,
-                    project,
-                    file_item,
-                    layer_name,
-                    layer_id,
-                )
+    def download_and_open_vector_file(self, request: OpenVectorFileRequest) -> None:
+        def open_children(local_path, project, file_item):
+            for child in request.children:
+                if isinstance(child, VectorLayerRef):
+                    self.open_layer(
+                        local_path, project, file_item, child.name, child.id
+                    )
+                elif isinstance(child, VectorTableRef):
+                    self.open_table(
+                        local_path, project, file_item, child.name, child.id
+                    )
 
-        self.download_and_open(request, open_layers)
+        self.download_and_open(request, open_children)
 
     def download_and_open(self, request, callback) -> None:
         project = request.project
@@ -2334,6 +2351,25 @@ class Loader(QObject):
         )
         parents = [project["name"], "files"] + file_item["id"].split("/")
         open_rana_vector_layer(local_file_path, layer_name, parents, ref)
+        self._store_server_timestamp(project["name"], file_item)
+
+    def open_table(
+        self,
+        local_file_path: str,
+        project: dict,
+        file_item: dict,
+        table_name: str,
+        table_id: str,
+    ) -> None:
+        """Open one selected table and record the file server timestamp."""
+        ref = RanaLayerRef(
+            project_id=project["id"],
+            file_id=file_item["id"],
+            descriptor_id=file_item.get("descriptor_id"),
+            layer_id=table_id,
+        )
+        parents = [project["name"], "files"] + file_item["id"].split("/")
+        open_rana_vector_table(local_file_path, table_name, parents, ref)
         self._store_server_timestamp(project["name"], file_item)
 
     @staticmethod

@@ -9,8 +9,8 @@ from rana_qgis_plugin.utils.api import RanaPostError
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
     OpenFolderRequest,
-    OpenLayersRequest,
     OpenSchematisationRequest,
+    OpenVectorFileRequest,
 )
 
 
@@ -479,7 +479,7 @@ def test_open_items_deduplicates_same_file_requests():
         list[
             OpenFileRequest
             | OpenSchematisationRequest
-            | OpenLayersRequest
+            | OpenVectorFileRequest
             | OpenFolderRequest
         ],
         [OpenFileRequest(project, file_item), OpenFileRequest(project, file_item)],
