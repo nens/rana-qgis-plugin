@@ -40,16 +40,16 @@ implementation task. Do not add E2E tests without explicit approval.
 #### Task 2: Add the table Browser item and native icon mapping
 - **Estimate:** ~50–90 lines
 - **Files:** `rana_qgis_plugin/data_items/table_item.py` (new),
-  `rana_qgis_plugin/utils/generic.py`, `tests/data_items/test_table_item.py`
-  (new), `tests/utils/test_generic.py`
+  `rana_qgis_plugin/utils/generic.py`, `tests/utils/test_generic.py`
 - **Description:** Implement a leaf `RanaTableDataItem`, using
-  `mIconTableLayer.svg` through the existing icon mechanism. Its open action
-  should create a one-child `OpenVectorChildrenRequest` with `table_id` as
-  both the local table name and child ID.
+  `mIconTableLayer.svg` through the existing icon mechanism. The selected-table
+  opening action is deferred until Task 6, when the loader accepts the unified
+  request type.
 - **Depends on:** Task 1
-- **Acceptance:** The table item uses the QGIS theme icon and requests the
-  expected table ref when opened.
-- **Evidence:** Table-item and icon mapping tests pass.
+- **Acceptance:** A leaf table item can be constructed and uses the native
+  table icon mapping.
+- **Evidence:** The generic icon mapping test passes; the item is exercised
+  when Browser discovery is covered in Task 3.
 
 #### Task 3: Discover children from descriptor `meta`
 - **Estimate:** ~40–80 lines
@@ -157,7 +157,9 @@ implementation task. Do not add E2E tests without explicit approval.
 - [x] Task 1: Add unified vector-child request models (existing layer request
   retained temporarily for compatibility until Task 6 migrates its callers;
   no standalone model test retained per engineer review)
-- [ ] Task 2: Add the table Browser item and native icon mapping
+- [x] Task 2: Add the table Browser item and native icon mapping (opening
+  action intentionally deferred to Task 6)
+  (selected-table opening action is deferred to Task 6)
 - [ ] Task 3: Discover children from descriptor `meta`
 - [ ] Task 4: Open an individual geometryless table
 - [ ] Task 5: Aggregate selected layers and tables by parent file

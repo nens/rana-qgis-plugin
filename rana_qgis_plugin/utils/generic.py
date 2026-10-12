@@ -167,6 +167,7 @@ def get_file_icon_name(data_type: str) -> str:
         "multilinestring": "mIconLineLayer.svg",
         "multipolygon": "mIconPolygonLayer.svg",
         "geometrycollection": "mIconGeometryCollection.svg",
+        "table": "mIconTableLayer.svg",
     }
     return icon_map.get(data_type.lower(), "mIconFile.svg")
 
