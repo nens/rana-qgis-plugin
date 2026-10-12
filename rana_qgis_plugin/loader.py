@@ -335,6 +335,15 @@ class Loader(QObject):
         schematisation_kind: str,
     ) -> SchematisationUploadTask | None:
         """Run common setup and upload orchestration for a creation wizard."""
+        working_dir = hcc_working_dir()
+        writable, error = ensure_writable_directory(working_dir)
+        if not writable:
+            self.communication.show_error(
+                f"Cannot write to working directory '{working_dir}': {error}",
+                parent=parent,
+            )
+            return None
+
         threedi_api = get_threedi_api()
         if threedi_api is None:
             self.communication.show_warn(
