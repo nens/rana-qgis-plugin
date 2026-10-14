@@ -249,6 +249,7 @@ def test_open_rana_schematisation_tags_loaded_group(
             7,
             wip_replace_requested=wip_replace_requested,
             parents=["Project", "files", "folder"],
+            group_name="schema",
         )
 
     group = lm.find_or_create_rana_groups(["Project", "files", "folder"], "project-id")
@@ -265,3 +266,4 @@ def test_open_rana_schematisation_tags_loaded_group(
         "files",
         "folder",
     ]
+    assert load.call_args.kwargs["group_name"] == "schema"

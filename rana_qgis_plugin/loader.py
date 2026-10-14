@@ -2291,6 +2291,7 @@ class Loader(QObject):
             parents = [project_name, "files"] + list(
                 PurePosixPath(request.file_item["id"]).parts[:-1]
             )
+            group_name = PurePosixPath(request.file_item["id"]).name
             open_rana_schematisation(
                 self.communication,
                 project_name,
@@ -2300,6 +2301,7 @@ class Loader(QObject):
                 download_context.wip_replace_requested,
                 geopackage_filepath=download_context.geopackage_filepath,
                 parents=parents,
+                group_name=group_name,
             )
 
         task = DownloadTask([downloader])
