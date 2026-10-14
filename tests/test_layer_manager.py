@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import Qgis, QgsProject, QgsVectorLayer
 
 import rana_qgis_plugin.layer_management.layer_manager as lm
 
@@ -45,7 +45,9 @@ def test_clear_rana_refs():
 # --- Test layer management ---
 
 
-def _create_test_gpkg(tmp_path: Path, name: str, *layer_names: str) -> Path:
+def _create_test_gpkg(
+    tmp_path: Path, name: str, *layer_names: str, tables: tuple[str, ...] = ()
+) -> Path:
     """Create a minimal GeoPackage with named point layers."""
     from osgeo import ogr, osr
 
@@ -57,6 +59,8 @@ def _create_test_gpkg(tmp_path: Path, name: str, *layer_names: str) -> Path:
     for layer_name in layer_names:
         geom_type = ogr.wkbLineString if "line" in layer_name else ogr.wkbPoint
         ds.CreateLayer(layer_name, srs, geom_type)
+    for table_name in tables:
+        ds.CreateLayer(table_name, geom_type=ogr.wkbNone)
     ds = None
     return gpkg_path
 
@@ -143,6 +147,14 @@ def test_open_vector_layer_invalid(tmp_path):
         str(tmp_path / "nonexistent.gpkg"), "nope", PARENTS, REF
     )
     assert layer is None
+
+
+def test_open_rana_vector_table_invalid(tmp_path):
+    gpkg = _create_test_gpkg(tmp_path, "test.gpkg", "points")
+
+    table = lm.open_rana_vector_layer(str(gpkg), "missing_table", PARENTS, REF)
+
+    assert table is None
 
 
 def test_open_rana_vector_layers(tmp_path):

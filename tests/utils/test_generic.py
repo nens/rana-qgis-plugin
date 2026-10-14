@@ -46,6 +46,10 @@ def test_parse_url_with_query():
     assert query_params == {"param1": ["value1"]}
 
 
+def test_table_icon_uses_native_qgis_table_layer_icon():
+    assert utils.get_file_icon_name("table") == "mIconTableLayer.svg"
+
+
 @patch("rana_qgis_plugin.utils.generic.QgsProject")
 def test_has_layer_loaded_from_dir_no_layers(mock_qgs_project, tmp_path):
     mock_qgs_project.instance.return_value.mapLayers.return_value = {}

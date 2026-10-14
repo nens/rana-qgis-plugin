@@ -17,10 +17,13 @@ from rana_qgis_plugin.data_items.gui_provider import (
 )
 from rana_qgis_plugin.data_items.layer_item import RanaLayerDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.data_items.table_item import RanaTableDataItem
 from rana_qgis_plugin.utils.data_models import (
-    OpenLayersRequest,
     OpenScenarioRequest,
     OpenScenarioWmsRequest,
+    OpenVectorFileRequest,
+    VectorLayerRef,
+    VectorTableRef,
 )
 
 
@@ -43,8 +46,45 @@ def test_open_selected_layers_aggregates_by_file():
 
     loader.open_items.assert_called_once_with(
         [
-            OpenLayersRequest(
-                project, parent.file_item, (("roads", "r"), ("buildings", "b"))
+            OpenVectorFileRequest(
+                project,
+                parent.file_item,
+                (
+                    VectorLayerRef(name="roads", id="r"),
+                    VectorLayerRef(name="buildings", id="b"),
+                ),
+            )
+        ]
+    )
+
+
+def test_open_selected_layers_and_table_aggregate_by_file():
+    loader = MagicMock()
+    project = {"id": "project", "name": "Project"}
+    parent = Mock(spec=RanaFileDataItem)
+    parent.project = project
+    parent.file_item = {"id": "roads.gpkg", "data_type": "vector"}
+    layer = Mock(spec=RanaLayerDataItem)
+    layer.parent.return_value = parent
+    layer.name.return_value = "roads"
+    layer.layer_id = "layer-id"
+    layer.loader = loader
+    table = Mock(spec=RanaTableDataItem)
+    table.parent.return_value = parent
+    table.table_id = "road_attributes"
+    table.loader = loader
+
+    RanaDataItemGuiProvider.open_selected_items([layer, table])
+
+    loader.open_items.assert_called_once_with(
+        [
+            OpenVectorFileRequest(
+                project=project,
+                file_item=parent.file_item,
+                children=(
+                    VectorLayerRef(name="roads", id="layer-id"),
+                    VectorTableRef(name="road_attributes", id="road_attributes"),
+                ),
             )
         ]
     )
@@ -65,6 +105,10 @@ def fake(cls):
         ),
         (
             [fake(RanaFolderDataItem), fake(RanaFolderDataItem)],
+            SelectionKind.VALID_MULTI,
+        ),
+        (
+            [fake(RanaLayerDataItem), fake(RanaTableDataItem)],
             SelectionKind.VALID_MULTI,
         ),
         (
