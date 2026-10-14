@@ -1,6 +1,6 @@
 ---
 feature: fix_493_schematisation_group_naming
-status: implementing
+status: complete
 created: 2026-10-13
 chunk_size: adaptive
 total_tasks: 3
@@ -38,7 +38,7 @@ compatibility with older editor versions.
 - **Status:** Complete
 
 #### Task 2: Derive and forward the plain file-item name
-- **Estimate:** ~25 lines
+- **Estimate:** ~20 lines
 - **Files:** `rana_qgis_plugin/loader.py`,
   `rana_qgis_plugin/layer_management/layer_manager.py`
 - **Description:** At the loader callback, derive the leaf with
@@ -53,6 +53,7 @@ compatibility with older editor versions.
   unchanged.
 - **Evidence:** Focused test asserting the forwarded leaf name and unchanged
   parent hierarchy.
+- **Status:** Complete
 
 ### Integration & Verification
 
@@ -69,3 +70,4 @@ compatibility with older editor versions.
   their previous behavior without failing to load.
 - **Evidence:** Focused tests pass and manual test notes cover new-editor and
   compatibility paths.
+- **Status:** Complete — focused tests pass; completion approved by user.

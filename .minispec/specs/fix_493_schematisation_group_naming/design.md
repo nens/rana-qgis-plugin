@@ -1,6 +1,6 @@
 ---
 feature: fix_493_schematisation_group_naming
-status: implementing
+status: complete
 created: 2026-10-13
 decisions:
   - 20261013-1800-schematisation-group-naming-source

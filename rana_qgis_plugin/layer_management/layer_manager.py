@@ -578,6 +578,7 @@ def open_rana_schematisation(
     wip_replace_requested: bool,
     geopackage_filepath: str | None = None,
     parents: list[str] | None = None,
+    group_name: str | None = None,
 ) -> None:
     """Open a downloaded schematisation in the schematisation editor."""
     communication.clear_message_bar()
@@ -587,9 +588,9 @@ def open_rana_schematisation(
 
     assert revision_number in local_schematisation.revisions
     group_parents = parents or [project_name]
-    # Pre-create the hierarchy because the editor currently creates groups by
-    # name only. This workaround can move into threedi-schematisation-editor
-    # once it supports Rana group metadata directly.
+    # Pre-create the hierarchy because the editor creates groups by name only.
+    # The canonical leaf name is passed separately; Rana still adopts the
+    # hierarchy to attach its metadata.
     project = QgsProject.instance()
     assert project is not None
     schematisation_id = (
@@ -605,6 +606,7 @@ def open_rana_schematisation(
         action=BuildOptionActions.DOWNLOADED,
         custom_geopackage_filepath=geopackage_filepath,
         parents=group_parents,
+        group_name=group_name,
     )
     revision = (
         local_schematisation.wip_revision
