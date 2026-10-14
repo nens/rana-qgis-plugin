@@ -255,6 +255,8 @@ def test_handle_upload_file_failed_logs_error():
 
 def test_data_sync_acquires_and_releases_lock_and_clears_dirty_state():
     loader, communication = make_loader()
+    synced_layers = []
+    loader.rana_sync_completed.connect(synced_layers.extend)
     task = MagicMock()
     task.rana_sync_keys = [("project", "descriptor")]
     task.failed_files = []
@@ -271,12 +273,15 @@ def test_data_sync_acquires_and_releases_lock_and_clears_dirty_state():
         )
 
     clear_dirty.assert_called_once_with(layer, "rana/data_dirty")
+    assert synced_layers == [layer]
     assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
     communication.bar_info.assert_called_once()
 
 
 def test_data_sync_termination_releases_lock_without_clearing_dirty_state():
     loader, _ = make_loader()
+    synced_layers = []
+    loader.rana_sync_completed.connect(synced_layers.extend)
     task = MagicMock()
     task.rana_sync_keys = [("project", "descriptor")]
     task.isCanceled.return_value = True
@@ -287,11 +292,14 @@ def test_data_sync_termination_releases_lock_without_clearing_dirty_state():
         loader.handle_data_sync_terminated(task)
 
     clear_dirty.assert_not_called()
+    assert synced_layers == []
     assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
 
 
 def test_style_sync_completion_clears_style_state_and_releases_lock():
     loader, communication = make_loader()
+    synced_layers = []
+    loader.rana_sync_completed.connect(synced_layers.extend)
     task = MagicMock()
     task.rana_sync_keys = [("project", "descriptor")]
     task.failed_items = []
@@ -308,8 +316,30 @@ def test_style_sync_completion_clears_style_state_and_releases_lock():
         )
 
     clear_dirty.assert_called_once_with(layer, "rana/style_dirty")
+    assert synced_layers == [layer]
     assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
     communication.bar_info.assert_called_once()
+
+
+def test_sync_failure_does_not_emit_completion_signal_or_clear_dirty_state():
+    loader, _ = make_loader()
+    synced_layers = []
+    loader.rana_sync_completed.connect(synced_layers.extend)
+    task = MagicMock()
+    task.rana_sync_keys = [("project", "descriptor")]
+    task.isCanceled.return_value = False
+    layer = MagicMock()
+
+    with (
+        patch.object(loader, "layers_for_keys", return_value=[layer]),
+        patch("rana_qgis_plugin.loader.clear_dirty") as clear_dirty,
+    ):
+        loader.handle_sync_completed(
+            task, "rana/data_dirty", "Data saved to Rana.", ["upload failed"]
+        )
+
+    clear_dirty.assert_not_called()
+    assert synced_layers == []
 
 
 def test_sync_key_acquisition_releases_partial_batch_on_conflict():
