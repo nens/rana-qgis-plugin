@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional, cast
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef
+    from rana_qgis_plugin.workers.style_layers import LayerSource
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class StyleUploadItem:
     layer_in_file: str | None = None
     project_id: str | None = None
     descriptor_id: str | None = None
+    layer_source: Optional["LayerSource"] = None
 
 
 @dataclass

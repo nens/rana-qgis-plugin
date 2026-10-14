@@ -7,6 +7,7 @@ from qgis.core import (
     QgsApplication,
     QgsDataItem,
     QgsDataItemProvider,
+    QgsProject,
 )
 from qgis.gui import QgsGui
 from qgis.PyQt.QtCore import QEvent, QObject
@@ -16,8 +17,14 @@ from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.data_items.gui_provider import RanaDataItemGuiProvider
 from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
+from rana_qgis_plugin.layer_management.close_sync_prompt import (
+    LayerRemovalSyncPrompt,
+    ProjectCloseSyncPrompt,
+)
+from rana_qgis_plugin.layer_management.indicator_manager import IndicatorManager
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
 from rana_qgis_plugin.layer_management.local_linking import LocalLinkingListener
+from rana_qgis_plugin.layer_management.raster_watch import RasterWatch
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.settings import initialize_settings
 
@@ -83,6 +90,20 @@ class RanaQgisPlugin(QObject):
             iface, self.loader.layer_lock_registry, self.loader
         )
         self.local_linking = LocalLinkingListener(self.loader)
+        project = QgsProject.instance()
+        assert project is not None
+        self.indicator_manager = IndicatorManager(project, iface.layerTreeView())
+        self.raster_watch = RasterWatch(project)
+        self.project_close_sync_prompt = ProjectCloseSyncPrompt(
+            project, self.layer_tree_menu, self.communication, iface.mainWindow()
+        )
+        self.layer_removal_sync_prompt = LayerRemovalSyncPrompt(
+            project,
+            self.layer_tree_menu,
+            self.communication,
+            self.project_close_sync_prompt,
+            iface.mainWindow(),
+        )
         self._externally_deactivated = False
 
     def initGui(self):
@@ -101,10 +122,18 @@ class RanaQgisPlugin(QObject):
             gui_registry.addProvider(self.data_item_gui_provider)
         self.layer_tree_menu.connect()
         self.local_linking.connect()
+        self.indicator_manager.connect()
+        self.raster_watch.connect()
+        self.project_close_sync_prompt.connect()
+        self.layer_removal_sync_prompt.connect()
         self.iface.mainWindow().installEventFilter(self)
 
     def unload(self):
         self.iface.mainWindow().removeEventFilter(self)
+        self.layer_removal_sync_prompt.disconnect()
+        self.project_close_sync_prompt.disconnect()
+        self.indicator_manager.disconnect()
+        self.raster_watch.disconnect()
         self.local_linking.disconnect()
         self.layer_tree_menu.disconnect()
         self.loader.shutdown()

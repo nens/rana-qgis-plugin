@@ -6,7 +6,7 @@ from html import escape
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from qgis.core import QgsApplication, QgsProject, QgsTask
+from qgis.core import QgsApplication, QgsProject, QgsRasterLayer, QgsTask
 from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
@@ -18,10 +18,11 @@ from threedi_api_client.openapi import (
 )
 from threedi_mi_utils import LocalSchematisation
 
-from rana_qgis_plugin.layer_management.dirty_tracking import (
-    DATA_DIRTY_PROPERTY,
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
+    DATA_SYNC_STATE_PROPERTY,
     STYLE_DIRTY_PROPERTY,
     clear_dirty,
+    set_data_sync_state,
 )
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
@@ -34,6 +35,9 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     open_rana_vector_layers,
     open_rana_wms,
     open_scenario_results_in_results_analysis,
+)
+from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
+    capture_raster_baseline,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
@@ -120,7 +124,7 @@ from rana_qgis_plugin.workers.download import (
     SchematisationRevisionDownloadContext,
     SchematisationRevisionDownloader,
 )
-from rana_qgis_plugin.workers.styling import StyleUploadTask
+from rana_qgis_plugin.workers.styling import StyleUploadTask, discard_layer_sources
 from rana_qgis_plugin.workers.threedi_resolve import ScenarioResolveTask
 from rana_qgis_plugin.workers.upload import (
     ExistingUploadStatus,
@@ -1363,7 +1367,7 @@ class Loader(QObject):
         task.taskCompleted.connect(
             lambda: self.handle_sync_completed(
                 task,
-                DATA_DIRTY_PROPERTY,
+                DATA_SYNC_STATE_PROPERTY,
                 "Data saved to Rana.",
                 task.failed_files,
             )
@@ -1381,6 +1385,7 @@ class Loader(QObject):
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
             self.communication.bar_error("Could not start style upload.")
+            discard_layer_sources(items)
             return
         keys = list(
             {
@@ -1391,6 +1396,7 @@ class Loader(QObject):
         )
         if not self.acquire_sync_keys(keys):
             self.communication.bar_warn("A sync is already in progress.")
+            discard_layer_sources(items)
             return
 
         for item in items:
@@ -1399,6 +1405,7 @@ class Loader(QObject):
             layers = self.layers_for_keys([(item.project_id, item.descriptor_id)])
             if not self.verify_style_target(item, layers):
                 self.release_sync_keys(keys)
+                discard_layer_sources(items)
                 return None
         task = StyleUploadTask(items)
         task.rana_sync_keys = keys
@@ -1517,7 +1524,14 @@ class Loader(QObject):
     ) -> None:
         if not failures and not task.isCanceled():
             for layer in self.layers_for_keys(task.rana_sync_keys):
-                clear_dirty(layer, dirty_property)
+                if dirty_property == DATA_SYNC_STATE_PROPERTY and isinstance(
+                    layer, QgsRasterLayer
+                ):
+                    capture_raster_baseline(layer)
+                elif dirty_property == DATA_SYNC_STATE_PROPERTY:
+                    set_data_sync_state(layer, "clean")
+                else:
+                    clear_dirty(layer, dirty_property)
         self.release_sync_keys(task.rana_sync_keys)
         self.communication.clear_message_bar()
         self.communication.bar_info(message)
@@ -2332,7 +2346,9 @@ class Loader(QObject):
             layer_names = get_vector_layer_names(local_file_path)
             open_rana_vector_layers(local_file_path, layer_names, parents, ref)
         else:
-            open_rana_raster(local_file_path, parents, ref)
+            layer = open_rana_raster(local_file_path, parents, ref)
+            if layer is not None:
+                capture_raster_baseline(layer)
 
         self._store_server_timestamp(project["name"], file_item)
 

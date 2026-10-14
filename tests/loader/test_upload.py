@@ -3,9 +3,19 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from qgis.core import QgsApplication
+from qgis.core import QgsApplication, QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import QCoreApplication
 
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
+    DATA_FINGERPRINT_PROPERTY,
+    DATA_SYNC_STATE_PROPERTY,
+)
+from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
+from rana_qgis_plugin.layer_management.layer_sync_state import LayerSyncState
+from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
+    capture_raster_baseline,
+    evaluate_raster_data_dirty,
+)
 from rana_qgis_plugin.loader import Loader, UploadChoice
 from rana_qgis_plugin.workers.upload import UploadJob, UploadPreparationResult
 
@@ -24,6 +34,16 @@ def wait_for(condition, timeout=3.0):
             return True
         time.sleep(0.05)
     return False
+
+
+def create_test_raster(path: Path) -> None:
+    """Create a tiny valid GeoTIFF for exercising real QGIS raster layers."""
+    from osgeo import gdal
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    dataset = gdal.GetDriverByName("GTiff").Create(str(path), 2, 2, 1, gdal.GDT_Byte)
+    dataset.GetRasterBand(1).WriteRaster(0, 0, 2, 2, b"\x00" * 4)
+    dataset = None
 
 
 def test_upload_files_with_no_jobs():
@@ -267,12 +287,88 @@ def test_data_sync_acquires_and_releases_lock_and_clears_dirty_state():
     ):
         assert loader.acquire_sync_keys(task.rana_sync_keys)
         loader.handle_sync_completed(
-            task, "rana/data_dirty", "Data saved to Rana.", task.failed_files
+            task, DATA_SYNC_STATE_PROPERTY, "Data saved to Rana.", task.failed_files
         )
 
-    clear_dirty.assert_called_once_with(layer, "rana/data_dirty")
+    clear_dirty.assert_not_called()
+    layer.setCustomProperty.assert_called_once_with(
+        DATA_SYNC_STATE_PROPERTY, LayerSyncState.CLEAN.value
+    )
     assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
     communication.bar_info.assert_called_once()
+
+
+def test_successful_raster_data_sync_captures_new_baseline(tmp_path, qgis_application):
+    QgsProject.instance().clear()
+    loader, _ = make_loader()
+    cache_dir = tmp_path / "cache"
+    raster_path = cache_dir / "project" / "files" / "dem" / "dem.tif"
+    create_test_raster(raster_path)
+    layer = QgsRasterLayer(str(raster_path), "dem", "gdal")
+    set_rana_refs(layer, RanaLayerRef("project", "dem.tif", "descriptor"))
+    QgsProject.instance().addMapLayer(layer)
+    with patch(
+        "rana_qgis_plugin.layer_management.raster_dirty_evaluator.raster_source_path",
+        return_value=raster_path,
+    ):
+        capture_raster_baseline(layer)
+        original_baseline = layer.customProperty(DATA_FINGERPRINT_PROPERTY)
+        raster_path.write_bytes(raster_path.read_bytes() + b"edited")
+        layer.setCustomProperty(DATA_SYNC_STATE_PROPERTY, LayerSyncState.DIRTY.value)
+
+        task = MagicMock()
+        task.rana_sync_keys = [("project", "descriptor")]
+        task.isCanceled.return_value = False
+        with patch.object(loader, "layers_for_keys", return_value=[layer]):
+            loader.handle_sync_completed(
+                task, DATA_SYNC_STATE_PROPERTY, "Data saved to Rana.", []
+            )
+
+        assert layer.customProperty(DATA_FINGERPRINT_PROPERTY) != original_baseline
+        assert (
+            layer.customProperty(DATA_SYNC_STATE_PROPERTY) == LayerSyncState.CLEAN.value
+        )
+        assert evaluate_raster_data_dirty(layer) is LayerSyncState.CLEAN
+    QgsProject.instance().clear()
+
+
+@pytest.mark.parametrize(
+    "failures,cancelled",
+    [(["upload failed"], False), ([], True)],
+)
+def test_failed_or_cancelled_raster_sync_keeps_dirty_state_and_baseline(
+    tmp_path, qgis_application, failures, cancelled
+):
+    QgsProject.instance().clear()
+    loader, _ = make_loader()
+    cache_dir = tmp_path / "cache"
+    raster_path = cache_dir / "project" / "files" / "dem" / "dem.tif"
+    create_test_raster(raster_path)
+    layer = QgsRasterLayer(str(raster_path), "dem", "gdal")
+    set_rana_refs(layer, RanaLayerRef("project", "dem.tif", "descriptor"))
+    QgsProject.instance().addMapLayer(layer)
+    with patch(
+        "rana_qgis_plugin.layer_management.raster_dirty_evaluator.raster_source_path",
+        return_value=raster_path,
+    ):
+        capture_raster_baseline(layer)
+        baseline = layer.customProperty(DATA_FINGERPRINT_PROPERTY)
+        raster_path.write_bytes(raster_path.read_bytes() + b"edited")
+        layer.setCustomProperty(DATA_SYNC_STATE_PROPERTY, LayerSyncState.DIRTY.value)
+
+        task = MagicMock()
+        task.rana_sync_keys = [("project", "descriptor")]
+        task.isCanceled.return_value = cancelled
+        with patch.object(loader, "layers_for_keys", return_value=[layer]):
+            loader.handle_sync_completed(
+                task, DATA_SYNC_STATE_PROPERTY, "Data saved to Rana.", failures
+            )
+
+        assert layer.customProperty(DATA_FINGERPRINT_PROPERTY) == baseline
+        assert (
+            layer.customProperty(DATA_SYNC_STATE_PROPERTY) == LayerSyncState.DIRTY.value
+        )
+    QgsProject.instance().clear()
 
 
 def test_data_sync_termination_releases_lock_without_clearing_dirty_state():
