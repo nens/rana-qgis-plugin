@@ -24,6 +24,8 @@ from rana_qgis_plugin.utils.settings import (
     set_cognito_client_id_native,
 )
 
+OAUTH_REDIRECT_PORT = 7070
+
 
 def get_authcfg_id():
     settings = QgsSettings()
@@ -170,7 +172,7 @@ def create_oauth2_config(provider: dict) -> Optional[str]:
         "clientId": client_id,
         "grantFlow": 3,
         "redirectHost": "localhost",
-        "redirectPort": 7070,
+        "redirectPort": OAUTH_REDIRECT_PORT,
         "redirectUrl": "rana-callback",
         "refreshTokenUrl": COGNITO_TOKEN_ENDPOINT,
         "requestUrl": COGNITO_AUTHENTICATION_ENDPOINT,

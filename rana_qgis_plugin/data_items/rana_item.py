@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional, cast
 
 from qgis.core import (
     Qgis,
+    QgsApplication,
     QgsDataItem,
     QgsErrorItem,
     QgsSettings,
@@ -40,7 +41,10 @@ from rana_qgis_plugin.constant import (
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
 from rana_qgis_plugin.icons import refresh_icon
-from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.network_manager import (
+    NetworkTimeoutError,
+    NetworkUnavailableError,
+)
 from rana_qgis_plugin.utils.api import (
     RanaFetchError,
     RanaPostError,
@@ -91,10 +95,7 @@ class RanaRootDataItem(QgsDataItem):
         )
         self.tenants: Optional[list] = None
         self.update_display()
-        if is_authenticated():
-            self.restore_session()
-        else:
-            self.setState(Qgis.BrowserItemState.Populated)
+        self.setState(Qgis.BrowserItemState.Populated)
 
     def createChildren(self) -> list:
         """Fetch and return project items. Called by QGIS in a background thread."""
@@ -102,6 +103,9 @@ class RanaRootDataItem(QgsDataItem):
             return []
         try:
             response = get_tenant_projects()
+        except NetworkTimeoutError:
+            self.error_signals.request_timed_out.emit()
+            return [QgsErrorItem(self, "Request timed out", self.path())]
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return [QgsErrorItem(self, "No connection to Rana", self.path())]
@@ -128,6 +132,8 @@ class RanaRootDataItem(QgsDataItem):
                 self.tenants = get_user_tenants(user["sub"])
         except RanaFetchError as e:
             self.error_signals.fetch_error_occurred.emit(str(e), False)
+        except NetworkTimeoutError:
+            self.error_signals.request_timed_out.emit()
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
         self.communication.bar_info(f"Signed in to Rana")
@@ -272,8 +278,6 @@ class RanaRootDataItem(QgsDataItem):
         if not tenant_id:
             return False
 
-        self.refresh()
-
         try:
             providers = fetch_identity_providers(tenant_id)
             if providers is None:
@@ -293,14 +297,24 @@ class RanaRootDataItem(QgsDataItem):
                 self.communication.bar_info("Failed to sign in to Rana")
                 return False
 
-            settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
-            set_tenant_id(tenant_id)
+            user_validated = False
             try:
-                user = get_user_info()
+                user = get_user_info(authcfg_id)
+                user_validated = True
             except RanaFetchError as e:
                 self.communication.bar_info(f"Failed to sign in to Rana")
                 self.error_signals.fetch_error_occurred.emit(str(e), False)
                 return False
+            finally:
+                # This config is temporary until user info validates it. Never
+                # leave a failed config in QgsAuthManager or persist its ID.
+                if not user_validated:
+                    auth_manager = QgsApplication.authManager()
+                    if auth_manager is not None:
+                        auth_manager.removeAuthenticationConfig(authcfg_id)
+
+            settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
+            set_tenant_id(tenant_id)
             try:
                 self.tenants = get_user_tenants(user["sub"])
             except RanaFetchError as e:
@@ -323,6 +337,9 @@ class RanaRootDataItem(QgsDataItem):
                 )
                 return False
             return True
+        except NetworkTimeoutError:
+            self.communication.bar_error("The Rana login request timed out.")
+            return False
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return False

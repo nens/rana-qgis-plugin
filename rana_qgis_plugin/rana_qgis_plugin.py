@@ -13,6 +13,7 @@ from qgis.PyQt.QtCore import QEvent, QObject
 from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.auth import clear_credentials
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.data_items.gui_provider import RanaDataItemGuiProvider
 from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
@@ -64,6 +65,11 @@ class RanaDataItemProvider(QgsDataItemProvider):
         self.error_signals.connection_lost.connect(
             lambda: self.communication.bar_warn("No connection to Rana")
         )
+        self.error_signals.request_timed_out.connect(
+            lambda: self.communication.bar_error(
+                "A Rana request timed out. Check your network connection before retrying."
+            )
+        )
 
 
 class RanaQgisPlugin(QObject):
@@ -82,6 +88,10 @@ class RanaQgisPlugin(QObject):
 
     def initGui(self):
         initialize_settings()
+        # Do not resume a persisted OAuth session automatically at application
+        # startup. This also discards an auth config left by an interrupted
+        # login; the user starts authentication explicitly from the Browser.
+        clear_credentials()
         app = QgsApplication.instance()
         if app is not None:
             registry = app.dataItemProviderRegistry()

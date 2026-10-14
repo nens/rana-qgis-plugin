@@ -15,7 +15,7 @@ from qgis.PyQt.QtCore import (
     QFile,
     QIODevice,
     QJsonDocument,
-    QThread,
+    QTimer,
     QUrl,
 )
 from qgis.PyQt.QtGui import QImage
@@ -36,6 +36,7 @@ def _get_plugin_version() -> str:
 
 
 PLUGIN_USER_AGENT = f"rana_plugin/{_get_plugin_version()}"
+NETWORK_REQUEST_TIMEOUT_MS = 60_000
 
 CONNECTIVITY_ERRORS = {
     QNetworkReply.NetworkError.HostNotFoundError,
@@ -49,6 +50,12 @@ CONNECTIVITY_ERRORS = {
 
 class NetworkUnavailableError(Exception):
     """Raised when a request fails due to connectivity issues."""
+
+    pass
+
+
+class NetworkTimeoutError(NetworkUnavailableError):
+    """Raised when a network request exceeds its maximum duration."""
 
     pass
 
@@ -232,6 +239,8 @@ class NetworkManager(object):
         # events, so response processing must remain tied to this request.
         reply = self._reply
         event_loop = QEventLoop()
+        timeout_timer = QTimer()
+        timeout_timer.setSingleShot(True)
 
         def on_finished() -> None:
             # QNetworkReply is asynchronous, but callers of this class expect
@@ -244,20 +253,37 @@ class NetworkManager(object):
             # through that manager. Only handle a timeout for this reply.
             if timed_out_reply is None or timed_out_reply is reply:
                 self.request_timeout()
+                reply.abort()
+                event_loop.quit()
+
+        def on_hard_timeout() -> None:
+            self.request_timeout()
+            reply.abort()
+            event_loop.quit()
 
         reply.finished.connect(on_finished)
         self._network_manager.requestTimedOut.connect(on_timeout)
+        timeout_timer.timeout.connect(on_hard_timeout)
         try:
             if not reply.isFinished():
+                timeout_timer.start(NETWORK_REQUEST_TIMEOUT_MS)
                 # Process events until this reply finishes without allowing
                 # mouse/keyboard input to re-enter the initiating action.
                 # Other queued events may still be delivered by this loop.
                 event_loop.exec(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
         finally:
+            timeout_timer.stop()
+            timeout_timer.timeout.disconnect(on_hard_timeout)
             # These handlers are only needed while this request is pending.
             # Disconnect them even when event processing raises or is stopped.
             reply.finished.disconnect(on_finished)
             self._network_manager.requestTimedOut.disconnect(on_timeout)
+
+        if self._network_timeout:
+            reply.deleteLater()
+            raise NetworkTimeoutError(
+                f"Request timed out after {NETWORK_REQUEST_TIMEOUT_MS / 1000:g} seconds"
+            )
 
         description = None
         self.last_http_status = reply.attribute(
