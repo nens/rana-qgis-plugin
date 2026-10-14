@@ -120,7 +120,7 @@ from rana_qgis_plugin.workers.download import (
     SchematisationRevisionDownloadContext,
     SchematisationRevisionDownloader,
 )
-from rana_qgis_plugin.workers.styling import StyleUploadTask
+from rana_qgis_plugin.workers.styling import StyleUploadTask, discard_layer_sources
 from rana_qgis_plugin.workers.threedi_resolve import ScenarioResolveTask
 from rana_qgis_plugin.workers.upload import (
     ExistingUploadStatus,
@@ -1381,6 +1381,7 @@ class Loader(QObject):
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
             self.communication.bar_error("Could not start style upload.")
+            discard_layer_sources(items)
             return
         keys = list(
             {
@@ -1391,6 +1392,7 @@ class Loader(QObject):
         )
         if not self.acquire_sync_keys(keys):
             self.communication.bar_warn("A sync is already in progress.")
+            discard_layer_sources(items)
             return
 
         for item in items:
@@ -1399,6 +1401,7 @@ class Loader(QObject):
             layers = self.layers_for_keys([(item.project_id, item.descriptor_id)])
             if not self.verify_style_target(item, layers):
                 self.release_sync_keys(keys)
+                discard_layer_sources(items)
                 return None
         task = StyleUploadTask(items)
         task.rana_sync_keys = keys

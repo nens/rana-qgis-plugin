@@ -10,9 +10,10 @@ from qgis.core import QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsRast
 from qgis.PyQt.QtWidgets import QAction, QMenu
 
 from rana_qgis_plugin.icons import rana_icon
-from rana_qgis_plugin.layer_management.dirty_tracking import (
-    is_data_dirty,
-    is_style_dirty,
+from rana_qgis_plugin.layer_management.dirty_state import (
+    DataDirtyState,
+    data_dirty_state,
+    has_unsynced_style,
 )
 from rana_qgis_plugin.layer_management.layer_manager import (
     _GROUP_SCHEMATISATION_ID_KEY,
@@ -26,7 +27,14 @@ from rana_qgis_plugin.utils.data_models import (
     StyleUploadItem,
     UploadableLayerItem,
 )
-from rana_qgis_plugin.workers.styling import make_file_style_upload_item
+from rana_qgis_plugin.workers.style_layers import (
+    LiveLayerSource,
+    capture_layer_styles,
+)
+from rana_qgis_plugin.workers.styling import (
+    discard_layer_sources,
+    make_file_style_upload_item,
+)
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface
@@ -107,11 +115,10 @@ class LayerTreeMenuProvider:
         style_label = "Save style to Rana" if is_file_group else "Save styles to Rana"
 
         save_style = QAction(rana_icon, style_label, menu)
-        all_layers = self._collect_all_layers([node])
-        style_dirty = any(is_style_dirty(layer) for layer in all_layers)
+        all_layers = self.collect_all_layers([node])
+        style_dirty = any(has_unsynced_style(layer) for layer in all_layers)
         data_dirty = any(
-            isinstance(layer, QgsRasterLayer) or is_data_dirty(layer)
-            for layer in all_layers
+            data_dirty_state(layer) is not DataDirtyState.CLEAN for layer in all_layers
         )
         if locked or not style_dirty:
             save_style.setEnabled(False)
@@ -126,10 +133,15 @@ class LayerTreeMenuProvider:
             save_data.triggered.connect(lambda: self.save_data([node]))
         menu.addAction(save_data)
 
-    def save_style(self, groups: list[QgsLayerTreeGroup]) -> None:
-        """Collect file-level style inputs and delegate them to Loader."""
-        if self.loader is None:
-            return
+    def capture_style_items(
+        self, groups: list[QgsLayerTreeGroup], for_close: bool = False
+    ) -> list[StyleUploadItem]:
+        """Extract file-level style upload inputs from still-live groups.
+
+        ``for_close`` snapshots each group's styles to disk instead of keeping
+        references to the live layers. Use it when the layers are about to be
+        removed from the project, since the upload task runs after that.
+        """
         items: list[StyleUploadItem] = []
         seen: set[tuple[str, str]] = set()
         for group, ref, layer in self.iterate_file_groups(groups):
@@ -143,23 +155,43 @@ class LayerTreeMenuProvider:
                 if isinstance(layer, QgsRasterLayer)
                 else DataType.vector
             )
+            group_layers = self.collect_all_layers([group])
+            layer_source = (
+                capture_layer_styles(group_layers)
+                if for_close
+                else LiveLayerSource(group_layers)
+            )
             items.append(
                 make_file_style_upload_item(
                     ref.descriptor_id,
                     data_type,
                     layer.source().split("|", 1)[0],
                     f"file {ref.file_id}",
+                    layer_source,
                     project_id=ref.project_id,
                 )
             )
             seen.add(key)
+        return items
+
+    def dispatch_style_items(self, items: list[StyleUploadItem]) -> None:
+        """Delegate previously-captured style upload inputs to Loader."""
+        if self.loader is None:
+            discard_layer_sources(items)
+            return
         self.loader.upload_styles(items)
 
-    def save_data(self, groups: list[QgsLayerTreeGroup]) -> None:
-        """Collect linked files and delegate upload orchestration to Loader."""
+    def save_style(self, groups: list[QgsLayerTreeGroup]) -> None:
+        """Collect file-level style inputs and delegate them to Loader."""
         if self.loader is None:
             return
-        items = []
+        self.dispatch_style_items(self.capture_style_items(groups))
+
+    def capture_data_items(
+        self, groups: list[QgsLayerTreeGroup]
+    ) -> list[UploadableLayerItem]:
+        """Extract linked-file upload inputs from still-live groups."""
+        items: list[UploadableLayerItem] = []
         seen: set[tuple[str, str]] = set()
         for group, ref, layer in self.iterate_file_groups(groups):
             if ref is None:
@@ -176,7 +208,19 @@ class LayerTreeMenuProvider:
                 )
             )
             seen.add(key)
+        return items
+
+    def dispatch_data_items(self, items: list[UploadableLayerItem]) -> None:
+        """Delegate previously-captured linked-file uploads to Loader."""
+        if self.loader is None:
+            return
         self.loader.upload_existing_files(items)
+
+    def save_data(self, groups: list[QgsLayerTreeGroup]) -> None:
+        """Collect linked files and delegate upload orchestration to Loader."""
+        if self.loader is None:
+            return
+        self.dispatch_data_items(self.capture_data_items(groups))
 
     def save_revision(self, groups: list[QgsLayerTreeGroup]) -> None:
         """Prepare the selected schematisation revision for upload."""
@@ -230,7 +274,7 @@ class LayerTreeMenuProvider:
         ]
 
     @staticmethod
-    def _collect_all_layers(groups: list[QgsLayerTreeGroup]) -> list[QgsMapLayer]:
+    def collect_all_layers(groups: list[QgsLayerTreeGroup]) -> list[QgsMapLayer]:
         """Return every map layer under the given groups (recursive)."""
         layers: list[QgsMapLayer] = []
         for group in groups:
@@ -240,7 +284,7 @@ class LayerTreeMenuProvider:
                     if layer is not None:
                         layers.append(layer)
                 elif isinstance(child, QgsLayerTreeGroup):
-                    layers.extend(LayerTreeMenuProvider._collect_all_layers([child]))
+                    layers.extend(LayerTreeMenuProvider.collect_all_layers([child]))
         return layers
 
     def _is_rana_group(self, group: QgsLayerTreeGroup) -> bool:
