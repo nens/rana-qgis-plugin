@@ -63,6 +63,7 @@ initialisation.
 OAuth2 config creation writes credentials/tokens into QGIS Auth Manager; only
 the config ID is persisted to Rana settings after user-info validation succeeds.
 
+
 ## Logout
 
 ```mermaid

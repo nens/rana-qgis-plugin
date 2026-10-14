@@ -13,6 +13,7 @@ from qgis.PyQt.QtCore import QEvent, QObject
 from qgis.PyQt.QtWidgets import QApplication
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.auth import clear_credentials
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.data_items.gui_provider import RanaDataItemGuiProvider
 from rana_qgis_plugin.data_items.rana_item import RanaRootDataItem
