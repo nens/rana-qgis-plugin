@@ -203,10 +203,13 @@ def configure_rana_auth(qgis_application):
 
 @pytest.fixture(scope="function")
 def plugin(qgis_iface, qgis_application):
-    configure_rana_auth(qgis_application)
-
     plugin = RanaQgisPlugin(qgis_iface)
     plugin.initGui()
+
+    # The plugin startup deliberately clears persisted Rana credentials so it
+    # never resumes OAuth without user action. E2E tests opt in to test auth
+    # explicitly after startup cleanup and before creating the Browser model.
+    configure_rana_auth(qgis_application)
 
     browser_model = QgsBrowserGuiModel()
     browser_model.initialize()

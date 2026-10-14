@@ -101,7 +101,7 @@ def test_refocus_not_triggered_by_settings_dialog(plugin, qtbot, qgis_applicatio
         mock_refresh.assert_not_called()
 
 
-def test_select_projects(plugin, qtbot):
+def test_select_projects(plugin, qtbot, authenticated):
     import uuid
 
     names = ["test_project_" + str(uuid.uuid4()) for _ in range(3)]
@@ -123,6 +123,7 @@ def test_select_projects(plugin, qtbot):
             None,
         )
         assert rana_index is not None, "Rana item not found in browser tree"
+        plugin.rana_root_item.refresh()
         click_tree_item(tree, rana_index, qtbot)
         qtbot.waitUntil(
             lambda: all(
