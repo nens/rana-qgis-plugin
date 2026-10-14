@@ -4,6 +4,7 @@ import json
 from typing import Optional
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
+from qgis.PyQt.QtNetwork import QHostAddress, QTcpServer
 
 from rana_qgis_plugin.constant import (
     COGNITO_AUTHENTICATION_ENDPOINT,
@@ -23,6 +24,8 @@ from rana_qgis_plugin.utils.settings import (
     set_cognito_client_id,
     set_cognito_client_id_native,
 )
+
+OAUTH_REDIRECT_PORT = 7070
 
 
 def get_authcfg_id():
@@ -66,6 +69,33 @@ def active_tenant() -> Optional[str]:
     return QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/tenant")
 
 
+def release_oauth_session(authcfg_id: str) -> None:
+    """Drop the cached OAuth2 state for an auth config.
+
+    QgsAuthManager caches a QgsO2 object per auth config. That object owns the
+    local redirect server bound to OAUTH_REDIRECT_PORT. Removing the auth
+    config alone does not destroy it, so an abandoned authorization (user
+    closed the browser) keeps the port bound and every later login fails
+    before a browser is opened. Clearing the cached config destroys the QgsO2
+    object and releases the listener.
+    """
+    auth_manager = QgsApplication.authManager()
+    if auth_manager is None:
+        return
+    auth_manager.clearCachedConfig(authcfg_id)
+
+
+def oauth_redirect_port_available() -> bool:
+    """Return True if the OAuth redirect port can be bound right now."""
+    server = QTcpServer()
+    try:
+        return server.listen(
+            QHostAddress(QHostAddress.SpecialAddress.LocalHost), OAUTH_REDIRECT_PORT
+        )
+    finally:
+        server.close()
+
+
 def clear_credentials(delete_config: bool = True) -> None:
     """Remove the stored authcfg and transition to logged-out state.
 
@@ -79,6 +109,7 @@ def clear_credentials(delete_config: bool = True) -> None:
         return
 
     if delete_config:
+        release_oauth_session(authcfg_id)
         auth_manager = QgsApplication.authManager()
         if auth_manager is not None:
             auth_manager.removeAuthenticationConfig(authcfg_id)
@@ -170,7 +201,7 @@ def create_oauth2_config(provider: dict) -> Optional[str]:
         "clientId": client_id,
         "grantFlow": 3,
         "redirectHost": "localhost",
-        "redirectPort": 7070,
+        "redirectPort": OAUTH_REDIRECT_PORT,
         "redirectUrl": "rana-callback",
         "refreshTokenUrl": COGNITO_TOKEN_ENDPOINT,
         "requestUrl": COGNITO_AUTHENTICATION_ENDPOINT,

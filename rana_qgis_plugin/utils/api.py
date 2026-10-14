@@ -151,15 +151,29 @@ def get_frontend_settings() -> dict:
         raise RanaFetchError(error or "", url, {})
 
 
-def get_user_info() -> UserInfo:
-    authcfg_id = get_authcfg_id()
+def get_user_info(authcfg_id: Optional[str] = None) -> UserInfo:
+    if authcfg_id is None:
+        authcfg_id = get_authcfg_id()
     url = COGNITO_USER_INFO_ENDPOINT
 
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
-    if error:
-        raise RanaFetchError(error, url, {})
-    return network_manager.content
+    if not status or error:
+        raise RanaFetchError(error or "Unable to validate Rana login", url, {})
+    user = network_manager.content
+    if not isinstance(user, dict) or not user.get("sub"):
+        raise RanaFetchError("Invalid user information", url, {})
+    if not all(
+        isinstance(user.get(field), str)
+        for field in ("given_name", "family_name", "email")
+    ):
+        raise RanaFetchError("Invalid user information", url, {})
+    return UserInfo(
+        sub=user["sub"],
+        given_name=user["given_name"],
+        family_name=user["family_name"],
+        email=user["email"],
+    )
 
 
 def get_user_tenants(user_id: str) -> list:

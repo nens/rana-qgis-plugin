@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional, cast
 
 from qgis.core import (
     Qgis,
+    QgsApplication,
     QgsDataItem,
     QgsErrorItem,
     QgsSettings,
@@ -25,11 +26,14 @@ from qgis.PyQt.QtWidgets import (
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.auth import (
+    OAUTH_REDIRECT_PORT,
     active_tenant,
     clear_credentials,
     create_oauth2_config,
     fetch_identity_providers,
     is_authenticated,
+    oauth_redirect_port_available,
+    release_oauth_session,
     reset_authentication_settings,
 )
 from rana_qgis_plugin.constant import (
@@ -40,7 +44,10 @@ from rana_qgis_plugin.constant import (
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
 from rana_qgis_plugin.icons import refresh_icon
-from rana_qgis_plugin.network_manager import NetworkUnavailableError
+from rana_qgis_plugin.network_manager import (
+    NetworkTimeoutError,
+    NetworkUnavailableError,
+)
 from rana_qgis_plugin.utils.api import (
     RanaFetchError,
     RanaPostError,
@@ -91,17 +98,23 @@ class RanaRootDataItem(QgsDataItem):
         )
         self.tenants: Optional[list] = None
         self.update_display()
-        if is_authenticated():
-            self.restore_session()
-        else:
+        if not is_authenticated():
+            # Mark as populated so QGIS does not try to fetch children while
+            # logged out. When authenticated the item stays NotPopulated, so
+            # expanding it triggers createChildren() and loads the projects.
             self.setState(Qgis.BrowserItemState.Populated)
 
     def createChildren(self) -> list:
         """Fetch and return project items. Called by QGIS in a background thread."""
         if not is_authenticated():
             return []
+        if self.tenants is None:
+            self.restore_session()
         try:
             response = get_tenant_projects()
+        except NetworkTimeoutError:
+            self.error_signals.request_timed_out.emit()
+            return [QgsErrorItem(self, "Request timed out", self.path())]
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return [QgsErrorItem(self, "No connection to Rana", self.path())]
@@ -121,17 +134,21 @@ class RanaRootDataItem(QgsDataItem):
         ]
 
     def restore_session(self) -> None:
-        """Silently restore tenant list from a previous authenticated session."""
+        """Silently restore the tenant list for an existing authenticated session.
+
+        Called lazily when children are first fetched, not at startup, so the
+        plugin never performs a network request while QGIS is initialising.
+        """
         try:
             user = get_user_info()
             if user is not None:
                 self.tenants = get_user_tenants(user["sub"])
         except RanaFetchError as e:
             self.error_signals.fetch_error_occurred.emit(str(e), False)
+        except NetworkTimeoutError:
+            self.error_signals.request_timed_out.emit()
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
-        self.communication.bar_info(f"Signed in to Rana")
-        self.update_display()
 
     def update_display(self) -> None:
         if not is_authenticated():
@@ -272,8 +289,6 @@ class RanaRootDataItem(QgsDataItem):
         if not tenant_id:
             return False
 
-        self.refresh()
-
         try:
             providers = fetch_identity_providers(tenant_id)
             if providers is None:
@@ -287,20 +302,44 @@ class RanaRootDataItem(QgsDataItem):
                 return False
             self.communication.clear_message_bar()
             self.communication.bar_info("Signing in to Rana...")
+            if not oauth_redirect_port_available():
+                self.communication.log_warn(
+                    f"Cannot start Rana login: the OAuth redirect port "
+                    f"{OAUTH_REDIRECT_PORT} is already in use."
+                )
+                self.communication.show_error(
+                    "The Rana login page cannot be opened right now. "
+                    "Wait a while or restart QGIS to try again."
+                )
+                return False
             authcfg_id = create_oauth2_config(provider)
 
             if not authcfg_id:
                 self.communication.bar_info("Failed to sign in to Rana")
                 return False
 
-            settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
-            set_tenant_id(tenant_id)
+            user_validated = False
             try:
-                user = get_user_info()
+                user = get_user_info(authcfg_id)
+                user_validated = True
             except RanaFetchError as e:
                 self.communication.bar_info(f"Failed to sign in to Rana")
                 self.error_signals.fetch_error_occurred.emit(str(e), False)
                 return False
+            finally:
+                # This config is temporary until user info validates it. Never
+                # leave a failed config in QgsAuthManager or persist its ID.
+                # Releasing the cached OAuth2 session first frees the local
+                # redirect listener, so an abandoned browser login does not
+                # block the next attempt.
+                if not user_validated:
+                    release_oauth_session(authcfg_id)
+                    auth_manager = QgsApplication.authManager()
+                    if auth_manager is not None:
+                        auth_manager.removeAuthenticationConfig(authcfg_id)
+
+            settings.setValue(RANA_AUTHCFG_ENTRY, authcfg_id)
+            set_tenant_id(tenant_id)
             try:
                 self.tenants = get_user_tenants(user["sub"])
             except RanaFetchError as e:
@@ -323,6 +362,9 @@ class RanaRootDataItem(QgsDataItem):
                 )
                 return False
             return True
+        except NetworkTimeoutError:
+            self.communication.bar_error("The Rana login request timed out.")
+            return False
         except NetworkUnavailableError:
             self.error_signals.connection_lost.emit()
             return False

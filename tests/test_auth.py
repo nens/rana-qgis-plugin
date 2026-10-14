@@ -1,11 +1,15 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from qgis.PyQt.QtNetwork import QHostAddress, QTcpServer
 
 from rana_qgis_plugin.auth import (
+    OAUTH_REDIRECT_PORT,
     clear_credentials,
     create_oauth2_config,
     is_authenticated,
+    oauth_redirect_port_available,
+    release_oauth_session,
     reset_authentication_settings,
 )
 from rana_qgis_plugin.constant import (
@@ -106,6 +110,43 @@ def test_clear_credentials_clears_authcfg():
 
     auth_mgr.removeAuthenticationConfig.assert_called_once_with("abc123")
     settings.remove.assert_called_once_with(RANA_AUTHCFG_ENTRY)
+
+
+def test_clear_credentials_releases_oauth_listener():
+    """Logout drops the cached OAuth2 session so the redirect port is freed."""
+    settings = make_mock_settings(base_url="https://example.com", authcfg_id="abc123")
+    auth_mgr = make_mock_auth_manager(authcfg_id="abc123", authcfg_exists=True)
+
+    with (
+        patch(_SETTINGS, return_value=settings),
+        patch(_AUTH_MGR, return_value=auth_mgr),
+    ):
+        clear_credentials()
+
+    auth_mgr.clearCachedConfig.assert_called_once_with("abc123")
+
+
+def test_release_oauth_session_clears_cached_config():
+    auth_mgr = make_mock_auth_manager(authcfg_id="abc123", authcfg_exists=True)
+
+    with patch(_AUTH_MGR, return_value=auth_mgr):
+        release_oauth_session("abc123")
+
+    auth_mgr.clearCachedConfig.assert_called_once_with("abc123")
+
+
+def test_oauth_redirect_port_available_detects_occupied_port():
+    """The port check reports False while the redirect port is bound."""
+    blocker = QTcpServer()
+    assert blocker.listen(
+        QHostAddress(QHostAddress.SpecialAddress.LocalHost), OAUTH_REDIRECT_PORT
+    ), "could not bind the redirect port for this test"
+    try:
+        assert oauth_redirect_port_available() is False
+    finally:
+        blocker.close()
+
+    assert oauth_redirect_port_available() is True
 
 
 def test_clear_credentials_when_already_signed_out_is_noop():

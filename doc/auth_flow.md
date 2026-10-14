@@ -6,9 +6,12 @@ This living document describes the auth lifecycle for the Rana Browser entrypoin
 
 Auth primitives live in `rana_qgis_plugin/auth.py` as a module of plain functions. The `RanaRootDataItem` owns prompts, UI messages, and orchestration. All persistent state is stored in `QgsSettings` and `QgsAuthManager` — there is no in-memory auth state object.
 
-## Login: new user (first time or after logout)
+## Login
 
-The user has no stored tenant or authcfg. They must pick a tenant and authentication method.
+Login is always initiated by the user from the Rana Browser context menu. If a
+tenant is already stored (for example, from a previous session), it is reused;
+otherwise the user is prompted for an organisation. The user then chooses an
+authentication method.
 
 ```mermaid
 sequenceDiagram
@@ -20,48 +23,45 @@ sequenceDiagram
     Note over User,Browser: Triggered from the Rana tree context menu (right-click -> "Login")
     User->>Browser: choose Login (context menu)
     Browser->>Auth: login()
-    Auth->>User: prompt: choose tenant
-    User-->>Auth: tenant_id
+    alt tenant stored
+        Auth->>Auth: reuse stored tenant
+    else no tenant stored
+        Auth->>User: prompt: choose tenant
+        User-->>Auth: tenant_id
+    end
     Auth->>Auth: fetch_identity_providers()
     Auth-->>User: prompt: choose provider (SSO / password)
     User-->>Auth: selected provider
     Auth->>AuthMgr: create OAuth2 config (persistToken=true)
     AuthMgr-->>Auth: authcfg_id
-    Auth->>Auth: persist tenant + authcfg_id to settings
-    Browser->>Browser: get_user_info(), get_user_tenants()
+    Browser->>Browser: get_user_info(authcfg_id) validates temporary config
+    Auth->>Auth: persist tenant + authcfg_id after validation
+    Browser->>Browser: get_user_tenants()
     Browser->>Browser: setup_3di_auth(user_id)
-    Browser->>Browser: refresh UI
+    Browser->>Browser: update display and refresh in finally
 ```
 
-## Login: returning user (after restart)
+## Startup after restart
 
-Tenant and authcfg ID are already stored. QGIS Auth Manager still holds the token (persisted). No user interaction needed.
+Startup preserves an existing session. The user stays logged in across QGIS
+restarts and plugin reloads until an explicit logout (or a backend URL change,
+see below).
 
-```mermaid
-sequenceDiagram
-    participant Browser as RanaRootDataItem
-    participant Auth as auth module
-    participant AuthMgr as QgsAuthManager
+`RanaQgisPlugin.initGui()` does not touch the stored auth config and performs no
+network request. `RanaRootDataItem.__init__()` does not call `restore_session()`,
+so startup never initiates authentication or launches a browser. An interrupted
+login is never resumed automatically: login persists the authcfg reference only
+after `get_user_info()` validated it, so an interrupted login leaves no stored
+reference to resume.
 
-    Browser->>Auth: is_authenticated()
-    Auth->>Auth: check Rana/base_url set
-    Auth->>Auth: check Rana/authcfg ID in settings
-    Auth->>AuthMgr: resolve authcfg_id
-    AuthMgr-->>Auth: config found
-    Auth-->>Browser: True — UI shows authenticated actions
+The session is restored lazily instead. The first time `createChildren()` runs
+for an authenticated user with no cached tenant list, it calls
+`restore_session()` to fetch user info and tenants. This keeps the "Switch
+organisation" action available after a restart without doing work during QGIS
+initialisation.
 
-    Note over Browser,Auth: On startup RanaRootDataItem.__init__ calls restore_session()
-    Browser->>Browser: get_user_info()
-    Browser->>Browser: get_user_tenants(user_id)
-    Browser->>Browser: reuse existing 3Di auth config
-    Browser->>Browser: silently populate UI (no prompts)
-```
-
-Key notes:
-- On restart, if all three conditions pass, the user is immediately signed in — no prompts shown.
-- __init__ calls _restore_session() which fetches user info and the cached tenant list (get_user_info(), get_user_tenants()) so the UI is populated silently.
-- If the authcfg ID is in settings but not found in `QgsAuthManager` (stale), it is removed from settings automatically and the user is treated as signed out (see `is_authenticated()` contract below).
-- OAuth2 config creation writes secrets/tokens into QGIS Auth Manager; only the config ID is persisted to Rana settings.
+OAuth2 config creation writes credentials/tokens into QGIS Auth Manager; only
+the config ID is persisted to Rana settings after user-info validation succeeds.
 
 ## Logout
 
@@ -80,7 +80,8 @@ sequenceDiagram
     Auth-->>Browser: done — UI shows logged-out actions
 ```
 
-RanaRootDataItem.logout() calls auth.clear_credentials(), then `remove_3di_auth()`. This removes both QGIS auth configurations and their stored settings pointers.
+`RanaRootDataItem.logout()` calls `clear_credentials()`, then `remove_3di_auth()`.
+This removes both QGIS auth configurations and their stored settings pointers.
 
 ## HCC authentication
 
@@ -88,7 +89,7 @@ After a successful Rana login, the item fetches the user's 3Di personal API key 
 `get_threedi_personal_api_key(user_id)`. `setup_3di_auth()` stores it in a QGIS
 Auth Manager Basic configuration using username `__key__`, and persists only its ID
 under `threedi/authcfg`. Existing 3Di credentials are reused when available.
-Logout removes this configuration.
+Logout removes the 3Di configuration and its settings pointer.
 
 
 ## Tenant switch (with rollback)
@@ -121,7 +122,7 @@ sequenceDiagram
 ```
 
 Notes:
-- The tenant list presented in prompt_switch_tenant() is the cached self._tenants fetched during login/restore — it is not fetched fresh during switch_tenant().
+- The tenant list presented in `prompt_switch_tenant()` is the cached `self.tenants` fetched during login; it is not fetched fresh during `switch_tenant()`.
 - Flow order: prompt happens before logout; logout only occurs after a new tenant is chosen. If the user cancels or re-selects the current tenant, no logout occurs.
 - Rollback rule: if re-login for the new tenant fails at any step, the prior authcfg ID and tenant MUST be restored in settings so the user is not left logged-out.
 
@@ -134,15 +135,47 @@ Notes:
 
 If an authcfg ID is present in settings but does NOT resolve in `QgsAuthManager` (stale pointer), the implementation MUST automatically remove the stored ID from settings. No network probe is required — resolution against `QgsAuthManager` is sufficient.
 
+This contract also covers startup: a stored reference that no longer resolves in
+`QgsAuthManager` is cleaned up and the user is treated as signed out.
+
+This check only validates that a config reference exists; it does not validate
+that the OAuth token is usable. Login validates a newly created config with
+`get_user_info(authcfg_id)` before persisting the reference.
+
+## Network request timeout
+
+`NetworkManager.process_request()` applies a 60-second timeout while waiting for
+the network reply. It aborts the pending reply and raises
+`NetworkTimeoutError`; login reports a timeout through the message bar.
+
+## Abandoned login and the redirect listener
+
+QGIS caches a `QgsO2` object per auth config, and that object owns the local
+redirect server bound to `OAUTH_REDIRECT_PORT` (7070). If the user closes the
+browser without completing authorization, removing the auth config is not
+enough: the cached object keeps the port bound, and the next login fails before
+a browser is opened (typically a `userInfo` transfer error with an empty server
+reply).
+
+Therefore any path that discards a Rana auth config MUST first call
+`release_oauth_session(authcfg_id)`, which calls
+`QgsAuthManager.clearCachedConfig()` and destroys the `QgsO2` object. This
+applies to the failed-login cleanup in `login()` and to `clear_credentials()`.
+
+As a safeguard, `login()` calls `oauth_redirect_port_available()` before
+creating an OAuth config. If the port is held by something outside this plugin
+(for example a second QGIS instance), login stops with an explanatory message
+instead of failing cryptically.
+
 ## Security: URL-change-forces-logout
 
-In the Settings dialog open_settings() workflow the following happens:
+In the Settings dialog `open_settings()` workflow the following happens:
 
 1. Dialog opens
-2. On Accepted and dlg.url_changed() is True:
+2. On Accepted and `dlg.url_changed()` is True:
    - Remove stored tenant entry (`RANA_TENANT_ENTRY`)
    - Call `clear_credentials()` (removes authcfg from QGIS Auth Manager)
-   - Reset `_tenants = None`
+   - Reset `self.tenants = None`
    - Update tooltip and refresh UI
    - If the user WAS authenticated before opening settings: automatically trigger `self.login()` to start a fresh login flow
 
@@ -163,4 +196,4 @@ These stored client IDs are then read by `create_oauth2_config()` when building 
 
 ## When to update this document
 
-Any change to login sequences, the `is_authenticated()` contract, rollback behaviour, or the URL-change rule MUST be reflected here before merging.
+Any change to login sequences, startup behavior, the `is_authenticated()` contract, timeout coverage, rollback behaviour, or the URL-change rule MUST be reflected here before merging.

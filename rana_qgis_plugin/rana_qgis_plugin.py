@@ -64,6 +64,11 @@ class RanaDataItemProvider(QgsDataItemProvider):
         self.error_signals.connection_lost.connect(
             lambda: self.communication.bar_warn("No connection to Rana")
         )
+        self.error_signals.request_timed_out.connect(
+            lambda: self.communication.bar_error(
+                "A Rana request timed out. Check your network connection before retrying."
+            )
+        )
 
 
 class RanaQgisPlugin(QObject):
@@ -82,6 +87,10 @@ class RanaQgisPlugin(QObject):
 
     def initGui(self):
         initialize_settings()
+        # A persisted auth config is only stored after login validated it, so
+        # it is kept across restarts. Startup performs no network request and
+        # never starts authentication by itself; the session is restored lazily
+        # when the Browser item is expanded.
         app = QgsApplication.instance()
         if app is not None:
             registry = app.dataItemProviderRegistry()

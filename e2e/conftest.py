@@ -203,10 +203,12 @@ def configure_rana_auth(qgis_application):
 
 @pytest.fixture(scope="function")
 def plugin(qgis_iface, qgis_application):
-    configure_rana_auth(qgis_application)
-
     plugin = RanaQgisPlugin(qgis_iface)
     plugin.initGui()
+
+    # Configure test auth after initGui() and before creating the Browser
+    # model, so the root item sees a ready session when it is constructed.
+    configure_rana_auth(qgis_application)
 
     browser_model = QgsBrowserGuiModel()
     browser_model.initialize()
