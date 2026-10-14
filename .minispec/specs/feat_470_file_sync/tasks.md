@@ -20,7 +20,7 @@ tests; UI paths require manual verification as noted below.
 
 ### Foundation
 
-#### Task 1: Emit a Loader signal when dirty flags are cleared
+#### Task 1: Add Loader sync-completion notification (superseded)
 - **Estimate:** ~35 lines
 - **Files:** `rana_qgis_plugin/loader.py`, `tests/loader/test_upload.py`
 - **Description:** Add `Loader.rana_sync_completed = pyqtSignal(list)`. In
@@ -37,17 +37,24 @@ tests; UI paths require manual verification as noted below.
 
 ### Core Implementation
 
-#### Task 2: Add layer-level dirty indicators
-- **Estimate:** ~130 lines (implementation and tests)
+#### Task 2: Use native property notifications for layer-level indicators
+- **Estimate:** ~150 lines (implementation, tests, and signal cleanup)
 - **Files:** `rana_qgis_plugin/layer_management/indicator_manager.py` (new),
-  `tests/layer_management/test_indicator_manager.py` (new)
+  `tests/layer_management/test_indicator_manager.py` (new),
+  `rana_qgis_plugin/loader.py`, `tests/loader/test_upload.py`
 - **Description:** Implement an `IndicatorManager` that attaches one generic
   `QgsLayerTreeViewIndicator` to dirty Rana-linked layer nodes. Initialize
   tracking for layers added to the project while the plugin is running, and
-  listen to `afterCommitChanges` and `styleChanged` so newly dirty layers are
-  reflected promptly. Scanning layers already present when the plugin starts
-  is not required. Use a QGIS theme icon rather than adding a new asset.
-- **Depends on:** None
+  listen to `QgsMapLayer.customPropertyChanged(key)` for the existing dirty
+  property keys. Do not duplicate listeners to `afterCommitChanges` or
+  `styleChanged`: `dirty_tracking.py` already owns those signals and writes
+  the properties. Property removal after sync uses the same notification.
+  Remove the now-redundant `Loader.rana_sync_completed` signal added in the
+  superseded Task 1 implementation. Scanning layers already present when the
+  plugin starts is not required. Use a QGIS theme icon rather than adding a
+  new asset.
+- **Depends on:** Task 1 (remove its superseded signal while completing this
+  task)
 - **Acceptance:** A linked vector layer receives a badge after a committed
   data edit or style change; a clean or non-Rana layer does not. A linked layer
   added after the manager starts is tracked and receives its badge when dirty.
@@ -63,14 +70,15 @@ tests; UI paths require manual verification as noted below.
   retain group badges correctly as individual layers become clean/dirty;
   remove indicators when associated layer/group nodes are removed; clean up
   all indicators and signal connections when the manager disconnects. Connect
-  to `Loader.rana_sync_completed` and re-evaluate affected layers/groups.
-- **Depends on:** Tasks 1 and 2
+  to the native `customPropertyChanged` signal for dirty-flag removals and
+  re-evaluate affected layers/groups.
+- **Depends on:** Task 2
 - **Acceptance:** A dirty child marks its ancestors; cleaning one of multiple
   dirty children does not clear the aggregate badge prematurely; cleaning the
   last dirty child clears it. Removed nodes and plugin teardown leave no
   registered indicators or active manager connections.
 - **Evidence:** Focused tests cover aggregation, mixed dirty/clean descendants,
-  sync completion, node removal, and disconnect cleanup.
+  dirty-property removal, node removal, and disconnect cleanup.
 
 #### Task 4: Collect dirty file groups for close-time sync
 - **Estimate:** ~90 lines (implementation and tests)
@@ -132,9 +140,10 @@ tests; UI paths require manual verification as noted below.
 
 ## Dependencies & Parallel Opportunities
 
-- Tasks 1, 2, and 4 touch separate code areas and can be implemented in
-  parallel.
-- Task 3 depends on Task 1's signal and Task 2's manager foundation.
+- Task 1's Loader-signal approach is superseded; Task 2 removes that signal
+  while implementing the layer-level indicator using property notifications.
+- Tasks 2 and 4 touch separate code areas and can be implemented in parallel.
+- Task 3 depends on Task 2's indicator-manager foundation.
 - Task 5 depends on Task 4's dirty-group scan.
 - Task 6 integrates the finished indicator manager and close-sync prompt, so
   it depends on Tasks 3 and 5.
@@ -143,8 +152,8 @@ tests; UI paths require manual verification as noted below.
 
 ## Notes
 
-- The `Loader.rana_sync_completed` signal is for indicator updates only; the
-  close-time prompt continues to use existing fire-and-forget save methods.
+- Dirty indicators rely on `QgsMapLayer.customPropertyChanged` for both dirty
+  property additions and removals; no new Loader signal is needed.
 - Schematisation dirty tracking and individual layer-removal warnings remain
   out of scope.
 - The close warning cannot cancel project clearing. “Continue without
@@ -152,8 +161,8 @@ tests; UI paths require manual verification as noted below.
 
 ## Progress
 
-- [x] Task 1: Emit a Loader signal when dirty flags are cleared
-- [ ] Task 2: Add layer-level dirty indicators
+- [x] Task 1: Add Loader sync-completion notification (superseded)
+- [x] Task 2: Use native property notifications for layer-level indicators
 - [ ] Task 3: Aggregate indicators and keep their lifecycle current
 - [ ] Task 4: Collect dirty file groups for close-time sync
 - [ ] Task 5: Prompt and dispatch sync before project clearing

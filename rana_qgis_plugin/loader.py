@@ -155,7 +155,6 @@ class Loader(QObject):
     avatar_updated = pyqtSignal(str, QPixmap)
     simulations_initialized = pyqtSignal(list)
     simulation_initialization_failed = pyqtSignal(str)
-    rana_sync_completed = pyqtSignal(list)
     item_renamed = pyqtSignal(
         str, str, str, bool
     )  # old_path, new_path, project_id, is_folder
@@ -1517,10 +1516,8 @@ class Loader(QObject):
         self, task, dirty_property: str, message: str, failures: list
     ) -> None:
         if not failures and not task.isCanceled():
-            layers = self.layers_for_keys(task.rana_sync_keys)
-            for layer in layers:
+            for layer in self.layers_for_keys(task.rana_sync_keys):
                 clear_dirty(layer, dirty_property)
-            self.rana_sync_completed.emit(layers)
         self.release_sync_keys(task.rana_sync_keys)
         self.communication.clear_message_bar()
         self.communication.bar_info(message)
