@@ -107,7 +107,7 @@ class LayerTreeMenuProvider:
         style_label = "Save style to Rana" if is_file_group else "Save styles to Rana"
 
         save_style = QAction(rana_icon, style_label, menu)
-        all_layers = self._collect_all_layers([node])
+        all_layers = self.collect_all_layers([node])
         style_dirty = any(is_style_dirty(layer) for layer in all_layers)
         data_dirty = any(
             isinstance(layer, QgsRasterLayer) or is_data_dirty(layer)
@@ -230,7 +230,7 @@ class LayerTreeMenuProvider:
         ]
 
     @staticmethod
-    def _collect_all_layers(groups: list[QgsLayerTreeGroup]) -> list[QgsMapLayer]:
+    def collect_all_layers(groups: list[QgsLayerTreeGroup]) -> list[QgsMapLayer]:
         """Return every map layer under the given groups (recursive)."""
         layers: list[QgsMapLayer] = []
         for group in groups:
@@ -240,7 +240,7 @@ class LayerTreeMenuProvider:
                     if layer is not None:
                         layers.append(layer)
                 elif isinstance(child, QgsLayerTreeGroup):
-                    layers.extend(LayerTreeMenuProvider._collect_all_layers([child]))
+                    layers.extend(LayerTreeMenuProvider.collect_all_layers([child]))
         return layers
 
     def _is_rana_group(self, group: QgsLayerTreeGroup) -> bool:

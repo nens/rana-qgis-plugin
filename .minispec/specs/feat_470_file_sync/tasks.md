@@ -164,6 +164,6 @@ tests; UI paths require manual verification as noted below.
 - [x] Task 1: Add Loader sync-completion notification (superseded)
 - [x] Task 2: Use native property notifications for layer-level indicators
 - [x] Task 3: Aggregate indicators and keep their lifecycle current
-- [ ] Task 4: Collect dirty file groups for close-time sync
+- [x] Task 4: Collect dirty file groups for close-time sync
 - [ ] Task 5: Prompt and dispatch sync before project clearing
 - [ ] Task 6: Wire managers into plugin lifecycle and verify the feature
