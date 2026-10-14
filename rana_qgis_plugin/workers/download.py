@@ -36,7 +36,11 @@ from rana_qgis_plugin.utils.local_paths import (
     get_local_results_dir,
     get_safe_local_path,
 )
-from rana_qgis_plugin.utils.qgis import rescale_qml_file
+from rana_qgis_plugin.utils.qgis import (
+    get_qml_path_for_raster,
+    rescale_qml_file,
+    strip_rana_properties_from_qml,
+)
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
 from rana_qgis_plugin.utils.zip import extract_flat
@@ -318,18 +322,35 @@ class RanaFileDownloader(RanaDownloader):
                 stream = io.BytesIO(qml_zip_content)
                 if zipfile.is_zipfile(stream):
                     with zipfile.ZipFile(stream, "r") as zip_file:
-                        extract_flat(zip_file, self.download_context.local_dir)
+                        extracted = extract_flat(
+                            zip_file, self.download_context.local_dir
+                        )
+                    self._strip_rana_properties(extracted)
 
         # For rasters, handle QML file matching and physical_quantity.qml renaming
         if self.file["data_type"] == "raster":
             self._handle_raster_qml_files()
 
+    @staticmethod
+    def _strip_rana_properties(extracted_paths: list[Path]) -> None:
+        """Remove Rana bookkeeping from freshly downloaded QML styles.
+
+        A style uploaded while its layer was dirty can carry `rana/` custom
+        properties, which QGIS would re-apply to every layer that later loads
+        it. Stripping here means the file is already safe by the time it is
+        on disk, before QGIS can auto-load it as a layer's default style.
+        """
+        for path in extracted_paths:
+            if path.suffix.lower() == ".qml":
+                strip_rana_properties_from_qml(path)
+
     def _handle_raster_qml_files(self):
         # Check if physical_quantity.qml exists, if so rename to match downloaded filename
         pq_path = self.download_context.local_dir / "physical_quantity.qml"
         if pq_path.exists():
-            new_name = self.download_context.local_file_path.with_suffix(".qml").name
-            final_qml_path = self.download_context.local_dir / new_name
+            final_qml_path = get_qml_path_for_raster(
+                self.download_context.local_file_path
+            )
             pq_path.replace(final_qml_path)
 
             # Attempt to rescale the QML to match the actual raster data range

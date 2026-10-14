@@ -12,6 +12,8 @@ from qgis.core import (
 )
 from qgis.utils import plugins
 
+RANA_PROPERTY_PREFIX = "rana/"
+
 
 def get_plugin_instance(plugin_name: str) -> Any:
     """Return given plugin name instance."""
@@ -150,6 +152,58 @@ def rescale_qml_file(file_path: Path, new_min: float, new_max: float) -> None:
             pass
 
 
+def strip_rana_properties_from_qml(file_path: Path) -> None:
+    """Remove Rana bookkeeping custom properties from a QML file.
+
+    Rana stores layer references and dirty flags as layer custom properties,
+    and QGIS serialises those into QML. Leaving them in place would upload
+    local bookkeeping into a shared style, and re-apply stale references and
+    dirty flags to every layer that later loads it.
+    """
+    try:
+        content = file_path.read_text()
+    except (IOError, OSError):
+        return
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return
+
+    removable = [
+        (parent, option)
+        for block in root.iter("customproperties")
+        for parent in block.iter()
+        for option in parent
+        if option.tag == "Option"
+        and option.get("name", "").startswith(RANA_PROPERTY_PREFIX)
+    ]
+    if not removable:
+        return
+    for parent, option in removable:
+        parent.remove(option)
+
+    try:
+        file_path.write_text(ET.tostring(root, encoding="unicode"))
+    except (IOError, OSError):
+        pass
+
+
 def get_qml_name_for_layer(layer_name: str) -> str:
     """Returns uri escaped layer name for QML file name."""
     return f"{quote(layer_name, safe='')}.qml"
+
+
+def get_qml_path_for_raster(raster_path: str | Path) -> Path:
+    """Return the sidecar QML path belonging to a raster file.
+
+    Rasters are one layer per file, so their style lives in a sidecar named
+    after the file stem (``dem.tif`` -> ``dem.qml``) rather than after a layer
+    name inside a container, which is what `get_qml_name_for_layer` is for.
+
+    This is also the name QGIS itself looks for: `QgsRasterLayer(path)` loads
+    this sidecar as the layer's default style during construction, before any
+    plugin code runs. Both the download (which writes the file) and the open
+    path (which strips Rana bookkeeping out of it) must therefore agree on
+    this name, or the unstripped sidecar silently wins.
+    """
+    return Path(raster_path).with_suffix(".qml")

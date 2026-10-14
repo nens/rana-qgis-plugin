@@ -11,7 +11,7 @@ from typing import Any, Optional
 import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from bridgestyle.qgis import togeostyler
-from qgis.core import QgsProject, QgsTask
+from qgis.core import QgsTask
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from rana_qgis_plugin.constant import STYLE_DIR
@@ -25,6 +25,8 @@ from rana_qgis_plugin.utils.generic import (
 )
 from rana_qgis_plugin.utils.lizard import import_from_geostyler
 from rana_qgis_plugin.utils.local_paths import get_local_publication_file_path
+from rana_qgis_plugin.utils.qgis import strip_rana_properties_from_qml
+from rana_qgis_plugin.workers.style_layers import LayerSource
 
 
 class StyleBuilder(QObject):
@@ -33,10 +35,13 @@ class StyleBuilder(QObject):
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
 
-    def __init__(self, local_file_path: str, file_ref_str: str):
+    def __init__(
+        self, local_file_path: str, file_ref_str: str, layer_source: LayerSource
+    ):
         super().__init__()
         self.local_file_path = local_file_path
         self.file_ref_str = file_ref_str
+        self.layer_source = layer_source
 
     def get_files(self) -> list:
         raise NotImplementedError
@@ -52,17 +57,9 @@ class StyleBuilder(QObject):
     def tempdir(self) -> Path:
         return Path(tempfile.mkdtemp())
 
-    @cached_property
-    def all_layers(self):
-        proj = QgsProject.instance()
-        if proj is None:
-            return []
-        all_layers = proj.mapLayers().values()
-        return [layer for layer in all_layers if self.local_file_path in layer.source()]
-
     @property
     def layers(self):
-        return self.all_layers
+        return self.layer_source.layers
 
     def validate_layers(self) -> bool:
         raise NotImplementedError
@@ -85,6 +82,7 @@ class StyleBuilder(QObject):
             # TODO: this breaks with non writable paths due to illegal characters
             qml_path = self.layer_qml_path(layer.name())
             layer.saveNamedStyle(str(qml_path))
+            strip_rana_properties_from_qml(qml_path)
         zip_path = str(self.tempdir.joinpath("qml.zip"))
         self._create_qml_zip(zip_path)
         return ("files", "qml.zip", zip_path, "application/zip")
@@ -217,8 +215,14 @@ class VectorStyleBuilderAllLayers(VectorStyleBuilder):
 class VectorStyleBuilderSingleLayer(VectorStyleBuilder):
     """Collects style files for a single layer in a vector file."""
 
-    def __init__(self, local_file_path: str, file_ref_str: str, layer_in_file: str):
-        super().__init__(local_file_path, file_ref_str)
+    def __init__(
+        self,
+        local_file_path: str,
+        file_ref_str: str,
+        layer_source: LayerSource,
+        layer_in_file: str,
+    ):
+        super().__init__(local_file_path, file_ref_str, layer_source)
         self.layer_in_file = layer_in_file
 
     @property
@@ -250,14 +254,23 @@ class StyleUploadTask(QgsTask):
 
     def make_builder(self, item: StyleUploadItem) -> StyleBuilder:
         """Build the appropriate StyleBuilder based on data_type."""
+        if item.layer_source is None:
+            raise RuntimeError(f"No layers captured for {item.file_ref_str}")
         if item.data_type == DataType.raster:
-            return RasterStyleBuilder(item.local_file_path, item.file_ref_str)
+            return RasterStyleBuilder(
+                item.local_file_path, item.file_ref_str, item.layer_source
+            )
         elif item.data_type == DataType.vector:
             if item.layer_in_file:
                 return VectorStyleBuilderSingleLayer(
-                    item.local_file_path, item.file_ref_str, item.layer_in_file
+                    item.local_file_path,
+                    item.file_ref_str,
+                    item.layer_source,
+                    item.layer_in_file,
                 )
-            return VectorStyleBuilderAllLayers(item.local_file_path, item.file_ref_str)
+            return VectorStyleBuilderAllLayers(
+                item.local_file_path, item.file_ref_str, item.layer_source
+            )
         else:
             raise ValueError(
                 f"Unsupported data type for style upload: {item.data_type.value}"
@@ -286,8 +299,17 @@ class StyleUploadTask(QgsTask):
             finally:
                 if builder is not None:
                     builder.clean()
+                if item.layer_source is not None:
+                    item.layer_source.discard()
             self.setProgress((index + 1) * 100 / len(self.items))
         return not self.failed_items
+
+
+def discard_layer_sources(items: list[StyleUploadItem]) -> None:
+    """Release captured layer snapshots for items that will never be built."""
+    for item in items:
+        if item.layer_source is not None:
+            item.layer_source.discard()
 
 
 def make_publication_style_upload_item(
@@ -297,6 +319,7 @@ def make_publication_style_upload_item(
     local_file_path: str,
     file_ref_str: str,
     file_path: str,
+    layer_source: LayerSource,
     layer_in_file: str | None = None,
 ) -> StyleUploadItem:
 
@@ -314,6 +337,7 @@ def make_publication_style_upload_item(
         file_ref_str=file_ref_str,
         upload_func=upload_func,
         layer_in_file=layer_in_file,
+        layer_source=layer_source,
     )
 
 
@@ -322,6 +346,7 @@ def make_file_style_upload_item(
     data_type: DataType,
     local_file_path: str,
     file_ref_str: str,
+    layer_source: LayerSource,
     layer_in_file: str | None = None,
     project_id: str | None = None,
 ) -> StyleUploadItem:
@@ -338,4 +363,5 @@ def make_file_style_upload_item(
         layer_in_file=layer_in_file,
         project_id=project_id,
         descriptor_id=descriptor_id,
+        layer_source=layer_source,
     )

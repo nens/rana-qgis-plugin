@@ -5,6 +5,11 @@ import pytest
 from qgis.core import Qgis, QgsProject, QgsVectorLayer
 
 import rana_qgis_plugin.layer_management.layer_manager as lm
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
+    is_data_dirty,
+    is_style_dirty,
+)
+from rana_qgis_plugin.utils.qgis import get_qml_name_for_layer
 
 # --- Test rana refs ---
 
@@ -170,6 +175,30 @@ def test_open_raster(tmp_path):
     assert layer is not None
     assert layer.isValid()
     assert layer.name() == "dem.tif"
+    assert lm.get_rana_refs(layer) == REF
+
+
+def test_open_vector_layer_ignores_dirty_flags_stored_in_the_qml(tmp_path):
+    """A style synced while dirty carries rana/style_dirty inside its QML.
+
+    Reopening such a file must not restore that flag, or the layer looks
+    dirty before the user has touched it (KI-004).
+    """
+    gpkg = _create_test_gpkg(tmp_path, "styled.gpkg", "points")
+    layer_name = "points"
+    styled = QgsVectorLayer(f"{gpkg}|layername={layer_name}", layer_name, "ogr")
+    styled.setCustomProperty("rana/style_dirty", True)
+    styled.setCustomProperty("rana/data_sync_state", "dirty")
+    styled.setCustomProperty("rana/file_id", "stale/other.gpkg")
+    qml_path = gpkg.parent / get_qml_name_for_layer(layer_name)
+    styled.saveNamedStyle(str(qml_path))
+
+    layer = lm.open_rana_vector_layer(str(gpkg), layer_name, PARENTS, REF)
+
+    assert layer is not None
+    assert not is_style_dirty(layer)
+    assert not is_data_dirty(layer)
+    # The stale reference in the QML must not override the real one.
     assert lm.get_rana_refs(layer) == REF
 
 

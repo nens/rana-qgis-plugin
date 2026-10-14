@@ -1,7 +1,7 @@
 from qgis.core import QgsVectorLayer
 
-from rana_qgis_plugin.layer_management.dirty_tracking import (
-    DATA_DIRTY_PROPERTY,
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
+    DATA_SYNC_STATE_PROPERTY,
     STYLE_DIRTY_PROPERTY,
     attach_dirty_tracking,
     is_data_dirty,
@@ -14,11 +14,12 @@ def test_vector_commit_marks_data_dirty(qgis_application):
     attach_dirty_tracking(layer)
 
     assert not is_data_dirty(layer)
+    assert layer.customProperty(DATA_SYNC_STATE_PROPERTY) == "clean"
     layer.startEditing()
     layer.commitChanges()
 
     assert is_data_dirty(layer)
-    assert layer.customProperty(DATA_DIRTY_PROPERTY) is True
+    assert layer.customProperty(DATA_SYNC_STATE_PROPERTY) == "dirty"
 
 
 def test_style_change_marks_style_dirty(qgis_application):

@@ -3,7 +3,8 @@
 This document describes the module-level layer-opening functions used by the
 Rana Browser. Download and styling mechanics are documented separately in
 [`download_workers.md`](download_workers.md) and
-[`styling_workers.md`](styling_workers.md).
+[`styling_workers.md`](styling_workers.md). Unsynced-change tracking is
+documented in [`dirty_tracking.md`](dirty_tracking.md).
 
 ## Layer-opening flow
 
@@ -77,14 +78,12 @@ registry is required.
 
 ## Dirty-state tracking
 
-When a linked layer is added:
-
-- committed vector edits set `rana/data_dirty`; and
-- `styleChanged` on any linked layer sets `rana/style_dirty`.
-
-The flags are cleared only after the corresponding synchronization succeeds.
-The layer-tree menu uses them to enable or disable the relevant save action.
-There is currently no separate layer-tree badge or name decoration.
+Each linked layer tracks whether its data and style have unsynced local
+changes, using different detection strategies for vector edits, raster file
+changes, and style changes. This state gates the layer-tree save actions,
+drives a layer-tree warning badge, and backs a prompt that offers to sync
+before a project or layer is closed. See
+[`dirty_tracking.md`](dirty_tracking.md) for the full state model and flow.
 
 ## Layer-tree synchronization menu
 
