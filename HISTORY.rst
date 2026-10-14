@@ -5,7 +5,7 @@ History
 1.2.23 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Fix the long list of organisations in the tenant switcher by using a ComboBox (nens/rana#5047).
 
 
 1.2.22 (2026-09-25)
@@ -284,7 +284,7 @@ History
 - Rename tenant to organisation in user interfaces
 - Reactivate plugin when workdir is not set
 - Dynamically fetch client cognito ids from Rana API endpoint
-- Add option to delete models and disable model creation when the max number of models is reached 
+- Add option to delete models and disable model creation when the max number of models is reached
 - Add file actions to detail view
 - Show dialogs pointing the user to the Rana HCC when creating a model, uploading a revision and starting a simulation
 - Only ask user for revision when saving a revision to Rana that does not have a WIP

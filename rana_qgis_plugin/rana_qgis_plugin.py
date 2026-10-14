@@ -10,11 +10,9 @@ from qgis.core import QgsApplication, QgsSettings
 from qgis.PyQt.QtCore import QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAction,
-    QButtonGroup,
     QDialog,
     QDockWidget,
     QMessageBox,
-    QRadioButton,
     QSizePolicy,
 )
 
@@ -204,20 +202,15 @@ class RanaQgisPlugin:
     def open_tenant_selection_dialog(self):
         current_tenant_id = get_tenant_id()
         dialog = TenantSelectionDialog(self.iface.mainWindow())
-        button_group = QButtonGroup(dialog)
         for tenant in self.tenants:
             tenant_name, tenant_id = tenant["name"], tenant["id"]
-            tenant_name = tenant_name.replace("&", "&&")  # Escape '&' character
-            radio_button = QRadioButton(f"{tenant_name} ({tenant_id})", dialog)
-            radio_button.setObjectName(tenant_id)
-            button_group.addButton(radio_button)
-            dialog.tenants_widget.layout().addWidget(radio_button)
+            dialog.organisations_box.addItem(f"{tenant_name} ({tenant_id})", tenant_id)
             if tenant_id == current_tenant_id:
-                radio_button.setChecked(True)
-        dialog.adjustSize()
+                dialog.organisations_box.setCurrentIndex(
+                    dialog.organisations_box.count() - 1
+                )
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            selected_button = button_group.checkedButton()
-            selected_tenant_id = selected_button.objectName()
+            selected_tenant_id = dialog.organisations_box.currentData()
             if selected_tenant_id != current_tenant_id:
                 set_tenant_id(selected_tenant_id)
                 self.communication.clear_message_bar()
