@@ -998,6 +998,7 @@ def load_local_schematisation(
     action: BuildOptionActions = BuildOptionActions.LOADED,
     custom_geopackage_filepath: str | None = None,
     parents: Sequence[str] | None = None,
+    group_name: str | None = None,
 ) -> str | None:
     loaded_group_name = None
     if local_schematisation and (
@@ -1015,18 +1016,44 @@ def load_local_schematisation(
             schematisation_editor = get_plugin_instance("threedi_schematisation_editor")
             communication.log_info(f"Loading {geopackage_filepath}")
             if schematisation_editor:
+                load_kwargs: dict[str, Any] = {"parents": parents}
+                if group_name is not None:
+                    load_kwargs["group_name"] = group_name
                 try:
                     loaded_group_name = schematisation_editor.load_schematisation(
-                        geopackage_filepath,
-                        parents=parents,
+                        geopackage_filepath, **load_kwargs
                     )
                 except TypeError as e:
-                    if "parents" in str(e):
-                        # Warn and all back on old syntax and behavior
+                    if "group_name" in str(e) and group_name is not None:
+                        try:
+                            loaded_group_name = (
+                                schematisation_editor.load_schematisation(
+                                    geopackage_filepath, parents=parents
+                                )
+                            )
+                        except TypeError as retry_error:
+                            if "parents" not in str(retry_error):
+                                raise
+                            communication.show_warn(
+                                "Rana schematisation editor is not up to date and "
+                                "therefore the schematisation layers will not be "
+                                "properly organized. Please update the plugin."
+                            )
+                            loaded_group_name = (
+                                schematisation_editor.load_schematisation(
+                                    geopackage_filepath
+                                )
+                            )
+                    elif "parents" in str(e):
+                        # Fall back to the oldest editor API and behavior.
                         communication.show_warn(
-                            "Rana schematisation editor is not up to date and therefore the schematisation layers will not be properly organized. Please update the plugin."
+                            "Rana schematisation editor is not up to date and "
+                            "therefore the schematisation layers will not be "
+                            "properly organized. Please update the plugin."
                         )
-                        schematisation_editor.load_schematisation(geopackage_filepath)
+                        loaded_group_name = schematisation_editor.load_schematisation(
+                            geopackage_filepath
+                        )
                     else:
                         raise
             else:
@@ -1036,7 +1063,7 @@ def load_local_schematisation(
                 )
                 communication.show_warn(msg)
             return loaded_group_name
-        except (TypeError, ValueError):
+        except ValueError:
             error_msg = "Invalid schematisation directory structure. Loading schematisation canceled."
             communication.show_error(error_msg)
     return None

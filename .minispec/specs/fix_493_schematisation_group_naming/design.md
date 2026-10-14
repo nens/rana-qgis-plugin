@@ -1,6 +1,6 @@
 ---
 feature: fix_493_schematisation_group_naming
-status: draft
+status: implementing
 created: 2026-10-13
 decisions:
   - 20261013-1800-schematisation-group-naming-source
@@ -14,8 +14,10 @@ When a schematisation is opened through Rana, the schematisation editor
 currently chooses its own group name by guessing from the GeoPackage path.
 This differs from other Rana resources, whose group or layer name is the plain
 item name shown in Rana's file tree. Pass that canonical name into the editor
-at load time. The editor-side API and reload/context handling are specified in
-the `feat_452_schematisation_group_naming` spec in the editor repository.
+at load time. The editor-side API and reload/context handling have been
+implemented and are installed in the Docker environment used for manual
+testing. This Rana change passes the canonical name through while remaining
+compatible with older editor versions.
 
 ## User Stories
 
@@ -58,9 +60,10 @@ already available file item ID. Existing schematisation ID, revision number,
   the optional name to the editor.
 - `open_rana_schematisation(..., group_name=...)` receives the final item
   name from its loader call site.
-- The editor entry point becomes
-  `load_schematisation(model_gpkg, parents=None, group_name=None)` in the
-  companion editor-side change.
+- The editor entry point accepts
+  `load_schematisation(model_gpkg, parents=None, group_name=None)`; that
+  editor-side change is already implemented and installed in the manual-test
+  Docker environment.
 
 ## Error Handling
 
@@ -75,9 +78,9 @@ Re-raise unrelated `TypeError`s so real errors are not hidden.
   WIP/revision suffix and no `Rana schematisation:` prefix.
 - Does not change Rana's parent path construction or group metadata.
 - Does not post-rename the editor-created group.
-- Depends on the editor-side `feat_452_schematisation_group_naming` change
-  for the name to appear consistently in the panel, dropdown, and loaded
-  message; the fallback supports older versions during rollout.
+- The installed editor-side `group_name` support makes the name appear
+  consistently in the panel, dropdown, and loaded message; the fallback
+  preserves compatibility with older versions.
 
 ## Manual Testing Paths
 

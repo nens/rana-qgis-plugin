@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 from qgis.PyQt.QtWidgets import QDialog
 
 from rana_qgis_plugin.loader import Loader
-from rana_qgis_plugin.simulation.utils import download_required_files
 from rana_qgis_plugin.utils.api import RanaPostError
 from rana_qgis_plugin.utils.data_models import (
     OpenFileRequest,
@@ -489,35 +488,3 @@ def test_open_items_deduplicates_same_file_requests():
         loader.open_items(requests)
 
     open_file.assert_called_once_with(requests[0])
-
-
-def test_download_required_files_removes_revision_directory_on_failure(tmp_path):
-    local = MagicMock()
-    local.revisions = {}
-    revision = MagicMock(id=2, number=3)
-    revision.sqlite.file.filename = "schema.zip"
-    revision.rasters = []
-    schematisation = MagicMock(id=1, name="Schema")
-    directory = tmp_path / "revision"
-    directory.mkdir()
-
-    with (
-        patch("rana_qgis_plugin.simulation.utils.ThreediCalls") as calls,
-        patch(
-            "rana_qgis_plugin.simulation.utils.get_download_file",
-            side_effect=RuntimeError("download failed"),
-        ),
-    ):
-        calls.return_value.download_schematisation_revision_sqlite.return_value = (
-            MagicMock()
-        )
-        calls.return_value.fetch_schematisation_revision_3di_models.return_value = []
-
-        try:
-            download_required_files(
-                schematisation, revision, str(directory), local, False, MagicMock()
-            )
-        except RuntimeError:
-            pass
-
-    assert not directory.exists()

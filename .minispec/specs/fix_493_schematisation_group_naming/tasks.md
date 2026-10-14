@@ -1,6 +1,6 @@
 ---
 feature: fix_493_schematisation_group_naming
-status: draft
+status: implementing
 created: 2026-10-13
 chunk_size: adaptive
 total_tasks: 3
@@ -12,17 +12,16 @@ estimated_lines: 70
 ## Overview
 
 Implements `.minispec/specs/fix_493_schematisation_group_naming/design.md`.
-The editor-side API is developed under the already-checked-out `feat_452`
-branch in the other repository. Rana's TypeError fallback allows these tasks
-to be merged before or after that editor change; end-to-end name verification
-requires both changes installed.
+The editor-side API is already implemented and installed in the Docker
+environment used for manual testing. Rana's TypeError fallback preserves
+compatibility with older editor versions.
 
 ## Task List
 
 ### Core Implementation
 
 #### Task 1: Pass an optional group name to the schematisation editor
-- **Estimate:** ~25 lines
+- **Estimate:** ~40 lines
 - **Files:** `rana_qgis_plugin/simulation/utils.py`
 - **Description:** Add optional `group_name=None` to
   `load_local_schematisation()` and pass it to
@@ -36,6 +35,7 @@ requires both changes installed.
   swallowed.
 - **Evidence:** Focused tests for supported and unsupported `group_name`,
   plus regression coverage for the existing `parents` fallback.
+- **Status:** Complete
 
 #### Task 2: Derive and forward the plain file-item name
 - **Estimate:** ~25 lines
@@ -63,8 +63,7 @@ requires both changes installed.
 - **Description:** With both repositories' changes available, exercise the
   manual testing paths in the design. Also confirm loading still succeeds
   with an editor version that lacks `group_name` support.
-- **Depends on:** Tasks 1-2; editor-side
-  `feat_452_schematisation_group_naming` for full override behavior.
+- **Depends on:** Tasks 1-2.
 - **Acceptance:** The plain item name appears in both the Layers panel and
   editor dropdown with the new editor, while older editor versions retain
   their previous behavior without failing to load.

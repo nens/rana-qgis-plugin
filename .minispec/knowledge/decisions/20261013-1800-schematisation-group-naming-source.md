@@ -14,9 +14,10 @@ names use the plain file/item name displayed in Rana's file tree.
 
 Pass the plain leaf item name from the Rana file item's `id` to
 `threedi_schematisation_editor.load_schematisation()` as the optional
-`group_name` argument. Do not add a WIP or revision suffix. Until the installed
-editor supports the argument, use the existing TypeError feature-detection
-fallback to load as before.
+`group_name` argument. Do not add a WIP or revision suffix. The editor-side
+support is implemented and installed in the Docker environment used for manual
+testing. Keep the TypeError feature-detection fallback for older editor
+versions.
 
 ## Reasoning
 
@@ -27,9 +28,9 @@ label and could break the editor's name-based group lookup on project reload.
 
 ## Consequences
 
-Full behavior requires the editor-side `group_name` support, tracked on the
-already-checked-out `feat_452` branch. Rana's fallback allows its change to
-work with older editor versions without introducing a new loading failure.
+The editor-side `group_name` support is available in the manual-test Docker
+environment. Rana's fallback allows this change to work with older editor
+versions without introducing a new loading failure.
 
 ## Related Decisions
 
