@@ -365,6 +365,14 @@ def handle_csv_header(header: List[str]):
         error_message = "Missing 'id' column in CSV file!"
     if "timeseries" not in header:
         error_message = "Missing 'timeseries' column in CSV file!"
+    if error_message is None:
+        unexpected_columns = set(header) - {"id", "timeseries"}
+        if unexpected_columns:
+            error_message = (
+                "Unexpected column(s) in boundary conditions CSV: "
+                f"{', '.join(sorted(unexpected_columns))}. "
+                "Only 'id' and 'timeseries' columns are supported."
+            )
     return error_message
 
 

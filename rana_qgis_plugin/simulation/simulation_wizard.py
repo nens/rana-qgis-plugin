@@ -670,11 +670,12 @@ class BoundaryConditionsWidget(uicls_boundary_conditions, basecls_boundary_condi
         with open(filename, encoding="utf-8-sig") as csvfile:
             reader = csv.DictReader(csvfile)
             header = reader.fieldnames
+            error_msg = handle_csv_header(header)
+            if error_msg is not None:
+                self.parent_page.parent_wizard.communication.show_warn(error_msg)
+                return None, None
+
             boundary_conditions_list = list(reader)
-        error_msg = handle_csv_header(header)
-        if error_msg is not None:
-            self.parent_page.parent_wizard.communication.show_warn(error_msg)
-            return None, None
         interpolate = (
             self.cb_interpolate_bc_1d.isChecked()
             if boundary_conditions_type == self.TYPE_1D
