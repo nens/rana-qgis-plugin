@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.23 (unreleased)
+1.2.23 (2026-10-15)
 -------------------
 
 - Fix the long list of organisations in the tenant switcher by using a ComboBox (nens/rana#5047).
