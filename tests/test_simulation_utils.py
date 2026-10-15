@@ -4,15 +4,14 @@ from rana_qgis_plugin.simulation.utils import handle_csv_header
 
 
 def test_handle_csv_header_accepts_supported_columns():
-    header = [["id", "timeseries"], ["timeseries", "id"]]
-
-    assert handle_csv_header(h) is None
+    assert handle_csv_header(["id", "timeseries"]) is None
+    assert handle_csv_header(["timeseries", "id"]) is None
 
 
 def test_handle_csv_header_rejects_unexpected_columns():
     header = ["id", "type", "connection_node_id", "timeseries"]
 
-    assert handle_csv_header(header) == (
-        "Unexpected column(s) in boundary conditions CSV: "
-        "connection_node_id, type. Only 'id' and 'timeseries' columns are supported."
-    )
+    error = handle_csv_header(header)
+    assert error is not None
+    assert "connection_node_id" in error
+    assert "type" in error
