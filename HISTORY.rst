@@ -7,6 +7,9 @@ History
 
 - Fix the long list of organisations in the tenant switcher by using a ComboBox (nens/rana#5047).
 
+- Reject CSV files for boundary conditions and substance concentrations if they have any columns
+  besides the required 'id' and 'timeseries' (nens/rana#4840).
+
 
 1.2.22 (2026-09-25)
 -------------------
