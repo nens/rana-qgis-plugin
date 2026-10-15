@@ -20,7 +20,7 @@ def make_boundary_conditions_widget():
 
 def test_boundary_conditions_invalid_upload_preserves_previous_state(tmp_path):
     csv_file = tmp_path / "boundary_conditions.csv"
-    csv_file.write_text("id,type,timeseries\n1,1,\"0,1\"\n", encoding="utf-8")
+    csv_file.write_text('id,type,timeseries\n1,1,"0,1"\n', encoding="utf-8")
     widget, communication = make_boundary_conditions_widget()
     previous_values = [{"id": 7}]
     widget.boundary_conditions_1d_timeseries = previous_values
