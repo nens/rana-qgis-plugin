@@ -6,6 +6,7 @@ History
 -------------------
 
 - Fix the long list of organisations in the tenant switcher by using a ComboBox (nens/rana#5047).
+- Rename software for scenario from 3Di to Rana (nens/rana#3771)
 
 - Reject CSV files for boundary conditions and substance concentrations if they have any columns
   besides the required 'id' and 'timeseries' (nens/rana#4840).

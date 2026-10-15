@@ -746,6 +746,8 @@ class FileView(QWidget):
 
             software_fv = FieldValue.from_dict(simulation, "software")
             software = software_fv.value or {}
+            if software.get("id", "").lower() == "3di":
+                software["id"] = "Rana"
 
             details += [
                 InfoRow("Simulation name", FieldValue.from_dict(simulation, "name")),
