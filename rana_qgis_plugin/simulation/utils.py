@@ -713,7 +713,7 @@ def resolve_schematisation_download_dir(
         def decision_tree():
             replace, store, cancel = "Replace", "Store", "Cancel"
             title = "Pick action"
-            question = f"Store as a revision {revision_number} or replace local WIP?"
+            question = f"Replace local WIP or store as revision {revision_number}?"
             wip_replace_requested = False
             picked_action_name = communications.custom_ask(
                 None, title, question, replace, store, cancel

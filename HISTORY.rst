@@ -5,7 +5,8 @@ History
 1.2.24 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Fix word order of a message so it matches the buttons of a dialog
+  used when opening schematisations
 
 
 1.2.23 (2026-10-15)
