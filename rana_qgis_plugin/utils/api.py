@@ -161,19 +161,13 @@ def get_user_info(communication: UICommunication) -> Optional[UserInfo]:
 
 
 def get_user_tenants(communication: UICommunication, user_id: str):
-    authcfg_id = get_authcfg_id()
     url = f"{api_url()}/tenants"
     params = {"user_id": user_id}
 
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-
-    if status:
-        response = network_manager.content
-        items = response["items"]
-        return items
-    else:
-        communication.show_error(f"Failed to get tenants: {error}")
+    try:
+        return paginated_fetch(url, limit=100, params=params)["items"]
+    except Exception as e:
+        communication.show_error(f"Failed to get tenants: {e}")
         return []
 
 
