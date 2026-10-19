@@ -177,15 +177,9 @@ def get_user_info(authcfg_id: Optional[str] = None) -> UserInfo:
 
 
 def get_user_tenants(user_id: str) -> list:
-    authcfg_id = get_authcfg_id()
     url = f"{api_url()}/tenants"
     params = {"user_id": user_id}
-
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(params)
-    if error:
-        raise RanaFetchError(error, url, params)
-    return network_manager.content["items"]
+    return paginated_fetch(url, limit=100, params=params)["items"]
 
 
 def get_tenant_details() -> dict:
