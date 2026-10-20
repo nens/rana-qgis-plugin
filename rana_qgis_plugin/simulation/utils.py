@@ -734,12 +734,7 @@ def resolve_schematisation_download_dir(
         def decision_tree():
             replace, store, cancel = "Replace", "Store", "Cancel"
             title = f"Open schematisation: {schematisation_name}"
-            question = (
-                f"How should revision {revision_number} of "
-                f"'{schematisation_name}' be opened?\n\n"
-                "Replace: replace the existing local WIP.\n"
-                "Store: save it as a separate local revision."
-            )
+            question = f"Replace local WIP or store as revision {revision_number}?"
             wip_replace_requested = False
             picked_action_name = communications.custom_ask(
                 None, title, question, replace, store, cancel
