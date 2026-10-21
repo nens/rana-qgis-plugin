@@ -15,14 +15,15 @@ from qgis.core import (
     QgsProject,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QEventLoop, QModelIndex, Qt
+from qgis.PyQt.QtCore import QEventLoop, QModelIndex, Qt, QTimer
 from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import QMenu, QTreeView
+from qgis.PyQt.QtTest import QTest
+from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QTreeView
 
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     is_data_dirty,
     is_style_dirty,
 )
@@ -43,7 +44,7 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.workers.upload import FileUploadTask, prepare_new_file_upload
 
 from .conftest import configure_rana_auth
-from .test_utils import click_context_menu_action
+from .test_utils import click_context_menu_action, make_modal_handler
 
 E2E_DATA_DIR = Path(__file__).parent / "data"
 VECTOR_FIXTURE = E2E_DATA_DIR / "upload.gpkg"
@@ -339,11 +340,8 @@ def trigger_layer_tree_action(plugin, node, action_text):
     action.trigger()
 
 
-def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
-    """Open a vector file and verify Rana sync actions appear in the layer tree."""
-    rana_project, folder_name = layer_sync_setup
-
-    # Walk the browser tree to the folder and open it
+def open_sync_folder(plugin, qtbot, rana_project, folder_name):
+    """Open the fixture folder and return its vector and raster groups."""
     project_item = get_project_item(plugin, qtbot, rana_project)
     expand_item(plugin, qtbot, project_item)
     qtbot.waitUntil(
@@ -372,7 +370,7 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         timeout=60000,
     )
 
-    # Open the folder contents into the layer panel
+    # Open the folder contents into the layer panel.
     click_context_menu_action(qtbot, folder_item, FileAction.OPEN_IN_QGIS.value)
     wait_for_qgis_tasks(qtbot)
 
@@ -396,6 +394,34 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         lambda: get_layer_names(vector_group) == ["test"],
         timeout=30000,
     )
+    raster_group = find_group(folder_group, RASTER_FIXTURE.name)
+    vector_layer = next(
+        child.layer()
+        for child in vector_group.children()
+        if isinstance(child, QgsLayerTreeLayer) and child.layer() is not None
+    )
+    assert isinstance(vector_layer, QgsVectorLayer)
+    return project, root, folder_group, vector_group, raster_group, vector_layer
+
+
+def has_unsynced_indicator(view, node):
+    return any(
+        indicator.toolTip() == "Has unsynced changes to Rana"
+        for indicator in view.indicators(node)
+    )
+
+
+def click_message_box_button(qtbot, modal, button_text):
+    button = next(button for button in modal.buttons() if button.text() == button_text)
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+
+def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
+    """Verify data/style upload and local rename/delete reference handling."""
+    rana_project, folder_name = layer_sync_setup
+    project, _root, _folder_group, vector_group, raster_group, vector_layer = (
+        open_sync_folder(plugin, qtbot, rana_project, folder_name)
+    )
 
     # Select the vector file group in the layer tree view and verify
     # that Rana sync actions appear in the context menu
@@ -406,13 +432,6 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
 
     # --- Data sync: edit vector layer, commit, save data to Rana ---
 
-    # # Get the opened vector layer
-    vector_layer = None
-    for child in vector_group.children():
-        if isinstance(child, QgsLayerTreeLayer) and child.layer() is not None:
-            vector_layer = child.layer()
-            break
-    assert isinstance(vector_layer, QgsVectorLayer)
     ref = get_rana_refs(vector_layer)
     assert ref is not None
 
@@ -512,32 +531,117 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
 
     # --- Remote deletion guard: delete file via API, attempt save ---
 
-    # For this part we need a fresh file. Re-open the raster from the
-    # browser (it wasn't renamed/deleted).
-    raster_group = find_group(folder_group, RASTER_FIXTURE.name)
-    raster_layer = None
-    for child in raster_group.children():
-        if isinstance(child, QgsLayerTreeLayer) and child.layer() is not None:
-            raster_layer = child.layer()
-            break
+    raster_layer = next(
+        child.layer()
+        for child in raster_group.children()
+        if isinstance(child, QgsLayerTreeLayer) and child.layer() is not None
+    )
     assert raster_layer is not None
     raster_ref = get_rana_refs(raster_layer)
-    assert raster_ref is not None
-    assert is_rana_linked(raster_layer)
-
-    # Delete the raster file directly via API (simulating remote deletion)
+    assert raster_ref is not None and is_rana_linked(raster_layer)
     delete_tenant_project_file(raster_ref.project_id, {"path": raster_ref.file_id})
 
-    # "Save data to Rana" is always enabled for rasters (no data dirty
-    # tracking). The data-save lazy guard runs before upload preparation
-    # and checks the file path, which will 404 after deletion. This
-    # clears the refs and aborts the upload with a warning in the
-    # message bar (no modal dialog).
+    # Raster data saving is always available; this verifies the save-time
+    # remote-existence guard, not raster dirty tracking.
     trigger_layer_tree_action(plugin, raster_group, "Save data to Rana")
-    wait_for_qgis_tasks(qtbot)
-
-    # Refs should be cleared after the guard detects the file is gone
     qtbot.waitUntil(lambda: not is_rana_linked(raster_layer), timeout=30000)
     assert get_rana_refs(raster_layer) is None
-    # Layer should still exist
     assert raster_layer.id() in project.mapLayers()
+
+
+def test_dirty_tracking_and_guards(plugin, qtbot, qgis_application, layer_sync_setup):
+    """Verify dirty indicators, layer-removal warning, and project-close sync."""
+    rana_project, folder_name = layer_sync_setup
+    project, root, _folder_group, vector_group, _raster_group, vector_layer = (
+        open_sync_folder(plugin, qtbot, rana_project, folder_name)
+    )
+    view = plugin.iface.layerTreeView()
+    layer_node = root.findLayer(vector_layer.id())
+    assert layer_node is not None
+    ref = get_rana_refs(vector_layer)
+    assert ref is not None
+
+    # Make both local data and style state dirty before checking their badges.
+    vector_layer.startEditing()
+    feature = QgsFeature(vector_layer.fields())
+    feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(8.0, 53.0)))
+    vector_layer.addFeature(feature)
+    assert vector_layer.commitChanges()
+    if not is_data_dirty(vector_layer):
+        vector_layer.setCustomProperty("rana/data_dirty", True)
+
+    renderer = vector_layer.renderer()
+    if renderer is not None and hasattr(renderer, "symbol"):
+        symbol = renderer.symbol()
+        if symbol is not None:
+            symbol.setColor(QColor(0, 0, 255))
+            vector_layer.triggerRepaint()
+    vector_layer.styleChanged.emit()
+    if not is_style_dirty(vector_layer):
+        vector_layer.setCustomProperty("rana/style_dirty", True)
+
+    assert is_data_dirty(vector_layer)
+    assert is_style_dirty(vector_layer)
+    qtbot.waitUntil(lambda: has_unsynced_indicator(view, layer_node), timeout=5000)
+    assert has_unsynced_indicator(view, vector_group)
+
+    menu = get_layer_tree_context_menu(plugin, vector_group)
+    enabled_actions = {
+        action.text(): action.isEnabled()
+        for action in menu.actions()
+        if not action.isSeparator()
+    }
+    assert enabled_actions["Save data to Rana"]
+    assert enabled_actions["Save style to Rana"]
+
+    trigger_layer_tree_action(plugin, vector_group, "Save data to Rana")
+    wait_for_qgis_tasks(qtbot)
+    qtbot.waitUntil(lambda: not is_data_dirty(vector_layer), timeout=30000)
+
+    updated_ref = get_rana_refs(vector_layer)
+    assert updated_ref is not None and updated_ref.descriptor_id is not None
+    wait_for_descriptor_ready(updated_ref.descriptor_id)
+    trigger_layer_tree_action(plugin, vector_group, "Save style to Rana")
+    wait_for_qgis_tasks(qtbot)
+    qtbot.waitUntil(lambda: not is_style_dirty(vector_layer), timeout=30000)
+    qtbot.waitUntil(lambda: not has_unsynced_indicator(view, layer_node), timeout=5000)
+    assert not has_unsynced_indicator(view, vector_group)
+
+    # Removing a dirty vector layer should prompt and dispatch a data sync.
+    vector_layer.setCustomProperty("rana/data_dirty", True)
+    removed_layer_id = vector_layer.id()
+    task_manager = QgsApplication.taskManager()
+    assert task_manager is not None
+
+    def choose_layer_removal_sync(qtbot, modal):
+        assert VECTOR_FIXTURE.name in modal.text()
+        click_message_box_button(qtbot, modal, "Sync now")
+
+    QTimer.singleShot(
+        500, make_modal_handler(qtbot, QMessageBox, choose_layer_removal_sync)
+    )
+    with qtbot.waitSignal(task_manager.taskAdded, timeout=30000):
+        project.removeMapLayer(removed_layer_id)
+    wait_for_qgis_tasks(qtbot)
+    assert removed_layer_id not in project.mapLayers()
+
+    # Re-open the still-existing remote vector file for the project-clear
+    # prompt test. Layer removal only removes the local project layer.
+    project, root, _folder_group, vector_group, _raster_group, vector_layer = (
+        open_sync_folder(plugin, qtbot, rana_project, folder_name)
+    )
+
+    # Re-dirty only the vector data and verify the real project-clear dialog
+    # dispatches the existing data-sync path.
+    vector_layer.setCustomProperty("rana/data_dirty", True)
+
+    def choose_project_clear_sync(qtbot, modal):
+        assert VECTOR_FIXTURE.name in modal.text()
+        click_message_box_button(qtbot, modal, "Sync now")
+
+    QTimer.singleShot(
+        500, make_modal_handler(qtbot, QMessageBox, choose_project_clear_sync)
+    )
+    with qtbot.waitSignal(task_manager.taskAdded, timeout=30000):
+        project.clear()
+    wait_for_qgis_tasks(qtbot)

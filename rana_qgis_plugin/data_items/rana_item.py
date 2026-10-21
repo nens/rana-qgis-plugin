@@ -104,6 +104,7 @@ class RanaRootDataItem(QgsDataItem):
             # expanding it triggers createChildren() and loads the projects.
             self.setState(Qgis.BrowserItemState.Populated)
 
+
     def createChildren(self) -> list:
         """Fetch and return project items. Called by QGIS in a background thread."""
         if not is_authenticated():

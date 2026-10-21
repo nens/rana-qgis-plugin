@@ -1,0 +1,65 @@
+from typing import cast
+
+from qgis.core import QgsLayerTreeModel, QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.gui import QgisInterface, QgsLayerTreeView
+from qgis.PyQt.QtWidgets import QMenu
+
+from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
+from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
+from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+
+
+class FakeInterface:
+    def __init__(self, view):
+        self.view = view
+
+    def layerTreeView(self):
+        return self.view
+
+
+def build_menu(project, group, qgis_application):
+    view = QgsLayerTreeView()
+    model = QgsLayerTreeModel(project.layerTreeRoot(), view)
+    view.setModel(model)
+    view.setCurrentNode(group)
+    menu = QMenu()
+    provider = LayerTreeMenuProvider(
+        cast(QgisInterface, FakeInterface(view)), LayerLockRegistry()
+    )
+    provider.on_context_menu(menu)
+    return menu
+
+
+def test_unlinked_dirty_layer_does_not_enable_group_sync(qgis_application):
+    project = QgsProject()
+    root = project.layerTreeRoot()
+    group = root.addGroup("file")
+    group.setCustomProperty("rana/project_id", "project")
+    linked = QgsVectorLayer("Point?crs=EPSG:4326", "linked", "memory")
+    set_rana_refs(linked, RanaLayerRef("project", "file.gpkg"))
+    project.addMapLayer(linked, False)
+    group.addLayer(linked)
+    unlinked = QgsVectorLayer("Point?crs=EPSG:4326", "unlinked", "memory")
+    unlinked.setCustomProperty("rana/style_dirty", True)
+    unlinked.setCustomProperty("rana/data_dirty", True)
+    project.addMapLayer(unlinked, False)
+    group.addLayer(unlinked)
+    menu = build_menu(project, group, qgis_application)
+    actions = {action.text(): action for action in menu.actions() if action.text()}
+    assert not actions["Save style to Rana"].isEnabled()
+    assert not actions["Save data to Rana"].isEnabled()
+
+
+def test_raster_unknown_data_keeps_group_data_sync_enabled(qgis_application):
+    project = QgsProject()
+    root = project.layerTreeRoot()
+    group = root.addGroup("file")
+    group.setCustomProperty("rana/project_id", "project")
+    raster = QgsRasterLayer("/vsimem/nonexistent.tif", "raster")
+    set_rana_refs(raster, RanaLayerRef("project", "raster.tif"))
+    project.addMapLayer(raster, False)
+    group.addLayer(raster)
+    menu = build_menu(project, group, qgis_application)
+    actions = {action.text(): action for action in menu.actions() if action.text()}
+    assert not actions["Save style to Rana"].isEnabled()
+    assert actions["Save data to Rana"].isEnabled()

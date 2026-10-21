@@ -17,7 +17,10 @@ from qgis.PyQt.QtCore import (
 )
 
 from rana_qgis_plugin.auth import get_authcfg_id
-from rana_qgis_plugin.layer_management.dirty_tracking import attach_dirty_tracking
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
+    DATA_FINGERPRINT_PROPERTY,
+    attach_dirty_tracking,
+)
 from rana_qgis_plugin.simulation.utils import (
     BuildOptionActions,
     load_local_schematisation,
@@ -28,6 +31,7 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.utils.qgis import (
     get_qml_name_for_layer,
     get_threedi_results_analysis_tool_instance,
+    strip_rana_properties_from_qml,
 )
 
 if TYPE_CHECKING:
@@ -112,6 +116,7 @@ class LayerManager(QObject):
                 get_qml_name_for_layer(layer_name)
             )
             if qml_path.exists():
+                strip_rana_properties_from_qml(qml_path)
                 layer.loadNamedStyle(str(qml_path))
                 layer.triggerRepaint()
             self._unlock_layer(layer)
@@ -388,6 +393,7 @@ def clear_rana_refs(layer: QgsMapLayer) -> None:
     """Remove the stored Rana reference from a map layer."""
     for property_key in RanaLayerRef.PROPERTY_KEYS.values():
         layer.removeCustomProperty(property_key)
+    layer.removeCustomProperty(DATA_FINGERPRINT_PROPERTY)
 
 
 def is_rana_linked(layer: QgsMapLayer) -> bool:
@@ -481,10 +487,13 @@ def open_rana_raster(
     if not layer.isValid():
         return None
     group = find_or_create_rana_groups(parents, ref.project_id)
-    set_rana_refs(layer, ref)
     qml_path = Path(local_file_path).parent / get_qml_name_for_layer(display_name)
     if qml_path.exists():
+        strip_rana_properties_from_qml(qml_path)
         layer.loadNamedStyle(str(qml_path))
+    # loadNamedStyle replaces the layer's custom properties, so Rana's own
+    # bookkeeping has to be written after the style, not before.
+    set_rana_refs(layer, ref)
     attach_dirty_tracking(layer)
     add_layer_to_group(layer, group)
     return layer
@@ -545,10 +554,13 @@ def open_rana_vector_layer(
     if not layer.isValid():
         return None
     group = find_or_create_rana_groups(parents, ref.project_id)
-    set_rana_refs(layer, ref)
     qml_path = Path(local_file_path).parent / get_qml_name_for_layer(layer_name)
     if qml_path.exists():
+        strip_rana_properties_from_qml(qml_path)
         layer.loadNamedStyle(str(qml_path))
+    # loadNamedStyle replaces the layer's custom properties, so Rana's own
+    # bookkeeping has to be written after the style, not before.
+    set_rana_refs(layer, ref)
     attach_dirty_tracking(layer)
     add_layer_to_group(layer, group)
     return layer

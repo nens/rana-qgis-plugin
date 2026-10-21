@@ -12,6 +12,8 @@ from qgis.core import (
 )
 from qgis.utils import plugins
 
+RANA_PROPERTY_PREFIX = "rana/"
+
 
 def get_plugin_instance(plugin_name: str) -> Any:
     """Return given plugin name instance."""
@@ -148,6 +150,42 @@ def rescale_qml_file(file_path: Path, new_min: float, new_max: float) -> None:
             file_path.write_text(rescaled)
         except (IOError, OSError):
             pass
+
+
+def strip_rana_properties_from_qml(file_path: Path) -> None:
+    """Remove Rana bookkeeping custom properties from a QML file.
+
+    Rana stores layer references and dirty flags as layer custom properties,
+    and QGIS serialises those into QML. Leaving them in place would upload
+    local bookkeeping into a shared style, and re-apply stale references and
+    dirty flags to every layer that later loads it.
+    """
+    try:
+        content = file_path.read_text()
+    except (IOError, OSError):
+        return
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return
+
+    removable = [
+        (parent, option)
+        for block in root.iter("customproperties")
+        for parent in block.iter()
+        for option in parent
+        if option.tag == "Option"
+        and option.get("name", "").startswith(RANA_PROPERTY_PREFIX)
+    ]
+    if not removable:
+        return
+    for parent, option in removable:
+        parent.remove(option)
+
+    try:
+        file_path.write_text(ET.tostring(root, encoding="unicode"))
+    except (IOError, OSError):
+        pass
 
 
 def get_qml_name_for_layer(layer_name: str) -> str:

@@ -4,7 +4,11 @@ from pathlib import Path
 import pytest
 from qgis.core import QgsVectorLayer
 
-from rana_qgis_plugin.utils.qgis import get_qml_name_for_layer, rescale_qml_ranges
+from rana_qgis_plugin.utils.qgis import (
+    get_qml_name_for_layer,
+    rescale_qml_ranges,
+    strip_rana_properties_from_qml,
+)
 
 
 def make_test_qml(min_val: float, max_val: float, num_stops: int) -> str:
@@ -89,3 +93,57 @@ def test_get_qml_name_for_layer(layer_name):
         qml_path = tmpdir_path / get_qml_name_for_layer(layer_name)
         layer.saveNamedStyle(str(qml_path))
         assert qml_path.exists(), f"QML file should be created at {qml_path}"
+
+
+class TestStripRanaPropertiesFromQml:
+    """QGIS serialises layer custom properties into QML.
+
+    Rana's own properties must never travel with a shared style: they would
+    upload local bookkeeping and restore stale references and dirty flags onto
+    any layer that loads it.
+    """
+
+    def save_styled_layer(self, tmp_path: Path) -> tuple[Path, QgsVectorLayer]:
+        layer = QgsVectorLayer("Point?crs=EPSG:4326", "points", "memory")
+        layer.setCustomProperty("rana/style_dirty", True)
+        layer.setCustomProperty("rana/data_dirty", True)
+        layer.setCustomProperty("rana/file_id", "roads.gpkg")
+        layer.setCustomProperty("rana/project_id", "proj-1")
+        layer.setCustomProperty("variableNames", ["keep_me"])
+        qml_path = tmp_path / "points.qml"
+        layer.saveNamedStyle(str(qml_path))
+        return qml_path, layer
+
+    def test_rana_properties_are_removed_and_others_kept(
+        self, tmp_path, qgis_application
+    ):
+        qml_path, _ = self.save_styled_layer(tmp_path)
+        assert "rana/style_dirty" in qml_path.read_text()
+
+        strip_rana_properties_from_qml(qml_path)
+
+        text = qml_path.read_text()
+        assert "rana/" not in text
+        assert "variableNames" in text
+
+    def test_loading_a_stripped_qml_leaves_no_rana_state(
+        self, tmp_path, qgis_application
+    ):
+        qml_path, _ = self.save_styled_layer(tmp_path)
+        strip_rana_properties_from_qml(qml_path)
+
+        target = QgsVectorLayer("Point?crs=EPSG:4326", "points", "memory")
+        _, loaded = target.loadNamedStyle(str(qml_path))
+
+        assert loaded
+        assert target.customProperty("rana/style_dirty") is None
+        assert target.customProperty("rana/file_id") is None
+        assert target.customProperty("variableNames") == ["keep_me"]
+
+    def test_unparsable_qml_is_left_untouched(self, tmp_path, qgis_application):
+        qml_path = tmp_path / "broken.qml"
+        qml_path.write_text("<qgis><unclosed>")
+
+        strip_rana_properties_from_qml(qml_path)
+
+        assert qml_path.read_text() == "<qgis><unclosed>"

@@ -1,8 +1,9 @@
-"""Dirty-state helpers for Rana-linked map layers."""
+"""Low-level dirty-property and edit-signal tracking for Rana layers."""
 
 from qgis.core import QgsMapLayer, QgsVectorLayer
 
 DATA_DIRTY_PROPERTY = "rana/data_dirty"
+DATA_FINGERPRINT_PROPERTY = "rana/data_fingerprint"
 STYLE_DIRTY_PROPERTY = "rana/style_dirty"
 
 
