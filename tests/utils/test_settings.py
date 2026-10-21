@@ -20,6 +20,7 @@ from rana_qgis_plugin.utils.settings import (
     set_rana_open_cache_dir,
     set_rana_root_dir,
     simulation_cache_dir,
+    sync_legacy_working_dir,
     unhide_project,
 )
 
@@ -72,6 +73,29 @@ def test_derived_storage_directories_are_created(settings, tmp_path):
     assert rana_cache_dir() == str(tmp_path / RANA_PROJECTS_DIR_NAME)
     assert (tmp_path / RANA_MODELS_DIR_NAME).is_dir()
     assert (tmp_path / RANA_PROJECTS_DIR_NAME).is_dir()
+
+
+def test_set_rana_root_dir_syncs_legacy_working_dir(settings, tmp_path):
+    settings.remove("threedi/working_dir")
+    set_rana_root_dir(str(tmp_path))
+
+    assert settings.value("threedi/working_dir") == str(tmp_path / RANA_MODELS_DIR_NAME)
+
+
+@pytest.mark.parametrize("overwrite", [True, False])
+@pytest.mark.parametrize("has_value", [True, False])
+def test_sync_legacy_working_dire(settings, tmp_path, overwrite, has_value):
+    set_rana_root_dir(str(tmp_path))
+    if has_value:
+        settings.setValue("threedi/working_dir", "custom-value")
+    else:
+        settings.remove("threedi/working_dir")
+    if overwrite or not has_value:
+        expected_value = hcc_working_dir()
+    else:
+        expected_value = "custom-value"
+    sync_legacy_working_dir(overwrite=overwrite)
+    assert settings.value("threedi/working_dir") == expected_value
 
 
 @pytest.mark.parametrize(

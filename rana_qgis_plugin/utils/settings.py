@@ -38,12 +38,19 @@ def rana_root_dir() -> str:
 def set_rana_root_dir(root_dir: str) -> None:
     root_dir = str(Path(root_dir).expanduser())
     QgsSettings().setValue(f"{RANA_SETTINGS_ENTRY}/root_dir", root_dir)
+    sync_legacy_working_dir()
 
 
 def hcc_working_dir() -> str:
     working_dir = Path(rana_root_dir()) / RANA_MODELS_DIR_NAME
     working_dir.mkdir(parents=True, exist_ok=True)
     return str(working_dir)
+
+
+def sync_legacy_working_dir(overwrite: bool = True) -> None:
+    settings = QgsSettings()
+    if overwrite or not settings.value("threedi/working_dir"):
+        settings.setValue("threedi/working_dir", hcc_working_dir())
 
 
 def rana_cache_dir() -> str:
@@ -189,7 +196,7 @@ def initialize_settings() -> None:
         f"{RANA_SETTINGS_ENTRY}/root_dir", str(Path.home() / "Rana")
     )
     settings.setValue(f"{RANA_SETTINGS_ENTRY}/root_dir", root_dir)
-    Path(root_dir, RANA_MODELS_DIR_NAME).mkdir(parents=True, exist_ok=True)
+    sync_legacy_working_dir(overwrite=False)
     Path(root_dir, RANA_PROJECTS_DIR_NAME).mkdir(parents=True, exist_ok=True)
 
 
