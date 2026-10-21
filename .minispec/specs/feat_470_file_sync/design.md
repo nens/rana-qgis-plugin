@@ -1,11 +1,12 @@
 ---
 feature: feat_470_file_sync
-status: implemented
+status: in_progress
 created: 2026-10-14
 decisions:
   - 20261014-close-sync-prompt-unified-hook
   - 20261014-dirty-state-layer-tree-indicator
   - 20261014-native-dirty-property-notification
+  - 20261021-raster-file-fingerprint-dirty-detection
   - 20261021-style-fingerprint-dirty-detection
 ---
 
@@ -21,11 +22,12 @@ treatment of the dirty-state indicator (listed there as out of scope), and the
 close-time warning (deferred "in favor of the future automatic sync-on-edit
 feature," never implemented).
 
-Builds entirely on existing dirty-state tracking
-(`layer_management/dirty_tracking.py`, `rana/data_dirty` / `rana/style_dirty`
-custom properties, vector-only data tracking / all-types style tracking per
-`20260818-1041-dirty-tracking-vector-only.md`) and the existing fire-and-forget
-sync methods on `Loader` (`upload_existing_files`, `upload_styles`) and
+Reuses existing dirty-state properties
+(`layer_management/dirty_tracking.py`, `rana/data_dirty` /
+`rana/style_dirty`) and vector-only edit-signal tracking per
+`20260818-1041-dirty-tracking-vector-only.md`; adds filesystem fingerprinting
+for eligible Rana rasters. Sync continues through the existing fire-and-forget
+methods on `Loader` (`upload_existing_files`, `upload_styles`) and
 `LayerTreeMenuProvider` (`save_style`, `save_data`). No new upload machinery is
 introduced.
 
@@ -41,10 +43,10 @@ introduced.
 ### Edge Cases
 
 - No dirty rana-linked layers exist at close time — no dialog shown.
-- Raster "data dirty" has no reliable signal (per
-  `20260818-1041-dirty-tracking-vector-only.md`) — rasters never show a data
-  indicator and are never included in the close-prompt's data-sync set; only
-  their style-dirty state is tracked.
+- Raster "data dirty" has no QGIS edit signal (per
+  `20260818-1041-dirty-tracking-vector-only.md`); filesystem fingerprinting
+  for Rana-cached rasters is specified below. Non-file-backed rasters and
+  linked rasters without a known baseline remain `UNKNOWN`.
 - A dirty layer or group is removed from the panel — prompt once for the
   affected dirty file groups before QGIS removes them. A group removal can
   include multiple dirty child layers and must be handled as one batch.
@@ -145,14 +147,98 @@ must never become an input to the others.
 
 ## Key Entities
 
-- **Dirty flags** (existing, unchanged): `rana/data_dirty` (vector only),
-  `rana/style_dirty` (all layer types) — `layer_management/dirty_tracking.py`.
+- **Dirty flags**: `rana/data_dirty` (vectors via edit tracking; eligible
+  rasters via fingerprint evaluation), `rana/style_dirty` (all layer types) —
+  `layer_management/dirty_tracking.py`.
+- **Raster data fingerprint** (new): `rana/data_fingerprint` — a digest of
+  the Rana raster's local file set at the moment it is known to match the
+  server (successful download or upload). Stored on the layer as a custom
+  property and persisted with the QGIS project. It is not part of
+  `RanaLayerRef`; `clear_rana_refs` removes it with the other Rana bookkeeping.
 - **Dirty-state notification** (native): `QgsMapLayer.customPropertyChanged`
   reports changes/removals to those flags; there is no duplicate dirty-state
   store or additional Loader signal.
 - **Indicator**: `QgsLayerTreeViewIndicator` instance tracked per layer/group
   node by `IndicatorManager`, not persisted (created for layers added while
   the plugin is running as they become dirty).
+
+## Raster data dirty detection
+
+QGIS rasters have no edit buffer, `afterCommitChanges`, or `isModified()`.
+Raster changes made through QGIS Processing, Georeferencer, or raster-editing
+plugins are written to disk without a QGIS signal that can serve as a dirty
+notification. Track Rana-linked raster data by comparing its current local
+file set to a baseline captured when a download or upload has completed
+successfully.
+
+### Fingerprint
+
+`local_paths.py:88-97` places each Rana file in a dedicated directory beneath
+the cache, co-locating the main raster and its sidecars. Fingerprint that
+directory recursively so changes to `.tfw`, `.aux.xml`, `.ovr`, and similar
+files are included. The digest is `sha256` over sorted manifest lines in the
+form `relative_path|size|mtime_ns`; no file contents are read, so work scales
+with the number of directory entries rather than the raster's byte size.
+
+Exclude `*.qml`, because styles are tracked separately through
+`rana/style_dirty`, as well as transient `*.tmp`, `*.lock`, `*.gpkg-wal`, and
+`*.gpkg-shm` files. A tool that rewrites byte-identical content still changes
+the modification time and may produce a safe false-positive `DIRTY`; content
+hash confirmation is deferred unless this becomes noisy.
+
+Only evaluate a linked layer whose provider is `gdal` and whose resolved local
+source path is inside `rana_cache_dir()`. Other providers and paths are
+`UNKNOWN`, not clean or dirty. A missing baseline or missing local directory
+also yields `UNKNOWN`, avoiding false claims about pre-existing cache files.
+Vectors continue using `afterCommitChanges`; filesystem tracking is enabled
+for rasters only.
+
+### Baseline lifecycle and re-downloads
+
+Store the baseline in the layer custom property `rana/data_fingerprint`, next
+to the existing Rana metadata. QGIS persists custom properties with the
+project. The existing `strip_rana_properties_from_qml` removes all `rana/`
+properties by prefix, so the fingerprint cannot leak through a style sidecar.
+Unlinking a layer removes the fingerprint property as well as its Rana refs.
+
+Capture or replace the baseline only after the file has been fully written by
+a successful download, or after the corresponding data upload succeeds.
+Ordinary project/layer open must not establish a missing baseline: an existing
+cached file may already contain unsynced changes. If no baseline is available,
+the state remains `UNKNOWN` until a successful download or upload establishes
+one. A re-download is a known-in-sync event, so after the downloaded file
+replaces the local file, update the baseline on the linked layer(s) for that
+Rana file; subsequent evaluation is `CLEAN` unless another write occurs.
+
+### Evaluation and watching
+
+The raster evaluator writes `rana/data_dirty` when the fingerprint differs
+from the baseline. Matching fingerprints clear the data-dirty property;
+absent baselines or missing/unreadable directories produce `UNKNOWN` and must
+not leave a stale raster `rana/data_dirty` flag. The consumer-facing
+dirty-state predicate reads cached properties and the baseline's presence; it
+does not fingerprint the directory. Evaluation runs at lifecycle, watcher,
+and prompt-collection points, not from badge refresh or context-menu
+predicates. The context menu allows `UNKNOWN`, the badge appears only for
+`DIRTY`, and the close/removal prompt includes only `DIRTY` data.
+
+Evaluate existing project rasters when the manager starts / project is read,
+newly added linked rasters, and affected rasters after filesystem notifications.
+Re-evaluate synchronously before collecting close/removal candidates so a
+stale cached property cannot hide a missed write. Menu and indicator code read
+the cached property and do not perform directory walks. This startup scan
+revalidates raster state and does not reattach the vector edit signals in
+KI-008.
+
+Use one `QFileSystemWatcher` with a shared single-shot debounce timer. Watch
+the raster directory and its subdirectories for additions/removals, and every
+relevant current file (main raster and sidecars) for content changes;
+directory watches alone may not report writes to an existing file. Refresh
+file watches after directory changes, including atomic replacements, since a
+file watch may be dropped when the watched file is renamed or removed. Debounce
+bursts (approximately 1.5 seconds), then recompute only affected layers.
+Remove watches and signal connections when layers leave the project or the
+manager disconnects.
 
 ## Requirements
 
@@ -162,8 +248,9 @@ must never become an input to the others.
   ancestor group) backing a rana-linked layer with `rana/data_dirty` or
   `rana/style_dirty` set.
 - **FR-002**: Badges MUST reflect current dirty state without stale data —
-  appearing promptly when a tracked edit/style-change signal fires, and
-  disappearing promptly after a successful sync of that layer.
+  appearing promptly when a tracked edit/style-change signal or raster file
+  watcher fires, and disappearing promptly after a successful sync of that
+  layer.
 - **FR-003**: On project close (including quitting QGIS), if any rana-linked
   layer has unsynced style or data changes, System MUST warn the user and
   offer to sync all dirty items before the close proceeds.
@@ -178,6 +265,20 @@ must never become an input to the others.
 - **FR-007**: "Sync now" MUST reuse existing per-file style/data upload
   entry points unchanged; this feature MUST NOT introduce new upload,
   locking, or remote-change-guard logic.
+- **FR-008**: A Rana-linked, file-backed raster MUST be reported `DIRTY` when
+  its cached file set differs from the baseline recorded at its last
+  successful download or data upload.
+- **FR-009**: A successful re-download MUST replace the raster's baseline so
+  the newly downloaded file is reported `CLEAN` unless it changes afterward.
+- **FR-010**: A missing baseline or an ineligible raster source MUST remain
+  `UNKNOWN`; opening an existing cached file MUST NOT silently establish a
+  baseline.
+- **FR-011**: Fingerprint calculation MUST NOT read raster contents and MUST
+  be independent of file byte size. Context-menu and badge refresh paths MUST
+  use cached state rather than initiating a directory scan.
+- **FR-012**: Raster dirty state MUST be re-evaluated for existing and newly
+  added project layers, after relevant filesystem notifications, and before
+  close/removal prompt collection.
 
 ## Success Criteria
 
@@ -191,6 +292,14 @@ must never become an input to the others.
 - **SC-003**: Choosing "Sync now" from the warning results in the same
   upload behavior (conflict handling, locking, remote-change guard) as
   manually triggering "Save style/data to Rana" from the context menu.
+- **SC-004**: A QGIS operation that writes to a linked Rana raster's cached
+  file set results in a badge within a few seconds, without reopening the
+  project.
+- **SC-005**: A successful re-download clears the raster's data-dirty state;
+  a subsequent close prompt does not list it unless another local write
+  occurs.
+- **SC-006**: A linked raster with no baseline or a non-file-backed provider
+  remains `UNKNOWN` and does not produce a data badge or close-time data entry.
 
 ## Out of Scope
 
@@ -206,6 +315,11 @@ must never become an input to the others.
 - Exact dialog widget choice (`QMessageBox` vs. custom `QDialog`) and the
   specific icon asset for the badge — implementation details, left to task
   breakdown (reuse/extend `icons.py`).
+- Filesystem-based dirty detection for vectors, including externally modified
+  GPKG/SHP files — vectors continue to use `afterCommitChanges`; enabling a
+  second source of vector dirty state is a separate design decision.
+- Content-hash confirmation after a stat-manifest change — deferred unless
+  safe false-positive dirty reports from identical rewrites prove disruptive.
 
 ## Known Issues
 
@@ -414,11 +528,13 @@ cannot answer for rasters, because raster data tracking is unimplemented (per
 that gap, not a domain distinction, and it should disappear when the gap
 closes.
 
-Model the gap honestly as a third state rather than flattening it:
+Model the gap honestly as a third state rather than flattening it. This was
+the policy before the raster filesystem evaluator was specified; the remaining
+`UNKNOWN` cases are defined above:
 
 - `CLEAN` — verified no local data changes
 - `DIRTY` — verified local data changes
-- `UNKNOWN` — cannot determine (rasters, today)
+- `UNKNOWN` — cannot determine (e.g. an unbaselined raster or non-file source)
 
 The state is shared; the **effects** differ per consumer:
 
@@ -428,9 +544,11 @@ The state is shared; the **effects** differ per consumer:
 | Badge | none | shown | none — do not nag about an unverifiable guess |
 | Close prompt | silent | guard | silent — do not block on a guess |
 
-Agreed policy (2026-10-21): raster data is always syncable; rasters are
-ignored when showing the badge and when guarding on close. The table above is
-that policy, expressed so it does not have to be restated at each call site.
+Agreed policy before raster tracking (2026-10-21): rasters were always
+syncable; they were ignored by badge and close-prompt data checks. With the
+filesystem evaluator specified above, eligible rasters leave `UNKNOWN` once a
+baseline exists and follow the same consumer policy as vectors. Remaining
+`UNKNOWN` sources stay syncable but do not badge or guard on close.
 
 Keeping the data-state `isinstance(layer, QgsRasterLayer)` check confined to
 the shared dirty-state predicate is the point. Other raster checks, such as
@@ -439,9 +557,12 @@ badge and prompt each had to re-check the layer type to decide whether to
 suppress, raster logic would scatter back into the consumers — exactly what
 KI-002 is about.
 
-When raster data tracking is implemented, rasters stop returning `UNKNOWN`
-and every consumer behaves correctly with no changes. Style dirtiness is
-unaffected: it is tracked for all layer types and stays two-state.
+Raster data tracking is specified in "Raster data dirty detection" above.
+Eligible baselined rasters return `CLEAN`/`DIRTY`; non-file-backed rasters and
+rasters without a baseline remain `UNKNOWN`. The context menu remains enabled
+for `UNKNOWN`, while badges and the close prompt act only on verified `DIRTY`
+state. Style dirtiness is unaffected: it is tracked for all layer types and
+stays two-state.
 
 ### KI-008: Reopening a project restores dirty state but not dirty tracking
 

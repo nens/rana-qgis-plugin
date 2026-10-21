@@ -3,8 +3,8 @@ feature: feat_470_file_sync
 status: in_progress
 created: 2026-10-14
 chunk_size: adaptive
-total_tasks: 10
-estimated_lines: 835
+total_tasks: 15
+estimated_lines: 1415
 ---
 
 # Unsynced Rana Changes Visibility Tasks
@@ -146,17 +146,24 @@ tests; UI paths require manual verification as noted below.
 ## Follow-up: dirty-state correctness
 
 Tasks 1-6 delivered the feature; manual testing then surfaced KI-001 to
-KI-008 in the design. These tasks address KI-002, KI-003 and KI-004, and
-resolve KI-007 as part of Task 7. KI-001, KI-005, KI-006 and KI-008 remain
-open and out of scope.
+KI-008 in the design. Tasks 7-10 address KI-002, KI-003 and KI-004, and
+establish the shared `UNKNOWN` policy for KI-007. Tasks 11-15 implement
+filesystem-based dirty detection for eligible Rana rasters, closing the
+remaining raster tracking gap in KI-007. KI-001, KI-005, KI-006 and KI-008
+remain open and out of scope.
 
 **Scope decision, 2026-10-21.** An earlier draft included a style-fingerprint
 mechanism (former Tasks 8-10, ~345 lines) to close the KI-001 detection holes.
 It is deferred — see the `rejected-for-now` status in
 `../../knowledge/decisions/20261021-style-fingerprint-dirty-detection.md`,
 which records the two triggers that would revive it. `styleChanged` remains
-the detection mechanism. The tasks below are all independent of how dirtiness
-is *detected*; they concern how it is *interpreted and propagated*.
+the detection mechanism for styles; the existing tasks concern how dirtiness
+is *interpreted and propagated*.
+
+**Raster tracking decision, 2026-10-21.** Raster dirty state is derived from a
+stat-based fingerprint of the Rana cache directory. The baseline lives on the
+layer as `rana/data_fingerprint`, not in QSettings. See
+`../../knowledge/decisions/20261021-raster-file-fingerprint-dirty-detection.md`.
 
 Run tests with `docker compose run --rm qgis pytest -v tests` (README,
 "Local development notes"). Scope to a file while iterating, e.g.
@@ -195,7 +202,7 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
   class DataDirtyState(Enum):
       CLEAN = auto()
       DIRTY = auto()
-      UNKNOWN = auto()      # raster: data tracking unimplemented (KI-007)
+      UNKNOWN = auto()      # cannot determine the data state
 
 
   def data_dirty_state(layer: QgsMapLayer) -> DataDirtyState: ...
@@ -204,7 +211,8 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
   ```
 
   `data_dirty_state` returns `CLEAN` for unlinked layers, `UNKNOWN` for
-  `QgsRasterLayer`, else `DIRTY`/`CLEAN` from `is_data_dirty`.
+  `QgsRasterLayer` (until Tasks 11-15 provide an evaluator), else
+  `DIRTY`/`CLEAN` from `is_data_dirty`.
   `has_unsynced_style` is `is_rana_linked and is_style_dirty`.
   `should_badge` is the badge's single combine rule:
   `has_unsynced_style(layer) or data_dirty_state(layer) is DIRTY` — note
@@ -239,7 +247,8 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
 - **Evidence:** New `test_dirty_state.py` parametrised over
   linked/unlinked × clean/dirty-data × clean/dirty-style × vector/raster,
   asserting the KI-007 effects table. Add a test asserting rasters report
-  `UNKNOWN`, so the change is visible when raster tracking later lands.
+  `UNKNOWN`, documenting the state until the raster evaluator in Tasks 11-15
+  is implemented.
   Consumer-level
   tests go in the existing `test_close_sync_prompt.py` and
   `test_indicator_manager.py`; the menu needs a real view with a current
@@ -333,6 +342,131 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
   `tests/test_layer_manager.py` reproduces the reported bug through the real
   open path. Full suite: 460 passed, 2 skipped.
 
+### Follow-up: raster data dirty detection
+
+These tasks implement the "Raster data dirty detection" section of
+`design.md`. The filesystem evaluator is enabled for eligible Rana-linked
+rasters only; vectors continue using `afterCommitChanges`.
+
+#### Task 11: Fingerprint Rana raster cache directories
+
+- **Estimate:** ~90 lines (implementation and tests)
+- **Files:** `rana_qgis_plugin/layer_management/file_fingerprint.py` (new),
+  `tests/layer_management/test_file_fingerprint.py` (new)
+- **Description:** Add a pure `fingerprint_dir(path) -> str | None` helper.
+  Walk the directory recursively, build sorted `relative_path|size|mtime_ns`
+  manifest lines, and return a truncated `sha256` digest. Exclude `*.qml`,
+  `*.tmp`, `*.lock`, `*.gpkg-wal`, and `*.gpkg-shm`. Return `None` for a
+  missing/unreadable directory rather than manufacturing a baseline. Add a
+  helper that resolves a linked raster's cache directory only when its
+  provider is `gdal` and its local source resolves beneath `rana_cache_dir()`.
+- **Depends on:** None
+- **Acceptance:** Identical directory state yields an identical fingerprint;
+  adding/removing/changing a relevant sidecar changes it; a `.qml` or excluded
+  transient file does not; missing/unreadable paths yield `None`; non-GDAL or
+  out-of-cache sources are not evaluable.
+- **Evidence:** Focused tests use `tmp_path`; path eligibility tests use the
+  `qgis_application` fixture where QGIS layer objects are required.
+
+#### Task 12: Add layer-scoped raster baseline evaluation
+
+- **Estimate:** ~120 lines (implementation and tests)
+- **Files:** `rana_qgis_plugin/layer_management/file_dirty_evaluator.py` (new),
+  `rana_qgis_plugin/layer_management/dirty_tracking.py`,
+  `rana_qgis_plugin/layer_management/layer_manager.py`,
+  `tests/layer_management/test_file_dirty_evaluator.py` (new)
+- **Description:** Define `DATA_FINGERPRINT_PROPERTY =
+  "rana/data_fingerprint"` alongside the existing dirty-property constants.
+  Implement explicit baseline capture and evaluation for an eligible linked
+  raster: no baseline or ineligible source -> `UNKNOWN`; matching fingerprint
+  -> `CLEAN`; mismatch -> `DIRTY`. Reflect evaluated state in
+  `rana/data_dirty` so existing consumers and property notifications remain
+  the integration path. A missing/unreadable current directory also returns
+  `UNKNOWN` and must not leave a stale raster data-dirty flag. Do not capture
+  a missing baseline merely because an existing layer/project was opened.
+  Extend `clear_rana_refs` to remove the fingerprint along with the Rana
+  identity properties.
+- **Depends on:** Task 11
+- **Acceptance:** Tests cover missing baseline, matching/mismatching content
+  metadata, ineligible source, and unlinking. Unknown does not become clean
+  or dirty; `clear_rana_refs` removes the fingerprint without changing the
+  vector dirty-tracking behavior.
+- **Evidence:** Focused evaluator and layer-manager tests pass using real QGIS
+  layer objects where appropriate.
+
+#### Task 13: Capture baselines after successful download and upload
+
+- **Estimate:** ~100 lines (implementation and tests)
+- **Files:** `rana_qgis_plugin/workers/download.py`,
+  `rana_qgis_plugin/layer_management/layer_manager.py`,
+  `rana_qgis_plugin/loader.py`, focused download/upload tests,
+  `tests/layer_management/test_file_dirty_evaluator.py`
+- **Description:** Identify the completion path that knows a Rana raster was
+  successfully written, and capture its baseline only after the write has
+  completed. Ensure a re-download updates the baseline for the corresponding
+  linked raster layer(s), making the newly downloaded copy clean. Do not
+  baseline arbitrary existing files during normal project/layer open. After a
+  successful data upload, replace the baseline for affected raster layers
+  instead of only clearing `rana/data_dirty`; failed or cancelled uploads
+  must retain the previous baseline and dirty state. Preserve style sync and
+  vector dirty handling.
+- **Depends on:** Task 12
+- **Acceptance:** First successful download and re-download establish a
+  baseline after file completion; re-downloading a modified raster results in
+  `CLEAN`; successful data upload results in `CLEAN`; failed/cancelled upload
+  does not clear dirty state or advance the baseline; opening an existing
+  baselineless raster remains `UNKNOWN`.
+- **Evidence:** Focused download and upload tests cover success, failure, and
+  re-download; existing vector upload tests remain green.
+
+#### Task 14: Watch raster files and revalidate project layers
+
+- **Estimate:** ~170 lines (implementation and tests)
+- **Files:** `rana_qgis_plugin/layer_management/raster_watch.py` (new),
+  `rana_qgis_plugin/rana_qgis_plugin.py`,
+  `tests/layer_management/test_raster_watch.py` (new)
+- **Description:** Add a lifecycle-managed watcher for eligible linked
+  rasters. Maintain a `QFileSystemWatcher` for each raster directory and its
+  subdirectories, plus its current data files (main file and relevant
+  sidecars), refreshing file watches after directory changes/atomic
+  replacement. Debounce notifications through a shared single-shot timer
+  (~1.5 s) and evaluate affected layers only. Register for layers added and
+  removed, and revalidate existing linked rasters when the watcher connects/
+  project is read. This project-start scan must not create missing baselines.
+  Wire watcher connect/disconnect alongside existing plugin managers and
+  clean up watches and signal connections on layer removal and plugin unload.
+- **Depends on:** Task 13
+- **Acceptance:** An in-place write and an atomic replacement are detected;
+  sidecar additions/removals trigger reevaluation; bursts coalesce; existing
+  project layers are revalidated without receiving a new baseline; removing a
+  layer or disconnecting removes its watches/connections.
+- **Evidence:** Focused tests exercise watcher lifecycle and debounce with
+  temporary files; avoid timing-sensitive assertions where signal dispatch
+  can be driven directly.
+
+#### Task 15: Integrate evaluated raster state with consumers
+
+- **Estimate:** ~100 lines (implementation and tests)
+- **Files:** `rana_qgis_plugin/layer_management/dirty_state.py`,
+  `rana_qgis_plugin/layer_management/close_sync_prompt.py`,
+  `tests/layer_management/test_dirty_state.py`,
+  `tests/layer_management/test_close_sync_prompt.py`,
+  `.minispec/specs/feat_470_file_sync/design.md`
+- **Description:** Replace the hard-coded raster `UNKNOWN` result with the
+  evaluator for eligible rasters. Ensure evaluation occurs before dirty-file
+  group collection for close/removal prompts, and remove the prompt's raster
+  data exclusion. Keep context-menu and indicator refresh on cached
+  `rana/data_dirty`; neither path should walk the filesystem. Preserve the
+  policy that `UNKNOWN` is syncable from the menu but does not badge or enter
+  close/removal data-sync lists. Update KI-007 to describe the implemented
+  detection and the remaining `UNKNOWN` cases.
+- **Depends on:** Tasks 12 and 14
+- **Acceptance:** A fingerprint mismatch badges and enters the close/removal
+  data-sync list; a matching baseline does neither; an unknown raster remains
+  menu-syncable but has no badge/prompt entry; vector behavior is unchanged.
+- **Evidence:** Dirty-state and close-prompt tests cover raster clean/dirty/
+  unknown cases; full unit suite passes.
+
 ## Dependencies & Parallel Opportunities
 
 - Task 1's Loader-signal approach is superseded; Task 2 removes that signal
@@ -346,7 +480,10 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
 - Task 9 was skipped at the engineer's request.
 - Task 10 confirmed KI-004 and fixed it; see the design.
 - The style-fingerprint work (former Tasks 8-10) is deferred; see the scope
-  decision at the top of this section.
+  decision at the top of this section. Raster file fingerprinting is a
+  separate, accepted design and is covered by Tasks 11-15.
+- Task 12 depends on Task 11; Task 13 depends on Task 12; Task 14 depends on
+  Task 13; Task 15 depends on Tasks 12 and 14.
 - No task adds E2E tests; those require separate explicit permission per the
   repository testing policy.
 
@@ -355,6 +492,11 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
 - Dirty indicators rely on `QgsMapLayer.customPropertyChanged` for both dirty
   property additions and removals; no new Loader signal is needed.
 - Schematisation dirty tracking remains out of scope.
+- Raster fingerprints are stat-based and may conservatively report dirty
+  after a byte-identical rewrite; contents are never read to compute them.
+- Baselines are layer custom properties saved with the project. A missing
+  baseline remains `UNKNOWN`; opening an existing raster never assumes that
+  the current file matches Rana.
 - The close warning cannot cancel project clearing. “Continue without
   syncing” is intentionally not labeled “Cancel.”
 - `QgsMapLayer.styleChanged` is emitted imperatively by each QGIS editing
@@ -376,9 +518,27 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
   appears when dirty.
 - Sync via the context menu: badge clears and stays clear while panning and
   zooming.
-- Raster in a group: "Save data to Rana" stays enabled, no data badge, no
-  close-prompt data entry.
+- Raster without a baseline: "Save data to Rana" stays enabled, no data badge
+  or close-prompt data entry.
 - Remove a dirty group; close a project with dirty layers.
+
+## Manual UI verification (Tasks 11-15)
+
+- Open/download an untouched Rana raster: it has a baseline and no data badge.
+- Use a QGIS tool/plugin that modifies the linked raster on disk (for example,
+  a workflow that replaces the source or writes a sidecar): a data badge
+  appears within a few seconds without reopening the project.
+- Sync raster data from the context menu: after successful upload, the badge
+  clears and remains clear while the raster is unchanged.
+- Modify the raster again and close/remove its layer: it appears in the data
+  section of the prompt.
+- Re-download the raster while it is locally dirty: after download completes,
+  its baseline is replaced and the badge clears.
+- Reopen a project with a stored baseline: state is revalidated against disk;
+  reopen a legacy project with no baseline: state remains `UNKNOWN` rather
+  than being assumed clean.
+- Add a non-file-backed raster: it remains `UNKNOWN`, with no badge/prompt
+  entry while the context-menu data action remains available.
 
 ## Progress
 
@@ -392,3 +552,8 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
 - [x] Task 8: Track all layers, filter at refresh time
 - [x] Task 9: Lock down the style/attach ordering (skipped at engineer request)
 - [x] Task 10: Confirm or diagnose KI-004
+- [ ] Task 11: Fingerprint Rana raster cache directories
+- [ ] Task 12: Add layer-scoped raster baseline evaluation
+- [ ] Task 13: Capture baselines after successful download and upload
+- [ ] Task 14: Watch raster files and revalidate project layers
+- [ ] Task 15: Integrate evaluated raster state with consumers
