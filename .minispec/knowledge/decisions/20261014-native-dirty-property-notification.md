@@ -24,7 +24,7 @@ dirty tracking uses those methods to set and clear `rana/data_dirty` and
 
 The first IndicatorManager draft also listened independently to
 `afterCommitChanges` and `styleChanged`, duplicating subscriptions already
-owned by `dirty_tracking.attach_dirty_tracking`.
+owned by `layer_dirty_flags.attach_dirty_tracking`.
 
 ## Options Considered
 
@@ -67,7 +67,7 @@ property, the layer emits the same notification and the badge is updated.
 
 ## Code References
 
-- Dirty flags are set in `rana_qgis_plugin/layer_management/dirty_tracking.py`
+- Dirty flags are set in `rana_qgis_plugin/layer_management/layer_dirty_flags.py`
 - Dirty flags are cleared in `rana_qgis_plugin/loader.py` through
   `clear_dirty()`
 - Indicator observer is `rana_qgis_plugin/layer_management/indicator_manager.py`

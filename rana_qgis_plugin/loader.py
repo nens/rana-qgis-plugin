@@ -18,7 +18,7 @@ from threedi_api_client.openapi import (
 )
 from threedi_mi_utils import LocalSchematisation
 
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_DIRTY_PROPERTY,
     STYLE_DIRTY_PROPERTY,
     clear_dirty,

@@ -4,14 +4,14 @@ from enum import Enum, auto
 
 from qgis.core import QgsMapLayer, QgsRasterLayer
 
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     is_data_dirty,
     is_style_dirty,
 )
 from rana_qgis_plugin.layer_management.layer_manager import is_rana_linked
 
 
-class DataDirtyState(Enum):
+class LayerSyncState(Enum):
     """Whether local data changes are known to be present."""
 
     CLEAN = auto()
@@ -19,13 +19,13 @@ class DataDirtyState(Enum):
     UNKNOWN = auto()
 
 
-def data_dirty_state(layer: QgsMapLayer) -> DataDirtyState:
+def layer_sync_state(layer: QgsMapLayer) -> LayerSyncState:
     """Return data dirtiness, distinguishing untracked rasters from clean data."""
     if not is_rana_linked(layer):
-        return DataDirtyState.CLEAN
+        return LayerSyncState.CLEAN
     if isinstance(layer, QgsRasterLayer):
-        return DataDirtyState.UNKNOWN
-    return DataDirtyState.DIRTY if is_data_dirty(layer) else DataDirtyState.CLEAN
+        return LayerSyncState.UNKNOWN
+    return LayerSyncState.DIRTY if is_data_dirty(layer) else LayerSyncState.CLEAN
 
 
 def has_unsynced_style(layer: QgsMapLayer) -> bool:
@@ -35,4 +35,4 @@ def has_unsynced_style(layer: QgsMapLayer) -> bool:
 
 def should_badge(layer: QgsMapLayer) -> bool:
     """Return whether a layer should display an unsynced-changes badge."""
-    return has_unsynced_style(layer) or data_dirty_state(layer) is DataDirtyState.DIRTY
+    return has_unsynced_style(layer) or layer_sync_state(layer) is LayerSyncState.DIRTY

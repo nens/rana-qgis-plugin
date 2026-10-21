@@ -10,16 +10,16 @@ from qgis.core import QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsRast
 from qgis.PyQt.QtWidgets import QAction, QMenu
 
 from rana_qgis_plugin.icons import rana_icon
-from rana_qgis_plugin.layer_management.dirty_state import (
-    DataDirtyState,
-    data_dirty_state,
-    has_unsynced_style,
-)
 from rana_qgis_plugin.layer_management.layer_manager import (
     _GROUP_SCHEMATISATION_ID_KEY,
     RanaLayerRef,
     get_rana_refs,
     is_rana_linked,
+)
+from rana_qgis_plugin.layer_management.layer_sync_state import (
+    LayerSyncState,
+    has_unsynced_style,
+    layer_sync_state,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.utils.data_models import (
@@ -118,7 +118,7 @@ class LayerTreeMenuProvider:
         all_layers = self.collect_all_layers([node])
         style_dirty = any(has_unsynced_style(layer) for layer in all_layers)
         data_dirty = any(
-            data_dirty_state(layer) is not DataDirtyState.CLEAN for layer in all_layers
+            layer_sync_state(layer) is not LayerSyncState.CLEAN for layer in all_layers
         )
         if locked or not style_dirty:
             save_style.setEnabled(False)

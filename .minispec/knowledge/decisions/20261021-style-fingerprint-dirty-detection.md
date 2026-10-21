@@ -127,7 +127,7 @@ regression test instead.
 - Existing tests that emit `styleChanged` without mutating the style become
   invalid by construction and must be migrated to real style changes.
 - Timers must be parented to the layer so they die with it. The existing
-  lambdas in `dirty_tracking.py` already hold a strong reference to `layer`,
+  lambdas in `layer_dirty_flags.py` already hold a strong reference to `layer`,
   keeping the Python wrapper alive after the C++ object is deleted; that
   cycle should be fixed here rather than duplicated.
 - Data dirtiness is unaffected — `afterCommitChanges` remains the mechanism

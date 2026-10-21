@@ -12,12 +12,12 @@ from qgis.core import (
 )
 from qgis.gui import QgsLayerTreeView, QgsLayerTreeViewIndicator
 
-from rana_qgis_plugin.layer_management.dirty_state import should_badge
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_DIRTY_PROPERTY,
     STYLE_DIRTY_PROPERTY,
 )
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef
+from rana_qgis_plugin.layer_management.layer_sync_state import should_badge
 
 _INDICATOR_TOOLTIP = "Has unsynced changes to Rana"
 _TRACKED_PROPERTY_KEYS = {

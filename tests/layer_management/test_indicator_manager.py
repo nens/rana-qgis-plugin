@@ -1,11 +1,11 @@
 from qgis.core import QgsLayerTreeModel, QgsProject, QgsVectorLayer
 from qgis.gui import QgsLayerTreeView
 
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.indicator_manager import IndicatorManager
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     attach_dirty_tracking,
     clear_dirty,
 )
-from rana_qgis_plugin.layer_management.indicator_manager import IndicatorManager
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
     clear_rana_refs,

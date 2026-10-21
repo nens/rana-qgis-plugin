@@ -17,7 +17,10 @@ from qgis.PyQt.QtCore import (
 )
 
 from rana_qgis_plugin.auth import get_authcfg_id
-from rana_qgis_plugin.layer_management.dirty_tracking import attach_dirty_tracking
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
+    DATA_FINGERPRINT_PROPERTY,
+    attach_dirty_tracking,
+)
 from rana_qgis_plugin.simulation.utils import (
     BuildOptionActions,
     load_local_schematisation,
@@ -390,6 +393,7 @@ def clear_rana_refs(layer: QgsMapLayer) -> None:
     """Remove the stored Rana reference from a map layer."""
     for property_key in RanaLayerRef.PROPERTY_KEYS.values():
         layer.removeCustomProperty(property_key)
+    layer.removeCustomProperty(DATA_FINGERPRINT_PROPERTY)
 
 
 def is_rana_linked(layer: QgsMapLayer) -> bool:

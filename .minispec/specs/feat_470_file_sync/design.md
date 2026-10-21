@@ -23,7 +23,7 @@ close-time warning (deferred "in favor of the future automatic sync-on-edit
 feature," never implemented).
 
 Reuses existing dirty-state properties
-(`layer_management/dirty_tracking.py`, `rana/data_dirty` /
+(`layer_management/layer_dirty_flags.py`, `rana/data_dirty` /
 `rana/style_dirty`) and vector-only edit-signal tracking per
 `20260818-1041-dirty-tracking-vector-only.md`; adds filesystem fingerprinting
 for eligible Rana rasters. Sync continues through the existing fire-and-forget
@@ -149,7 +149,7 @@ must never become an input to the others.
 
 - **Dirty flags**: `rana/data_dirty` (vectors via edit tracking; eligible
   rasters via fingerprint evaluation), `rana/style_dirty` (all layer types) —
-  `layer_management/dirty_tracking.py`.
+  `layer_management/layer_dirty_flags.py`.
 - **Raster data fingerprint** (new): `rana/data_fingerprint` — a digest of
   the Rana raster's local file set at the moment it is known to match the
   server (successful download or upload). Stored on the layer as a custom
@@ -325,7 +325,7 @@ manager disconnects.
 
 Found while testing the implemented feature. Recorded here rather than fixed
 in place: each has a distinct root cause and the indicator ones affect
-`dirty_tracking.py` / `indicator_manager.py` behaviour that other features
+`layer_dirty_flags.py` / `indicator_manager.py` behaviour that other features
 depend on.
 
 ### KI-001: Style-change detection has per-caller holes
@@ -419,10 +419,10 @@ Two consequences: a dirty but unlinked layer enables the context-menu sync
 actions while showing no badge and raising no close prompt; and one stale
 layer in a group enables the actions for all its siblings.
 
-These should share one predicate, defined once in a new `dirty_state.py`.
-Placing it there rather than in `dirty_tracking.py` avoids an import cycle,
+These should share one predicate, defined once in a new `layer_sync_state.py`.
+Placing it there rather than in `layer_dirty_flags.py` avoids an import cycle,
 since the predicate needs `is_rana_linked` from `layer_manager`, which already
-imports `dirty_tracking`. The raster asymmetry is deliberate and is tracked
+imports `layer_dirty_flags`. The raster asymmetry is deliberate and is tracked
 separately as KI-007 — it must not be folded into the shared predicate.
 
 ### KI-003: Group badges go stale when a layer is untracked

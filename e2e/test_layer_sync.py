@@ -23,7 +23,7 @@ from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QTreeView
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     is_data_dirty,
     is_style_dirty,
 )

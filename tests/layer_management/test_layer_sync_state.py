@@ -1,13 +1,13 @@
 import pytest
 from qgis.core import QgsMapLayer, QgsRasterLayer, QgsVectorLayer
 
-from rana_qgis_plugin.layer_management.dirty_state import (
-    DataDirtyState,
-    data_dirty_state,
+from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
+from rana_qgis_plugin.layer_management.layer_sync_state import (
+    LayerSyncState,
     has_unsynced_style,
+    layer_sync_state,
     should_badge,
 )
-from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
 
 
 @pytest.mark.parametrize("layer_type", ["vector", "raster"])
@@ -33,20 +33,20 @@ def test_consumer_dirty_state(
         layer.setCustomProperty("rana/style_dirty", True)
 
     expected_dirty_data = (
-        DataDirtyState.CLEAN
+        LayerSyncState.CLEAN
         if not linked
-        else DataDirtyState.UNKNOWN
+        else LayerSyncState.UNKNOWN
         if layer_type == "raster"
-        else DataDirtyState.DIRTY
+        else LayerSyncState.DIRTY
         if data_dirty
-        else DataDirtyState.CLEAN
+        else LayerSyncState.CLEAN
     )
     expected_dirty_style = linked and style_dirty
 
-    assert data_dirty_state(layer) is expected_dirty_data
+    assert layer_sync_state(layer) is expected_dirty_data
     assert has_unsynced_style(layer) is expected_dirty_style
     assert should_badge(layer) is (
-        expected_dirty_style or expected_dirty_data is DataDirtyState.DIRTY
+        expected_dirty_style or expected_dirty_data is LayerSyncState.DIRTY
     )
 
 
@@ -55,4 +55,4 @@ def test_raster_data_state_is_unknown(qgis_application):
     set_rana_refs(raster, RanaLayerRef("project", "raster.tif"))
     raster.setCustomProperty("rana/data_dirty", True)
 
-    assert data_dirty_state(raster) is DataDirtyState.UNKNOWN
+    assert layer_sync_state(raster) is LayerSyncState.UNKNOWN

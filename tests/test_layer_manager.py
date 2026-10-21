@@ -5,7 +5,7 @@ import pytest
 from qgis.core import Qgis, QgsProject, QgsVectorLayer
 
 import rana_qgis_plugin.layer_management.layer_manager as lm
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     is_data_dirty,
     is_style_dirty,
 )

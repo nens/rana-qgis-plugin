@@ -11,10 +11,10 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QTimer
 
-from rana_qgis_plugin.layer_management.dirty_state import (
-    DataDirtyState,
-    data_dirty_state,
+from rana_qgis_plugin.layer_management.layer_sync_state import (
+    LayerSyncState,
     has_unsynced_style,
+    layer_sync_state,
     should_badge,
 )
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
@@ -40,7 +40,7 @@ def collect_dirty_file_groups(
         if any(has_unsynced_style(layer) for layer in rana_layers):
             style_groups.append(group)
         if any(
-            data_dirty_state(layer) is DataDirtyState.DIRTY for layer in rana_layers
+            layer_sync_state(layer) is LayerSyncState.DIRTY for layer in rana_layers
         ):
             data_groups.append(group)
     return style_groups, data_groups

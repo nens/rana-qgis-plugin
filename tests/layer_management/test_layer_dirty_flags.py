@@ -1,6 +1,6 @@
 from qgis.core import QgsVectorLayer
 
-from rana_qgis_plugin.layer_management.dirty_tracking import (
+from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_DIRTY_PROPERTY,
     STYLE_DIRTY_PROPERTY,
     attach_dirty_tracking,

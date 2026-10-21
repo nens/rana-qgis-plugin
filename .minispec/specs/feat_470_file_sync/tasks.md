@@ -47,7 +47,7 @@ tests; UI paths require manual verification as noted below.
   tracking for layers added to the project while the plugin is running, and
   listen to `QgsMapLayer.customPropertyChanged(key)` for the existing dirty
   property keys. Do not duplicate listeners to `afterCommitChanges` or
-  `styleChanged`: `dirty_tracking.py` already owns those signals and writes
+  `styleChanged`: `layer_dirty_flags.py` already owns those signals and writes
   the properties. Property removal after sync uses the same notification.
   Remove the now-redundant `Loader.rana_sync_completed` signal added in the
   superseded Task 1 implementation. Scanning layers already present when the
@@ -167,58 +167,63 @@ layer as `rana/data_fingerprint`, not in QSettings. See
 
 Run tests with `docker compose run --rm qgis pytest -v tests` (README,
 "Local development notes"). Scope to a file while iterating, e.g.
-`... pytest -v tests/layer_management/test_dirty_state.py`.
+`... pytest -v tests/layer_management/test_layer_sync_state.py`.
 
 ### Shared convention: where the predicates live
 
-`is_rana_linked` lives in `layer_manager.py:393-395`, and `layer_manager.py:20`
-already imports `attach_dirty_tracking` from `dirty_tracking.py`. Putting
-linking-aware predicates into `dirty_tracking.py` would create the import
-cycle `layer_manager → dirty_tracking → layer_manager`. Split the concerns:
+`is_rana_linked` lives in `layer_manager.py`, and `layer_manager.py` imports
+`attach_dirty_tracking` from `layer_dirty_flags.py`. Putting linking-aware
+predicates into `layer_dirty_flags.py` would create the import cycle
+`layer_manager → layer_dirty_flags → layer_manager`. Split the concerns:
 
-- `dirty_tracking.py` stays **low-level**: raw custom-property reads/writes
+- `layer_dirty_flags.py` stays **low-level**: raw custom-property reads/writes
   and signal attachment. It must not import `layer_manager`.
-- New `layer_management/dirty_state.py` holds the **consumer-visible**
-  predicates. It imports `is_rana_linked` from `layer_manager` and the raw
-  predicates from `dirty_tracking`. Consumers import only from here.
+- `layer_sync_state.py` holds the **consumer-visible** predicates and the
+  `LayerSyncState` enum. It imports `is_rana_linked` from `layer_manager` and
+  raw predicates from `layer_dirty_flags`. Consumers import only from here.
+- `raster_dirty_evaluator.py` imports the `LayerSyncState` enum from
+  `layer_sync_state.py` and returns it directly, so raster and vector dirty
+  state share one vocabulary. It does not import `layer_sync_state.py`'s
+  predicate functions, so there's no cycle back the other way.
 
-Resulting order, acyclic: `dirty_state → {layer_manager, dirty_tracking}`,
-`layer_manager → dirty_tracking`.
+Resulting order, acyclic: `layer_sync_state → {layer_manager,
+layer_dirty_flags}`, `layer_manager → layer_dirty_flags`, and
+`raster_dirty_evaluator → {layer_dirty_flags, layer_sync_state}`.
 
 Do not add linking checks to the existing `is_data_dirty` / `is_style_dirty`
-in `dirty_tracking.py:9-14`. They are storage primitives, used by tracking
+in `layer_dirty_flags.py`. They are storage primitives, used by tracking
 internals and by `clear_dirty`, which must still work on a layer that has
-since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
+since been unlinked. Only `layer_sync_state.py` applies `is_rana_linked`.
 
 #### Task 7: Define one shared dirty state
 
 - **Estimate:** ~150 lines (implementation and tests)
-- **Files:** `rana_qgis_plugin/layer_management/dirty_state.py` (new),
+- **Files:** `rana_qgis_plugin/layer_management/layer_sync_state.py` (new),
   `layer_tree_menu.py`, `close_sync_prompt.py`, `indicator_manager.py`,
-  `tests/layer_management/test_dirty_state.py` (new)
-- **Description:** Create `dirty_state.py` with this exact API:
+  `tests/layer_management/test_layer_sync_state.py` (new)
+- **Description:** Create `layer_sync_state.py` with this exact API:
 
   ```python
-  class DataDirtyState(Enum):
+  class LayerSyncState(Enum):
       CLEAN = auto()
       DIRTY = auto()
       UNKNOWN = auto()      # cannot determine the data state
 
 
-  def data_dirty_state(layer: QgsMapLayer) -> DataDirtyState: ...
+  def layer_sync_state(layer: QgsMapLayer) -> LayerSyncState: ...
   def has_unsynced_style(layer: QgsMapLayer) -> bool: ...
   def should_badge(layer: QgsMapLayer) -> bool: ...
   ```
 
-  `data_dirty_state` returns `CLEAN` for unlinked layers, `UNKNOWN` for
+  `layer_sync_state` returns `CLEAN` for unlinked layers, `UNKNOWN` for
   `QgsRasterLayer` (until Tasks 11-15 provide an evaluator), else
   `DIRTY`/`CLEAN` from `is_data_dirty`.
   `has_unsynced_style` is `is_rana_linked and is_style_dirty`.
   `should_badge` is the badge's single combine rule:
-  `has_unsynced_style(layer) or data_dirty_state(layer) is DIRTY` — note
+  `has_unsynced_style(layer) or layer_sync_state(layer) is DIRTY` — note
   `UNKNOWN` never badges.
 
-  Data-state raster checks belong **only** in `dirty_state.py`. Preserve
+  Data-state raster checks belong **only** in `layer_sync_state.py`. Preserve
   unrelated raster checks, such as `layer_tree_menu.py:155`, which selects
   the upload data type rather than interpreting dirty state. Replace these
   existing expressions:
@@ -227,7 +232,7 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
     the `is_style_dirty` any(), and `isinstance(layer, QgsRasterLayer) or
     is_data_dirty(layer)`. Menu enablement becomes: style action on
     `any(has_unsynced_style(l) ...)`, data action on
-    `any(data_dirty_state(l) is not CLEAN ...)`. Keep the existing `locked`
+    `any(layer_sync_state(l) is not CLEAN ...)`. Keep the existing `locked`
     check unchanged. Evaluating all descendants of the selected group is
     intended and stays; the fix is that each layer is now linking-filtered.
   - `close_sync_prompt.py:37-48` — the `rana_layers` filter and the raster
@@ -242,9 +247,9 @@ since been unlinked. Only `dirty_state.py` applies `is_rana_linked`.
   A linked dirty vector layer is treated consistently by menu, badge and
   prompt. Raster data sync stays reachable from the menu; rasters show no data
   badge and stay excluded from the close prompt. Dirty-state raster logic is
-  confined to `dirty_state.py`; unrelated raster checks may remain. No import
+  confined to `layer_sync_state.py`; unrelated raster checks may remain. No import
   cycle.
-- **Evidence:** New `test_dirty_state.py` parametrised over
+- **Evidence:** New `test_layer_sync_state.py` parametrised over
   linked/unlinked × clean/dirty-data × clean/dirty-style × vector/raster,
   asserting the KI-007 effects table. Add a test asserting rasters report
   `UNKNOWN`, documenting the state until the raster evaluator in Tasks 11-15
@@ -371,10 +376,10 @@ rasters only; vectors continue using `afterCommitChanges`.
 #### Task 12: Add layer-scoped raster baseline evaluation
 
 - **Estimate:** ~120 lines (implementation and tests)
-- **Files:** `rana_qgis_plugin/layer_management/file_dirty_evaluator.py` (new),
-  `rana_qgis_plugin/layer_management/dirty_tracking.py`,
+- **Files:** `rana_qgis_plugin/layer_management/raster_dirty_evaluator.py` (new),
+  `rana_qgis_plugin/layer_management/layer_dirty_flags.py`,
   `rana_qgis_plugin/layer_management/layer_manager.py`,
-  `tests/layer_management/test_file_dirty_evaluator.py` (new)
+  `tests/layer_management/test_raster_dirty_evaluator.py` (new)
 - **Description:** Define `DATA_FINGERPRINT_PROPERTY =
   "rana/data_fingerprint"` alongside the existing dirty-property constants.
   Implement explicit baseline capture and evaluation for an eligible linked
@@ -400,7 +405,7 @@ rasters only; vectors continue using `afterCommitChanges`.
 - **Files:** `rana_qgis_plugin/workers/download.py`,
   `rana_qgis_plugin/layer_management/layer_manager.py`,
   `rana_qgis_plugin/loader.py`, focused download/upload tests,
-  `tests/layer_management/test_file_dirty_evaluator.py`
+  `tests/layer_management/test_raster_dirty_evaluator.py`
 - **Description:** Identify the completion path that knows a Rana raster was
   successfully written, and capture its baseline only after the write has
   completed. Ensure a re-download updates the baseline for the corresponding
@@ -447,9 +452,9 @@ rasters only; vectors continue using `afterCommitChanges`.
 #### Task 15: Integrate evaluated raster state with consumers
 
 - **Estimate:** ~100 lines (implementation and tests)
-- **Files:** `rana_qgis_plugin/layer_management/dirty_state.py`,
+- **Files:** `rana_qgis_plugin/layer_management/layer_sync_state.py`,
   `rana_qgis_plugin/layer_management/close_sync_prompt.py`,
-  `tests/layer_management/test_dirty_state.py`,
+  `tests/layer_management/test_layer_sync_state.py`,
   `tests/layer_management/test_close_sync_prompt.py`,
   `.minispec/specs/feat_470_file_sync/design.md`
 - **Description:** Replace the hard-coded raster `UNKNOWN` result with the
@@ -552,8 +557,8 @@ rasters only; vectors continue using `afterCommitChanges`.
 - [x] Task 8: Track all layers, filter at refresh time
 - [x] Task 9: Lock down the style/attach ordering (skipped at engineer request)
 - [x] Task 10: Confirm or diagnose KI-004
-- [ ] Task 11: Fingerprint Rana raster cache directories
-- [ ] Task 12: Add layer-scoped raster baseline evaluation
+- [x] Task 11: Fingerprint Rana raster cache directories
+- [x] Task 12: Add layer-scoped raster baseline evaluation
 - [ ] Task 13: Capture baselines after successful download and upload
 - [ ] Task 14: Watch raster files and revalidate project layers
 - [ ] Task 15: Integrate evaluated raster state with consumers
