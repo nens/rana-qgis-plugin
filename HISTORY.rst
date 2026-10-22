@@ -6,7 +6,10 @@ History
 -------------------
 
 - Fix word order of a message so it matches the buttons of a dialog
-  used when opening schematisations
+  used when opening schematisations (nens/rana#4928)
+- Fetch all tenants in one go (nens/rana#5047)
+- Reject CSV files for boundary conditions and substance concentrations if they have any columns
+  besides the required 'id' and 'timeseries' (nens/rana#4840).
 
 
 1.2.23 (2026-10-15)
@@ -14,8 +17,6 @@ History
 
 - Fix the long list of organisations in the tenant switcher by using a ComboBox (nens/rana#5047).
 - Rename software for scenario from 3Di to Rana (nens/rana#3771)
-- Reject CSV files for boundary conditions and substance concentrations if they have any columns
-  besides the required 'id' and 'timeseries' (nens/rana#4840).
 
 
 1.2.22 (2026-09-25)
