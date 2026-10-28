@@ -92,39 +92,31 @@ under `threedi/authcfg`. Existing 3Di credentials are reused when available.
 Logout removes the 3Di configuration and its settings pointer.
 
 
-## Tenant switch (with rollback)
+## Tenant switch
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Browser as RanaRootDataItem
-    participant Auth as auth module
 
     User->>Browser: choose Switch tenant
-    Browser->>Auth: switch_tenant()
-    Auth->>Auth: snapshot current tenant + authcfg_id
-    Auth->>User: prompt_switch_tenant()  
-    Note right of Auth: shows radio dialog of cached tenants (self._tenants)
-    User-->>Auth: new_tenant_id or CANCEL
+    Browser->>Browser: read current tenant (get_tenant_id())
+    Browser->>User: prompt_switch_tenant()
+    Note right of Browser: shows dropdown of cached tenants (self.tenants)
+    User-->>Browser: new_tenant_id or CANCEL
     alt cancelled or same tenant
-        Auth-->>Browser: return early (no change)
+        Browser-->>User: return early (no change)
     else new tenant selected
-        Auth->>Auth: logout()  
-        Auth->>Auth: login(start_tenant_id=new_tenant)  
-        alt success
-            Auth->>Auth: persist new tenant + authcfg_id to settings
-            Auth->>Browser: refresh UI
-        else failure
-            Auth->>Auth: restore snapshot (authcfg_id + tenant) to settings
-            Auth->>Browser: show error message
-        end
+        Browser->>Browser: set_tenant_id(new_tenant)
+        Browser->>Browser: update_display()
+        Browser->>Browser: refresh()
     end
 ```
 
 Notes:
 - The tenant list presented in `prompt_switch_tenant()` is the cached `self.tenants` fetched during login; it is not fetched fresh during `switch_tenant()`.
-- Flow order: prompt happens before logout; logout only occurs after a new tenant is chosen. If the user cancels or re-selects the current tenant, no logout occurs.
-- Rollback rule: if re-login for the new tenant fails at any step, the prior authcfg ID and tenant MUST be restored in settings so the user is not left logged-out.
+- `switch_tenant()` does not log out, re-login, create an auth configuration, or roll back. It only changes the stored tenant ID.
+- The existing OAuth authcfg is retained. API requests use the selected tenant as their tenant context in request paths.
 
 ## is_authenticated() contract
 

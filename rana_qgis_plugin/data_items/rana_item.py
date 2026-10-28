@@ -403,27 +403,15 @@ class RanaRootDataItem(QgsDataItem):
         return selected_tenant if isinstance(selected_tenant, str) else None
 
     def switch_tenant(self) -> None:
-        """Switch to a different tenant: snapshot, logout, re-login, rollback on failure."""
-        snapshot_tenant = get_tenant_id()
-        snapshot_authcfg = QgsSettings().value(RANA_AUTHCFG_ENTRY)
-
+        """Switch tenant context while keeping the current user authenticated."""
+        current_tenant = get_tenant_id()
         new_tenant = self.prompt_switch_tenant()
-        if not new_tenant or new_tenant == snapshot_tenant:
+        if not new_tenant or new_tenant == current_tenant:
             return
 
-        self.logout(delete_config=False)
-
-        if not self.login(start_tenant_id=new_tenant):
-            # Rollback: restore previous credentials and tenant
-            self.communication.show_error(
-                f"Failed to sign in to organisation '{new_tenant}'. Restoring previous session."
-            )
-            if snapshot_authcfg:
-                QgsSettings().setValue(RANA_AUTHCFG_ENTRY, snapshot_authcfg)
-            if snapshot_tenant:
-                set_tenant_id(snapshot_tenant)
-            self.update_display()
-            self.refresh()
+        set_tenant_id(new_tenant)
+        self.update_display()
+        self.refresh()
 
     def logout(self, delete_config: bool = True) -> None:
         """Full logout: clear credentials and reset UI state."""
