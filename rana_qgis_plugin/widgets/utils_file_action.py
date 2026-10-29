@@ -188,25 +188,14 @@ def copy_wms_url_to_clipboard(file: dict, communication=None):
 
 
 def retrieve_url(selected_item: dict, project: dict, communication) -> QUrl:
-    if selected_item.get("data_type") == "threedi_schematisation":
-        try:
-            schematisation = get_threedi_schematisation(selected_item["descriptor_id"])
-        except RanaFetchError as e:
-            communication.show_error("Failed to retrieve schematisation from Rana")
-            communication.log_err(f"Failed to retrieve schematisation: {e}")
-            return None
-        if not schematisation.get("management_url"):
-            return None
-        return QUrl(schematisation["management_url"])
-    elif selected_item.get("data_type") in ["vector", "raster"]:
-        link = f"{base_url()}/{get_tenant_id()}/projects/{project['slug']}?tab=1&"
-        file_id = selected_item.get("id")
-        if "/" in file_id:
-            path = file_id.rsplit("/", 1)[0]
-            fileName = file_id.rsplit("/", 1)[1]
-            link = link + f"path={path.replace('/', ',')}&fileName={fileName}"
-        else:
-            link = link + f"fileName={file_id}"
+    link = f"{base_url()}/{get_tenant_id()}/projects/{project['slug']}?tab=1&"
+    file_id = selected_item.get("id")
+    if "/" in file_id:
+        path = file_id.rsplit("/", 1)[0]
+        fileName = file_id.rsplit("/", 1)[1]
+        link = link + f"path={path.replace('/', ',')}&fileName={fileName}"
+    else:
+        link = link + f"fileName={file_id}"
     return QUrl(link)
 
 

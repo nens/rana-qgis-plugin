@@ -10,6 +10,7 @@ History
 - Fetch all tenants in one go (nens/rana#5047)
 - Reject CSV files for boundary conditions and substance concentrations if they have any columns
   besides the required 'id' and 'timeseries' (nens/rana#4840).
+- Point "Open in web viewer" for schematisation to Rana preview instead of management page
 
 
 1.2.23 (2026-10-15)
