@@ -1,6 +1,46 @@
-from qgis.PyQt.QtCore import QPoint, QRect, QSize, Qt
-from qgis.PyQt.QtGui import QPainter
-from qgis.PyQt.QtWidgets import QStyledItemDelegate, QToolTip
+from qgis.PyQt.QtCore import QEvent, QPoint, QRect, QSize, Qt
+from qgis.PyQt.QtGui import QPainter, QTextDocument
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QToolTip,
+)
+
+
+class WordWrapDelegate(QStyledItemDelegate):
+    """Paint and size item text with word wrapping."""
+
+    def paint(self, painter, option, index):
+        options = QStyleOptionViewItem(option)
+        self.initStyleOption(options, index)
+        options.features |= QStyleOptionViewItem.ViewItemFeature.WrapText
+        if options.widget is not None and options.widget.indexWidget(index) is not None:
+            options.text = ""
+        style = (
+            QApplication.style() if options.widget is None else options.widget.style()
+        )
+        if style is not None:
+            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, options, painter)
+
+    def sizeHint(self, option, index):
+        options = QStyleOptionViewItem(option)
+        self.initStyleOption(options, index)
+        options.features |= QStyleOptionViewItem.ViewItemFeature.WrapText
+        document = QTextDocument()
+        document.setHtml(options.text)
+        document.setTextWidth(option.rect.width())
+        return QSize(option.rect.width(), int(document.size().height()))
+
+    def helpEvent(self, event, view, option, index):
+        if not event or not view or event.type() != QEvent.Type.ToolTip:
+            return super().helpEvent(event, view, option, index)
+        text = index.data(Qt.ItemDataRole.DisplayRole)
+        if not text:
+            return super().helpEvent(event, view, option, index)
+        QToolTip.showText(event.globalPos(), text)
+        return True
 
 
 class ContributorAvatarsDelegate(QStyledItemDelegate):

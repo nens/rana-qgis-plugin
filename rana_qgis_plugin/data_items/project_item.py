@@ -66,10 +66,15 @@ class RanaProjectDataItem(QgsDataItem):
         open_action.setIcon(QIcon(str(ICONS_DIR / "link.svg")))
         open_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
 
+        processes_action = QAction("Processes", parent)
+        processes_action.triggered.connect(
+            lambda: self.loader.open_processes_dock(self.project, self.error_signals)
+        )
+
         hide_action = QAction("Don't show this project", parent)
         hide_action.triggered.connect(self.hide_project)
 
-        return [open_action, hide_action]
+        return [open_action, processes_action, hide_action]
 
     def hide_project(self) -> None:
         hide_project(base_url(), get_tenant_id(), self.project["id"])

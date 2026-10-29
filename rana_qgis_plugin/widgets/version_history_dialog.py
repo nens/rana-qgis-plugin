@@ -32,7 +32,7 @@ from rana_qgis_plugin.utils.api import (
     get_threedi_schematisation,
 )
 from rana_qgis_plugin.utils.data_models import OpenSchematisationRequest
-from rana_qgis_plugin.utils.generic import get_rana_processes_url, get_threedi_api
+from rana_qgis_plugin.utils.generic import get_threedi_api
 from rana_qgis_plugin.utils.time import format_timestamp, parse_timestamp_str
 from rana_qgis_plugin.workers.history import HistoryFetchTask, HistoryRow
 
@@ -623,13 +623,14 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
                 self.file_item,
                 row.metadata["schematisation_id"],
                 row.metadata["revision_id"],
+                self.error_signals,
                 self,
             )
         finally:
             button.setEnabled(True)
 
     def create_model(self, row: HistoryRow, button: QPushButton) -> None:
-        """Start model creation and show the online process link."""
+        """Start model creation and point the user to the Processes panel."""
         response = self.loader.start_model_tracker_process(
             self.project["id"],
             row.metadata["schematisation_id"],
@@ -641,14 +642,11 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         button.setEnabled(False)
         button.setToolTip("Model creation requested — click Refresh to check status")
         job_id = response.get("job_id") or response.get("id")
-        self.show_process_url_popup(job_id)
-
-    def show_process_url_popup(self, job_id: str) -> None:
-        url = get_rana_processes_url(self.project.get("slug", ""), job_id)
-        QMessageBox.information(
-            self,
-            "Rana model creation",
-            f'<a href="{url}">Track model creation in Rana</a>',
+        if not job_id:
+            return
+        button.setEnabled(False)
+        self.loader.point_user_to_processes(
+            self.project, [str(job_id)], self.error_signals, self
         )
 
     def delete_model(self, row: HistoryRow) -> None:
