@@ -106,7 +106,7 @@ def simple_fetch(url: str, params: Optional[dict] = None) -> dict:
         return network_manager.content
     else:
         # Raise when fetch failed, error should be handled downstream
-        raise RanaFetchError(error or "", url, params)
+        raise RanaFetchError(error or "", url, params, network_manager.last_http_status)
 
 
 def single_fetch(
@@ -767,7 +767,7 @@ def get_user(params: dict) -> Optional[dict]:
     return user_info[0]
 
 
-def get_project_jobs(project_id: str, params: Optional[dict] = None) -> Optional[dict]:
+def get_project_jobs(project_id: str, params: Optional[dict] = None) -> dict:
     """Fetch jobs for a project.
 
     Args:
@@ -775,18 +775,27 @@ def get_project_jobs(project_id: str, params: Optional[dict] = None) -> Optional
         params: Optional additional query params. Supports: search,
             created_by, status. Merged with default project_id and limit.
     """
-    authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     merged = {"project_id": project_id, "limit": 100}
     if params:
         merged.update(params)
     url = f"{api_url()}/tenants/{tenant}/jobs"
-    network_manager = NetworkManager(url, authcfg_id)
-    status, error = network_manager.fetch(merged)
-    if status:
-        return network_manager.content
-    else:
-        return None
+    return simple_fetch(url, merged)
+
+
+def get_job_logs(job_id: str, params: Optional[dict] = None) -> dict:
+    """Fetch logs for a job.
+
+    Args:
+        job_id: The job to fetch logs for.
+        params: Optional query parameters. Defaults to a limit of 500.
+    """
+    tenant = get_tenant_id()
+    merged = {"limit": 500}
+    if params:
+        merged.update(params)
+    url = f"{api_url()}/tenants/{tenant}/jobs/{job_id}/logs"
+    return simple_fetch(url, merged)
 
 
 def get_project_publications(project_id: str, params: Optional[dict] = None) -> dict:

@@ -2,14 +2,25 @@
 
 from collections.abc import Callable, Sequence
 from enum import Enum
-from html import escape
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from qgis.core import QgsApplication, QgsProject, QgsRasterLayer, QgsTask
-from qgis.PyQt.QtCore import QObject, QSettings, QThreadPool, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import (
+    QObject,
+    QSettings,
+    Qt,
+    QThreadPool,
+    pyqtSignal,
+    pyqtSlot,
+)
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QDockWidget,
+    QFileDialog,
+    QMessageBox,
+)
 from threedi_api_client import ThreediApi
 from threedi_api_client.openapi import (
     ApiException,
@@ -18,6 +29,7 @@ from threedi_api_client.openapi import (
 )
 from threedi_mi_utils import LocalSchematisation
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_SYNC_STATE_PROPERTY,
     STYLE_DIRTY_PROPERTY,
@@ -93,7 +105,6 @@ from rana_qgis_plugin.utils.data_models import (
 from rana_qgis_plugin.utils.filesystem import ensure_writable_directory
 from rana_qgis_plugin.utils.generic import (
     get_editable_layers_for_file,
-    get_rana_processes_url,
     get_threedi_api,
     get_threedi_organisations,
     save_layer_changes,
@@ -103,6 +114,7 @@ from rana_qgis_plugin.utils.qgis import (
 )
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.widgets.processes_panel import ProcessesPanel
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
 from rana_qgis_plugin.widgets.schematisation_new_wizard import (
@@ -179,15 +191,108 @@ class Loader(QObject):
         self.scenario_action_pending = 0
         self.results_analysis_queue: list[tuple[str, dict, dict]] = []
         self.results_analysis_loading = False
+        self.process_docks: dict[str, QDockWidget] = {}
 
     def shutdown(self) -> None:
         """Cancel pending work and drain the pool. Call on plugin unload."""
         self._accept_async_callbacks = False
+        for dock in list(self.process_docks.values()):
+            panel = dock.widget()
+            if panel is not None:
+                panel.stop_polling()
+            if self.communication.iface is not None:
+                self.communication.iface.removeDockWidget(dock)
+            dock.deleteLater()
+        self.process_docks.clear()
         for task in list(self.active_tasks):
             task.cancel()
         if self.avatar_worker is not None:
             self.avatar_worker.cancel()
         self.avatar_pool.waitForDone(3000)
+
+    def open_processes_dock(
+        self,
+        project: dict,
+        error_signals: ApiErrorSignals,
+    ) -> QDockWidget:
+        """Open or raise the Processes dock for a Rana project."""
+        project_id = str(project["id"])
+        dock = self.process_docks.get(project_id)
+        if dock is not None:
+            dock.show()
+            dock.raise_()
+            dock.activateWindow()
+            return dock
+
+        iface = self.communication.iface
+        if iface is None:
+            raise RuntimeError("Cannot open Processes without a QGIS interface")
+        main_window = iface.mainWindow()
+        dock = QDockWidget(f"Processes: {project['name']}", main_window)
+        dock.setObjectName(f"rana_processes_{project_id}")
+        dock.setAllowedAreas(
+            cast(
+                Qt.DockWidgetAreas,
+                Qt.DockWidgetArea.LeftDockWidgetArea
+                | Qt.DockWidgetArea.RightDockWidgetArea,
+            )
+        )
+        dock.setFeatures(
+            cast(
+                QDockWidget.DockWidgetFeatures,
+                QDockWidget.DockWidgetFeature.DockWidgetMovable
+                | QDockWidget.DockWidgetFeature.DockWidgetClosable
+                | QDockWidget.DockWidgetFeature.DockWidgetFloatable,
+            )
+        )
+        dock.setWidget(
+            ProcessesPanel(
+                project,
+                error_signals,
+                avatar_cache=self.avatar_cache,
+                parent=dock,
+            )
+        )
+        self.process_docks[project_id] = dock
+
+        def remove_dock(_object=None) -> None:
+            if self.process_docks.get(project_id) is dock:
+                self.process_docks.pop(project_id, None)
+
+        dock.destroyed.connect(remove_dock)
+        iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        dock.setFloating(True)
+        dock.show()
+        dock.raise_()
+        dock.activateWindow()
+        return dock
+
+    def point_user_to_processes(
+        self,
+        project: dict,
+        job_ids: list[str],
+        error_signals: ApiErrorSignals,
+        parent=None,
+    ) -> None:
+        """Raise or offer the project's Processes dock and highlight jobs."""
+        dock = self.process_docks.get(str(project["id"]))
+        if dock is None:
+            if not self.communication.ask(
+                parent, "Processes", "Track progress in the Processes window?"
+            ):
+                return
+            dock = self.open_processes_dock(project, error_signals)
+
+        dock.show()
+        dock.raise_()
+        if dock.isFloating():
+            dock.activateWindow()
+        else:
+            self.communication.bar_info("See the Processes panel for progress.")
+
+        panel = dock.widget()
+        if panel is not None:
+            panel.highlight_jobs(job_ids)
 
     def _track_task(self, task: QgsTask) -> None:
         """Keep a Python reference to a task until it completes or terminates."""
@@ -205,6 +310,8 @@ class Loader(QObject):
         project: dict | None = None,
         file_item: dict | None = None,
         parent=None,
+        *,
+        error_signals: ApiErrorSignals,
     ) -> SimulationRunner | None:
         """Create and submit the simulation initialization task.
 
@@ -235,7 +342,7 @@ class Loader(QObject):
         if project is not None and file_item is not None:
             task.signals.initializing_simulations_finished.connect(
                 lambda _message, simulations: self.start_simulation_tracker_process(
-                    project, file_item, simulations, parent
+                    project, file_item, simulations, error_signals, parent
                 )
             )
         task_manager.addTask(task)
@@ -284,10 +391,18 @@ class Loader(QObject):
         simulations: list,
         project: dict,
         file_item: dict,
+        error_signals: ApiErrorSignals,
         parent,
     ) -> None:
         """Submit simulations prepared by the wizard to the task manager."""
-        self.start_simulations(threedi_api, simulations, project, file_item, parent)
+        self.start_simulations(
+            threedi_api,
+            simulations,
+            project,
+            file_item,
+            parent=parent,
+            error_signals=error_signals,
+        )
 
     def import_schematisation_from_hcc(
         self,
@@ -455,6 +570,7 @@ class Loader(QObject):
         file_item: dict,
         schematisation_id: int,
         revision_id: int,
+        error_signals: ApiErrorSignals,
         parent,
     ) -> None:
         """Open the simulation setup dialogs after validating prerequisites."""
@@ -559,7 +675,12 @@ class Loader(QObject):
                 )
             simulation_wizard.simulations_prepared.connect(
                 lambda simulations: self._start_simulations_from_wizard(
-                    threedi_api, simulations, project, file_item, parent
+                    threedi_api,
+                    simulations,
+                    project,
+                    file_item,
+                    error_signals,
+                    parent,
                 )
             )
             simulation_wizard.exec()
@@ -571,7 +692,12 @@ class Loader(QObject):
             self.communication.show_error(f"Could not prepare simulation: {error}")
 
     def start_simulation_tracker_process(
-        self, project: dict, file_item: dict, simulations: list, parent=None
+        self,
+        project: dict,
+        file_item: dict,
+        simulations: list,
+        error_signals: ApiErrorSignals,
+        parent=None,
     ) -> None:
         """Start a Rana tracker process for each initialized simulation."""
         try:
@@ -589,7 +715,7 @@ class Loader(QObject):
         output_file_path = (
             file_item["id"].rpartition("/")[0] + file_item["id"].rpartition("/")[1]
         )
-        links = []
+        job_ids = []
         for simulation in simulations:
             simulation_name = simulation.simulation.name
             params = {
@@ -618,14 +744,11 @@ class Loader(QObject):
                     f"Simulation tracker started without a job ID for {simulation_name}"
                 )
                 continue
-            url = get_rana_processes_url(project.get("slug", ""), job_id)
-            links.append(
-                f'<a href="{escape(url, quote=True)}">'
-                f"Track simulation {escape(simulation_name)} in Rana</a>"
-            )
+            job_ids.append(str(job_id))
 
-        if links:
-            QMessageBox.information(parent, "Rana simulation", "<br>".join(links))
+        if job_ids:
+            self.communication.bar_info(f"{len(job_ids)} simulation(s) started.")
+            self.point_user_to_processes(project, job_ids, error_signals, parent)
 
     def begin_scenario_action(self, count: int) -> bool:
         if self.scenario_action_busy:

@@ -40,7 +40,19 @@ def test_project_listing(plugin, qtbot, rana_project):
         timeout=30000,
     )
 
-    # Step 2: delete project via API, refresh, assert it disappears
+    # Step 2: open Processes from the project context menu and assert the panel is shown
+    project_item = next(
+        child
+        for child in plugin.rana_root_item.children()
+        if isinstance(child, RanaProjectDataItem)
+        and child.name() == rana_project["name"]
+    )
+    click_context_menu_action(qtbot, project_item, "Processes")
+    dock = plugin.loader.process_docks[rana_project["id"]]
+    assert dock.isVisible()
+    dock.close()
+
+    # Step 3: delete project via API, refresh, assert it disappears
     from rana_qgis_plugin.utils.api import delete_project
 
     delete_project(rana_project["id"])

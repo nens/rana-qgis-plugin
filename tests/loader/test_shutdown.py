@@ -16,6 +16,21 @@ def test_shutdown_cancels_active_tasks_without_dropping_references():
     assert loader.active_tasks == set(tasks)
 
 
+def test_shutdown_stops_process_panel_polling_and_removes_docks():
+    loader, communication = make_loader()
+    dock = MagicMock()
+    panel = dock.widget.return_value
+    loader.process_docks["project"] = dock
+
+    with patch.object(loader.avatar_pool, "waitForDone"):
+        loader.shutdown()
+
+    panel.stop_polling.assert_called_once_with()
+    communication.iface.removeDockWidget.assert_called_once_with(dock)
+    dock.deleteLater.assert_called_once_with()
+    assert loader.process_docks == {}
+
+
 def test_tracked_task_is_retained_until_completion_or_termination():
     loader, _ = make_loader()
     task = MagicMock()

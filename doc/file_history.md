@@ -108,12 +108,10 @@ sequenceDiagram
 
 ### Create / Delete behavior
 
-- **Create** calls `Loader.start_model_tracker_process()`. On success it disables the clicked button for the current dialog instance, changes its tooltip to prompt a manual Refresh, and shows a popup with a link to the Rana processes tab (`get_rana_processes_url()`), including the returned job
-  ID when available.
-- **Delete** asks for confirmation, then calls `Loader.delete_schematisation_revision_3di_model()` synchronously. On  failure it shows an action error and leaves the table unchanged. On success it calls `refresh()`, which re-fetches the complete revision list so every
-  row's model-limit state is recalculated.
+- **Create** calls `Loader.start_model_tracker_process()`. On success it disables the clicked button for the current dialog instance, changes its tooltip to prompt a manual Refresh, and calls `Loader.point_user_to_processes()`, which opens the Processes panel (see [processes_panel.md](./processes_panel.md)) and highlights the returned job ID. If the response contains no job ID, the button is disabled but the user is not pointed to the Processes panel.
+- **Delete** asks for confirmation, then calls `Loader.delete_schematisation_revision_3di_model()` synchronously. On failure it shows an action error and leaves the table unchanged. On success it calls `update_action_columns_after_delete_success()`, which updates the existing table in place without a new API request.
 
-**Known limitation:** model-creation state is not tracked after the Create click. There is no polling of the server-side job, and no persisted state across closing/reopening the dialog or restarting QGIS. A user could therefore start a second `Create` for the same revision while an earlier one is still running, by refreshing before the first one completes. 
+**Known limitation:** the Create click is not tracked by the file history dialog. After it, the button is disabled only for that dialog instance; the dialog does not poll the server-side job or persist its state, so closing and reopening the dialog, or refreshing before the job finishes, re-enables Create and allows a second request for the same revision. Job progress is only visible in the Processes panel (see [processes_panel.md](./processes_panel.md)), which is the place to check whether a model is already being created.
 
 ### Revision row context menu
 
