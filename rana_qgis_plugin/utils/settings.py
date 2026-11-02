@@ -141,10 +141,10 @@ def get_use_plugin_excepthook() -> bool:
     )
 
 
-def get_log_threedi_api_requests() -> bool:
-    """Return whether ThreeDi API request-attempt logging is enabled."""
+def get_log_api_requests() -> bool:
+    """Return whether API request/upload-attempt logging is enabled."""
     return QgsSettings().value(
-        f"{RANA_SETTINGS_ENTRY}/log_threedi_api_requests", False, type=bool
+        f"{RANA_SETTINGS_ENTRY}/log_api_requests", False, type=bool
     )
 
 
@@ -159,7 +159,7 @@ def get_advanced_settings() -> dict:
         "use_plugin_excepthook",
         "hcc_url",
         "rana_api_version_prefix",
-        "log_threedi_api_requests",
+        "log_api_requests",
     ]
     for setting_name in settings_names:
         value = QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/{setting_name}")

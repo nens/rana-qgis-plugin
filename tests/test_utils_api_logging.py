@@ -4,9 +4,9 @@ from unittest.mock import Mock, patch
 import pytest
 from qgis.core import Qgis
 
-import rana_qgis_plugin.simulation.threedi_api_logging as api_logging
 import rana_qgis_plugin.simulation.threedi_calls as threedi_calls
-from rana_qgis_plugin.simulation.threedi_api_logging import (
+import rana_qgis_plugin.utils.api_logging as api_logging
+from rana_qgis_plugin.utils.api_logging import (
     build_request_summary,
     redact_query_params,
 )
@@ -50,12 +50,12 @@ def make_api_client(request):
     return SimpleNamespace(_client=SimpleNamespace(rest_client=rest_client))
 
 
-def test_install_request_logger_logs_attempt_and_returns_result():
+def test_install_threedi_request_logger_logs_attempt_and_returns_result():
     result = object()
     original_request = Mock(return_value=result)
     api_client = make_api_client(original_request)
     with patch.object(api_logging, "log_message") as log_message:
-        api_logging.install_request_logger(api_client)
+        api_logging.install_threedi_request_logger(api_client)
         actual = api_client._client.rest_client.request(
             "GET", "https://example.test/items", [("limit", 5)]
         )
@@ -71,12 +71,15 @@ def test_install_request_logger_logs_attempt_and_returns_result():
     )
 
 
-def test_install_request_logger_logs_failure_without_exception_text():
+def test_install_threedi_request_logger_logs_failure_without_exception_text():
+    # The exception's text is excluded because it may contain response
+    # headers/body content (the client's ApiException includes both in its
+    # string representation), which must not be logged.
     error = RuntimeError("could contain secrets")
     original_request = Mock(side_effect=error)
     api_client = make_api_client(original_request)
     with patch.object(api_logging, "log_message") as log_message:
-        api_logging.install_request_logger(api_client)
+        api_logging.install_threedi_request_logger(api_client)
         with pytest.raises(RuntimeError, match="could contain secrets") as exc_info:
             api_client._client.rest_client.request("GET", "https://example.test/items")
 
@@ -89,21 +92,21 @@ def test_install_request_logger_logs_failure_without_exception_text():
     assert "could contain secrets" not in str(log_message.call_args_list)
 
 
-def test_install_request_logger_fails_open_when_attempt_log_raises():
+def test_install_threedi_request_logger_still_sends_request_when_attempt_log_raises():
     result = object()
     original_request = Mock(return_value=result)
     api_client = make_api_client(original_request)
     with patch.object(
         api_logging, "log_message", side_effect=RuntimeError("logger failed")
     ):
-        api_logging.install_request_logger(api_client)
+        api_logging.install_threedi_request_logger(api_client)
         actual = api_client._client.rest_client.request("GET", "https://example.test")
 
     assert actual is result
     original_request.assert_called_once()
 
 
-def test_install_request_logger_preserves_transport_error_if_warning_log_raises():
+def test_install_threedi_request_logger_preserves_transport_error_if_warning_log_raises():
     error = RuntimeError("transport failed")
     original_request = Mock(side_effect=error)
     api_client = make_api_client(original_request)
@@ -112,20 +115,20 @@ def test_install_request_logger_preserves_transport_error_if_warning_log_raises(
         "log_message",
         side_effect=[None, RuntimeError("logger failed")],
     ):
-        api_logging.install_request_logger(api_client)
+        api_logging.install_threedi_request_logger(api_client)
         with pytest.raises(RuntimeError, match="transport failed") as exc_info:
             api_client._client.rest_client.request("GET", "https://example.test")
 
     assert exc_info.value is error
 
 
-def test_install_request_logger_logs_api_status_without_reason():
+def test_install_threedi_request_logger_logs_api_status_without_reason():
     error = RuntimeError("secret reason")
     setattr(error, "status", 503)
     original_request = Mock(side_effect=error)
     api_client = make_api_client(original_request)
     with patch.object(api_logging, "log_message") as log_message:
-        api_logging.install_request_logger(api_client)
+        api_logging.install_threedi_request_logger(api_client)
         with pytest.raises(RuntimeError):
             api_client._client.rest_client.request("GET", "https://example.test")
 
@@ -137,7 +140,7 @@ def test_install_request_logger_logs_api_status_without_reason():
     assert "secret reason" not in str(log_message.call_args_list)
 
 
-def test_install_request_logger_fails_open_when_summary_fails():
+def test_install_threedi_request_logger_still_sends_request_when_summary_raises():
     result = object()
     original_request = Mock(return_value=result)
     api_client = make_api_client(original_request)
@@ -149,7 +152,7 @@ def test_install_request_logger_fails_open_when_summary_fails():
         ),
         patch.object(api_logging, "log_message") as log_message,
     ):
-        api_logging.install_request_logger(api_client)
+        api_logging.install_threedi_request_logger(api_client)
         actual = api_client._client.rest_client.request("GET", "https://example.test")
 
     assert actual is result
@@ -157,13 +160,13 @@ def test_install_request_logger_fails_open_when_summary_fails():
     assert not log_message.called
 
 
-def test_install_request_logger_skips_missing_transport_and_warns_once():
+def test_install_threedi_request_logger_skips_missing_transport_and_warns_once():
     with (
         patch.object(api_logging, "log_message") as log_message,
         patch.object(api_logging, "_INSTALLATION_WARNING_EMITTED", False),
     ):
-        api_logging.install_request_logger(SimpleNamespace())
-        api_logging.install_request_logger(SimpleNamespace())
+        api_logging.install_threedi_request_logger(SimpleNamespace())
+        api_logging.install_threedi_request_logger(SimpleNamespace())
 
     log_message.assert_called_once_with(
         "ThreeDi API request logging could not be installed; continuing without it.",
@@ -171,9 +174,9 @@ def test_install_request_logger_skips_missing_transport_and_warns_once():
     )
 
 
-@patch("rana_qgis_plugin.simulation.threedi_calls.install_request_logger")
+@patch("rana_qgis_plugin.simulation.threedi_calls.install_threedi_request_logger")
 @patch("rana_qgis_plugin.simulation.threedi_calls.ThreediApi")
-@patch("rana_qgis_plugin.simulation.threedi_calls.get_log_threedi_api_requests")
+@patch("rana_qgis_plugin.simulation.threedi_calls.get_log_api_requests")
 @pytest.mark.parametrize("logging_enabled_return", [True, False])
 def test_personal_token_factory_installs_request_logger(
     logging_enabled, threedi_api_class, install_logger, logging_enabled_return
@@ -199,3 +202,89 @@ def test_personal_token_factory_installs_request_logger(
         install_logger.assert_called_once_with(api_client)
     else:
         install_logger.assert_not_called()
+
+
+def test_build_upload_summary_omits_query_string():
+    summary = api_logging.build_upload_summary(
+        "put",
+        "https://user:password@example.test/bucket/file?signature=secret&x=1",
+    )
+
+    assert summary == "PUT https://example.test/bucket/file"
+    assert "signature" not in summary
+    assert "secret" not in summary
+    assert "password" not in summary
+
+
+def test_logged_put_logs_attempt_and_returns_result():
+    response = object()
+    with (
+        patch.object(api_logging.requests, "put", return_value=response) as put,
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        actual = api_logging.logged_put(
+            "https://example.test/bucket/file?sig=secret", data=b"payload"
+        )
+
+    assert actual is response
+    put.assert_called_once_with(
+        "https://example.test/bucket/file?sig=secret", data=b"payload"
+    )
+    log_message.assert_called_once_with(
+        "Upload attempt: PUT https://example.test/bucket/file",
+        Qgis.MessageLevel.Info,
+    )
+
+
+def test_logged_put_logs_failure_without_exception_text():
+    # The exception's text is excluded because, for HTTP errors (e.g. from
+    # response.raise_for_status()), it commonly includes the full request
+    # URL -- including the query string this summary otherwise omits,
+    # since that query string may contain a presigned signature.
+    error = RuntimeError("could contain secrets")
+    with (
+        patch.object(api_logging.requests, "put", side_effect=error),
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        with pytest.raises(RuntimeError, match="could contain secrets") as exc_info:
+            api_logging.logged_put("https://example.test/bucket/file")
+
+    assert exc_info.value is error
+    assert log_message.call_count == 2
+    assert log_message.call_args_list[-1].args == (
+        "Upload failed: PUT https://example.test/bucket/file (RuntimeError)",
+        Qgis.MessageLevel.Warning,
+    )
+    assert "could contain secrets" not in str(log_message.call_args_list)
+
+
+def test_logged_put_still_sends_request_when_summary_raises():
+    response = object()
+    with (
+        patch.object(
+            api_logging,
+            "build_upload_summary",
+            side_effect=RuntimeError("format failed"),
+        ),
+        patch.object(api_logging.requests, "put", return_value=response) as put,
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        actual = api_logging.logged_put("https://example.test/bucket/file")
+
+    assert actual is response
+    put.assert_called_once()
+    assert not log_message.called
+
+
+def test_logged_put_still_sends_request_when_attempt_log_raises():
+    response = object()
+    with (
+        patch.object(
+            api_logging, "log_message", side_effect=RuntimeError("logger failed")
+        ),
+        patch.object(api_logging.requests, "put", return_value=response) as put,
+    ):
+        actual = api_logging.logged_put("https://example.test/bucket/file")
+
+    assert actual is response
+    put.assert_called_once()

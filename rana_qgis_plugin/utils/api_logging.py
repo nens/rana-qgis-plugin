@@ -3,6 +3,7 @@ from functools import wraps
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import requests
 from qgis.core import Qgis, QgsMessageLog
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
@@ -88,8 +89,13 @@ def log_installation_warning_once() -> None:
     )
 
 
-def install_request_logger(api_client: Any) -> None:
-    """Log redacted request attempts for a ThreeDi API client instance."""
+def install_threedi_request_logger(api_client: Any) -> None:
+    """Log redacted request attempts for a ThreeDi API client instance.
+
+    This patches ``api_client._client.rest_client.request``, an internal
+    attribute specific to the ``threedi-api-client`` package's ``ThreediApi``
+    class, so it only applies to ThreeDi API clients.
+    """
     try:
         rest_client = api_client._client.rest_client
         original_request = rest_client.request
@@ -130,3 +136,44 @@ def install_request_logger(api_client: Any) -> None:
         rest_client.request = logged_request
     except Exception:
         log_installation_warning_once()
+
+
+def build_upload_summary(method: str, url: str) -> str:
+    """Format a one-line upload summary with the query string always omitted.
+
+    Upload URLs are often presigned and may carry signatures or credentials
+    in their query string, so unlike ``build_request_summary`` this never
+    includes query parameters, not even redacted.
+    """
+    parsed_url = urlsplit(url)
+    host = parsed_url.netloc.rsplit("@", 1)[-1]
+    safe_url = urlunsplit((parsed_url.scheme, host, parsed_url.path, "", ""))
+    return f"{method.upper()} {safe_url}"
+
+
+def logged_put(url: str, **kwargs: Any) -> requests.Response:
+    """Log a PUT upload attempt, then delegate to ``requests.put`` unchanged.
+
+    Logging failures never prevent the upload or alter its result/exception.
+    """
+    try:
+        summary = build_upload_summary("PUT", url)
+        log_message(f"Upload attempt: {summary}", Qgis.MessageLevel.Info)
+    except Exception:
+        summary = "upload summary unavailable"
+
+    try:
+        return requests.put(url, **kwargs)
+    except Exception as error:
+        try:
+            # The exception's text is excluded deliberately: for HTTP errors
+            # (e.g. `response.raise_for_status()`), it commonly includes the
+            # full request URL, including the query string this summary
+            # otherwise omits because it may hold a presigned signature.
+            log_message(
+                f"Upload failed: {summary} ({type(error).__name__})",
+                Qgis.MessageLevel.Warning,
+            )
+        except Exception:
+            pass
+        raise

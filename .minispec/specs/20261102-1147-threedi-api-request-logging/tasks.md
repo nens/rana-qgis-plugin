@@ -210,6 +210,6 @@ for the options considered.
 - [x] Task 1: Request-summary and redaction helpers
 - [x] Task 2: Transport wrapper + wire into personal-token factory
 - [x] Task 3: Add settings toggle, gate the wrapper, default off
-- [ ] Task 4: Rename setting, relocate module, log direct `requests.put()` uploads
+- [x] Task 4: Rename setting, relocate module, log direct `requests.put()` uploads
 - [ ] Task 5: Logging-enabled pool for `upload_file()` uploads
 </content>

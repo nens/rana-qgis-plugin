@@ -124,11 +124,15 @@ use_plugin_excepthook=false
 to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
 
 
-### Debugging ThreeDi API requests
+### Debugging API requests
 
-ThreeDi API requests made through the plugin's API client can be logged in
-QGIS's **Log Messages** panel under the **Rana** category. Logging is disabled
-by default and can be activated via the `QGIS/QGIS3.ini` file in your profile: `log_threedi_api_requests=true`.
+ThreeDi API requests made through the plugin's API client, as well as file
+upload attempts to Rana and ThreeDi (e.g. project files, schematisations,
+rasters), can be logged in QGIS's **Log Messages** panel under the **Rana**
+category. Logging is disabled by default and can be activated via the
+`QGIS/QGIS3.ini` file in your profile: `log_api_requests=true`. Upload log
+entries never include the upload URL's query string, headers, or file
+contents.
 
 
 ## Releasing
