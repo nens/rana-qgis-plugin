@@ -288,3 +288,121 @@ def test_logged_put_still_sends_request_when_attempt_log_raises():
 
     assert actual is response
     put.assert_called_once()
+
+
+def test_get_logging_pool_disabled_returns_plain_pool_with_matching_retry_policy():
+    with patch.object(api_logging, "get_log_api_requests", return_value=False):
+        pool = api_logging.get_logging_pool()
+
+    assert type(pool) is api_logging.urllib3.PoolManager
+    retries = pool.connection_pool_kw["retries"]
+    assert retries.total == 3
+    assert retries.backoff_factor == 1.0
+
+
+def test_get_logging_pool_enabled_returns_logging_pool_with_matching_retry_policy():
+    with patch.object(api_logging, "get_log_api_requests", return_value=True):
+        pool = api_logging.get_logging_pool()
+
+    assert isinstance(pool, api_logging._LoggingPoolManager)
+    retries = pool.connection_pool_kw["retries"]
+    assert retries.total == 3
+    assert retries.backoff_factor == 1.0
+
+
+def test_logging_pool_manager_from_pool_reuses_source_pool_configuration():
+    source_retries = api_logging.urllib3.util.retry.Retry(7, backoff_factor=2.5)
+    source_pool = api_logging.urllib3.PoolManager(retries=source_retries)
+
+    pool = api_logging._LoggingPoolManager.from_pool(source_pool)
+
+    assert isinstance(pool, api_logging._LoggingPoolManager)
+    assert pool.connection_pool_kw["retries"] is source_retries
+    assert pool.headers == source_pool.headers
+
+
+def test_get_logging_pool_disabled_returns_threedi_api_clients_own_pool():
+    with (
+        patch.object(api_logging, "get_log_api_requests", return_value=False),
+        patch.object(api_logging, "get_pool") as get_pool_mock,
+    ):
+        pool = api_logging.get_logging_pool()
+
+    get_pool_mock.assert_called_once_with()
+    assert pool is get_pool_mock.return_value
+
+
+def test_get_logging_pool_enabled_wraps_threedi_api_clients_own_pool():
+    with (
+        patch.object(api_logging, "get_log_api_requests", return_value=True),
+        patch.object(api_logging, "get_pool") as get_pool_mock,
+        patch.object(api_logging._LoggingPoolManager, "from_pool") as from_pool_mock,
+    ):
+        pool = api_logging.get_logging_pool()
+
+    get_pool_mock.assert_called_once_with()
+    from_pool_mock.assert_called_once_with(get_pool_mock.return_value)
+    assert pool is from_pool_mock.return_value
+
+
+def test_logging_pool_manager_logs_attempt_and_returns_result():
+    response = object()
+    pool = api_logging._LoggingPoolManager()
+    with (
+        patch.object(
+            api_logging.urllib3.PoolManager, "request", return_value=response
+        ) as request,
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        actual = pool.request(
+            "PUT", "https://example.test/bucket/file?sig=secret", body=b"payload"
+        )
+
+    assert actual is response
+    request.assert_called_once_with(
+        "PUT", "https://example.test/bucket/file?sig=secret", body=b"payload"
+    )
+    log_message.assert_called_once_with(
+        "Upload attempt: PUT https://example.test/bucket/file",
+        Qgis.MessageLevel.Info,
+    )
+
+
+def test_logging_pool_manager_logs_failure_without_exception_text():
+    error = RuntimeError("could contain secrets")
+    pool = api_logging._LoggingPoolManager()
+    with (
+        patch.object(api_logging.urllib3.PoolManager, "request", side_effect=error),
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        with pytest.raises(RuntimeError, match="could contain secrets") as exc_info:
+            pool.request("PUT", "https://example.test/bucket/file")
+
+    assert exc_info.value is error
+    assert log_message.call_count == 2
+    assert log_message.call_args_list[-1].args == (
+        "Upload failed: PUT https://example.test/bucket/file (RuntimeError)",
+        Qgis.MessageLevel.Warning,
+    )
+    assert "could contain secrets" not in str(log_message.call_args_list)
+
+
+def test_logging_pool_manager_still_sends_request_when_summary_raises():
+    response = object()
+    pool = api_logging._LoggingPoolManager()
+    with (
+        patch.object(
+            api_logging,
+            "build_upload_summary",
+            side_effect=RuntimeError("format failed"),
+        ),
+        patch.object(
+            api_logging.urllib3.PoolManager, "request", return_value=response
+        ) as request,
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        actual = pool.request("PUT", "https://example.test/bucket/file")
+
+    assert actual is response
+    request.assert_called_once()
+    assert not log_message.called

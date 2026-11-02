@@ -4,9 +4,12 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
+import urllib3
 from qgis.core import Qgis, QgsMessageLog
+from threedi_api_client.files import get_pool
 
 from rana_qgis_plugin.constant import PLUGIN_NAME
+from rana_qgis_plugin.utils.settings import get_log_api_requests
 
 _INSTALLATION_WARNING_EMITTED = False
 SENSITIVE_QUERY_TERMS = (
@@ -177,3 +180,60 @@ def logged_put(url: str, **kwargs: Any) -> requests.Response:
         except Exception:
             pass
         raise
+
+
+class _LoggingPoolManager(urllib3.PoolManager):
+    """A ``urllib3.PoolManager`` that logs each request attempt.
+
+    Used only for ``threedi_api_client.files.upload_file()``, which does not
+    use a ``ThreediApi`` instance and therefore cannot be instrumented via
+    ``install_threedi_request_logger``. Behaves exactly like the base
+    ``PoolManager`` except for logging; arguments, responses, and exceptions
+    are passed through unchanged.
+    """
+
+    @classmethod
+    def from_pool(cls, pool: urllib3.PoolManager) -> "_LoggingPoolManager":
+        """Build a logging pool with the same configuration as ``pool``.
+
+        Reuses ``pool``'s actual ``connection_pool_kw`` (which includes its
+        retry policy) and headers, rather than re-specifying them here, so
+        this stays in sync with whatever ``threedi_api_client.files.get_pool()``
+        actually constructs.
+        """
+        return cls(headers=pool.headers, **pool.connection_pool_kw)
+
+    def request(self, method, url, *args, **kwargs):
+        try:
+            summary = build_upload_summary(method, url)
+            log_message(f"Upload attempt: {summary}", Qgis.MessageLevel.Info)
+        except Exception:
+            summary = "upload summary unavailable"
+
+        try:
+            return super().request(method, url, *args, **kwargs)
+        except Exception as error:
+            try:
+                # See logged_put() for why the exception text is excluded.
+                log_message(
+                    f"Upload failed: {summary} ({type(error).__name__})",
+                    Qgis.MessageLevel.Warning,
+                )
+            except Exception:
+                pass
+            raise
+
+
+def get_logging_pool() -> urllib3.PoolManager:
+    """Return a pool for ``threedi_api_client.files.upload_file(pool=...)``.
+
+    When API request logging is disabled, this is simply
+    ``threedi_api_client.files.get_pool()`` — the same default pool
+    ``upload_file()`` would otherwise construct itself when no ``pool=`` is
+    passed. When enabled, it returns a pool built with the same
+    configuration that additionally logs each request attempt.
+    """
+    pool = get_pool()
+    if not get_log_api_requests():
+        return pool
+    return _LoggingPoolManager.from_pool(pool)
