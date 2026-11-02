@@ -30,7 +30,9 @@ is not the intended shipped behavior. See `tasks.md` for the task sequencing.
 **Integration point**: of the three API client factory functions in
 `simulation/threedi_calls.py`, only `get_api_client_with_personal_api_token`
 is actually called anywhere in the plugin, via `get_threedi_api()` in
-`utils/generic.py`. The other two (`get_api_client`, `get_api_client_with_tokens`)
+`utils/generic.py`. The logger is installed inside that factory immediately
+after constructing the client, so any caller of this factory receives the
+wrapped client. The other two (`get_api_client`, `get_api_client_with_tokens`)
 are currently unused in the plugin and are left uninstrumented; this is
 explicitly out of scope (see below).
 
@@ -118,9 +120,10 @@ from User Story 1 reappear.
 - **FR-001**: The plugin MUST provide a reusable transport-logging wrapper
   (`install_request_logger`) in a new module,
   `rana_qgis_plugin/simulation/threedi_api_logging.py`.
-- **FR-002**: `utils/generic.py`'s `get_threedi_api()` MUST call
-  `install_request_logger(threedi_api)` unconditionally on the client it
-  constructs, before returning it.
+- **FR-002**: `get_api_client_with_personal_api_token()` in
+  `simulation/threedi_calls.py` MUST call
+  `install_request_logger(api_client)` unconditionally immediately after
+  constructing the client and before returning it.
 - **FR-003**: The wrapper MUST log a summary (HTTP method, host+path, and
   redacted query params) at `Qgis.MessageLevel.Info` immediately before
   invoking the original transport method, i.e. before the request may or may
@@ -155,9 +158,9 @@ from User Story 1 reappear.
 - **FR-010**: The plugin MUST provide a hidden QgsSettings boolean,
   `Rana/log_threedi_api_requests` (default `False`), following the pattern of
   `get_use_plugin_excepthook()` in `utils/settings.py`.
-- **FR-011**: `get_threedi_api()` MUST only call `install_request_logger(...)`
-  when this setting is enabled; FR-002's unconditional call is replaced by a
-  conditional one.
+- **FR-011**: `get_api_client_with_personal_api_token()` MUST only call
+  `install_request_logger(...)` when this setting is enabled; FR-002's
+  unconditional call is replaced by a conditional one.
 - **FR-012**: The setting MUST NOT appear in `get_advanced_settings()` / the
   advanced settings dialog; it is QgsSettings-only, undocumented in the UI.
 
@@ -172,7 +175,7 @@ from User Story 1 reappear.
 ### Measurable Outcomes
 
 - **SC-001**: During Phase 1 (development, unconditional), every HTTP request
-  made through a client returned by `get_threedi_api()` produces a
+  made through a client returned by `get_api_client_with_personal_api_token()` produces a
   corresponding log line in the Rana category, including calls that fail
   before receiving a response.
 - **SC-002**: During Phase 2 (setting added, default `False`), with the

@@ -7,7 +7,7 @@ supersedes: null
 superseded_by: null
 impacts:
   - rana_qgis_plugin/simulation/threedi_api_logging.py
-  - rana_qgis_plugin/utils/generic.py
+  - rana_qgis_plugin/simulation/threedi_calls.py
   - rana_qgis_plugin/utils/settings.py
 tags: [debugging, logging, threedi-api-client, network]
 participants: [engineer, implementation-agent]
@@ -81,19 +81,20 @@ intent-to-send, independent of whether the network call ultimately succeeds.
 ## Decision
 
 We chose **Option 2: monkey-patch the transport request method on the
-client instance, installed by the plugin's `get_threedi_api()` function.**
+client instance, installed by the plugin's personal-token client factory.**
 
 Specifically:
 
 - During development, the logger is installed unconditionally in
-  `utils/generic.py:get_threedi_api()` after client construction. The final
+  `simulation/threedi_calls.py:get_api_client_with_personal_api_token()`
+  immediately after client construction. The final
   task, after stabilization, adds the hidden setting
   `Rana/log_threedi_api_requests` (boolean, default `False`) and makes
   installation conditional on it. It follows the existing
   `use_plugin_excepthook` pattern and is not exposed in the advanced settings
   dialog.
-- Only `get_threedi_api()` is wired because the other two factories in
-  `simulation/threedi_calls.py` (`get_api_client` and
+- Only `get_api_client_with_personal_api_token()` is wired because the other
+  two factories in `simulation/threedi_calls.py` (`get_api_client` and
   `get_api_client_with_tokens`) are unused in the plugin.
 - The wrapper logs an `Info`-level message to the QGIS "Rana" log category
   (via the same mechanism as `UICommunication.log_msg`) with the HTTP method,
@@ -133,8 +134,9 @@ Specifically:
 - ✅ No changes to the `threedi-api-client` package.
 - ✅ After stabilization and addition of the setting, logging is disabled by
   default for users who have not explicitly enabled it.
-- ✅ Catches requests made through the plugin's `get_threedi_api()` clients,
-  including pagination, without instrumenting each API method individually.
+- ✅ Any caller of `get_api_client_with_personal_api_token()` receives a
+  wrapped client; requests include pagination without instrumenting each API
+  method individually.
 
 ### Negative
 
@@ -160,7 +162,7 @@ Specifically:
 ## Code References
 
 - Client construction/integration point:
-  `rana_qgis_plugin/utils/generic.py:get_threedi_api()`
+  `rana_qgis_plugin/simulation/threedi_calls.py:get_api_client_with_personal_api_token()`
 - Settings pattern to follow: `rana_qgis_plugin/utils/settings.py:138-141`
   (`get_use_plugin_excepthook`)
 - Logging mechanism to reuse: `rana_qgis_plugin/communication.py:120-134`

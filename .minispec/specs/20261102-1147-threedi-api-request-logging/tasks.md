@@ -60,11 +60,11 @@ for the options considered.
 
 ---
 
-#### Task 2: Transport wrapper + wire into `get_threedi_api()` (default-on)
+#### Task 2: Transport wrapper + wire into the personal-token client factory (default-on)
 - **Estimate:** ~90 lines
 - **Files:**
   - `rana_qgis_plugin/simulation/threedi_api_logging.py` (extend)
-  - `rana_qgis_plugin/utils/generic.py` (edit `get_threedi_api()`)
+  - `rana_qgis_plugin/simulation/threedi_calls.py` (edit personal-token factory)
   - `tests/test_threedi_api_logging.py` (extend)
 - **Description:**
   - Add `install_request_logger(api_client) -> None` to
@@ -91,9 +91,10 @@ for the options considered.
       `AttributeError`): if the expected attribute chain doesn't exist, log a
       single warning via `QgsMessageLog.logMessage` and return without
       raising — the API client must remain fully usable either way.
-  - In `utils/generic.py`'s `get_threedi_api()`: call
-    `install_request_logger(threedi_api)` unconditionally, right before
-    returning the client. No setting check yet.
+  - In `get_api_client_with_personal_api_token()` in
+    `simulation/threedi_calls.py`, call `install_request_logger(api_client)`
+    unconditionally after client construction and before returning it. No
+    setting check yet.
 - **Depends on:** Task 1
 - **Acceptance:**
   - Unit tests use a fake/mock object standing in for
@@ -107,8 +108,8 @@ for the options considered.
       `install_request_logger` itself.
     - Summary formatting or Info/Warning log emission failures do not block
       transport invocation, alter its return value, or replace its exception.
-  - Unit test: `get_threedi_api()` installs the wrapper on the client it
-    constructs during the development phase.
+  - Unit test: `get_api_client_with_personal_api_token()` installs the wrapper
+    on the client it constructs during the development phase.
   - Manual check: open the simulation overview or another ThreeDi-backed
     panel in QGIS, confirm log lines appear in the Rana log category showing
     method/path/params, with no raw secrets visible.
@@ -126,18 +127,21 @@ ever leak. Only move to Task 3 once satisfied.
 - **Estimate:** ~40 lines
 - **Files:**
   - `rana_qgis_plugin/utils/settings.py` (add accessor)
-  - `rana_qgis_plugin/utils/generic.py` (make the Task 2 call conditional)
+  - `rana_qgis_plugin/simulation/threedi_calls.py` (make the Task 2 call conditional)
+  - `README.md` (document the hidden setting and how to enable it)
   - `tests/test_utils_settings.py` (extend)
-  - `tests/test_utils_generic.py` (extend existing generic utility tests)
+  - `tests/test_threedi_api_logging.py` (extend factory coverage)
 - **Description:**
   - Add `get_log_threedi_api_requests() -> bool` to `utils/settings.py`,
     reading `QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/log_threedi_api_requests", False, type=bool)`,
     following the exact pattern of `get_use_plugin_excepthook()`.
-  - In `utils/generic.py`'s `get_threedi_api()`, change the unconditional
-    `install_request_logger(threedi_api)` call from Task 2 to:
-    `if get_log_threedi_api_requests(): install_request_logger(threedi_api)`.
+  - In `get_api_client_with_personal_api_token()`, change the unconditional
+    `install_request_logger(api_client)` call from Task 2 to:
+    `if get_log_threedi_api_requests(): install_request_logger(api_client)`.
   - Do **not** add this setting to `get_advanced_settings()` — it stays
     undiscoverable outside QgsSettings, matching `use_plugin_excepthook`.
+  - Update the README to document the hidden QgsSettings key, default-off
+    behavior, and how developers can enable it for diagnostics.
   - This task is scoped strictly to adding the setting and flipping the
     default from on to off-by-default-with-opt-in. No logging-behavior
     changes (verbosity, redaction rules, log level) are bundled in here —
@@ -145,8 +149,9 @@ ever leak. Only move to Task 3 once satisfied.
     separate, preceding change to Task 2's code first.
 - **Depends on:** Task 2 (and the stabilization checkpoint above)
 - **Acceptance:**
-  - Unit test: setting unset/False → `get_threedi_api()` does not install
-    the wrapper (e.g. assert `install_request_logger` not called, via mock).
+  - Unit test: setting unset/False →
+    `get_api_client_with_personal_api_token()` does not install the wrapper
+    (e.g. assert `install_request_logger` not called, via mock).
   - Unit test: setting True → wrapper is installed (assert called).
   - Manual check: with the setting left unset, confirm no request-attempt
     log lines appear during normal use; set
@@ -156,7 +161,7 @@ ever leak. Only move to Task 3 once satisfied.
 ## Notes
 
 - All three tasks touch `rana_qgis_plugin/simulation/threedi_api_logging.py`
-  and/or `rana_qgis_plugin/utils/generic.py` — no parallelization
+  and/or `rana_qgis_plugin/simulation/threedi_calls.py` — no parallelization
   opportunities; work through them in order.
 - `get_api_client()` and `get_api_client_with_tokens()` in
   `simulation/threedi_calls.py` are intentionally left uninstrumented — they
@@ -171,5 +176,5 @@ ever leak. Only move to Task 3 once satisfied.
 ## Progress
 
 - [x] Task 1: Request-summary and redaction helpers
-- [ ] Task 2: Transport wrapper + wire into `get_threedi_api()` (default-on)
+- [x] Task 2: Transport wrapper + wire into personal-token factory (default-on)
 - [ ] Task 3: Add hidden setting, gate the wrapper, default off
