@@ -52,7 +52,7 @@ def redact_url_query(url: str) -> str:
             host,
             parsed_url.path,
             urlencode(safe_query_params or []),
-            parsed_url.fragment,
+            "",
         )
     )
 
@@ -158,7 +158,11 @@ def logged_put(url: str, **kwargs: Any) -> requests.Response:
     """Log a PUT upload attempt, then delegate to ``requests.put`` unchanged.
 
     Logging failures never prevent the upload or alter its result/exception.
+    When API request logging is disabled, this is simply ``requests.put``.
     """
+    if not get_log_api_requests():
+        return requests.put(url, **kwargs)
+
     try:
         summary = build_upload_summary("PUT", url)
         log_message(f"Upload attempt: {summary}", Qgis.MessageLevel.Info)
@@ -182,7 +186,7 @@ def logged_put(url: str, **kwargs: Any) -> requests.Response:
         raise
 
 
-class _LoggingPoolManager(urllib3.PoolManager):
+class LoggingPoolManager(urllib3.PoolManager):
     """A ``urllib3.PoolManager`` that logs each request attempt.
 
     Used only for ``threedi_api_client.files.upload_file()``, which does not
@@ -193,7 +197,7 @@ class _LoggingPoolManager(urllib3.PoolManager):
     """
 
     @classmethod
-    def from_pool(cls, pool: urllib3.PoolManager) -> "_LoggingPoolManager":
+    def from_pool(cls, pool: urllib3.PoolManager) -> "LoggingPoolManager":
         """Build a logging pool with the same configuration as ``pool``.
 
         Reuses ``pool``'s actual ``connection_pool_kw`` (which includes its
@@ -236,4 +240,4 @@ def get_logging_pool() -> urllib3.PoolManager:
     pool = get_pool()
     if not get_log_api_requests():
         return pool
-    return _LoggingPoolManager.from_pool(pool)
+    return LoggingPoolManager.from_pool(pool)

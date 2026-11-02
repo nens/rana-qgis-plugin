@@ -45,6 +45,15 @@ def test_build_request_summary_without_query_params():
     )
 
 
+def test_redact_url_query_omits_fragment():
+    summary = api_logging.redact_url_query(
+        "https://example.test/items?limit=5#access_token=secret"
+    )
+
+    assert summary == "https://example.test/items?limit=5"
+    assert "secret" not in summary
+
+
 def make_api_client(request):
     rest_client = SimpleNamespace(request=request)
     return SimpleNamespace(_client=SimpleNamespace(rest_client=rest_client))
@@ -219,6 +228,7 @@ def test_build_upload_summary_omits_query_string():
 def test_logged_put_logs_attempt_and_returns_result():
     response = object()
     with (
+        patch.object(api_logging, "get_log_api_requests", return_value=True),
         patch.object(api_logging.requests, "put", return_value=response) as put,
         patch.object(api_logging, "log_message") as log_message,
     ):
@@ -243,6 +253,7 @@ def test_logged_put_logs_failure_without_exception_text():
     # since that query string may contain a presigned signature.
     error = RuntimeError("could contain secrets")
     with (
+        patch.object(api_logging, "get_log_api_requests", return_value=True),
         patch.object(api_logging.requests, "put", side_effect=error),
         patch.object(api_logging, "log_message") as log_message,
     ):
@@ -290,6 +301,38 @@ def test_logged_put_still_sends_request_when_attempt_log_raises():
     put.assert_called_once()
 
 
+def test_logged_put_disabled_skips_logging_and_returns_result():
+    response = object()
+    with (
+        patch.object(api_logging, "get_log_api_requests", return_value=False),
+        patch.object(api_logging.requests, "put", return_value=response) as put,
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        actual = api_logging.logged_put(
+            "https://example.test/bucket/file?sig=secret", data=b"payload"
+        )
+
+    assert actual is response
+    put.assert_called_once_with(
+        "https://example.test/bucket/file?sig=secret", data=b"payload"
+    )
+    assert not log_message.called
+
+
+def test_logged_put_disabled_skips_logging_on_failure():
+    error = RuntimeError("could contain secrets")
+    with (
+        patch.object(api_logging, "get_log_api_requests", return_value=False),
+        patch.object(api_logging.requests, "put", side_effect=error),
+        patch.object(api_logging, "log_message") as log_message,
+    ):
+        with pytest.raises(RuntimeError, match="could contain secrets") as exc_info:
+            api_logging.logged_put("https://example.test/bucket/file")
+
+    assert exc_info.value is error
+    assert not log_message.called
+
+
 def test_get_logging_pool_disabled_returns_plain_pool_with_matching_retry_policy():
     with patch.object(api_logging, "get_log_api_requests", return_value=False):
         pool = api_logging.get_logging_pool()
@@ -304,7 +347,7 @@ def test_get_logging_pool_enabled_returns_logging_pool_with_matching_retry_polic
     with patch.object(api_logging, "get_log_api_requests", return_value=True):
         pool = api_logging.get_logging_pool()
 
-    assert isinstance(pool, api_logging._LoggingPoolManager)
+    assert isinstance(pool, api_logging.LoggingPoolManager)
     retries = pool.connection_pool_kw["retries"]
     assert retries.total == 3
     assert retries.backoff_factor == 1.0
@@ -314,9 +357,9 @@ def test_logging_pool_manager_from_pool_reuses_source_pool_configuration():
     source_retries = api_logging.urllib3.util.retry.Retry(7, backoff_factor=2.5)
     source_pool = api_logging.urllib3.PoolManager(retries=source_retries)
 
-    pool = api_logging._LoggingPoolManager.from_pool(source_pool)
+    pool = api_logging.LoggingPoolManager.from_pool(source_pool)
 
-    assert isinstance(pool, api_logging._LoggingPoolManager)
+    assert isinstance(pool, api_logging.LoggingPoolManager)
     assert pool.connection_pool_kw["retries"] is source_retries
     assert pool.headers == source_pool.headers
 
@@ -336,7 +379,7 @@ def test_get_logging_pool_enabled_wraps_threedi_api_clients_own_pool():
     with (
         patch.object(api_logging, "get_log_api_requests", return_value=True),
         patch.object(api_logging, "get_pool") as get_pool_mock,
-        patch.object(api_logging._LoggingPoolManager, "from_pool") as from_pool_mock,
+        patch.object(api_logging.LoggingPoolManager, "from_pool") as from_pool_mock,
     ):
         pool = api_logging.get_logging_pool()
 
@@ -347,7 +390,7 @@ def test_get_logging_pool_enabled_wraps_threedi_api_clients_own_pool():
 
 def test_logging_pool_manager_logs_attempt_and_returns_result():
     response = object()
-    pool = api_logging._LoggingPoolManager()
+    pool = api_logging.LoggingPoolManager()
     with (
         patch.object(
             api_logging.urllib3.PoolManager, "request", return_value=response
@@ -370,7 +413,7 @@ def test_logging_pool_manager_logs_attempt_and_returns_result():
 
 def test_logging_pool_manager_logs_failure_without_exception_text():
     error = RuntimeError("could contain secrets")
-    pool = api_logging._LoggingPoolManager()
+    pool = api_logging.LoggingPoolManager()
     with (
         patch.object(api_logging.urllib3.PoolManager, "request", side_effect=error),
         patch.object(api_logging, "log_message") as log_message,
@@ -389,7 +432,7 @@ def test_logging_pool_manager_logs_failure_without_exception_text():
 
 def test_logging_pool_manager_still_sends_request_when_summary_raises():
     response = object()
-    pool = api_logging._LoggingPoolManager()
+    pool = api_logging.LoggingPoolManager()
     with (
         patch.object(
             api_logging,
