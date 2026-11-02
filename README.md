@@ -61,7 +61,6 @@ The `NetworkManager` class uses the Qt Network library to add OAuth2 token to
 the requests to Rana. The `NetworkManager` class can be found in
 `rana_qgis_plugin/network_manager.py`.
 
-
 ## QGIS / Rana Vector style
 
 Vector styles are stored in QGIS as `*.qml` files. We use a library to convert
@@ -123,6 +122,13 @@ This hook can be quite annoying during development so it can be manually turned 
 use_plugin_excepthook=false
 ```
 to the `[Rana]` section `QGIS/QGIS3.ini` in your profile folder. 
+
+
+### Debugging ThreeDi API requests
+
+ThreeDi API requests made through the plugin's API client can be logged in
+QGIS's **Log Messages** panel under the **Rana** category. Logging is disabled
+by default and can be activated via the `QGIS/QGIS3.ini` file in your profile: `log_threedi_api_requests=true`.
 
 
 ## Releasing

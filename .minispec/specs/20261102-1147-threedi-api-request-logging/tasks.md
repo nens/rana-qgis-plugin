@@ -1,6 +1,6 @@
 ---
 feature: threedi-api-request-logging
-status: planned
+status: completed
 created: 2026-11-02
 chunk_size: medium
 total_tasks: 3
@@ -19,7 +19,7 @@ package. The intended final behavior is opt-in.
 **Deliberate sequencing**: During development, Tasks 1-2 install the logger
 unconditionally because no setting exists yet. The engineer can observe it
 under normal plugin use and confirm it's useful, not noisy, and never leaks
-secrets. Task 3 — adding the hidden setting (default `False`) that makes
+secrets. Task 3 — adding the QgsSettings toggle (default `False`) that makes
 logging opt-in — is deliberately last, and should only be started once
 Tasks 1-2 have been lived with and are judged satisfactory. Default-on is a
 development phase only, not the intended shipped behavior.
@@ -121,9 +121,9 @@ ever leak. Only move to Task 3 once satisfied.
 
 ---
 
-### Phase 2: Gate behind a hidden setting (final task)
+### Phase 2: Gate behind the settings toggle (final task)
 
-#### Task 3: Add hidden setting, gate the wrapper, default off
+#### Task 3: Add settings toggle, gate the wrapper, default off
 - **Estimate:** ~40 lines
 - **Files:**
   - `rana_qgis_plugin/utils/settings.py` (add accessor)
@@ -138,9 +138,9 @@ ever leak. Only move to Task 3 once satisfied.
   - In `get_api_client_with_personal_api_token()`, change the unconditional
     `install_request_logger(api_client)` call from Task 2 to:
     `if get_log_threedi_api_requests(): install_request_logger(api_client)`.
-  - Do **not** add this setting to `get_advanced_settings()` — it stays
-    undiscoverable outside QgsSettings, matching `use_plugin_excepthook`.
-  - Update the README to document the hidden QgsSettings key, default-off
+  - Add the setting name to `get_advanced_settings()` so it appears in the
+    settings dialog's read-only Advanced Settings section when set.
+  - Update the README to document the QgsSettings key, default-off
     behavior, and how developers can enable it for diagnostics.
   - This task is scoped strictly to adding the setting and flipping the
     default from on to off-by-default-with-opt-in. No logging-behavior
@@ -153,6 +153,7 @@ ever leak. Only move to Task 3 once satisfied.
     `get_api_client_with_personal_api_token()` does not install the wrapper
     (e.g. assert `install_request_logger` not called, via mock).
   - Unit test: setting True → wrapper is installed (assert called).
+  - Unit test: `get_advanced_settings()` includes the setting when present.
   - Manual check: with the setting left unset, confirm no request-attempt
     log lines appear during normal use; set
     `Rana/log_threedi_api_requests=true` via the Python console
@@ -177,4 +178,4 @@ ever leak. Only move to Task 3 once satisfied.
 
 - [x] Task 1: Request-summary and redaction helpers
 - [x] Task 2: Transport wrapper + wire into personal-token factory (default-on)
-- [ ] Task 3: Add hidden setting, gate the wrapper, default off
+- [x] Task 3: Add settings toggle, gate the wrapper, default off

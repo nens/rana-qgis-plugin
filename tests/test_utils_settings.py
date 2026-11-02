@@ -2,7 +2,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rana_qgis_plugin.utils.settings import get_advanced_settings, get_hcc_url_override
+from rana_qgis_plugin.utils.settings import (
+    get_advanced_settings,
+    get_hcc_url_override,
+    get_log_threedi_api_requests,
+)
 
 
 @pytest.mark.parametrize(
@@ -27,38 +31,45 @@ def test_get_hcc_url_override(mock_return_value, expected_result):
 
 
 @pytest.mark.parametrize(
-    "hcc_url_value,excepthook_value,expected_dict",
+    "hcc_url_value,excepthook_value,request_logging_value,expected_dict",
     [
-        (None, None, {}),
+        (None, None, None, {}),
         (
             "https://dev-3di-api.example.com",
             None,
+            None,
             {"hcc_url": "https://dev-3di-api.example.com"},
         ),
-        (None, "true", {"use_plugin_excepthook": "true"}),
+        (None, "true", None, {"use_plugin_excepthook": "true"}),
+        (None, None, True, {"log_threedi_api_requests": True}),
         (
             "https://dev-3di-api.example.com",
             "true",
+            True,
             {
                 "hcc_url": "https://dev-3di-api.example.com",
                 "use_plugin_excepthook": "true",
+                "log_threedi_api_requests": True,
             },
         ),
-        ("", None, {}),
-        (None, "", {}),
-        ("", "", {}),
+        ("", None, None, {}),
+        (None, "", None, {}),
+        ("", "", "", {}),
     ],
     ids=[
         "both_empty",
         "only_hcc_url",
         "only_excepthook",
+        "only_request_logging",
         "both_set",
         "hcc_url_empty",
         "excepthook_empty",
         "both_empty_strings",
     ],
 )
-def test_get_advanced_settings(hcc_url_value, excepthook_value, expected_dict):
+def test_get_advanced_settings(
+    hcc_url_value, excepthook_value, request_logging_value, expected_dict
+):
     """Test get_advanced_settings returns only non-empty settings"""
     with patch("rana_qgis_plugin.utils.settings.QgsSettings") as mock_settings:
         mock_instance = MagicMock()
@@ -69,6 +80,8 @@ def test_get_advanced_settings(hcc_url_value, excepthook_value, expected_dict):
                 return hcc_url_value if hcc_url_value else None
             elif key == "Rana/use_plugin_excepthook":
                 return excepthook_value if excepthook_value else None
+            elif key == "Rana/log_threedi_api_requests":
+                return request_logging_value if request_logging_value else None
             return default
 
         mock_instance.value.side_effect = mock_value

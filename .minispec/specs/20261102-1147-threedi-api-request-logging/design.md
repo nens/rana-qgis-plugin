@@ -155,14 +155,16 @@ from User Story 1 reappear.
 
 **Phase 2 (final task, after stabilization — adds the hidden setting):**
 
-- **FR-010**: The plugin MUST provide a hidden QgsSettings boolean,
+- **FR-010**: The plugin MUST provide a QgsSettings boolean,
   `Rana/log_threedi_api_requests` (default `False`), following the pattern of
   `get_use_plugin_excepthook()` in `utils/settings.py`.
 - **FR-011**: `get_api_client_with_personal_api_token()` MUST only call
   `install_request_logger(...)` when this setting is enabled; FR-002's
   unconditional call is replaced by a conditional one.
-- **FR-012**: The setting MUST NOT appear in `get_advanced_settings()` / the
-  advanced settings dialog; it is QgsSettings-only, undocumented in the UI.
+- **FR-012**: The setting MUST appear in `get_advanced_settings()` and be
+  displayed in the Advanced Settings section of the settings dialog when it
+  has a value. The dialog displays advanced settings read-only; users can set
+  the value through QgsSettings/QGIS.ini.
 
 ### Key Entities
 

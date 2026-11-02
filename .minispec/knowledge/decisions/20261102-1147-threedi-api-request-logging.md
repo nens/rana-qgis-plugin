@@ -33,7 +33,7 @@ ones that fail before a response is received — surfaced through QGIS's
 existing Log Messages panel, without modifying the `threedi-api-client`
 package. Logging is initially unconditional during development so its volume
 and usefulness can be evaluated; the intended final behavior is opt-in via a
-hidden setting added only after the stabilization period.
+settings toggle added only after the stabilization period.
 
 In the inspected version of `threedi_api_client` (5.0.5), the synchronous
 request path is:
@@ -88,11 +88,11 @@ Specifically:
 - During development, the logger is installed unconditionally in
   `simulation/threedi_calls.py:get_api_client_with_personal_api_token()`
   immediately after client construction. The final
-  task, after stabilization, adds the hidden setting
+  task, after stabilization, adds the setting
   `Rana/log_threedi_api_requests` (boolean, default `False`) and makes
   installation conditional on it. It follows the existing
-  `use_plugin_excepthook` pattern and is not exposed in the advanced settings
-  dialog.
+  `use_plugin_excepthook` pattern and is included in `get_advanced_settings()`
+  so it appears in the read-only Advanced Settings section when set.
 - Only `get_api_client_with_personal_api_token()` is wired because the other
   two factories in `simulation/threedi_calls.py` (`get_api_client` and
   `get_api_client_with_tokens`) are unused in the plugin.
@@ -130,7 +130,7 @@ Specifically:
 ### Positive
 
 - ✅ During development, request attempts are logged without requiring setup;
-  after stabilization, users can opt in via a hidden setting.
+  after stabilization, users can opt in via the setting.
 - ✅ No changes to the `threedi-api-client` package.
 - ✅ After stabilization and addition of the setting, logging is disabled by
   default for users who have not explicitly enabled it.

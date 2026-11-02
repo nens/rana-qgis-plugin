@@ -173,11 +173,14 @@ def test_install_request_logger_skips_missing_transport_and_warns_once():
 
 @patch("rana_qgis_plugin.simulation.threedi_calls.install_request_logger")
 @patch("rana_qgis_plugin.simulation.threedi_calls.ThreediApi")
+@patch("rana_qgis_plugin.simulation.threedi_calls.get_log_threedi_api_requests")
+@pytest.mark.parametrize("logging_enabled_return", [True, False])
 def test_personal_token_factory_installs_request_logger(
-    threedi_api_class, install_logger
+    logging_enabled, threedi_api_class, install_logger, logging_enabled_return
 ):
     api_client = object()
     threedi_api_class.return_value = api_client
+    logging_enabled.return_value = logging_enabled_return
 
     result = threedi_calls.get_api_client_with_personal_api_token(
         "api-token", "https://api.example", version="v3"
@@ -192,4 +195,7 @@ def test_personal_token_factory_installs_request_logger(
         },
         version="v3",
     )
-    install_logger.assert_called_once_with(api_client)
+    if logging_enabled_return:
+        install_logger.assert_called_once_with(api_client)
+    else:
+        install_logger.assert_not_called()
