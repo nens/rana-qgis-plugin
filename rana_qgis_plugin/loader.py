@@ -14,7 +14,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QPixmap
+from qgis.PyQt.QtGui import QImage, QPixmap
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDockWidget,
@@ -184,7 +184,7 @@ class Loader(QObject):
         self.layer_lock_registry = LayerLockRegistry()
         self.avatar_pool = QThreadPool()
         self.avatar_pool.setMaxThreadCount(1)
-        self.avatar_worker: AvatarWorker | None = None
+        self.avatar_workers: list[AvatarWorker] = []
         self.active_tasks: set[QgsTask] = set()
         self._accept_async_callbacks = True
         self.scenario_action_busy = False
@@ -206,8 +206,8 @@ class Loader(QObject):
         self.process_docks.clear()
         for task in list(self.active_tasks):
             task.cancel()
-        if self.avatar_worker is not None:
-            self.avatar_worker.cancel()
+        for worker in self.avatar_workers:
+            worker.cancel()
         self.avatar_pool.waitForDone(3000)
 
     def open_processes_dock(
@@ -249,7 +249,7 @@ class Loader(QObject):
             ProcessesPanel(
                 project,
                 error_signals,
-                avatar_cache=self.avatar_cache,
+                loader=self,
                 parent=dock,
             )
         )
@@ -1222,14 +1222,48 @@ class Loader(QObject):
         )
 
     def fetch_avatars(self, users: list[dict]) -> None:
-        """Start a background fetch of real avatars for the given users."""
+        """Queue a background fetch of real avatars for the given users."""
         if not users:
             return None
-        if self.avatar_worker is not None:
-            self.avatar_worker.cancel()
-        self.avatar_worker = AvatarWorker(self.communication, users)
-        self.avatar_worker.signals.avatar_ready.connect(self.avatar_cache.update_avatar)
-        self.avatar_pool.start(self.avatar_worker)
+        worker = AvatarWorker(self.communication, users)
+        self.avatar_workers.append(worker)
+        worker.signals.avatar_ready.connect(self.on_avatar_ready)
+        worker.signals.avatar_failed.connect(self.on_avatar_fetch_failed)
+        worker.signals.finished.connect(self._on_avatar_worker_finished)
+        self.avatar_pool.start(worker)
+
+    def get_avatar_for_user(self, user: dict) -> QPixmap:
+        """Return the cached avatar or create a placeholder and queue its fetch."""
+        return self.get_avatars_for_users([user])[user["id"]]
+
+    def get_avatars_for_users(self, users: list[dict]) -> dict[str, QPixmap]:
+        """Return cached/placeholders and queue one batch for cache misses."""
+        avatars = {}
+        missing_users = {}
+        for user in users:
+            user_id = user["id"]
+            avatar = self.avatar_cache.get_avatar_from_cache(user_id)
+            if avatar is None:
+                avatar = self.avatar_cache.get_avatar_for_user(user)
+                missing_users[user_id] = user
+            avatars[user_id] = avatar
+        self.fetch_avatars(list(missing_users.values()))
+        return avatars
+
+    @pyqtSlot(object)
+    def _on_avatar_worker_finished(self, worker: AvatarWorker) -> None:
+        if worker in self.avatar_workers:
+            self.avatar_workers.remove(worker)
+
+    @pyqtSlot(str, QImage)
+    def on_avatar_ready(self, user_id: str, image: QImage) -> None:
+        if self._accept_async_callbacks:
+            self.avatar_cache.update_avatar(user_id, image)
+
+    @pyqtSlot(str, str)
+    def on_avatar_fetch_failed(self, user_id: str, _error: str) -> None:
+        if self._accept_async_callbacks:
+            self.avatar_cache.remove_avatar(user_id)
 
     @pyqtSlot(str)
     def on_avatar_changed(self, user_id: str) -> None:

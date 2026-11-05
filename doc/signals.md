@@ -26,22 +26,35 @@ local response.
 ## Avatar loading
 
 Avatar loading is routed through `Loader` so that widgets do not manage the
-worker or cache themselves.
+worker or cache themselves. Consumers (`ProcessesPanel`, `FileInfoDialog`,
+`ProjectsSelectionDialog`) connect to `Loader.avatar_updated` and call
+`Loader.get_avatar_for_user` or `Loader.get_avatars_for_users`. These check
+`AvatarCache` first; only cache misses reach `Loader.fetch_avatars`, which
+starts an `AvatarWorker` (a `QRunnable`).
 
 ```mermaid
 sequenceDiagram
-    participant Dialog
+    participant Widget as ProcessesPanel / FileInfoDialog
     participant Loader
     participant Worker as AvatarWorker
     participant Cache as AvatarCache
-    Dialog->>Loader: fetch_avatars
-    Worker-->>Cache: avatar_ready
-    Cache-->>Loader: avatar_changed
-    Loader-->>Dialog: avatar_updated
+    Widget->>Loader: get_avatar(s)_for_user
+    alt cache hit
+        Loader-->>Widget: pixmap
+    else cache miss
+        Loader->>Worker: fetch_avatars
+        Worker-->>Loader: signals.avatar_ready
+        Loader->>Cache: update_avatar
+        Cache-->>Loader: avatar_changed
+        Loader-->>Widget: avatar_updated
+    end
 ```
 
-The worker signal updates the cache. The cache signal is converted into the
-loader's UI-facing `avatar_updated` signal.
+The worker's `avatar_ready` is connected to `Loader.on_avatar_ready`, which
+updates the cache; the cache's `avatar_changed` is converted by
+`Loader.on_avatar_changed` into the UI-facing `avatar_updated` signal. The cache
+is not connected to the worker directly. On `avatar_failed`,
+`Loader.on_avatar_fetch_failed` removes the cache entry.
 
 ## File uploads
 
@@ -100,7 +113,7 @@ different scenarios — **`ProjectCloseSyncPrompt`** (closing/switching/
 quitting the whole project) and **`LayerRemovalSyncPrompt`** (removing an
 individual dirty layer or group while the project stays open) — built on a
 shared `SyncPromptAction` (ask + dispatch-or-discard) so both show the
-identical dialog/outcome. Together they connect 6 signals. (Dirty
+identical dialog/outcome. Together they make 7 signal connections (2 in `ProjectCloseSyncPrompt.connect()`, 5 in `LayerRemovalSyncPrompt.connect()`). (Dirty
 qualification itself — which groups even count as "unsynced" — is in
 [`dirty_tracking.md`](dirty_tracking.md); this section is only about the
 connections.)
@@ -132,7 +145,7 @@ sequenceDiagram
   dedup/batching state of its own.
 - Closing/switching the project, and quitting QGIS, all route through this
   same signal (quitting clears the project as part of its own shutdown) —
-  see `20261014-close-sync-prompt-unified-hook.md` for why there's one hook
+  see [`20261014-close-sync-prompt-unified-hook.md`](../.minispec/knowledge/decisions/20261014-close-sync-prompt-unified-hook.md) for why there's one hook
   instead of a separate quit-specific one.
 - `aboutToBeCleared` is not cancelable, so the dialog only offers "Sync now"
   / "Continue without syncing," never "Cancel".

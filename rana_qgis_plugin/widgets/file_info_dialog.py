@@ -1,8 +1,10 @@
 """Dialog and section widgets for viewing Rana file metadata."""
 
+from typing import TYPE_CHECKING
+
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import Qt, QTimer
-from qgis.PyQt.QtGui import QShowEvent, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QPixmap, QShowEvent, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -34,8 +36,10 @@ from rana_qgis_plugin.widgets.file_info_models import (
     SchematisationFileInfoModel,
     get_file_info_model_class,
 )
-from rana_qgis_plugin.widgets.utils_avatars import get_avatar
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme_as_pixmap
+
+if TYPE_CHECKING:
+    from rana_qgis_plugin.loader import Loader
 
 
 class GeneralInfoWidget(QWidget):
@@ -62,7 +66,7 @@ class GeneralInfoWidget(QWidget):
                 row_layout.addWidget(self.labels[item])
             self.layout().addLayout(row_layout)
 
-    def update(self, info: GeneralInfo):
+    def set_general_info(self, info: GeneralInfo):
         """Update stable labels from General data."""
         fields = {
             "filename": info.filename,
@@ -74,13 +78,13 @@ class GeneralInfoWidget(QWidget):
         self.labels["file_icon"].setPixmap(
             get_icon_from_theme_as_pixmap(get_file_icon_name(info.icon_name))
         )
-        avatar = get_avatar(
-            info.avatar_user, try_remote=True, create_from_initials=True
-        )
-        if avatar:
-            self.labels["user_icon"].setPixmap(avatar)
         for key, field in fields.items():
             update_label(self.labels[key], field)
+
+    def set_avatar(self, avatar: QPixmap | None) -> None:
+        """Set the author avatar without fetching it synchronously."""
+        pixmap = avatar if avatar is not None else QPixmap()
+        self.labels["user_icon"].setPixmap(pixmap)
 
 
 class MoreInfoWidget(QWidget):
@@ -91,7 +95,7 @@ class MoreInfoWidget(QWidget):
         self.labels = {}
         self.setLayout(QFormLayout(self))
 
-    def update(self, section: InfoSection):
+    def update_section(self, section: InfoSection):
         """Update existing labels and add only previously unseen fields."""
         for row in section.rows:
             if row.key not in self.labels:
@@ -121,7 +125,7 @@ class RelatedFilesWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.table)
 
-    def update(self, related_files: list[RelatedFile]):
+    def update_related_files(self, related_files: list[RelatedFile]):
         """Replace table rows while keeping the table and model stable."""
         self.model.removeRows(0, self.model.rowCount())
         for related_file in related_files:
@@ -142,12 +146,21 @@ class RelatedFilesWidget(QWidget):
 class FileInfoDialog(QDialog):
     """Display read-only metadata for one Rana file."""
 
-    def __init__(self, file_data: dict, error_signals: ApiErrorSignals, parent=None):
+    def __init__(
+        self,
+        file_data: dict,
+        error_signals: ApiErrorSignals,
+        loader: "Loader",
+        parent=None,
+    ):
         super().__init__(parent)
         self.file_data = file_data
         self.error_signals = error_signals
+        self.loader = loader
         self.setWindowTitle(f"File information - {file_data.get('id', '')}")
         self.setup_ui()
+        self.loader.avatar_updated.connect(self._on_avatar_updated)
+        self.refresh()
 
     def setup_ui(self):
         """Create section widgets and the dialog controls."""
@@ -182,7 +195,6 @@ class FileInfoDialog(QDialog):
         layout.addWidget(self._scroll_area)
         layout.addWidget(self.error_label)
         layout.addLayout(buttons)
-        self.refresh()
 
     def _fetch_descriptor(self):
         """Fetch the descriptor and update all section widgets."""
@@ -200,11 +212,23 @@ class FileInfoDialog(QDialog):
         return descriptor
 
     def _populate_widgets(self, model):
-        self.general_widget.update(model.get_general_info())
-        self.more_widget.update(model.get_more_section())
+        general_info = model.get_general_info()
+        avatar = (
+            self.loader.get_avatar_for_user(general_info.avatar_user)
+            if general_info.avatar_user
+            else None
+        )
+        self.general_widget.set_general_info(general_info)
+        self.general_widget.set_avatar(avatar)
+        self.more_widget.update_section(model.get_more_section())
         related_files = model.get_related_files()
-        self.files_widget.update(related_files)
+        self.files_widget.update_related_files(related_files)
         self.files_box.setVisible(bool(related_files))
+
+    def _on_avatar_updated(self, user_id: str, avatar: QPixmap) -> None:
+        user = self.file_data.get("user")
+        if user and str(user.get("id")) == user_id:
+            self.general_widget.labels["user_icon"].setPixmap(avatar)
 
     def refresh(self):
         """Fetch the descriptor and update all section widgets."""

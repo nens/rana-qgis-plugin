@@ -10,8 +10,9 @@ from rana_qgis_plugin.utils.api import get_user_image
 
 # We need a separate signals class since QRunnable cannot have signals
 class AvatarWorkerSignals(QObject):
-    finished = pyqtSignal()
+    finished = pyqtSignal(object)
     avatar_ready = pyqtSignal(str, QImage)
+    avatar_failed = pyqtSignal(str, str)
 
 
 class AvatarWorker(QRunnable):
@@ -29,7 +30,14 @@ class AvatarWorker(QRunnable):
         for user in self.users:
             if self._cancelled:
                 break
-            image = get_user_image(user["id"])
-            if image and not image.isNull():
-                self.signals.avatar_ready.emit(user["id"], image)
-        self.signals.finished.emit()
+            user_id = user["id"]
+            try:
+                image = get_user_image(user_id)
+                if image is None:
+                    continue
+                if image.isNull():
+                    raise ValueError("Received an invalid user image")
+                self.signals.avatar_ready.emit(user_id, image)
+            except Exception as error:
+                self.signals.avatar_failed.emit(user_id, str(error))
+        self.signals.finished.emit(self)

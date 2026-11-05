@@ -28,6 +28,7 @@ from rana_qgis_plugin.widgets.version_history_dialog import (
 )
 from rana_qgis_plugin.workers.history import HistoryRow
 from rana_qgis_plugin.workers.rana_jobs import JobsFetchTask
+from tests.loader.helpers import make_loader
 
 
 @pytest.fixture(autouse=True)
@@ -52,6 +53,12 @@ def make_job(job_id: int, name: str, progress: int = 0) -> JobData:
         process_name="Simulation tracker",
         inputs={},
     )
+
+
+@pytest.fixture
+def loader():
+    loader, _communication = make_loader()
+    return loader
 
 
 def test_jobs_table_model_inserts_updates_and_removes_rows(qgis_application):
@@ -166,9 +173,11 @@ def test_word_wrap_delegate_sizes_name_from_display_text(qgis_application):
 
 
 def test_processes_panel_builds_filter_params_and_keeps_stable_combo(
-    qgis_application,
+    qgis_application, loader
 ):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     filters = {"name": "rain", "who": "user-1", "status": "running"}
 
     assert panel._api_filters(filters) == {
@@ -180,9 +189,11 @@ def test_processes_panel_builds_filter_params_and_keeps_stable_combo(
 
 
 def test_processes_panel_debounces_refresh_until_active_fetch_completes(
-    qgis_application,
+    qgis_application, loader
 ):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel._visible = True
     panel._current_task = JobsFetchTask("project-1")
 
@@ -193,8 +204,12 @@ def test_processes_panel_debounces_refresh_until_active_fetch_completes(
     assert panel._fetch_requested
 
 
-def test_processes_panel_uses_flexible_text_columns_and_single_avatar(qgis_application):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+def test_processes_panel_uses_flexible_text_columns_and_single_avatar(
+    qgis_application, loader
+):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     job = make_job(1, "A long job name")
     panel.model.update_jobs([job])
 
@@ -225,14 +240,14 @@ def test_processes_panel_uses_flexible_text_columns_and_single_avatar(qgis_appli
 
 
 def test_processes_panel_shows_cancel_only_for_eligible_simulation_jobs(
-    qgis_application,
+    qgis_application, loader
 ):
     with patch(
         "rana_qgis_plugin.widgets.processes_panel.get_process_id_for_tag",
         return_value="tracker",
     ):
         panel = ProcessesPanel(
-            {"id": "project-1", "slug": "project"}, ApiErrorSignals()
+            {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
         )
     eligible = make_job(1, "Eligible")
     eligible.inputs["simulation_id"] = 42
@@ -257,13 +272,15 @@ def test_processes_panel_shows_cancel_only_for_eligible_simulation_jobs(
     assert panel.table.columnWidth(4) >= 160 + 4 + 24
 
 
-def test_cancel_simulation_confirmation_and_success_update_status(qgis_application):
+def test_cancel_simulation_confirmation_and_success_update_status(
+    qgis_application, loader
+):
     with patch(
         "rana_qgis_plugin.widgets.processes_panel.get_process_id_for_tag",
         return_value="tracker",
     ):
         panel = ProcessesPanel(
-            {"id": "project-1", "slug": "project"}, ApiErrorSignals()
+            {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
         )
     job = make_job(1, "Simulation")
     job.inputs["simulation_id"] = 42
@@ -295,13 +312,13 @@ def test_cancel_simulation_confirmation_and_success_update_status(qgis_applicati
     assert button.isHidden()
 
 
-def test_cancel_simulation_decline_sends_no_action(qgis_application):
+def test_cancel_simulation_decline_sends_no_action(qgis_application, loader):
     with patch(
         "rana_qgis_plugin.widgets.processes_panel.get_process_id_for_tag",
         return_value="tracker",
     ):
         panel = ProcessesPanel(
-            {"id": "project-1", "slug": "project"}, ApiErrorSignals()
+            {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
         )
     job = make_job(1, "Simulation")
     job.inputs["simulation_id"] = 42
@@ -323,14 +340,14 @@ def test_cancel_simulation_decline_sends_no_action(qgis_application):
 
 
 def test_cancel_simulation_failure_reports_error_and_reenables_button(
-    qgis_application,
+    qgis_application, loader
 ):
     with patch(
         "rana_qgis_plugin.widgets.processes_panel.get_process_id_for_tag",
         return_value="tracker",
     ):
         panel = ProcessesPanel(
-            {"id": "project-1", "slug": "project"}, ApiErrorSignals()
+            {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
         )
     job = make_job(1, "Simulation")
     job.inputs["simulation_id"] = 42
@@ -366,9 +383,11 @@ def test_cancel_simulation_failure_reports_error_and_reenables_button(
 
 
 def test_highlight_jobs_fetches_then_selects_and_highlights_matching_rows(
-    qgis_application,
+    qgis_application, loader
 ):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel._visible = True
     fetched_jobs = [
         {
@@ -498,8 +517,12 @@ def test_model_start_notifies_with_returned_job_id_and_signals():
     assert button.setEnabled.call_args_list == [call(False), call(False)]
 
 
-def test_selected_job_logs_show_timestamp_level_message_and_exception(qgis_application):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+def test_selected_job_logs_show_timestamp_level_message_and_exception(
+    qgis_application, loader
+):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel.model.update_jobs([make_job(1, "Job with logs")])
     logs_response = {
         "items": [
@@ -541,8 +564,10 @@ def test_selected_job_logs_show_timestamp_level_message_and_exception(qgis_appli
     fetch_logs.assert_called_once_with("1")
 
 
-def test_stale_logs_response_does_not_replace_new_selection(qgis_application):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+def test_stale_logs_response_does_not_replace_new_selection(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel.model.update_jobs([make_job(1, "First"), make_job(2, "Second")])
     selection_model = panel.table.selectionModel()
     assert selection_model is not None
@@ -589,8 +614,10 @@ def test_stale_logs_response_does_not_replace_new_selection(qgis_application):
     assert panel.logs.toPlainText() == ""
 
 
-def test_logs_clear_when_no_job_is_selected(qgis_application):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+def test_logs_clear_when_no_job_is_selected(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel.logs.setPlainText("previous job logs")
     panel.model.update_jobs([make_job(1, "No selection")])
 
@@ -602,8 +629,10 @@ def test_logs_clear_when_no_job_is_selected(qgis_application):
     fetch_logs.assert_not_called()
 
 
-def test_selected_job_without_logs_shows_empty_state(qgis_application):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+def test_selected_job_without_logs_shows_empty_state(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel.model.update_jobs([make_job(1, "Empty logs")])
     selection_model = panel.table.selectionModel()
     assert selection_model is not None
@@ -626,8 +655,10 @@ def test_selected_job_without_logs_shows_empty_state(qgis_application):
     assert panel.logs.placeholderText() == "No logs available for this job."
 
 
-def test_selected_job_log_error_is_reported(qgis_application):
-    panel = ProcessesPanel({"id": "project-1", "slug": "project"}, ApiErrorSignals())
+def test_selected_job_log_error_is_reported(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
     panel.model.update_jobs([make_job(1, "Failed logs")])
     selection_model = panel.table.selectionModel()
     assert selection_model is not None

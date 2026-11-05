@@ -120,6 +120,10 @@ class AvatarCache(QObject):
             self.cache[user["id"]] = get_avatar(user, try_remote=False)
         return self.cache[user["id"]]
 
+    def remove_avatar(self, user_id: str) -> None:
+        """Remove a cached avatar after a failed fetch without notifying views."""
+        self.cache.pop(user_id, None)
+
     def update_avatar(self, user_id: str, image: QImage):
         """Convert a QImage to a circular QPixmap and update the cache.
 
