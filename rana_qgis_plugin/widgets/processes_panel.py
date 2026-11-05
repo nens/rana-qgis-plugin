@@ -70,7 +70,9 @@ class ProcessProgressBar(ColoredProgressBar):
         else:
             self.set_failed()
             return
-        self.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
+        style = f"QProgressBar::chunk {{ background-color: {color}; }}"
+        if self.styleSheet() != style:
+            self.setStyleSheet(style)
 
 
 def apply_job_progress(progress_bar: ProcessProgressBar, job: JobData) -> None:
@@ -336,9 +338,7 @@ class ProcessesPanel(QWidget):
         if selection_model is not None:
             selection_model.selectionChanged.connect(self._on_selection_changed)
         self.model.dataChanged.connect(self._update_row_widgets)
-        self.model.rowsInserted.connect(self._update_all_row_widgets)
-        self.model.rowsMoved.connect(self._update_all_row_widgets)
-        self.model.rowsRemoved.connect(self._update_all_row_widgets)
+        self.model.rowsInserted.connect(self._update_inserted_row_widgets)
         self.loader.avatar_updated.connect(self.on_avatar_updated)
 
     def on_avatar_updated(self, user_id: str, avatar: QPixmap) -> None:
@@ -433,7 +433,6 @@ class ProcessesPanel(QWidget):
                             False,
                         )
                 self.model.update_jobs(jobs)
-                self._update_all_row_widgets()
                 self._repopulate_who_combo()
                 self._refresh_selected_job_logs()
                 if self._highlight_job_ids:
@@ -653,6 +652,11 @@ class ProcessesPanel(QWidget):
             ],
         )
 
+    def _update_inserted_row_widgets(
+        self, _parent: QModelIndex, first: int, last: int
+    ) -> None:
+        self._update_row_widgets(self.model.index(first, 0), self.model.index(last, 0))
+
     def _update_all_row_widgets(self, *_args) -> None:
         for row in range(self.model.rowCount()):
             self._update_row_widgets(self.model.index(row, 0), self.model.index(row, 4))
@@ -671,15 +675,15 @@ class ProcessesPanel(QWidget):
                 self.table.setIndexWidget(name_index, name_label)
             name_label.setToolTip(job.name)
             if job.process_id:
-                name_label.setStyleSheet("")
+                name_style = ""
                 job_url = html.escape(self._job_url(job), quote=True)
                 job_name = html.escape(job.name, quote=True)
                 name_label.setText(f'<a href="{job_url}">{job_name}</a>')
             else:
-                name_label.setStyleSheet(
-                    f"color: {self.table.palette().text().color().name()}"
-                )
+                name_style = f"color: {self.table.palette().text().color().name()}"
                 name_label.setText(job.name)
+            if name_label.styleSheet() != name_style:
+                name_label.setStyleSheet(name_style)
 
             who_index = self.model.index(row, 2)
             who_label = self.table.indexWidget(who_index)
