@@ -403,7 +403,15 @@ class ProjectsSelectionDialog(QDialog):
             self.reject()
             return
 
-        self._all_projects = self._with_contributors_data(response.get("items", []))
+        projects = response.get("items", [])
+        all_contributors = {
+            contributor["id"]: contributor
+            for project in projects
+            for contributor in project.get("contributors", [])
+        }
+        # Request avatars for all contributors, but don't wait for them to arrive before populating the table.
+        self.loader.get_avatars_for_users(list(all_contributors.values()))
+        self._all_projects = self._with_contributors_data(projects)
         self._last_toggled_row = None
         self.projects_model.load_projects(
             self._all_projects, self._sort_column, self._sort_order
@@ -411,10 +419,6 @@ class ProjectsSelectionDialog(QDialog):
         self.empty_label.setVisible(self.projects_model.rowCount() == 0)
         self.resize_columns()
         self.populate_contributors(self._all_projects)
-        all_contributors = {
-            c["id"]: c for p in self._all_projects for c in p.get("contributors", [])
-        }
-        self.loader.fetch_avatars(list(all_contributors.values()))
 
     def on_avatar_updated(self, user_id: str, avatar: QPixmap) -> None:
         """Refresh contributor data in rows and combo when a real avatar arrives."""
@@ -438,7 +442,7 @@ class ProjectsSelectionDialog(QDialog):
             contributors_data = []
             for i, contributor in enumerate(project.get("contributors", [])):
                 avatar: QPixmap | None = (
-                    self.avatar_cache.get_avatar_for_user(contributor)
+                    self.avatar_cache.get_avatar_from_cache(contributor["id"])
                     if i < 3
                     else None
                 )
@@ -514,7 +518,7 @@ class ProjectsSelectionDialog(QDialog):
             display_name = f"{user['given_name']} {user['family_name']}"
             if user["id"] == my_id:
                 display_name += " (You)"
-            avatar = self.avatar_cache.get_avatar_for_user(user)
+            avatar = self.avatar_cache.get_avatar_from_cache(user["id"])
             combo_items.append((display_name, user["id"], avatar))
         self.filter_bar.set_combo_items("who", combo_items)
 

@@ -10,6 +10,7 @@ from qgis.PyQt.QtCore import (
     Qt,
     QTimer,
 )
+from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -43,13 +44,15 @@ from rana_qgis_plugin.widgets.filter_bar import (
     FilterBar,
     TextFilterConfig,
 )
-from rana_qgis_plugin.widgets.utils_avatars import AvatarCache
 from rana_qgis_plugin.widgets.jobs_models import (
     JobData,
     JobParseError,
     job_can_be_cancelled,
 )
 from rana_qgis_plugin.workers.rana_jobs import JobsFetchTask
+
+if TYPE_CHECKING:
+    from rana_qgis_plugin.loader import Loader
 
 _HEADERS = ["Name", "Process name", "Who", "Started", "Status"]
 
@@ -229,13 +232,13 @@ class ProcessesPanel(QWidget):
         self,
         project: dict,
         error_signals: ApiErrorSignals,
-        avatar_cache: AvatarCache | None = None,
+        loader: "Loader",
         parent=None,
     ):
         super().__init__(parent)
         self.project = project
         self.error_signals = error_signals
-        self.avatar_cache = avatar_cache or AvatarCache()
+        self.loader = loader
         try:
             self.simulation_tracker_process_id = get_process_id_for_tag(
                 "simulation_tracker"
@@ -315,6 +318,18 @@ class ProcessesPanel(QWidget):
         self.model.rowsInserted.connect(self._update_all_row_widgets)
         self.model.rowsMoved.connect(self._update_all_row_widgets)
         self.model.rowsRemoved.connect(self._update_all_row_widgets)
+        self.loader.avatar_updated.connect(self.on_avatar_updated)
+
+    def on_avatar_updated(self, user_id: str, avatar: QPixmap) -> None:
+        """Refresh matching process-owner cells and the contributor filter."""
+        self.filter_bar.update_combo_avatar("who", user_id, avatar)
+        for row in range(self.model.rowCount()):
+            job = self.model.job_at(row)
+            if str(job.user.get("id")) != user_id:
+                continue
+            who_label = self.table.indexWidget(self.model.index(row, 2))
+            if isinstance(who_label, QLabel):
+                who_label.setPixmap(avatar)
 
     @property
     def polling(self) -> bool:
@@ -583,7 +598,7 @@ class ProcessesPanel(QWidget):
                 (
                     display_name,
                     user["id"],
-                    self.avatar_cache.get_avatar_for_user(user),
+                    self.loader.get_avatar_for_user(user),
                 )
                 for display_name, user in ordered_users
             ],
@@ -623,7 +638,7 @@ class ProcessesPanel(QWidget):
                 who_label = QLabel(self.table)
                 who_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setIndexWidget(who_index, who_label)
-            who_label.setPixmap(self.avatar_cache.get_avatar_for_user(job.user))
+            who_label.setPixmap(self.loader.get_avatar_for_user(job.user))
             who_label.setToolTip(job.user_name)
 
             status_index = self.model.index(row, 4)

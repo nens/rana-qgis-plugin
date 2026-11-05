@@ -8,6 +8,7 @@ decisions:
   - 20261029-1107-processes-table-filters-details
   - 20261029-1108-processes-simulation-cancel
   - 20261029-1300-processes-notify-on-process-start
+  - 20261104-1623-shared-avatar-fetching-and-failure-handling
 ---
 
 # Feature Specification: Processes Browser
@@ -147,7 +148,7 @@ Cancel button state is a transition, not a disable/re-enable pair: disable the a
 
 Wire the dynamic "who" filter combo the same way `ProjectsSelectionDialog.populate_contributors` already wires its own contributor combo (legacy's equivalent: `_repopulate_who_combo`): scan the currently-loaded rows' `job.user`, dedupe, build `(name, id, avatar)` tuples, call `filter_bar.set_combo_items`.
 
-Use the existing `ContributorAvatarsDelegate` where the job creator data is compatible; otherwise render a readable contributor name without requiring a new avatar subsystem.
+Use the existing `ContributorAvatarsDelegate` where the job creator data is compatible; otherwise render a readable contributor name. Avatar retrieval is shared infrastructure rather than a Processes-only subsystem; the Processes panel uses the Loader-owned cache/request path described in [Shared Avatar Fetching and Failure Recovery](../feat_458_avatars/design.md) and refreshes displayed owners on cache updates. Displaying contributor names remains independent of avatar availability (decision `../../knowledge/decisions/20261029-1107-processes-table-filters-details.md`).
 
 ### Dock lifetime and deduplication
 

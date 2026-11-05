@@ -227,7 +227,7 @@ class RanaFileDataItem(QgsDataItem):
             if file_data.get("data_type") == "threedi_schematisation"
             else FileInfoDialog
         )
-        dialog_class(file_data, self.error_signals, parent).exec()
+        dialog_class(file_data, self.error_signals, self.loader, parent).exec()
 
     def delete_file(self, parent) -> None:
         """Confirm and delete this file, then refresh its parent item."""

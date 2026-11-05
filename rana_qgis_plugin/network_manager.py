@@ -348,8 +348,15 @@ class NetworkManager(object):
                         )
             elif content_type.startswith("image/"):
                 image = QImage()
-                image.loadFromData(raw_content)
-                self._content = image
+                if image.loadFromData(raw_content):
+                    self._content = image
+                else:
+                    status = False
+                    description = (
+                        f"Failed to decode image response (HTTP "
+                        f"{self.last_http_status}, content-type="
+                        f"{content_type!r}, {len(raw_content)} bytes)"
+                    )
             else:
                 try:
                     self._content = json.loads(str(raw_content, "utf-8"))

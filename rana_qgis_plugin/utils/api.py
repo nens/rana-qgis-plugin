@@ -747,16 +747,37 @@ def get_threedi_organisations() -> list[str]:
 
 
 def get_user_image(user_id: str) -> Optional[QImage]:
+    """Fetch a user's avatar, returning None only when no avatar exists."""
     authcfg_id = get_authcfg_id()
     tenant = get_tenant_id()
     url = f"{api_url()}/tenants/{tenant}/users/{user_id}/image"
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch()
-    if status:
-        response = network_manager.content
-        return response
-    else:
-        return None
+    if not status:
+        if network_manager.last_http_status == 404:
+            return None
+        raise RanaFetchError(
+            error or "Failed to fetch user image",
+            url,
+            {},
+            status_code=network_manager.last_http_status,
+        )
+    response = network_manager.content
+    if not isinstance(response, QImage):
+        raise RanaFetchError(
+            f"Expected a user image, received {type(response).__name__}",
+            url,
+            {},
+            status_code=network_manager.last_http_status,
+        )
+    if response.isNull():
+        raise RanaFetchError(
+            "Received an invalid user image",
+            url,
+            {},
+            status_code=network_manager.last_http_status,
+        )
+    return response
 
 
 def get_user(params: dict) -> Optional[dict]:
