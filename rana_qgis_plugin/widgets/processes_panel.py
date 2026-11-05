@@ -2,6 +2,7 @@ import html
 from typing import TYPE_CHECKING, Any, cast
 
 from qgis.core import QgsApplication
+from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import (
     QAbstractTableModel,
     QItemSelectionModel,
@@ -17,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QHeaderView,
     QLabel,
     QMessageBox,
+    QSplitter,
     QTextEdit,
     QToolButton,
     QTreeView,
@@ -290,11 +292,30 @@ class ProcessesPanel(QWidget):
         self.logs = QTextEdit(self)
         self.logs.setReadOnly(True)
         self.logs.setPlaceholderText("Select a job to view its logs.")
+        # Collect log in collapsible group box to support show/hide
+        self._log_box = QgsCollapsibleGroupBox(self)
+        self._log_box.setTitle("Show log")
+        log_box_layout = QVBoxLayout(self._log_box)
+        log_box_layout.setContentsMargins(0, 0, 0, 0)
+        log_box_layout.addWidget(self.logs)
+        self._log_box.setCollapsed(True)
+        self._log_box.setVisible(False)
+        self._log_box.collapsedStateChanged.connect(self._on_log_box_collapsed)
+        # Add table and log box to splitter to allow user to resize log height
+        self._splitter = QSplitter(Qt.Orientation.Vertical, self)
+        self._splitter.addWidget(self.table)
+        self._splitter.addWidget(self._log_box)
+        self._splitter.setCollapsible(0, False)
+        self._splitter.setCollapsible(1, False)
+        self._splitter.setStretchFactor(0, 3)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.splitterMoved.connect(self._on_splitter_moved)
+        self._log_initialised = False
+        self._log_height: int | None = None
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.filter_bar)
-        layout.addWidget(self.table)
-        layout.addWidget(self.logs)
+        layout.addWidget(self._splitter)
 
         self._current_task: JobsFetchTask | None = None
         self._filters: dict = {}
@@ -490,7 +511,33 @@ class ProcessesPanel(QWidget):
 
     def _on_selection_changed(self, *_args) -> None:
         self._logs_job_id = None
+        selection_model = self.table.selectionModel()
+        has_selection = selection_model is not None and selection_model.hasSelection()
+        if not has_selection:
+            self._log_box.setCollapsed(True)
+            self._log_box.setVisible(False)
+        else:
+            self._log_box.setVisible(True)
+            if self._log_box.isCollapsed():
+                self._log_box.setCollapsed(False)
+                self._on_log_box_collapsed(False)
+                return
         self._refresh_selected_job_logs()
+
+    def _on_log_box_collapsed(self, collapsed: bool) -> None:
+        self._log_box.setTitle("Show log" if collapsed else "Hide log")
+        total = sum(self._splitter.sizes())
+        if collapsed:
+            header_height = self._log_box.sizeHint().height()
+            self._splitter.setSizes([max(total - header_height, 0), header_height])
+            return
+        log_height = self._log_height if self._log_height else max(total // 4, 1)
+        self._splitter.setSizes([max(total - log_height, 0), log_height])
+        self._refresh_selected_job_logs()
+
+    def _on_splitter_moved(self, _pos: int, _index: int) -> None:
+        if not self._log_box.isCollapsed() and self._splitter.sizes()[1] > 0:
+            self._log_height = self._splitter.sizes()[1]
 
     def _refresh_selected_job_logs(self) -> None:
         selection_model = self.table.selectionModel()
@@ -512,6 +559,8 @@ class ProcessesPanel(QWidget):
             self.logs.clear()
             self.logs.setPlaceholderText(f"Loading logs for {job.name}…")
             self._logs_job_id = job.id
+        if self._log_box.isCollapsed():
+            return
         try:
             response = get_job_logs(str(job.id))
         except (NetworkTimeoutError, NetworkUnavailableError, RanaFetchError) as error:
@@ -748,6 +797,9 @@ class ProcessesPanel(QWidget):
 
     def showEvent(self, a0) -> None:
         super().showEvent(a0)
+        if not self._log_initialised:
+            self._log_initialised = True
+            self._on_log_box_collapsed(True)
         self._visible = True
         if not self._stopped:
             self.start_polling()

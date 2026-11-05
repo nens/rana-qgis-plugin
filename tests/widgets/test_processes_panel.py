@@ -683,3 +683,94 @@ def test_selected_job_log_error_is_reported(qgis_application, loader):
 
     assert panel.logs.placeholderText() == "Could not load job logs."
     assert errors == [("logs unavailable. URL: url. params: {}", False)]
+
+
+def select_first_row(panel):
+    selection_model = panel.table.selectionModel()
+    assert selection_model is not None
+    selection_model.select(
+        panel.model.index(0, 0),
+        cast(
+            QItemSelectionModel.SelectionFlags,
+            QItemSelectionModel.SelectionFlag.Select
+            | QItemSelectionModel.SelectionFlag.Rows,
+        ),
+    )
+    return selection_model
+
+
+def test_log_box_is_hidden_until_a_job_is_selected(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+
+    assert panel._log_box.isHidden()
+    assert panel._log_box.isCollapsed()
+
+
+def test_selecting_a_job_opens_log_with_hide_label(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+
+    with patch(
+        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        return_value={"items": []},
+    ):
+        select_first_row(panel)
+
+    assert not panel._log_box.isHidden()
+    assert not panel._log_box.isCollapsed()
+    assert panel._log_box.title() == "Hide log"
+
+
+def test_collapsing_log_switches_label_to_show(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+    with patch(
+        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        return_value={"items": []},
+    ):
+        select_first_row(panel)
+
+    panel._log_box.findChild(QToolButton, "collapseButton").click()
+    panel.show()
+    assert panel._log_box.isCollapsed()
+    assert panel._log_box.title() == "Show log"
+
+
+def test_clearing_selection_hides_and_collapses_log_box(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+    with patch(
+        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        return_value={"items": []},
+    ):
+        selection_model = select_first_row(panel)
+        selection_model.clearSelection()
+
+    assert panel._log_box.isHidden()
+    assert panel._log_box.isCollapsed()
+
+
+def test_collapsed_log_does_not_fetch_logs(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+    select_first_row(panel)
+    panel._log_box.setCollapsed(True)
+
+    with patch(
+        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        return_value={"items": []},
+    ) as fetch_logs:
+        panel._refresh_selected_job_logs()
+
+    fetch_logs.assert_not_called()
