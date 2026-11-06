@@ -143,20 +143,20 @@ deliberately don't all react the same way:
 
 ### Consequences of each state
 
-| Data state | "Save data to Rana" action | Layer-tree badge | Close/removal prompt |
+| Data state | "Sync data to Rana" action | Layer-tree badge | Close/removal prompt |
 | ---------- | --------------------------- | ----------------- | ---------------------- |
 | `clean`    | disabled                    | not shown          | not raised             |
 | `dirty`    | enabled                     | shown              | raised                 |
 | `unknown`  | enabled                     | **not shown**      | **not raised**         |
 
 (Style dirtiness is a separate boolean and is always treated the same way
-everywhere: dirty style enables "Save style to Rana", shows the badge, and
+everywhere: dirty style enables "Sync style to Rana", shows the badge, and
 raises the prompt.)
 
 So an `unknown` raster — e.g. its cache file briefly becomes unreadable, or
 its baseline fingerprint is missing — gets no passive warning at all: no
 badge in the layer tree, and no prompt when the layer, its group, or the
-project is closed. The only place it's visible is that "Save data to Rana"
+project is closed. The only place it's visible is that "Sync data to Rana"
 stays enabled in the context menu, so a user who checks can still sync it
 manually; nothing surfaces it to a user who doesn't check. This is a
 deliberate asymmetry: the badge and close-prompt are reserved for *confirmed*
@@ -169,8 +169,8 @@ only.
 
 ### `layer_tree_menu.py`
 
-For a Rana-linked group, "Save style to Rana" is enabled when any contained
-layer has `has_unsynced_style()`; "Save data to Rana" is enabled when any
+For a Rana-linked group, "Sync style to Rana" is enabled when any contained
+layer has `has_unsynced_style()`; "Sync data to Rana" is enabled when any
 contained layer's `layer_sync_state()` is not `clean` (so `dirty` or
 `unknown`). Both are disabled while the file's sync key is locked (see
 [Sync locking](#sync-locking)), regardless of dirty state.

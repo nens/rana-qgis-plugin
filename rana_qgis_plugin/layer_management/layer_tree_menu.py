@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from qgis.core import QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsRasterLayer
-from qgis.PyQt.QtWidgets import QAction, QMenu
+from qgis.PyQt.QtWidgets import QAction, QDialog, QMenu
 
 from rana_qgis_plugin.icons import rana_icon
 from rana_qgis_plugin.layer_management.layer_manager import (
@@ -21,7 +21,14 @@ from rana_qgis_plugin.layer_management.layer_sync_state import (
     has_unsynced_style,
     layer_sync_state,
 )
+from rana_qgis_plugin.layer_management.sync_changes import (
+    SyncChanges,
+    SyncKind,
+    file_key,
+)
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+from rana_qgis_plugin.layer_management.sync_prompt_dialog import SyncDialog
+from rana_qgis_plugin.utils.api import get_project_names
 from rana_qgis_plugin.utils.data_models import (
     DataType,
     StyleUploadItem,
@@ -61,6 +68,14 @@ class LayerTreeMenuProvider:
         self.iface = iface
         self.layer_lock_registry = layer_lock_registry
         self.loader = loader
+
+    def collect_sync_changes(
+        self, kind: SyncKind, groups: list[QgsLayerTreeGroup]
+    ) -> SyncChanges:
+        """Return the changed layers per file for the one kind being synced."""
+        return SyncChanges.from_layers(
+            self.collect_all_layers(groups), {kind}, include_unknown_data=True
+        )
 
     def connect(self) -> None:
         view = self.iface.layerTreeView()
@@ -112,26 +127,26 @@ class LayerTreeMenuProvider:
         is_file_group = any(
             isinstance(child, QgsLayerTreeLayer) for child in node.children()
         )
-        style_label = "Save style to Rana" if is_file_group else "Save styles to Rana"
+        style_label = "Sync style to Rana" if is_file_group else "Sync styles to Rana"
 
-        save_style = QAction(rana_icon, style_label, menu)
+        sync_style = QAction(rana_icon, style_label, menu)
         all_layers = self.collect_all_layers([node])
         style_dirty = any(has_unsynced_style(layer) for layer in all_layers)
         data_dirty = any(
             layer_sync_state(layer) is not LayerSyncState.CLEAN for layer in all_layers
         )
         if locked or not style_dirty:
-            save_style.setEnabled(False)
+            sync_style.setEnabled(False)
         else:
-            save_style.triggered.connect(lambda: self.save_style([node]))
-        menu.addAction(save_style)
+            sync_style.triggered.connect(lambda: self.sync(SyncKind.STYLE, [node]))
+        menu.addAction(sync_style)
 
-        save_data = QAction(rana_icon, "Save data to Rana", menu)
+        sync_data = QAction(rana_icon, "Sync data to Rana", menu)
         if locked or not data_dirty:
-            save_data.setEnabled(False)
+            sync_data.setEnabled(False)
         else:
-            save_data.triggered.connect(lambda: self.save_data([node]))
-        menu.addAction(save_data)
+            sync_data.triggered.connect(lambda: self.sync(SyncKind.DATA, [node]))
+        menu.addAction(sync_data)
 
     def capture_style_items(
         self, groups: list[QgsLayerTreeGroup], for_close: bool = False
@@ -181,11 +196,57 @@ class LayerTreeMenuProvider:
             return
         self.loader.upload_styles(items)
 
-    def save_style(self, groups: list[QgsLayerTreeGroup]) -> None:
-        """Collect file-level style inputs and delegate them to Loader."""
+    def sync(self, kind: SyncKind, groups: list[QgsLayerTreeGroup]) -> None:
+        """Ask which files of one kind to sync, then dispatch the checked ones."""
         if self.loader is None:
             return
-        self.dispatch_style_items(self.capture_style_items(groups))
+        if kind is SyncKind.DATA:
+            data_items = self.capture_data_items(groups)
+            if not data_items:
+                return
+        else:
+            style_items = self.capture_style_items(groups)
+            if not style_items:
+                return
+        changes = self.collect_sync_changes(kind, groups)
+        missing_names = changes.unresolved_project_ids()
+        project_names = {
+            **changes.known_project_names(),
+            **(get_project_names(missing_names) if missing_names else {}),
+        }
+        dialog = SyncDialog(
+            self.iface.mainWindow(),
+            f"Sync {kind.value} to Rana",
+            "Continue sync",
+            "Cancel sync",
+            changes,
+            show_kinds=False,
+            project_names=project_names,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        selected = dialog.selected(kind)
+        if kind is SyncKind.DATA:
+            chosen = [
+                item
+                for item in data_items
+                if file_key(
+                    item.rana_ref.project_id,
+                    item.rana_ref.descriptor_id,
+                    item.rana_ref.file_id,
+                )
+                in selected
+            ]
+            if chosen:
+                self.dispatch_data_items(chosen)
+        else:
+            chosen_styles = [
+                item
+                for item in style_items
+                if file_key(item.project_id, item.descriptor_id, None) in selected
+            ]
+            if chosen_styles:
+                self.dispatch_style_items(chosen_styles)
 
     def capture_data_items(
         self, groups: list[QgsLayerTreeGroup]
@@ -215,12 +276,6 @@ class LayerTreeMenuProvider:
         if self.loader is None:
             return
         self.loader.upload_existing_files(items)
-
-    def save_data(self, groups: list[QgsLayerTreeGroup]) -> None:
-        """Collect linked files and delegate upload orchestration to Loader."""
-        if self.loader is None:
-            return
-        self.dispatch_data_items(self.capture_data_items(groups))
 
     def save_revision(self, groups: list[QgsLayerTreeGroup]) -> None:
         """Prepare the selected schematisation revision for upload."""

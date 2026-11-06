@@ -61,8 +61,8 @@ def test_unlinked_dirty_layer_does_not_enable_group_sync(qgis_application):
     group.addLayer(unlinked)
     with build_menu(project, group, qgis_application) as menu:
         actions = {action.text(): action for action in menu.actions() if action.text()}
-        assert not actions["Save style to Rana"].isEnabled()
-        assert not actions["Save data to Rana"].isEnabled()
+        assert not actions["Sync style to Rana"].isEnabled()
+        assert not actions["Sync data to Rana"].isEnabled()
 
 
 def test_raster_unknown_data_keeps_group_data_sync_enabled(qgis_application):
@@ -76,5 +76,5 @@ def test_raster_unknown_data_keeps_group_data_sync_enabled(qgis_application):
     group.addLayer(raster)
     with build_menu(project, group, qgis_application) as menu:
         actions = {action.text(): action for action in menu.actions() if action.text()}
-        assert not actions["Save style to Rana"].isEnabled()
-        assert actions["Save data to Rana"].isEnabled()
+        assert not actions["Sync style to Rana"].isEnabled()
+        assert actions["Sync data to Rana"].isEnabled()

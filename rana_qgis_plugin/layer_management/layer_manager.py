@@ -345,12 +345,15 @@ class RanaLayerRef:
     file_id: str
     descriptor_id: Optional[str] = None
     layer_id: Optional[str] = None
+    # Optional: layers linked before the name was stored have none.
+    project_name: Optional[str] = None
 
     PROPERTY_KEYS: ClassVar[dict[str, str]] = {
         "project_id": "rana/project_id",
         "file_id": "rana/file_id",
         "descriptor_id": "rana/descriptor_id",
         "layer_id": "rana/layer_id",
+        "project_name": "rana/project_name",
     }
 
     @staticmethod
@@ -364,7 +367,10 @@ class RanaLayerRef:
         file_id = values.get("file_id")
         if not isinstance(project_id, str) or not isinstance(file_id, str):
             return None
-        values.update(project_id=project_id, file_id=file_id)
+        project_name = values.get("project_name")
+        if not isinstance(project_name, str) or not project_name:
+            project_name = None
+        values.update(project_id=project_id, file_id=file_id, project_name=project_name)
         return RanaLayerRef(
             project_id=project_id,
             file_id=file_id,

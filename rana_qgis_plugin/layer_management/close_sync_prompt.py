@@ -19,9 +19,6 @@ prompt). See `doc/signals.md` for the full connection/sequence diagrams and
 `doc/dirty_tracking.md` for flowcharts of each route.
 """
 
-import html
-from pathlib import PurePosixPath
-
 from qgis.core import (
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
@@ -31,6 +28,7 @@ from qgis.core import (
     QgsRasterLayer,
 )
 from qgis.PyQt.QtCore import QTimer
+from qgis.PyQt.QtWidgets import QDialog
 
 from rana_qgis_plugin.layer_management.layer_sync_state import (
     LayerSyncState,
@@ -42,10 +40,20 @@ from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvi
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     evaluate_raster_data_dirty,
 )
-from rana_qgis_plugin.utils.data_models import StyleUploadItem, UploadableLayerItem
+from rana_qgis_plugin.layer_management.sync_changes import (
+    SyncChanges,
+    SyncKind,
+    file_key,
+)
+from rana_qgis_plugin.layer_management.sync_prompt_dialog import SyncDialog
+from rana_qgis_plugin.utils.api import get_project_names
+from rana_qgis_plugin.utils.data_models import (
+    StyleUploadItem,
+    UploadableLayerItem,
+)
 from rana_qgis_plugin.workers.styling import discard_layer_sources
 
-SYNC_NOW = "Sync now"
+SYNC_NOW = "Sync changes now"
 CONTINUE_WITHOUT_SYNCING = "Continue without syncing"
 
 
@@ -71,60 +79,6 @@ def collect_dirty_file_groups(
         ):
             data_groups.append(group)
     return style_groups, data_groups
-
-
-def style_item_name(item: StyleUploadItem) -> str:
-    """Return the Rana file name identified by a style upload item."""
-    return PurePosixPath(item.file_ref_str.removeprefix("file ")).name
-
-
-def data_item_name(item: UploadableLayerItem) -> str:
-    """Return the Rana file name identified by a linked-file upload item."""
-    return PurePosixPath(item.rana_ref.file_id).name
-
-
-def describe_changes(has_style: bool, has_data: bool, single_file: bool) -> str:
-    """Name the kinds of change being reported.
-
-    For one file both flags describe that same file, so they can be stated
-    as fact. Across several files the flags may come from different files,
-    so "and/or" avoids claiming every file changed in both ways.
-    """
-    if has_style and has_data:
-        return "data and style" if single_file else "data and/or style"
-    return "style" if has_style else "data"
-
-
-def build_question(style_names: list[str], data_names: list[str]) -> str:
-    """Build the sync-prompt question text listing the given file names.
-
-    The dialog renders this as rich text, so plain newlines/bullets do not
-    produce a visible list; HTML markup is required. The phrasing and
-    shape also depend on how many files are involved: a single file is
-    named inline, 2-10 files are shown as a bullet list, and 11+ files
-    show the first 10 plus an "...and N more files" summary line.
-
-    Names are sorted alphabetically rather than by layer-tree position:
-    tree-driven removal fires bottom-up across multiple deferred signals,
-    so the original visual order isn't reliably reconstructable once
-    several files are captured across that cascade.
-    """
-    names = sorted(set(style_names) | set(data_names), key=str.casefold)
-    changes = describe_changes(bool(style_names), bool(data_names), len(names) == 1)
-    if len(names) == 1:
-        return (
-            f"<b>{html.escape(names[0])}</b> has unsynced {changes} changes."
-            "<br><br>Sync it now, or continue without syncing?"
-        )
-    shown = names[:10]
-    items = "".join(f"<li>{html.escape(name)}</li>" for name in shown)
-    if len(names) > 10:
-        items += f"<li>…and {len(names) - 10} more files</li>"
-    return (
-        f"The following files have unsynced {changes} changes:"
-        f"<ul>{items}</ul>"
-        "Sync them now, or continue without syncing?"
-    )
 
 
 class SyncPromptAction:
@@ -164,33 +118,65 @@ class SyncPromptAction:
         data_items = (
             self.layer_tree_menu.capture_data_items(data_groups) if data_groups else []
         )
-        self.prompt_and_dispatch(style_items, data_items)
+        all_layers = LayerTreeMenuProvider.collect_all_layers(
+            style_groups + data_groups
+        )
+        changes = SyncChanges.from_layers(
+            all_layers,
+            set(SyncKind),
+        )
+        self.prompt_and_dispatch(style_items, data_items, changes)
 
     def prompt_and_dispatch(
         self,
         style_items: list[StyleUploadItem],
         data_items: list[UploadableLayerItem],
+        changes: SyncChanges,
     ) -> None:
-        """Ask whether to sync the captured items, releasing them if not."""
+        """Ask which files to sync, dispatching the checked ones.
+
+        Unchecked style snapshots, and all of them when the user continues without
+        syncing, are released so their temporary files are removed.
+        """
         if not style_items and not data_items:
             discard_layer_sources(style_items)
             return
-        style_names = [style_item_name(item) for item in style_items]
-        data_names = [data_item_name(item) for item in data_items]
-        answer = self.communication.custom_ask(
+        missing_names = changes.unresolved_project_ids()
+        project_names = {
+            **changes.known_project_names(),
+            **(get_project_names(missing_names) if missing_names else {}),
+        }
+        dialog = SyncDialog(
             self.parent,
             "Unsynced changes",
-            build_question(style_names, data_names),
             SYNC_NOW,
             CONTINUE_WITHOUT_SYNCING,
+            changes,
+            project_names=project_names,
         )
-        if answer != SYNC_NOW:
-            discard_layer_sources(style_items)
-            return
-        if style_items:
-            self.layer_tree_menu.dispatch_style_items(style_items)
-        if data_items:
-            self.layer_tree_menu.dispatch_data_items(data_items)
+        confirmed = dialog.exec() == QDialog.DialogCode.Accepted
+        selected_style = dialog.selected(SyncKind.STYLE) if confirmed else set()
+        selected_data = dialog.selected(SyncKind.DATA) if confirmed else set()
+        style_to_sync = []
+        for item in style_items:
+            if file_key(item.project_id, item.descriptor_id, None) in selected_style:
+                style_to_sync.append(item)
+            else:
+                discard_layer_sources([item])
+        data_to_sync = [
+            item
+            for item in data_items
+            if file_key(
+                item.rana_ref.project_id,
+                item.rana_ref.descriptor_id,
+                item.rana_ref.file_id,
+            )
+            in selected_data
+        ]
+        if style_to_sync:
+            self.layer_tree_menu.dispatch_style_items(style_to_sync)
+        if data_to_sync:
+            self.layer_tree_menu.dispatch_data_items(data_to_sync)
 
 
 class ProjectCloseSyncPrompt:
@@ -255,6 +241,7 @@ class LayerRemovalSyncPrompt:
         self._prompted_layer_ids: set[str] = set()
         self._pending_style_items: list[StyleUploadItem] = []
         self._pending_data_items: list[UploadableLayerItem] = []
+        self._pending_changes = SyncChanges()
         # Removal signals may arrive several times during one QGIS tree-removal
         # operation. Keep pre-removal IDs to clean deduplication after each
         # corresponding removedChildren notification.
@@ -294,6 +281,7 @@ class LayerRemovalSyncPrompt:
         discard_layer_sources(self._pending_style_items)
         self._pending_style_items.clear()
         self._pending_data_items.clear()
+        self._pending_changes = SyncChanges()
         self._pending_tree_removal_ids.clear()
         self._pending_tree_only_cleanup_ids.clear()
         self._flush_timer.deleteLater()
@@ -423,6 +411,12 @@ class LayerRemovalSyncPrompt:
             self._pending_data_items.extend(
                 self.layer_tree_menu.capture_data_items(data_groups)
             )
+        self._pending_changes = self._pending_changes.merge(
+            SyncChanges.from_layers(
+                LayerTreeMenuProvider.collect_all_layers(style_groups + data_groups),
+                set(SyncKind),
+            )
+        )
         # Capture above while the tree/layers are still alive; defer only the
         # prompt and dispatch so notifications from this removal cascade batch.
         if not self._flush_timer.isActive():
@@ -440,7 +434,9 @@ class LayerRemovalSyncPrompt:
         data_items = self._pending_data_items
         self._pending_style_items = []
         self._pending_data_items = []
-        self.action.prompt_and_dispatch(style_items, data_items)
+        changes = self._pending_changes
+        self._pending_changes = SyncChanges()
+        self.action.prompt_and_dispatch(style_items, data_items, changes)
 
     @staticmethod
     def layer_ids_in_subtree(node: QgsLayerTreeNode) -> set[str]:
