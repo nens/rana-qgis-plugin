@@ -10,6 +10,8 @@ from qgis.PyQt.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 from threedi_api_client.files import upload_file
 from threedi_api_client.openapi import ApiException
 
+from rana_qgis_plugin.utils.api_logging import get_logging_pool
+
 from .data_models import simulation_data_models as dm
 from .threedi_calls import ThreediCalls
 from .utils import (
@@ -1301,6 +1303,7 @@ class SchematisationUploadProgressWorker(QRunnable):
             zipped_geopackage_filepath,
             CHUNK_SIZE,
             callback_func=self.monitor_upload_progress,
+            pool=get_logging_pool(),
         )
         os.remove(zipped_geopackage_filepath)
         self.current_task_progress = 100
@@ -1342,6 +1345,7 @@ class SchematisationUploadProgressWorker(QRunnable):
             raster_filepath,
             CHUNK_SIZE,
             callback_func=self.monitor_upload_progress,
+            pool=get_logging_pool(),
         )
         self.current_task_progress = 100
         self.report_upload_progress()

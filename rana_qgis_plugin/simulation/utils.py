@@ -30,6 +30,7 @@ from threedi_mi_utils import (
 )
 
 from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
+from rana_qgis_plugin.utils.api_logging import logged_put
 
 
 class LogLevels(Enum):
@@ -279,7 +280,7 @@ def write_template(template_name, simulation_template):
 def upload_local_file(upload, filepath):
     """Upload file."""
     with open(filepath, "rb") as file:
-        response = requests.put(upload.put_url, data=file)
+        response = logged_put(upload.put_url, data=file)
         return response
 
 

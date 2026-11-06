@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Optional
 
-import requests
 from qgis.PyQt.QtCore import (
     QSettings,
     QThread,
@@ -15,6 +14,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_project_file,
     start_file_upload,
 )
+from rana_qgis_plugin.utils.api_logging import logged_put
 from rana_qgis_plugin.utils.local_paths import get_local_file_path
 from rana_qgis_plugin.utils.time import convert_timestamp_str_to_local_time
 
@@ -174,7 +174,7 @@ class FileUploadWorker(QThread):
             # Step 2: Upload the file to the upload_url
             self.progress.emit(int(0.2 * progress_step + progress_start), "")
             with open(local_path, "rb") as file:
-                response = requests.put(upload_url, data=file)
+                response = logged_put(upload_url, data=file)
                 response.raise_for_status()
             # Step 3: Complete the upload
             self.progress.emit(int(0.8 * progress_step + progress_start), "")

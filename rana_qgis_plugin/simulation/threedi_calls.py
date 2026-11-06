@@ -89,6 +89,9 @@ from threedi_api_client.openapi import (
     WindDragCoefficient,
 )
 
+from rana_qgis_plugin.utils.api_logging import install_threedi_request_logger
+from rana_qgis_plugin.utils.settings import get_log_api_requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,6 +134,8 @@ def get_api_client_with_personal_api_token(
         "THREEDI_API_PERSONAL_API_TOKEN": personal_api_token,
     }
     api_client = ThreediApi(config=config, version=version)
+    if get_log_api_requests():
+        install_threedi_request_logger(api_client)
     return api_client
 
 

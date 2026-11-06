@@ -11,6 +11,7 @@ History
 - Reject CSV files for boundary conditions and substance concentrations if they have any columns
   besides the required 'id' and 'timeseries' (nens/rana#4840).
 - Point "Open in web viewer" for schematisation to Rana preview instead of management page
+- Add option to log API calls (nens/rana#5343)
 
 
 1.2.23 (2026-10-15)

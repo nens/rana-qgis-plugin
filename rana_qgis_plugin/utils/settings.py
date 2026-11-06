@@ -141,6 +141,13 @@ def get_use_plugin_excepthook() -> bool:
     )
 
 
+def get_log_api_requests() -> bool:
+    """Return whether API request/upload-attempt logging is enabled."""
+    return QgsSettings().value(
+        f"{RANA_SETTINGS_ENTRY}/log_api_requests", False, type=bool
+    )
+
+
 def get_hcc_url_override() -> Optional[str]:
     value = QgsSettings().value("Rana/hcc_url")
     return value if value else None
@@ -148,7 +155,12 @@ def get_hcc_url_override() -> Optional[str]:
 
 def get_advanced_settings() -> dict:
     advanced_settings = {}
-    settings_names = ["use_plugin_excepthook", "hcc_url", "rana_api_version_prefix"]
+    settings_names = [
+        "use_plugin_excepthook",
+        "hcc_url",
+        "rana_api_version_prefix",
+        "log_api_requests",
+    ]
     for setting_name in settings_names:
         value = QgsSettings().value(f"{RANA_SETTINGS_ENTRY}/{setting_name}")
         if value is not None:
