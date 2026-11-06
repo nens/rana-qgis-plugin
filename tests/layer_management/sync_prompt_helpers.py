@@ -1,19 +1,33 @@
 """Shared fakes/helpers for the CloseSyncPrompt-family tests."""
 
 from pathlib import PurePosixPath
+from unittest.mock import patch
 
 from qgis.core import QgsLayerTreeGroup, QgsMapLayer
 
+from rana_qgis_plugin.layer_management import close_sync_prompt
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
     get_rana_refs,
     set_rana_refs,
 )
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
+from rana_qgis_plugin.layer_management.sync_changes import FileKey
+from rana_qgis_plugin.layer_management.sync_summary import (
+    build_details,
+    build_summary,
+)
+from rana_qgis_plugin.utils.data_models import DataType
 
 
-def make_linked_layer(layer: QgsMapLayer, file_id: str) -> QgsMapLayer:
-    set_rana_refs(layer, RanaLayerRef("project", file_id))
+def fk(file_id: str, project_id: str = "project") -> FileKey:
+    return FileKey(project_id, file_id)
+
+
+def make_linked_layer(
+    layer: QgsMapLayer, file_id: str, project_id: str = "project"
+) -> QgsMapLayer:
+    set_rana_refs(layer, RanaLayerRef(project_id, file_id))
     return layer
 
 
@@ -35,13 +49,41 @@ def file_id_for_group(group: QgsLayerTreeGroup) -> str:
 
 
 class ChoiceRecorder:
+    """Stand-in for `CloseSyncDialog` that never opens a modal window.
+
+    Records the (summary, details) HTML the dialog would show and reports the
+    configured label as the user's choice. Use as a context manager: the
+    patch is active only inside the `with` block.
+    """
+
     def __init__(self, choice: str):
         self.choice = choice
-        self.questions = []
+        self.shown: list[tuple[str, str]] = []
+        self._patcher = patch.object(
+            close_sync_prompt, "CloseSyncDialog", self.fake_dialog_class()
+        )
 
-    def custom_ask(self, parent, title, question, *choices):
-        self.questions.append((title, question, choices))
-        return self.choice
+    def __enter__(self) -> "ChoiceRecorder":
+        self._patcher.start()
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self._patcher.stop()
+
+    def fake_dialog_class(self):
+        recorder = self
+
+        class FakeCloseSyncDialog:
+            def __init__(self, parent, changes):
+                recorder.shown.append((build_summary(changes), build_details(changes)))
+
+            def exec(self) -> int:
+                return 0
+
+            def selected_label(self) -> str:
+                return recorder.choice
+
+        return FakeCloseSyncDialog
 
 
 class FakeLayerSource:
@@ -55,12 +97,15 @@ class FakeLayerSource:
 class FakeStyleItem:
     def __init__(self, file_id: str):
         self.file_ref_str = f"file {file_id}"
+        self.data_type = DataType.raster
+        self.layer_in_file = None
         self.layer_source = FakeLayerSource()
 
 
 class FakeDataItem:
     def __init__(self, file_id: str):
         self.rana_ref = RanaLayerRef("project", file_id)
+        self.layer_name = None
 
 
 class SyncRecorder:

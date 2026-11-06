@@ -89,9 +89,9 @@ before a project or layer is closed. See
 
 The layer-tree menu provider adds actions for Rana-linked groups:
 
-- **Save style to Rana** uploads style files for the linked layer or file;
-- **Save styles to Rana** is used when a group contains multiple files; and
-- **Save data to Rana** is available at file level only.
+- **Sync style to Rana** uploads style files for the linked layer or file;
+- **Sync styles to Rana** is used when a group contains multiple files; and
+- **Sync data to Rana** is available at file level only.
 
 Data upload replaces the complete Rana file, so it is not offered for an
 individual layer inside a multi-layer vector file. A central lock registry

@@ -19,14 +19,11 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QEventLoop, QModelIndex, Qt, QTimer
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QMenu, QMessageBox, QTreeView
+from qgis.PyQt.QtWidgets import QApplication, QMenu, QPushButton, QTreeView
 
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.data_items.file_item import RanaFileDataItem
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
-from rana_qgis_plugin.layer_management.close_sync_prompt import (
-    CONTINUE_WITHOUT_SYNCING,
-)
 from rana_qgis_plugin.layer_management.file_fingerprint import raster_source_path
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     is_data_dirty,
@@ -39,6 +36,13 @@ from rana_qgis_plugin.layer_management.layer_manager import (
 from rana_qgis_plugin.layer_management.layer_sync_state import (
     LayerSyncState,
     layer_sync_state,
+)
+from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
+    CONTINUE_WITHOUT_SYNCING,
+    OK,
+    SYNC_NOW,
+    CloseSyncDialog,
+    OnDemandSyncDialog,
 )
 from rana_qgis_plugin.utils.api import (
     FileDescriptorStatus,
@@ -485,15 +489,35 @@ def has_unsynced_indicator(view, node):
     )
 
 
-def click_message_box_button(qtbot, modal, button_text):
-    button = next(
-        (button for button in modal.buttons() if button.text() == button_text), None
-    )
+def click_dialog_button(qtbot, dialog, button_text):
+    buttons = dialog.findChildren(QPushButton)
+    button = next((button for button in buttons if button.text() == button_text), None)
     assert button is not None, (
-        f"Button {button_text!r} not found. Available: "
-        f"{[b.text() for b in modal.buttons()]}. Message: {modal.text()!r}"
+        f"Button {button_text!r} not found. Available: {[b.text() for b in buttons]}"
     )
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+
+def sync_dialog_text(dialog):
+    """Return the summary and the (collapsed) details text of a sync dialog."""
+    return dialog.summary_label.text() + dialog.details_area.widget().text()
+
+
+def dismiss_sync_started_notice(qtbot):
+    """Wait for the non-blocking "Sync started" dialog of an on-demand sync, then close it."""
+
+    def find_notice():
+        return next(
+            (
+                widget
+                for widget in QApplication.topLevelWidgets()
+                if isinstance(widget, OnDemandSyncDialog) and widget.isVisible()
+            ),
+            None,
+        )
+
+    qtbot.waitUntil(lambda: find_notice() is not None, timeout=5000)
+    click_dialog_button(qtbot, find_notice(), OK)
 
 
 def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
@@ -513,8 +537,8 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
     # that Rana sync actions appear in the context menu
     menu = get_layer_tree_context_menu(plugin, vector_group)
     action_texts = [a.text() for a in menu.actions() if not a.isSeparator()]
-    assert "Save style to Rana" in action_texts
-    assert "Save data to Rana" in action_texts
+    assert "Sync style to Rana" in action_texts
+    assert "Sync data to Rana" in action_texts
 
     # --- Data sync: edit vector layer, commit, save data to Rana ---
 
@@ -542,8 +566,8 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         vector_layer.setCustomProperty("rana/data_sync_state", "dirty")
     assert is_data_dirty(vector_layer)
 
-    # Trigger "Save data to Rana" from the layer tree context menu
-    trigger_layer_tree_action(plugin, vector_group, "Save data to Rana")
+    # Trigger "Sync data to Rana" from the layer tree context menu
+    trigger_layer_tree_action(plugin, vector_group, "Sync data to Rana")
     wait_for_qgis_tasks(qtbot)
 
     # Verify data dirty flag is cleared
@@ -580,8 +604,8 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         vector_layer.setCustomProperty("rana/style_dirty", True)
     assert is_style_dirty(vector_layer)
 
-    # Trigger "Save style to Rana" from the layer tree context menu
-    trigger_layer_tree_action(plugin, vector_group, "Save style to Rana")
+    # Trigger "Sync style to Rana" from the layer tree context menu
+    trigger_layer_tree_action(plugin, vector_group, "Sync style to Rana")
     wait_for_qgis_tasks(qtbot)
 
     # Verify style dirty flag is cleared
@@ -636,7 +660,7 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         timeout=10000,
     )
 
-    trigger_layer_tree_action(plugin, raster_group, "Save data to Rana")
+    trigger_layer_tree_action(plugin, raster_group, "Sync data to Rana")
     wait_for_qgis_tasks(qtbot)
     qtbot.waitUntil(
         lambda: layer_sync_state(raster_layer) is LayerSyncState.CLEAN,
@@ -676,13 +700,13 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         raster_layer.setCustomProperty("rana/style_dirty", True)
     assert is_style_dirty(raster_layer)
 
-    trigger_layer_tree_action(plugin, raster_group, "Save style to Rana")
+    trigger_layer_tree_action(plugin, raster_group, "Sync style to Rana")
     wait_for_qgis_tasks(qtbot)
     qtbot.waitUntil(lambda: not is_style_dirty(raster_layer), timeout=30000)
 
     # --- Remote deletion guard: delete file via API, attempt save ---
 
-    # "Save data to Rana" is gated on dirty state. Real dirty detection is
+    # "Sync data to Rana" is gated on dirty state. Real dirty detection is
     # already verified above (data-sync round trip); set the property
     # directly here only to re-enable the action for this guard.
     raster_layer.setCustomProperty("rana/data_sync_state", "dirty")
@@ -690,7 +714,7 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
     assert raster_ref is not None and is_rana_linked(raster_layer)
     delete_tenant_project_file(raster_ref.project_id, {"path": raster_ref.file_id})
 
-    trigger_layer_tree_action(plugin, raster_group, "Save data to Rana")
+    trigger_layer_tree_action(plugin, raster_group, "Sync data to Rana")
     qtbot.waitUntil(lambda: not is_rana_linked(raster_layer), timeout=30000)
     assert get_rana_refs(raster_layer) is None
     assert raster_layer.id() in project.mapLayers()
@@ -756,17 +780,19 @@ def test_dirty_tracking_and_guards(plugin, qtbot, qgis_application, layer_sync_s
         for action in menu.actions()
         if not action.isSeparator()
     }
-    assert enabled_actions["Save data to Rana"]
-    assert enabled_actions["Save style to Rana"]
+    assert enabled_actions["Sync data to Rana"]
+    assert enabled_actions["Sync style to Rana"]
 
-    trigger_layer_tree_action(plugin, vector_group, "Save data to Rana")
+    trigger_layer_tree_action(plugin, vector_group, "Sync data to Rana")
+    dismiss_sync_started_notice(qtbot)
     wait_for_qgis_tasks(qtbot)
     qtbot.waitUntil(lambda: not is_data_dirty(vector_layer), timeout=30000)
 
     updated_ref = get_rana_refs(vector_layer)
     assert updated_ref is not None and updated_ref.descriptor_id is not None
     wait_for_descriptor_ready(updated_ref.descriptor_id)
-    trigger_layer_tree_action(plugin, vector_group, "Save style to Rana")
+    trigger_layer_tree_action(plugin, vector_group, "Sync style to Rana")
+    dismiss_sync_started_notice(qtbot)
     wait_for_qgis_tasks(qtbot)
     qtbot.waitUntil(lambda: not is_style_dirty(vector_layer), timeout=30000)
     qtbot.waitUntil(lambda: not has_unsynced_indicator(view, layer_node), timeout=5000)
@@ -779,11 +805,11 @@ def test_dirty_tracking_and_guards(plugin, qtbot, qgis_application, layer_sync_s
     assert task_manager is not None
 
     def choose_layer_removal_sync(qtbot, modal):
-        assert VECTOR_FIXTURE.name in modal.text()
-        click_message_box_button(qtbot, modal, "Sync now")
+        assert VECTOR_FIXTURE.name in sync_dialog_text(modal)
+        click_dialog_button(qtbot, modal, SYNC_NOW)
 
     QTimer.singleShot(
-        500, make_modal_handler(qtbot, QMessageBox, choose_layer_removal_sync)
+        500, make_modal_handler(qtbot, CloseSyncDialog, choose_layer_removal_sync)
     )
     with qtbot.waitSignal(task_manager.taskAdded, timeout=30000):
         project.removeMapLayer(removed_layer_id)
@@ -799,9 +825,9 @@ def test_dirty_tracking_and_guards(plugin, qtbot, qgis_application, layer_sync_s
     # nested event loop of open_sync_folder, so a handler must already be armed
     # or the modal blocks that loop forever.
     def skip_reopen_sync(qtbot, modal):
-        click_message_box_button(qtbot, modal, CONTINUE_WITHOUT_SYNCING)
+        click_dialog_button(qtbot, modal, CONTINUE_WITHOUT_SYNCING)
 
-    QTimer.singleShot(500, make_modal_handler(qtbot, QMessageBox, skip_reopen_sync))
+    QTimer.singleShot(500, make_modal_handler(qtbot, CloseSyncDialog, skip_reopen_sync))
     (
         project,
         root,
@@ -830,12 +856,13 @@ def test_dirty_tracking_and_guards(plugin, qtbot, qgis_application, layer_sync_s
     )
 
     def choose_project_clear_sync(qtbot, modal):
-        assert VECTOR_FIXTURE.name in modal.text()
-        assert RASTER_FIXTURE.name in modal.text()
-        click_message_box_button(qtbot, modal, "Sync now")
+        text = sync_dialog_text(modal)
+        assert VECTOR_FIXTURE.name in text
+        assert RASTER_FIXTURE.name in text
+        click_dialog_button(qtbot, modal, SYNC_NOW)
 
     QTimer.singleShot(
-        500, make_modal_handler(qtbot, QMessageBox, choose_project_clear_sync)
+        500, make_modal_handler(qtbot, CloseSyncDialog, choose_project_clear_sync)
     )
     with qtbot.waitSignal(task_manager.taskAdded, timeout=30000):
         project.clear()

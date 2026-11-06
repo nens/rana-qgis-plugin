@@ -76,7 +76,7 @@ sequenceDiagram
     participant Builder
     participant Rana as Rana API
 
-    User->>Menu: Save style to Rana
+    User->>Menu: Sync style to Rana
     Menu->>Loader: collect linked layer/file
     Loader->>Task: addTask(style items)
     Task->>Builder: validate and generate styles
@@ -88,8 +88,8 @@ sequenceDiagram
 
 ## Layer-panel actions
 
-Rana-linked groups in the QGIS layer panel expose **Save style to Rana** (or
-**Save styles to Rana** for a folder containing multiple files). The action is
+Rana-linked groups in the QGIS layer panel expose **Sync style to Rana** (or
+**Sync styles to Rana** for a folder containing multiple files). The action is
 enabled only when a linked layer has a dirty style state. It is disabled while
 the referenced Rana file is being synchronized.
 

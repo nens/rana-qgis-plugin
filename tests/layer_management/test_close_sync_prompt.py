@@ -5,7 +5,6 @@ from osgeo import gdal
 from qgis.core import QgsLayerTreeGroup, QgsRasterLayer, QgsVectorLayer
 
 from rana_qgis_plugin.layer_management.close_sync_prompt import (
-    build_question,
     collect_dirty_file_groups,
 )
 from rana_qgis_plugin.layer_management.layer_dirty_flags import DATA_SYNC_STATE_PROPERTY
@@ -42,7 +41,7 @@ def test_collects_style_dirty_rana_file_groups(qgis_application):
     assert data_groups == []
 
 
-def test_collects_vector_data_dirty_groups_and_ignores_unknown_raster_data(
+def test_collects_vector_data_dirty_groups_and_ignores_unchanged_raster_data(
     qgis_application,
 ):
     root = QgsLayerTreeGroup()
@@ -151,38 +150,3 @@ def test_file_group_is_listed_once_when_multiple_layers_are_dirty(qgis_applicati
 
     assert style_groups == [group]
     assert data_groups == []
-
-
-def test_single_file_with_only_style_changes_says_style(qgis_application):
-    question = build_question(["roads.gpkg"], [])
-
-    assert "unsynced style changes" in question
-    assert "data" not in question
-
-
-def test_single_file_with_only_data_changes_says_data(qgis_application):
-    question = build_question([], ["roads.gpkg"])
-
-    assert "unsynced data changes" in question
-    assert "style" not in question
-
-
-def test_single_file_dirty_in_both_ways_says_data_and_style(qgis_application):
-    question = build_question(["roads.gpkg"], ["roads.gpkg"])
-
-    assert "unsynced data and style changes" in question
-    assert "and/or" not in question
-
-
-def test_separate_files_per_change_kind_say_data_and_or_style(qgis_application):
-    question = build_question(["style.gpkg"], ["data.gpkg"])
-
-    assert "unsynced data and/or style changes" in question
-    assert "style.gpkg" in question
-    assert "data.gpkg" in question
-
-
-def test_a_file_dirty_in_both_ways_is_listed_once(qgis_application):
-    question = build_question(["roads.gpkg", "water.gpkg"], ["roads.gpkg"])
-
-    assert question.count("roads.gpkg") == 1

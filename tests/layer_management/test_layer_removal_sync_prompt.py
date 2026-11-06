@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from typing import cast
 
 from qgis.core import QgsProject, QgsVectorLayer
@@ -17,21 +18,22 @@ from tests.layer_management.sync_prompt_helpers import (
 )
 
 
+@contextmanager
 def make_layer_removal_prompt(project, choice):
     """Build a disconnected `ProjectCloseSyncPrompt` (never True here) plus
     the `LayerRemovalSyncPrompt` under test, matching how they're wired in
     production (the removal prompt always needs a project-close companion to
     check `is_clearing`, even when this test never triggers a project clear).
     """
-    communication = ChoiceRecorder(choice)
-    sync = SyncRecorder()
-    project_close = ProjectCloseSyncPrompt(
-        project, cast(LayerTreeMenuProvider, sync), communication
-    )
-    prompt = LayerRemovalSyncPrompt(
-        project, cast(LayerTreeMenuProvider, sync), communication, project_close
-    )
-    return prompt, communication, sync
+    with ChoiceRecorder(choice) as communication:
+        sync = SyncRecorder()
+        project_close = ProjectCloseSyncPrompt(
+            project, cast(LayerTreeMenuProvider, sync), communication
+        )
+        prompt = LayerRemovalSyncPrompt(
+            project, cast(LayerTreeMenuProvider, sync), communication, project_close
+        )
+        yield prompt, communication, sync
 
 
 def test_removing_dirty_project_layer_prompts_and_dispatches_sync(qgis_application):
@@ -46,18 +48,18 @@ def test_removing_dirty_project_layer_prompts_and_dispatches_sync(qgis_applicati
     project.addMapLayer(layer, False)
     group.addLayer(layer)
     layer.setCustomProperty("rana/data_sync_state", "dirty")
-    prompt, communication, sync = make_layer_removal_prompt(project, SYNC_NOW)
-    prompt.connect()
+    with make_layer_removal_prompt(project, SYNC_NOW) as (prompt, communication, sync):
+        prompt.connect()
 
-    try:
-        project.removeMapLayer(layer.id())
-        # Removal reaches the layer tree before the registry signal, so the
-        # prompt is batched via a zero-delay timer.
-        qgis_application.processEvents()
-        assert sync.data_groups == ["dirty.gpkg"]
-        assert sync.style_groups == []
-    finally:
-        prompt.disconnect()
+        try:
+            project.removeMapLayer(layer.id())
+            # Removal reaches the layer tree before the registry signal, so the
+            # prompt is batched via a zero-delay timer.
+            qgis_application.processEvents()
+            assert sync.data_groups == ["dirty.gpkg"]
+            assert sync.style_groups == []
+        finally:
+            prompt.disconnect()
 
 
 def test_removing_group_with_multiple_dirty_layers_prompts_once(qgis_application):
@@ -78,17 +80,17 @@ def test_removing_group_with_multiple_dirty_layers_prompts_once(qgis_application
     group.addLayer(second)
     first.setCustomProperty("rana/data_sync_state", "dirty")
     second.setCustomProperty("rana/style_dirty", True)
-    prompt, communication, sync = make_layer_removal_prompt(project, SYNC_NOW)
-    prompt.connect()
+    with make_layer_removal_prompt(project, SYNC_NOW) as (prompt, communication, sync):
+        prompt.connect()
 
-    root.removeChildNode(group)
-    # Tree-driven group removal batches the prompt via a zero-delay timer.
-    qgis_application.processEvents()
+        root.removeChildNode(group)
+        # Tree-driven group removal batches the prompt via a zero-delay timer.
+        qgis_application.processEvents()
 
-    assert len(communication.questions) == 1
-    assert sync.data_groups == ["multi.gpkg"]
-    assert sync.style_groups == ["multi.gpkg"]
-    prompt.disconnect()
+        assert len(communication.shown) == 1
+        assert sync.data_groups == ["multi.gpkg"]
+        assert sync.style_groups == ["multi.gpkg"]
+        prompt.disconnect()
 
 
 def test_tree_removal_clears_prompted_ids_for_removed_sibling_only(qgis_application):
@@ -106,16 +108,16 @@ def test_tree_removal_clears_prompted_ids_for_removed_sibling_only(qgis_applicat
         groups.append(add_file_group(root, f"{name}-file", layer))
         layers.append(layer)
 
-    prompt, _, _ = make_layer_removal_prompt(project, CONTINUE_WITHOUT_SYNCING)
-    prompt.connect()
-    first_id, middle_id, last_id = (layer.id() for layer in layers)
-    prompt._prompted_layer_ids.update({first_id, middle_id, last_id})
+    with make_layer_removal_prompt(project, CONTINUE_WITHOUT_SYNCING) as (prompt, _, _):
+        prompt.connect()
+        first_id, middle_id, last_id = (layer.id() for layer in layers)
+        prompt._prompted_layer_ids.update({first_id, middle_id, last_id})
 
-    root.removeChildNode(groups[1])
-    qgis_application.processEvents()
+        root.removeChildNode(groups[1])
+        qgis_application.processEvents()
 
-    assert prompt._prompted_layer_ids == {first_id, last_id}
-    prompt.disconnect()
+        assert prompt._prompted_layer_ids == {first_id, last_id}
+        prompt.disconnect()
 
 
 def test_disconnect_cancels_pending_prompt_and_discards_style_snapshot(
@@ -129,18 +131,18 @@ def test_disconnect_cancels_pending_prompt_and_discards_style_snapshot(
     )
     layer.setCustomProperty("rana/style_dirty", True)
     group = add_file_group(root, "dirty-file", layer)
-    prompt, communication, sync = make_layer_removal_prompt(project, SYNC_NOW)
-    prompt.connect()
+    with make_layer_removal_prompt(project, SYNC_NOW) as (prompt, communication, sync):
+        prompt.connect()
 
-    root.removeChildNode(group)
-    assert prompt._flush_timer.isActive()
-    assert sync.captured_style_items
+        root.removeChildNode(group)
+        assert prompt._flush_timer.isActive()
+        assert sync.captured_style_items
 
-    prompt.disconnect()
-    qgis_application.processEvents()
+        prompt.disconnect()
+        qgis_application.processEvents()
 
-    assert communication.questions == []
-    assert all(item.layer_source.discarded for item in sync.captured_style_items)
+        assert communication.shown == []
+        assert all(item.layer_source.discarded for item in sync.captured_style_items)
 
 
 def test_removing_parent_group_with_multiple_dirty_file_groups_prompts_once(
@@ -164,19 +166,19 @@ def test_removing_parent_group_with_multiple_dirty_file_groups_prompts_once(
     add_file_group(parent_group, "second-file", second)
     first.setCustomProperty("rana/data_sync_state", "dirty")
     second.setCustomProperty("rana/style_dirty", True)
-    prompt, communication, sync = make_layer_removal_prompt(project, SYNC_NOW)
-    prompt.connect()
+    with make_layer_removal_prompt(project, SYNC_NOW) as (prompt, communication, sync):
+        prompt.connect()
 
-    try:
-        root.removeChildNode(parent_group)
-        # Tree-driven group removal batches the prompt via a zero-delay timer.
-        qgis_application.processEvents()
+        try:
+            root.removeChildNode(parent_group)
+            # Tree-driven group removal batches the prompt via a zero-delay timer.
+            qgis_application.processEvents()
 
-        assert len(communication.questions) == 1
-        assert sync.data_groups == ["first.gpkg"]
-        assert sync.style_groups == ["second.gpkg"]
-    finally:
-        prompt.disconnect()
+            assert len(communication.shown) == 1
+            assert sync.data_groups == ["first.gpkg"]
+            assert sync.style_groups == ["second.gpkg"]
+        finally:
+            prompt.disconnect()
 
 
 def test_removal_prompt_is_suppressed_while_project_is_clearing(qgis_application):
@@ -192,22 +194,22 @@ def test_removal_prompt_is_suppressed_while_project_is_clearing(qgis_application
     group.addLayer(layer)
     layer.setCustomProperty("rana/data_sync_state", "dirty")
 
-    communication = ChoiceRecorder(CONTINUE_WITHOUT_SYNCING)
-    sync = SyncRecorder()
-    project_close = ProjectCloseSyncPrompt(
-        project, cast(LayerTreeMenuProvider, sync), communication
-    )
-    removal = LayerRemovalSyncPrompt(
-        project, cast(LayerTreeMenuProvider, sync), communication, project_close
-    )
-    project_close.is_clearing = True
-    removal.connect()
+    with ChoiceRecorder(CONTINUE_WITHOUT_SYNCING) as communication:
+        sync = SyncRecorder()
+        project_close = ProjectCloseSyncPrompt(
+            project, cast(LayerTreeMenuProvider, sync), communication
+        )
+        removal = LayerRemovalSyncPrompt(
+            project, cast(LayerTreeMenuProvider, sync), communication, project_close
+        )
+        project_close.is_clearing = True
+        removal.connect()
 
-    try:
-        project.removeMapLayer(layer.id())
-        qgis_application.processEvents()
-        assert communication.questions == []
-        assert sync.data_groups == []
-        assert sync.style_groups == []
-    finally:
-        removal.disconnect()
+        try:
+            project.removeMapLayer(layer.id())
+            qgis_application.processEvents()
+            assert communication.shown == []
+            assert sync.data_groups == []
+            assert sync.style_groups == []
+        finally:
+            removal.disconnect()
