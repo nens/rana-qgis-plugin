@@ -32,6 +32,10 @@ services:
       - "7070:7070"
     # Give QGIS enough time to flush settings to disk when closing normally
     stop_grace_period: 10s
+    # The host resolves via systemd-resolved (127.0.0.53), which is not reachable
+    # from inside the container. Point it at the upstream DNS server directly.
+    dns:
+      - 10.90.20.1
     environment:
       RANA_PAK: ${RANA_PAK:-}
       DISPLAY: ${DISPLAY}
