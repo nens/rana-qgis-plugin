@@ -273,9 +273,8 @@ sequenceDiagram
     end
 ```
 
-If there are no items to capture, nothing is shown. Project names that are not
-stored on the layers are looked up with `get_project_names` before the dialog
-opens.
+If there are no items to capture, nothing is shown. Project names come from the
+layers; the dialog falls back to the project ID and never calls the API.
 
 ## Project-selection dialog
 

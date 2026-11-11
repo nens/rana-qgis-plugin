@@ -193,15 +193,3 @@ class SyncChanges:
 
     def project_ids(self) -> set[str]:
         return {key.project_id for key in set(self.data) | set(self.style)}
-
-    def known_project_names(self) -> dict[str, str]:
-        """Return the project names stored on the changed layers, by project ID."""
-        return {
-            project_id: name
-            for project_id, name in self.project_names.items()
-            if project_id in self.project_ids()
-        }
-
-    def unresolved_project_ids(self) -> set[str]:
-        """Return the project IDs whose name is not stored on the changed layers."""
-        return self.project_ids() - self.known_project_names().keys()

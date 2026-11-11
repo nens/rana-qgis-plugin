@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 from qgis.core import QgsVectorLayer
@@ -181,18 +182,12 @@ def test_unchecking_works_without_kinds(qgis_application):
 
 
 def test_project_node_shows_the_project_name_when_known(qgis_application):
-    changes = SyncChanges.from_layers(
-        [make_layer("a", "a.gpkg", "d1")], {SyncKind.DATA}
-    )
-
-    dialog = SyncDialog(
-        None,
-        "Sync",
-        "Continue sync",
-        "Cancel sync",
-        changes,
+    changes = replace(
+        SyncChanges.from_layers([make_layer("a", "a.gpkg", "d1")], {SyncKind.DATA}),
         project_names={"project": "Flood study"},
     )
+
+    dialog = SyncDialog(None, "Sync", "Continue sync", "Cancel sync", changes)
 
     assert find_item(dialog, "Flood study").parent().text(0) == "Data changes:"
     assert dialog.tree.findItems("project", Qt.MatchFlag.MatchRecursive) == []

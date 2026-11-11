@@ -24,11 +24,12 @@ from rana_qgis_plugin.layer_management.layer_sync_state import (
 from rana_qgis_plugin.layer_management.sync_changes import (
     SyncChanges,
     SyncKind,
-    file_key,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
-from rana_qgis_plugin.layer_management.sync_prompt_dialog import SyncDialog
-from rana_qgis_plugin.utils.api import get_project_names
+from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
+    SyncDialog,
+    dispatch_selected,
+)
 from rana_qgis_plugin.utils.data_models import (
     DataType,
     StyleUploadItem,
@@ -200,53 +201,31 @@ class LayerTreeMenuProvider:
         """Ask which files of one kind to sync, then dispatch the checked ones."""
         if self.loader is None:
             return
+        style_items: list[StyleUploadItem] = []
+        data_items: list[UploadableLayerItem] = []
         if kind is SyncKind.DATA:
             data_items = self.capture_data_items(groups)
-            if not data_items:
-                return
         else:
             style_items = self.capture_style_items(groups)
-            if not style_items:
-                return
-        changes = self.collect_sync_changes(kind, groups)
-        missing_names = changes.unresolved_project_ids()
-        project_names = {
-            **changes.known_project_names(),
-            **(get_project_names(missing_names) if missing_names else {}),
-        }
+        if not style_items and not data_items:
+            return
         dialog = SyncDialog(
             self.iface.mainWindow(),
             f"Sync {kind.value} to Rana",
             "Continue sync",
             "Cancel sync",
-            changes,
+            self.collect_sync_changes(kind, groups),
             show_kinds=False,
-            project_names=project_names,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        selected = dialog.selected(kind)
-        if kind is SyncKind.DATA:
-            chosen = [
-                item
-                for item in data_items
-                if file_key(
-                    item.rana_ref.project_id,
-                    item.rana_ref.descriptor_id,
-                    item.rana_ref.file_id,
-                )
-                in selected
-            ]
-            if chosen:
-                self.dispatch_data_items(chosen)
-        else:
-            chosen_styles = [
-                item
-                for item in style_items
-                if file_key(item.project_id, item.descriptor_id, None) in selected
-            ]
-            if chosen_styles:
-                self.dispatch_style_items(chosen_styles)
+        confirmed = dialog.exec() == QDialog.DialogCode.Accepted
+        dispatch_selected(
+            style_items,
+            data_items,
+            dialog.selected(SyncKind.STYLE) if confirmed else set(),
+            dialog.selected(SyncKind.DATA) if confirmed else set(),
+            self.dispatch_style_items,
+            self.dispatch_data_items,
+        )
 
     def capture_data_items(
         self, groups: list[QgsLayerTreeGroup]

@@ -87,17 +87,12 @@ class ChoiceRecorder:
         self._patcher = patch.object(
             close_sync_prompt, "SyncDialog", self.fake_dialog_class()
         )
-        self._names_patcher = patch.object(
-            close_sync_prompt, "get_project_names", lambda project_ids: {}
-        )
 
     def __enter__(self) -> "ChoiceRecorder":
         self._patcher.start()
-        self._names_patcher.start()
         return self
 
     def __exit__(self, *exc_info) -> None:
-        self._names_patcher.stop()
         self._patcher.stop()
 
     def fake_dialog_class(self):
@@ -112,7 +107,6 @@ class ChoiceRecorder:
                 cancel_label,
                 changes,
                 show_kinds=True,
-                project_names=None,
             ):
                 recorder.shown.append(changes)
 

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import PurePosixPath
 
 from qgis.PyQt.QtCore import Qt
@@ -19,10 +20,13 @@ from rana_qgis_plugin.layer_management.sync_changes import (
     SyncChanges,
     SyncFileKey,
     SyncKind,
+    file_key,
 )
 from rana_qgis_plugin.layer_management.sync_summary import build_summary
+from rana_qgis_plugin.utils.data_models import StyleUploadItem, UploadableLayerItem
 from rana_qgis_plugin.utils.generic import get_file_icon_name
 from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
+from rana_qgis_plugin.workers.styling import discard_layer_sources
 
 SECTION_TITLES = {SyncKind.DATA: "Data changes:", SyncKind.STYLE: "Style changes:"}
 DEFAULT_WIDTH = 480
@@ -52,7 +56,6 @@ class SyncDialog(QDialog):
         cancel_label: str,
         changes: SyncChanges,
         show_kinds: bool = True,
-        project_names: dict[str, str] | None = None,
     ):
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -60,7 +63,7 @@ class SyncDialog(QDialog):
         self.setMinimumWidth(MIN_WIDTH)
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
         self.show_kinds = show_kinds
-        self.project_names = project_names or {}
+        self.project_names = changes.project_names
         self.file_items: dict[SyncKind, dict[SyncFileKey, QTreeWidgetItem]] = {
             kind: {} for kind in SyncKind
         }
@@ -167,3 +170,37 @@ class SyncDialog(QDialog):
 
     def update_confirm_button(self) -> None:
         self.confirm_button.setEnabled(any(self.selected(kind) for kind in SyncKind))
+
+
+def dispatch_selected(
+    style_items: list[StyleUploadItem],
+    data_items: list[UploadableLayerItem],
+    selected_style: set[SyncFileKey],
+    selected_data: set[SyncFileKey],
+    dispatch_style: Callable[[list[StyleUploadItem]], None],
+    dispatch_data: Callable[[list[UploadableLayerItem]], None],
+) -> None:
+    """Dispatch the items whose file is selected and release the other styles."""
+    style_to_sync = [
+        item
+        for item in style_items
+        if file_key(item.project_id, item.descriptor_id, None) in selected_style
+    ]
+    data_to_sync = [
+        item
+        for item in data_items
+        if file_key(
+            item.rana_ref.project_id,
+            item.rana_ref.descriptor_id,
+            item.rana_ref.file_id,
+        )
+        in selected_data
+    ]
+    synced_style_ids = {id(item) for item in style_to_sync}
+    discard_layer_sources(
+        [item for item in style_items if id(item) not in synced_style_ids]
+    )
+    if style_to_sync:
+        dispatch_style(style_to_sync)
+    if data_to_sync:
+        dispatch_data(data_to_sync)

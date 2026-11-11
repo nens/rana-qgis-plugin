@@ -208,32 +208,14 @@ def test_same_file_path_in_different_projects_is_not_merged(qgis_application):
     assert changes.file_count() == 2
 
 
-def test_known_project_names_come_from_the_layers(qgis_application):
+def test_project_names_come_from_the_layers(qgis_application):
     layers = [
         make_vector("a", "a.gpkg", dirty=True, project_id="p1"),
         make_vector("b", "b.gpkg", dirty=True, project_id="p2"),
     ]
-    set_rana_refs(
-        layers[0],
-        RanaLayerRef("p1", "a.gpkg", project_name="Alpha"),
-    )
+    set_rana_refs(layers[0], RanaLayerRef("p1", "a.gpkg", project_name="Alpha"))
     changes = SyncChanges.from_layers(layers, BOTH)
 
-    assert changes.known_project_names() == {"p1": "Alpha"}
-    assert changes.unresolved_project_ids() == {"p2"}
-
-
-def test_known_project_names_survive_for_kind_and_merge(qgis_application):
-    layer = make_vector("a", "a.gpkg", dirty=True, project_id="p1")
-    set_rana_refs(layer, RanaLayerRef("p1", "a.gpkg", project_name="Alpha"))
-    changes = SyncChanges.from_layers([layer], BOTH)
-
-    assert changes.for_kind(SyncKind.DATA).known_project_names() == {"p1": "Alpha"}
-    assert changes.merge(SyncChanges()).unresolved_project_ids() == set()
-
-
-def test_all_names_resolved_locally_leaves_nothing_unresolved(qgis_application):
-    layer = make_vector("a", "a.gpkg", dirty=True, project_id="p1")
-    set_rana_refs(layer, RanaLayerRef("p1", "a.gpkg", project_name="Alpha"))
-
-    assert SyncChanges.from_layers([layer], BOTH).unresolved_project_ids() == set()
+    assert changes.project_names == {"p1": "Alpha"}
+    assert changes.for_kind(SyncKind.DATA).project_names == {"p1": "Alpha"}
+    assert changes.merge(SyncChanges()).project_names == {"p1": "Alpha"}

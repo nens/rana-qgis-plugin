@@ -6,7 +6,11 @@ from qgis.PyQt.QtWidgets import QDialog
 from rana_qgis_plugin.layer_management import layer_tree_menu
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
-from rana_qgis_plugin.layer_management.sync_changes import SyncKind, file_key
+from rana_qgis_plugin.layer_management.sync_changes import (
+    SyncChanges,
+    SyncKind,
+    file_key,
+)
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
 from rana_qgis_plugin.utils.data_models import (
     DataType,
@@ -30,17 +34,6 @@ class FakeLoader:
 
     def upload_styles(self, items):
         self.style_items = items
-
-
-class FakeChanges:
-    def project_ids(self):
-        return {"project"}
-
-    def known_project_names(self):
-        return {}
-
-    def unresolved_project_ids(self):
-        return {"project"}
 
 
 class FakeSyncDialog:
@@ -109,9 +102,8 @@ def test_sync_dispatches_only_selected_items(monkeypatch, kind, qgis_application
         lambda groups: style_items,
     )
     monkeypatch.setattr(
-        provider, "collect_sync_changes", lambda kind, groups: FakeChanges()
+        provider, "collect_sync_changes", lambda kind, groups: SyncChanges()
     )
-    monkeypatch.setattr(layer_tree_menu, "get_project_names", lambda project_ids: {})
     monkeypatch.setattr(
         layer_tree_menu,
         "SyncDialog",

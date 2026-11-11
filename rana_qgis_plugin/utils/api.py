@@ -1,4 +1,3 @@
-from collections.abc import Iterable
 from enum import Enum
 from typing import Any, Optional, TypedDict, cast
 
@@ -8,7 +7,7 @@ from qgis.PyQt.QtGui import QImage
 from rana_qgis_plugin.auth import get_authcfg_id
 from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.constant import COGNITO_USER_INFO_ENDPOINT
-from rana_qgis_plugin.network_manager import NetworkManager, NetworkUnavailableError
+from rana_qgis_plugin.network_manager import NetworkManager
 from rana_qgis_plugin.utils.settings import api_url, get_tenant_id
 
 
@@ -203,25 +202,6 @@ def get_tenant_project(project_id: str) -> dict:
     """
     tenant = get_tenant_id()
     return simple_fetch(f"{api_url()}/tenants/{tenant}/projects/{project_id}")
-
-
-def get_project_names(project_ids: Iterable[str]) -> dict[str, str]:
-    """Return the name per project ID, leaving out projects that cannot be fetched.
-
-    Callers fall back to the ID. When the network is unavailable the remaining
-    projects are skipped, so an offline close waits for one request, not several.
-    """
-    names: dict[str, str] = {}
-    for project_id in sorted(project_ids):
-        try:
-            name = get_tenant_project(project_id).get("name")
-        except NetworkUnavailableError:
-            break
-        except RanaFetchError:
-            continue
-        if isinstance(name, str) and name:
-            names[project_id] = name
-    return names
 
 
 def get_tenant_projects(params: Optional[dict] = None) -> dict:

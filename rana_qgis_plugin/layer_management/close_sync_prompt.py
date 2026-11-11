@@ -43,10 +43,11 @@ from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
 from rana_qgis_plugin.layer_management.sync_changes import (
     SyncChanges,
     SyncKind,
-    file_key,
 )
-from rana_qgis_plugin.layer_management.sync_prompt_dialog import SyncDialog
-from rana_qgis_plugin.utils.api import get_project_names
+from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
+    SyncDialog,
+    dispatch_selected,
+)
 from rana_qgis_plugin.utils.data_models import (
     StyleUploadItem,
     UploadableLayerItem,
@@ -141,42 +142,22 @@ class SyncPromptAction:
         if not style_items and not data_items:
             discard_layer_sources(style_items)
             return
-        missing_names = changes.unresolved_project_ids()
-        project_names = {
-            **changes.known_project_names(),
-            **(get_project_names(missing_names) if missing_names else {}),
-        }
         dialog = SyncDialog(
             self.parent,
             "Unsynced changes",
             SYNC_NOW,
             CONTINUE_WITHOUT_SYNCING,
             changes,
-            project_names=project_names,
         )
         confirmed = dialog.exec() == QDialog.DialogCode.Accepted
-        selected_style = dialog.selected(SyncKind.STYLE) if confirmed else set()
-        selected_data = dialog.selected(SyncKind.DATA) if confirmed else set()
-        style_to_sync = []
-        for item in style_items:
-            if file_key(item.project_id, item.descriptor_id, None) in selected_style:
-                style_to_sync.append(item)
-            else:
-                discard_layer_sources([item])
-        data_to_sync = [
-            item
-            for item in data_items
-            if file_key(
-                item.rana_ref.project_id,
-                item.rana_ref.descriptor_id,
-                item.rana_ref.file_id,
-            )
-            in selected_data
-        ]
-        if style_to_sync:
-            self.layer_tree_menu.dispatch_style_items(style_to_sync)
-        if data_to_sync:
-            self.layer_tree_menu.dispatch_data_items(data_to_sync)
+        dispatch_selected(
+            style_items,
+            data_items,
+            dialog.selected(SyncKind.STYLE) if confirmed else set(),
+            dialog.selected(SyncKind.DATA) if confirmed else set(),
+            self.layer_tree_menu.dispatch_style_items,
+            self.layer_tree_menu.dispatch_data_items,
+        )
 
 
 class ProjectCloseSyncPrompt:
