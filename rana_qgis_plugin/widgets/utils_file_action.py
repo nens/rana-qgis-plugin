@@ -44,7 +44,7 @@ class FileAction(Enum):
     HISTORY = "File History"
     RENAME = "Rename"
     DELETE = "Delete"
-    REMOVE_FROM_PROJECT = "Remove from Project"
+    REMOVE_FROM_PROJECT = "Delete"
 
     def __lt__(self, other):
         # sort a list of file actions by order of definition here
