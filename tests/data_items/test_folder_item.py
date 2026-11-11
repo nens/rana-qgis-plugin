@@ -31,7 +31,7 @@ def test_add_schematisation_submenu_routes_with_folder_context(
     route_actions = add_action.menu().actions()
 
     assert [action.text() for action in route_actions] == [
-        "Import from HCC",
+        "Import from catalogue",
         "Upload existing",
         "From scratch",
     ]

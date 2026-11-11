@@ -108,7 +108,7 @@ class RanaFolderDataItem(QgsDataItem):
                 routes = (
                     (
                         download_icon,
-                        "Import from HCC",
+                        "Import from catalogue",
                         lambda: self.loader.import_schematisation_from_hcc(
                             self.project,
                             self.folder_path,
