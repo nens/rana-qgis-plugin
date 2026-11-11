@@ -45,4 +45,5 @@ that must be removed.
 ## Consequences
 - A discard bug can only be in the close route, which has tests for cancel and unchecked
   snapshots in `tests/layer_management/test_project_close_sync_prompt.py`.
-- The on-demand route has no unit test yet. Its behavior is covered only by E2E.
+- The on-demand route has a unit test for dispatching only the selected items
+  (`tests/layer_management/test_layer_tree_menu_sync.py`). Cancel is covered only by E2E.

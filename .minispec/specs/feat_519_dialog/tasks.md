@@ -34,7 +34,8 @@ passing.
   `tests/layer_management/test_sync_changes.py`
 - **Description:** `SyncKind`, `SyncFileKey(project_id, ref)`, `file_key`, `ChangedLayer`,
   `ChangedFile`, and frozen `SyncChanges` with `from_layers`, `files`, `for_kind`, `merge`,
-  `is_empty`, `file_count`.
+  `is_empty`, `file_count`, `project_ids`, `known_project_names`, `unresolved_project_ids`.
+  `RanaLayerRef` gets an optional `project_name` (`layer_manager.py`, set by `loader.py`).
 - **Depends on:** None
 - **Acceptance:** `from_layers` covers keys, file and layer icon types, style skipped without
   a descriptor, `include_unknown_data`, and only the requested kinds. `merge` returns a new
@@ -71,12 +72,12 @@ passing.
 - **Estimate:** ~70 lines
 - **Files:** `rana_qgis_plugin/layer_management/layer_tree_menu.py`
 - **Description:** `sync(kind, groups)` captures upload items for the one kind, shows
-  `SyncDialog` modally (no section roots, project names fetched) with "Continue sync" and
+  `SyncDialog` modally (no section roots, project names from the layers, fetched only when missing) with "Continue sync" and
   "Cancel sync", and dispatches only the items
   whose `file_key` is selected. Unselected items are dropped without discard.
 - **Depends on:** Tasks 2, 4
 - **Acceptance:** Only the chosen kind is named; the dialog is modal; cancel dispatches nothing.
-- **Evidence:** Covered by the E2E test (CI). No unit test for `sync(kind)` yet (see design).
+- **Evidence:** `test_layer_tree_menu_sync.py` (dispatch only selected items) and the E2E test (CI).
 
 #### Task 6: Close, project-close and layer-removal routes
 - **Estimate:** ~90 lines

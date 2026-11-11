@@ -43,11 +43,12 @@ See decision `20261106-1240-sync-prompt-dialog`.
   file reads `1 file has unsynced changes (data and style).` With `show_kinds=False` (the
   on-demand route, which has one kind) the summary only counts files:
   `2 files have unsynced changes.`
-- A header-less `QTreeWidget`, fully expanded. Tree structure:
+- A resizable dialog (default 480x420, minimum width 320) with a header-less `QTreeWidget`, fully expanded. Tree structure:
   - Section roots "Data changes:" and "Style changes:" (only sections with changes). They are
     left out when `show_kinds=False`, so the tree then starts at the project nodes.
   - Project node with the Rana icon, showing the project name from `project_names` (project
-    ID when unknown).
+    ID when unknown). The callers fill `project_names` from the names stored on the layers,
+    and ask the API only for projects without a stored name.
   - Folders with the folder icon, from `PurePosixPath(file_id).parts` without the file name.
   - File node, showing the file name, with a raster or vector icon.
   - Layer nodes under the file, showing the layer name with a geometry icon.
@@ -94,20 +95,34 @@ Lives next to the code that builds it, not in `utils/data_models.py`.
   descriptor, because they cannot be uploaded as style. A layer that is passed twice is
   counted once (by layer ID): the close route collects a file group once for each kind in
   which it is dirty.
-- `project_ids()` returns the projects that have changes, for the name lookup.
+- `project_names` holds the project names read from the changed layers' Rana references
+  (`RanaLayerRef.project_name`, first name per project wins). It is kept by `for_kind` and
+  `merge`. `project_ids()` returns the projects that have changes, `known_project_names()`
+  the ones with a stored name, and `unresolved_project_ids()` the ones that still need an
+  API lookup.
 
-### Project names (`utils/api.py`)
+### Project names
+- `RanaLayerRef.project_name` (custom property `rana/project_name`) is an optional field. The
+  loader stores the project name when it links a layer. Layers linked before this field
+  existed have none, so a name is never required. See decision
+  `20261106-1240-sync-prompt-dialog`.
+- The callers merge `changes.known_project_names()` with `api.get_project_names` for
+  `changes.unresolved_project_ids()`. With every name stored, opening the dialog makes no
+  request, so an offline close does not wait for the network.
+
+#### `utils/api.py`
 - `get_tenant_project(project_id)` is `GET /tenants/{tenant}/projects/{project_id}`.
 - `get_project_names(project_ids) -> dict[str, str]` returns the name per project. Projects
   that fail or have no name are left out, and the dialog shows their ID. When the network is
   unavailable it stops after the first failed request, so an offline close waits for one
-  request, not one per project. Names are not stored on layers, because they would go
-  stale, and not read from the layer tree, because users can rename groups there.
+  request, not one per project. Names are read neither from the layer tree, because users can rename groups there, nor
+  refreshed after linking: a stored name can be stale after a project rename, which only
+  affects the label in the dialog.
 
 ### Callers
 - On-demand (`layer_tree_menu.py`, `sync(kind, groups)`): captures the upload items for the
-  kind, returns if there are none, collects `SyncChanges` for that kind, shows `SyncDialog`
-  with `show_kinds=False` and the project names.
+  kind, returns if there are none, collects `SyncChanges` for that kind (`include_unknown_data=True` for data), shows
+  `SyncDialog` with `show_kinds=False` and the project names.
   If confirmed it keeps the upload items whose `file_key` is in `selected(kind)` and
   dispatches them. Unchecked items are dropped without discard, because live layer sources
   own nothing.
@@ -128,8 +143,10 @@ Lives next to the code that builds it, not in `utils/data_models.py`.
 `close_sync_prompt.py` both import `sync_prompt_dialog.py` and `sync_changes.py`.
 
 ## Data Model
-No new persisted state. The dialog uses the per-layer dirty state already tracked by
-`layer_sync_state` and `has_unsynced_style`.
+One new persisted, optional field: the layer custom property `rana/project_name`, stored with the
+other `rana/` Rana-reference properties and removed with them by `clear_rana_refs`. Existing
+projects need no migration. The dialog otherwise uses the per-layer dirty state already tracked
+by `layer_sync_state` and `has_unsynced_style`.
 
 ## API/Interface
 - `sync_changes.SyncKind`, `SyncFileKey`, `file_key`, `ChangedLayer`, `ChangedFile`,
@@ -137,6 +154,8 @@ No new persisted state. The dialog uses the per-layer dirty state already tracke
 - `sync_summary.build_summary(changes, include_kinds=True) -> str`
 - `sync_prompt_dialog.SyncDialog(parent, title, confirm_label, cancel_label, changes,
   show_kinds=True, project_names=None)`: `exec()`, then `selected(kind) -> set[SyncFileKey]`
+- `SyncChanges.known_project_names()`, `SyncChanges.unresolved_project_ids()`
+- `RanaLayerRef.project_name`
 - `api.get_tenant_project(project_id)`, `api.get_project_names(project_ids)`
 
 ## Removed
@@ -172,7 +191,11 @@ No new persisted state. The dialog uses the per-layer dirty state already tracke
 - Unit tests: the project-close prompt dispatches only checked files and releases unchecked
   and cancelled style snapshots (`test_project_close_sync_prompt.py`). The layer-removal
   prompt releases snapshots on disconnect (`test_layer_removal_sync_prompt.py`).
-- Gap: the on-demand `sync(kind)` route has no unit test yet. It is covered only by E2E.
+- Unit tests (`test_sync_changes.py`): `known_project_names` come from the layers and survive
+  `for_kind` and `merge`.
+- Unit test (`test_layer_tree_menu_sync.py`): the on-demand `sync(kind)` dispatches only the
+  selected items, for data and style. Cancel and the project-name lookup are not unit tested;
+  the whole route is also covered by E2E.
 - E2E: `e2e/test_layer_sync.py` answers `SyncDialog` through its buttons ("Sync changes now",
   "Continue without syncing", "Continue sync"). No new E2E tests.
 - Manual: see the Notes in `tasks.md`.

@@ -22,9 +22,11 @@ classDiagram
 
 ### Root: `RanaRootDataItem`
 
-The root is always visible at `/Rana`. On construction it updates its display
-name (`Rana` or `Rana [tenant]`) and restores an existing session. Authentication
-details are documented in [the authentication flow](auth-flow.md).
+The root is always visible at `/Rana`. On construction it only updates its display
+name (`Rana` or `Rana [tenant]`). An existing session is restored lazily: the
+first `createChildren()` call on an authenticated root calls `restore_session()`
+to load the tenant list, so no request is made while QGIS starts. Authentication
+details are documented in [the authentication flow](auth_flow.md).
 Its context menu changes with authentication state:
 
 - unauthenticated: Login and Settings;
@@ -76,14 +78,23 @@ layer-panel context menu.
 
 ## Signals and error handling
 
-The shared signal hub has two signals:
+The shared signal hub (`ApiErrorSignals`) has three signals:
 
 - `connection_lost`: emitted for `NetworkUnavailableError`;
-- `fetch_error_occurred(str)`: emitted for `FetchError`, carrying the API error.
+- `request_timed_out`: emitted for `NetworkTimeoutError`, a subclass of
+  `NetworkUnavailableError` that is caught first;
+- `fetch_error_occurred(str, bool)`: emitted for `FetchError`, carrying the API
+  error and whether to show it in an error dialog (`True`) or only log it
+  (`False`).
 
-The provider connects these to a UI error dialog and a warning message bar.
-Every network-backed `createChildren()` catches both exception types, emits the
-appropriate signal, and returns a `QgsErrorItem` in the browser tree. Thus the
+The plugin connects these in `connect_signals()`: `connection_lost` shows a
+"No connection to Rana" warning in the message bar, `request_timed_out` shows an
+error bar ("A Rana request timed out. Check your network connection before
+retrying."), and `fetch_error_occurred` shows an error dialog or writes to the
+log depending on the flag. The root item's `createChildren()` catches all three
+exception types, emits the appropriate signal, and returns a `QgsErrorItem` in
+the browser tree. Folder and file items only distinguish `NetworkUnavailableError`
+and `FetchError`, so a timeout there is reported as `connection_lost`. Thus the
 user receives both immediate UI feedback and an item-level explanation:
 
 ```mermaid
@@ -99,6 +110,11 @@ sequenceDiagram
     alt success
         API-->>Item: data
         Item-->>QGIS: child data items
+    else timeout (root item)
+        API--xItem: NetworkTimeoutError
+        Item->>E: request_timed_out.emit()
+        E->>UI: bar_error("A Rana request timed out...")
+        Item-->>QGIS: QgsErrorItem "Request timed out"
     else no network
         API--xItem: NetworkUnavailableError
         Item->>E: connection_lost.emit()
@@ -106,7 +122,7 @@ sequenceDiagram
         Item-->>QGIS: QgsErrorItem
     else API fetch failure
         API--xItem: FetchError(message)
-        Item->>E: fetch_error_occurred.emit(message)
+        Item->>E: fetch_error_occurred.emit(message, True)
         E->>UI: show_error(message)
         Item-->>QGIS: QgsErrorItem
     end
@@ -114,5 +130,5 @@ sequenceDiagram
 
 Authentication errors are handled at the root-item UI boundary using message-bar
 notifications, error signals, and boolean results rather than `QgsErrorItem`s;
-see [the authentication flow](auth-flow.md) for their handling. Logout clears both
+see [the authentication flow](auth_flow.md) for their handling. Logout clears both
 Rana and 3Di credentials and refreshes the display.

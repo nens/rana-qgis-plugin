@@ -71,13 +71,17 @@ them sequentially in the QGIS task manager. For each item it:
 sequenceDiagram
     participant User
     participant Menu as Layer-tree menu
+    participant Dialog as SyncDialog
     participant Loader
     participant Task as StyleUploadTask
     participant Builder
     participant Rana as Rana API
 
     User->>Menu: Sync style to Rana
-    Menu->>Loader: collect linked layer/file
+    Menu->>Menu: capture style items, build SyncChanges
+    Menu->>Dialog: show changed files
+    Dialog-->>Menu: selected files (or cancel)
+    Menu->>Loader: dispatch_style_items(checked items only)
     Loader->>Task: addTask(style items)
     Task->>Builder: validate and generate styles
     Builder-->>Task: QML/style files
@@ -87,6 +91,10 @@ sequenceDiagram
 ```
 
 ## Layer-panel actions
+
+Before dispatching, the action shows a `SyncDialog` ("Continue sync" /
+"Cancel sync") listing the changed files. Only checked files are passed to
+`Loader` as `StyleUploadItem`s; cancelling dispatches nothing.
 
 Rana-linked groups in the QGIS layer panel expose **Sync style to Rana** (or
 **Sync styles to Rana** for a folder containing multiple files). The action is
@@ -102,8 +110,9 @@ itself, because Rana replaces the complete file. See
 
 `styleChanged` marks a linked layer with `rana/style_dirty`. The flag is
 cleared only after a successful style upload; failures and cancellation leave
-it set so the user can retry. There is currently no separate layer-tree badge:
-the dirty state is reflected by the enabled/disabled context-menu action.
+it set so the user can retry. Unsynced style also shows a warning badge in the
+layer tree (`IndicatorManager`) and enables the context-menu action; see
+[`dirty_tracking.md`](dirty_tracking.md).
 
 Before a style upload, the loader verifies that the Rana file descriptor still
 exists. An authoritative not-found response clears the link and disables

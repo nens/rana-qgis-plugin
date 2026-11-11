@@ -35,7 +35,8 @@ prompt all need the same data, and the match between them must be exact.
   dataclasses in `layer_management/sync_changes.py`. They are not in `utils/data_models.py`.
   This corrects the earlier decision text, which placed them there.
 - `SyncChanges` is a frozen dataclass with `data` and `style` maps from `SyncFileKey` to
-  `ChangedFile`. `from_layers(layers, kinds, include_unknown_data=False)` collects only the
+  `ChangedFile`, and a `project_names` map read from the layers (see
+  `20261106-1240-sync-prompt-dialog`). `from_layers(layers, kinds, include_unknown_data=False)` collects only the
   requested kinds. `merge` returns a new object with the union and sorted layers.
 - The on-demand sync passes `include_unknown_data=True`, because its action is enabled for any
   state except clean. The close routes only count dirty layers.

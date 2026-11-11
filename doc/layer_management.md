@@ -13,8 +13,13 @@ function for the downloaded resource:
 
 - `open_rana_vector_layers()` opens all layers in a vector file;
 - `open_rana_vector_layer()` opens one named vector layer; and
-- `open_rana_raster()` opens a raster file.
+- `open_rana_raster()` opens a raster file;
+- `open_rana_wms()` adds the WMS layers of a descriptor (its `wms` link) to the Rana layer tree, skipping layers that are invalid or lack code, name or label; and
+- `open_rana_schematisation()` loads a downloaded schematisation revision (or the WIP revision) into the schematisation editor and tags its group (see below).
 - `open_scenario_results_in_results_analysis()` opens a scenario using the Results Analysis plugin. See [`scenario_results.md`](scenario_results.md) for all details.
+
+WMS opening is module-level, see
+[`20260921-1800-wms-module-level-layer-opening.md`](../.minispec/knowledge/decisions/20260921-1800-wms-module-level-layer-opening.md).
 
 The functions receive the local file path, Rana reference, and display-path
 segments. They create QGIS layers, add them to the current project, and attach
@@ -68,6 +73,8 @@ Each opened layer stores its Rana reference as QGIS custom properties under the
 `rana/` namespace:
 
 - project ID;
+- project name (`rana/project_name`, optional: absent on layers linked
+  before it was stored);
 - Rana file path;
 - file descriptor ID; and
 - vector layer ID, where applicable.
@@ -92,6 +99,10 @@ The layer-tree menu provider adds actions for Rana-linked groups:
 - **Sync style to Rana** uploads style files for the linked layer or file;
 - **Sync styles to Rana** is used when a group contains multiple files; and
 - **Sync data to Rana** is available at file level only.
+
+Choosing a sync action opens a confirmation dialog listing the affected
+files and layers; the user can deselect individual files, and only the checked
+files are synchronized. See [`dirty_tracking.md`](dirty_tracking.md).
 
 Data upload replaces the complete Rana file, so it is not offered for an
 individual layer inside a multi-layer vector file. A central lock registry

@@ -10,6 +10,8 @@ impacts:
   - rana_qgis_plugin/layer_management/close_sync_prompt.py
   - rana_qgis_plugin/layer_management/layer_tree_menu.py
   - rana_qgis_plugin/layer_management/sync_summary.py
+  - rana_qgis_plugin/layer_management/layer_manager.py
+  - rana_qgis_plugin/loader.py
 tags: [sync, messaging, ui]
 participants: [engineer, build agent]
 ---
@@ -26,6 +28,8 @@ The user needs to see the files, and to decide which ones are synced.
 ## Options Considered
 - **`QMessageBox.setDetailedText()`:** rejected. The toggle label is fixed, and the text is
   plain, so the sections cannot be bold.
+- **Always look the project names up in the API:** rejected. It adds a blocking request to
+  every dialog, including project close.
 - **Keep the collapsible details with a notice after dispatch:** rejected. The files are
   hidden, the user cannot deselect them, and the sync has already started.
 - **Two dialog classes (close and on-demand):** rejected. Wording and behavior drift apart,
@@ -42,10 +46,13 @@ The user needs to see the files, and to decide which ones are synced.
   and "Style changes:", then the project, the folders, the file, and the layers. The
   on-demand route has a single kind, so it passes `show_kinds=False`: the section roots are
   left out and the summary only counts files.
-- The project node shows the project name. The callers fetch it with
-  `api.get_project_names` (`GET .../projects/{id}`, one small request per project) and the
-  dialog falls back to the project ID. Names are not stored on layers, because they go
-  stale, and not read from the layer tree, because users can rename groups there.
+- The project node shows the project name. The loader stores the name on each layer as
+  `rana/project_name` when it links it (`RanaLayerRef.project_name`), so the dialog opens
+  without a request. The callers fetch only missing names, from layers linked before this
+  field existed, with `api.get_project_names` (`GET .../projects/{id}`, one small request per
+  project). The dialog falls back to the project ID. A stored name is not refreshed, so a
+  renamed project can show its old name; the name is only a label and the ID is the key.
+  Names are not read from the layer tree, because users can rename groups there.
 - Sections, projects, folders and files are checkable. Sections, projects and folders are
   auto-tristate. Files are plain checkable. Layers are display only. Everything starts
   checked.
@@ -58,7 +65,8 @@ The user needs to see the files, and to decide which ones are synced.
   `2 files have unsynced changes.`
 
 ## Consequences
-- The project name lookup is a synchronous request before the dialog opens. It has the
+- The project name lookup, now only for layers without a stored name, is a synchronous request
+  before the dialog opens. It has the
   network timeout, and `get_project_names` stops after the first network failure, so an
   offline close adds at most one wait. A failed lookup shows the project ID.
 - `CloseSyncDialog`, `OnDemandSyncDialog`, `QgsCollapsibleGroupBox`, height fitting, the

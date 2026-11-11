@@ -173,7 +173,10 @@ For a Rana-linked group, "Sync style to Rana" is enabled when any contained
 layer has `has_unsynced_style()`; "Sync data to Rana" is enabled when any
 contained layer's `layer_sync_state()` is not `clean` (so `dirty` or
 `unknown`). Both are disabled while the file's sync key is locked (see
-[Sync locking](#sync-locking)), regardless of dirty state.
+[Sync locking](#sync-locking)), regardless of dirty state. Choosing either action opens `SyncDialog` to
+confirm (see `LayerTreeMenuProvider.sync`); the on-demand route also lists
+layers whose data state is `unknown` (`include_unknown_data`), matching the
+enabled state of the action, whereas the close/removal prompt does not.
 
 ### [`IndicatorManager`](../rana_qgis_plugin/layer_management/indicator_manager.py)
 
@@ -191,10 +194,12 @@ Warns before unsynced changes would be lost, and offers to dispatch the
 existing sync actions instead of just closing silently. A file group is
 considered for the prompt when it has unsynced style, **or** when a
 contained layer's data state is exactly `dirty` (`unknown` is excluded, same
-as the badge). The prompt text names each affected file using its Rana
-reference (`UploadableLayerItem.rana_ref.file_id` /
-`StyleUploadItem.file_ref_str`), not the (possibly renamed) QGIS layer-tree
-group label.
+as the badge). The prompt is a `SyncDialog` tree (project, folders, file,
+layers) built from `SyncChanges`, which is read from the layers and uses the
+Rana reference (path, project name), not the (possibly renamed) QGIS layer-tree
+group label. The upload items (`UploadableLayerItem` / `StyleUploadItem`) are
+used for dispatch only; they are matched to tree rows through `SyncFileKey`
+(`file_key`), and only checked files are dispatched.
 
 Two classes handle two different triggers, built on a shared
 `SyncPromptAction` (ask + dispatch-or-discard) so both produce the identical
@@ -220,6 +225,9 @@ flowchart LR
     on_project_about_to_be_cleared --> collect_dirty_file_groups
     collect_dirty_file_groups --> dirty{Any dirty items?}
     dirty -- yes --> prompt_to_sync_groups
+    prompt_to_sync_groups --> prompt_and_dispatch
+    prompt_and_dispatch --> dialog[SyncDialog]
+    dialog --> checked[dispatch checked items]
 ```
 
 
@@ -246,6 +254,8 @@ flowchart LR
     prompt_for_layer_ids --> find_dirty_groups
     find_dirty_groups --> dirty{Any dirty items?}
     dirty --> prompt_and_dispatch
+    prompt_and_dispatch --> dialog[SyncDialog]
+    dialog --> checked[dispatch checked items]
 ```
 
 - `willRemoveChildren` (the layer *tree* reporting nodes about to be
@@ -262,7 +272,7 @@ flowchart LR
     pending -- No --> queue_prompt_for_layer_ids
     queue_prompt_for_layer_ids --> find_dirty_groups
     find_dirty_groups --> dirty{Any dirty items?}
-    dirty --> add[append to pending items]
+    dirty --> add[append to pending items and merge SyncChanges]
 ```
 
   A zero-delay, single-shot `QTimer` is (re)started every time this
