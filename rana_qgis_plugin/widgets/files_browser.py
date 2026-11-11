@@ -221,7 +221,7 @@ class FilesBrowser(QWidget):
         )
         self.action_import_schematisation = schematisation_menu.addAction(
             download_icon,
-            "Import from HCC",
+            "Import from catalogue",
         )
         self.action_import_schematisation.setToolTip(
             "Import a schematisation from the model databank into Rana web platform"

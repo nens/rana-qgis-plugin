@@ -12,6 +12,7 @@ History
   besides the required 'id' and 'timeseries' (nens/rana#4840).
 - Point "Open in web viewer" for schematisation to Rana preview instead of management page
 - Add option to log API calls (nens/rana#5343)
+- Change "Import from HCC" to "Import from catalogue" and change "Remove from project" to "Delete" (nens/rana#5332)
 
 
 1.2.23 (2026-10-15)
