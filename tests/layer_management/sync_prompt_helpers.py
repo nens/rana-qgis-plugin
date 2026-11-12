@@ -1,12 +1,12 @@
 """Shared fakes/helpers for the CloseSyncPrompt-family tests."""
 
 from pathlib import PurePosixPath
+from types import ModuleType
 from unittest.mock import patch
 
 from qgis.core import QgsLayerTreeGroup, QgsMapLayer
 from qgis.PyQt.QtWidgets import QDialog
 
-from rana_qgis_plugin.layer_management import close_sync_prompt
 from rana_qgis_plugin.layer_management.close_sync_prompt import SYNC_NOW
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
@@ -74,19 +74,23 @@ def file_id_for_group(group: QgsLayerTreeGroup) -> str:
 class ChoiceRecorder:
     """Stand-in for `SyncDialog` that never opens a modal window.
 
-    Records the changes each dialog is given and answers with the configured
-    button label. Files whose file ID is in `unchecked` are reported as
-    unselected. Use as a context manager: the patch is active only inside the
-    `with` block.
+    Patches `SyncDialog` in `module` and records the changes each dialog is
+    given. The dialog accepts when its confirm label equals `choice` and
+    rejects otherwise, as if the user clicked that button. Files whose file ID
+    is in `unchecked` are reported as unselected. Use as a context manager: the
+    patch is active only inside the `with` block.
     """
 
-    def __init__(self, choice: str, unchecked: frozenset[str] = frozenset()):
+    def __init__(
+        self,
+        module: ModuleType,
+        choice: str,
+        unchecked: frozenset[str] = frozenset(),
+    ):
         self.choice = choice
         self.unchecked = unchecked
         self.shown: list[SyncChanges] = []
-        self._patcher = patch.object(
-            close_sync_prompt, "SyncDialog", self.fake_dialog_class()
-        )
+        self._patcher = patch.object(module, "SyncDialog", self.fake_dialog_class())
 
     def __enter__(self) -> "ChoiceRecorder":
         self._patcher.start()
@@ -109,9 +113,10 @@ class ChoiceRecorder:
                 show_kinds=True,
             ):
                 recorder.shown.append(changes)
+                self.confirm_label = confirm_label
 
             def exec(self) -> QDialog.DialogCode:
-                if recorder.choice == SYNC_NOW:
+                if recorder.choice == self.confirm_label:
                     return QDialog.DialogCode.Accepted
                 return QDialog.DialogCode.Rejected
 

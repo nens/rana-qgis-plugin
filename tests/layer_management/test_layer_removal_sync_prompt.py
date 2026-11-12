@@ -3,6 +3,7 @@ from typing import cast
 
 from qgis.core import QgsProject, QgsVectorLayer
 
+from rana_qgis_plugin.layer_management import close_sync_prompt
 from rana_qgis_plugin.layer_management.close_sync_prompt import (
     CONTINUE_WITHOUT_SYNCING,
     SYNC_NOW,
@@ -25,13 +26,13 @@ def make_layer_removal_prompt(project, choice):
     production (the removal prompt always needs a project-close companion to
     check `is_clearing`, even when this test never triggers a project clear).
     """
-    with ChoiceRecorder(choice) as communication:
+    with ChoiceRecorder(close_sync_prompt, choice) as communication:
         sync = SyncRecorder()
         project_close = ProjectCloseSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication
+            project, cast(LayerTreeMenuProvider, sync)
         )
         prompt = LayerRemovalSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication, project_close
+            project, cast(LayerTreeMenuProvider, sync), project_close
         )
         yield prompt, communication, sync
 
@@ -194,13 +195,13 @@ def test_removal_prompt_is_suppressed_while_project_is_clearing(qgis_application
     group.addLayer(layer)
     layer.setCustomProperty("rana/data_sync_state", "dirty")
 
-    with ChoiceRecorder(CONTINUE_WITHOUT_SYNCING) as communication:
+    with ChoiceRecorder(close_sync_prompt, CONTINUE_WITHOUT_SYNCING) as communication:
         sync = SyncRecorder()
         project_close = ProjectCloseSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication
+            project, cast(LayerTreeMenuProvider, sync)
         )
         removal = LayerRemovalSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication, project_close
+            project, cast(LayerTreeMenuProvider, sync), project_close
         )
         project_close.is_clearing = True
         removal.connect()

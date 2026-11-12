@@ -93,11 +93,9 @@ class SyncPromptAction:
     def __init__(
         self,
         layer_tree_menu: LayerTreeMenuProvider,
-        communication,
         parent=None,
     ):
         self.layer_tree_menu = layer_tree_menu
-        self.communication = communication
         self.parent = parent
 
     def prompt_to_sync_groups(
@@ -167,11 +165,10 @@ class ProjectCloseSyncPrompt:
         self,
         project: QgsProject,
         layer_tree_menu: LayerTreeMenuProvider,
-        communication,
         parent=None,
     ):
         self.project = project
-        self.action = SyncPromptAction(layer_tree_menu, communication, parent)
+        self.action = SyncPromptAction(layer_tree_menu, parent)
         # Read by LayerRemovalSyncPrompt to suppress itself: QGIS fires
         # per-layer/tree removal signals as part of its own project-clearing
         # sequence, and those would otherwise produce a second, redundant
@@ -211,13 +208,12 @@ class LayerRemovalSyncPrompt:
         self,
         project: QgsProject,
         layer_tree_menu: LayerTreeMenuProvider,
-        communication,
         project_close: ProjectCloseSyncPrompt,
         parent=None,
     ):
         self.project = project
         self.layer_tree_menu = layer_tree_menu
-        self.action = SyncPromptAction(layer_tree_menu, communication, parent)
+        self.action = SyncPromptAction(layer_tree_menu, parent)
         self.project_close = project_close
         self._prompted_layer_ids: set[str] = set()
         self._pending_style_items: list[StyleUploadItem] = []

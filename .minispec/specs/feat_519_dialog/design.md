@@ -34,8 +34,8 @@ renamed from "Save" to "Sync".
 - "Save revision" is unchanged (out of scope).
 
 ### Sync dialog (`layer_management/sync_prompt_dialog.py`)
-`SyncDialog(parent, title, confirm_label, cancel_label, changes: SyncChanges, show_kinds=True,
-project_names=None)` is the only dialog. The caller supplies the title and the button labels.
+`SyncDialog(parent, title, confirm_label, cancel_label, changes: SyncChanges,
+show_kinds=True)` is the only dialog. The caller supplies the title and the button labels.
 See decision `20261106-1240-sync-prompt-dialog`.
 
 - A summary line from `build_summary`, for example
@@ -47,8 +47,7 @@ See decision `20261106-1240-sync-prompt-dialog`.
   - Section roots "Data changes:" and "Style changes:" (only sections with changes). They are
     left out when `show_kinds=False`, so the tree then starts at the project nodes.
   - Project node with the Rana icon, showing the project name from `project_names` (project
-    ID when unknown). The callers fill `project_names` from the names stored on the layers,
-    and ask the API only for projects without a stored name.
+    ID when unknown). The callers fill `project_names` from the names stored on the layers.
   - Folders with the folder icon, from `PurePosixPath(file_id).parts` without the file name.
   - File node, showing the file name, with a raster or vector icon.
   - Layer nodes under the file, showing the layer name with a geometry icon.
@@ -97,27 +96,18 @@ Lives next to the code that builds it, not in `utils/data_models.py`.
   which it is dirty.
 - `project_names` holds the project names read from the changed layers' Rana references
   (`RanaLayerRef.project_name`, first name per project wins). It is kept by `for_kind` and
-  `merge`. `project_ids()` returns the projects that have changes, `known_project_names()`
-  the ones with a stored name, and `unresolved_project_ids()` the ones that still need an
-  API lookup.
+  `merge`. `project_ids()` returns the projects that have changes.
 
 ### Project names
-- `RanaLayerRef.project_name` (custom property `rana/project_name`) is an optional field. The
-  loader stores the project name when it links a layer. Layers linked before this field
-  existed have none, so a name is never required. See decision
-  `20261106-1240-sync-prompt-dialog`.
-- The callers merge `changes.known_project_names()` with `api.get_project_names` for
-  `changes.unresolved_project_ids()`. With every name stored, opening the dialog makes no
-  request, so an offline close does not wait for the network.
-
-#### `utils/api.py`
-- `get_tenant_project(project_id)` is `GET /tenants/{tenant}/projects/{project_id}`.
-- `get_project_names(project_ids) -> dict[str, str]` returns the name per project. Projects
-  that fail or have no name are left out, and the dialog shows their ID. When the network is
-  unavailable it stops after the first failed request, so an offline close waits for one
-  request, not one per project. Names are read neither from the layer tree, because users can rename groups there, nor
-  refreshed after linking: a stored name can be stale after a project rename, which only
+- `RanaLayerRef.project_name` (custom property `rana/project_name`) is stored by the loader
+  whenever it links a layer, so every linked layer carries a name.
+- The dialog shows the project ID when a name is missing. This is a defensive fallback for
+  layers linked by pre-release builds of this branch; no released build has such layers.
+- No lookup is made: opening the dialog never makes a request.
+- Names are read neither from the layer tree, because users can rename groups there, nor
+  refreshed after linking. A stored name can go stale after a project rename, which only
   affects the label in the dialog.
+- See decision `20261106-1240-sync-prompt-dialog`.
 
 ### Callers
 - On-demand (`layer_tree_menu.py`, `sync(kind, groups)`): captures the upload items for the
@@ -153,10 +143,8 @@ by `layer_sync_state` and `has_unsynced_style`.
   `SyncChanges` (`from_layers`, `files`, `for_kind`, `merge`, `is_empty`, `file_count`)
 - `sync_summary.build_summary(changes, include_kinds=True) -> str`
 - `sync_prompt_dialog.SyncDialog(parent, title, confirm_label, cancel_label, changes,
-  show_kinds=True, project_names=None)`: `exec()`, then `selected(kind) -> set[SyncFileKey]`
-- `SyncChanges.known_project_names()`, `SyncChanges.unresolved_project_ids()`
+  show_kinds=True)`: `exec()`, then `selected(kind) -> set[SyncFileKey]`
 - `RanaLayerRef.project_name`
-- `api.get_tenant_project(project_id)`, `api.get_project_names(project_ids)`
 
 ## Removed
 - `CloseSyncDialog` and `OnDemandSyncDialog` (replaced by `SyncDialog`).
@@ -184,15 +172,13 @@ by `layer_sync_state` and `has_unsynced_style`.
   removes it from `selected(kind)`; unchecking a folder unchecks its files; parent partial
   state; confirm disabled when nothing is checked; tree nesting; layers not checkable;
   no section roots with `show_kinds=False`; project name shown.
-- Unit tests (`tests/utils/test_api_project_names.py`): names per project, failures left
-  out, stops after a network failure.
 - Unit tests (`test_sync_summary.py`): `build_summary` for data only, style only, both,
   single file, many files, counts per project, and without kinds.
 - Unit tests: the project-close prompt dispatches only checked files and releases unchecked
   and cancelled style snapshots (`test_project_close_sync_prompt.py`). The layer-removal
   prompt releases snapshots on disconnect (`test_layer_removal_sync_prompt.py`).
-- Unit tests (`test_sync_changes.py`): `known_project_names` come from the layers and survive
-  `for_kind` and `merge`.
+- Unit tests (`test_sync_changes.py`): `project_names` come from the layers' `project_name`
+  and survive `for_kind` and `merge`.
 - Unit test (`test_layer_tree_menu_sync.py`): the on-demand `sync(kind)` dispatches only the
   selected items, for data and style. Cancel and the project-name lookup are not unit tested;
   the whole route is also covered by E2E.

@@ -34,7 +34,7 @@ passing.
   `tests/layer_management/test_sync_changes.py`
 - **Description:** `SyncKind`, `SyncFileKey(project_id, ref)`, `file_key`, `ChangedLayer`,
   `ChangedFile`, and frozen `SyncChanges` with `from_layers`, `files`, `for_kind`, `merge`,
-  `is_empty`, `file_count`, `project_ids`, `known_project_names`, `unresolved_project_ids`.
+  `is_empty`, `file_count`, `project_ids`.
   `RanaLayerRef` gets an optional `project_name` (`layer_manager.py`, set by `loader.py`).
 - **Depends on:** None
 - **Acceptance:** `from_layers` covers keys, file and layer icon types, style skipped without

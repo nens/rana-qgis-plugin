@@ -3,6 +3,7 @@ from typing import cast
 
 from qgis.core import QgsProject, QgsVectorLayer
 
+from rana_qgis_plugin.layer_management import close_sync_prompt
 from rana_qgis_plugin.layer_management.close_sync_prompt import (
     CONTINUE_WITHOUT_SYNCING,
     SYNC_NOW,
@@ -22,11 +23,9 @@ from tests.layer_management.sync_prompt_helpers import (
 
 @contextmanager
 def make_project_close_prompt(project, choice):
-    with ChoiceRecorder(choice) as communication:
+    with ChoiceRecorder(close_sync_prompt, choice) as communication:
         sync = SyncRecorder()
-        prompt = ProjectCloseSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication
-        )
+        prompt = ProjectCloseSyncPrompt(project, cast(LayerTreeMenuProvider, sync))
         yield prompt, communication, sync
 
 
@@ -238,7 +237,7 @@ def test_is_clearing_flag_is_set_during_the_prompt_and_reset_after_clear(
     add_file_group(root, "dirty-file", layer)
     with make_project_close_prompt(project, SYNC_NOW) as (prompt, communication, sync):
         removal = LayerRemovalSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication, prompt
+            project, cast(LayerTreeMenuProvider, sync), prompt
         )
         prompt.connect()
         removal.connect()
@@ -270,12 +269,10 @@ def test_unchecked_files_are_not_dispatched_and_their_snapshots_are_released(
     add_file_group(root, "kept-file", kept)
     add_file_group(root, "skipped-file", skipped)
     with ChoiceRecorder(
-        SYNC_NOW, unchecked=frozenset({"skipped.gpkg"})
+        close_sync_prompt, SYNC_NOW, unchecked=frozenset({"skipped.gpkg"})
     ) as communication:
         sync = SyncRecorder()
-        prompt = ProjectCloseSyncPrompt(
-            project, cast(LayerTreeMenuProvider, sync), communication
-        )
+        prompt = ProjectCloseSyncPrompt(project, cast(LayerTreeMenuProvider, sync))
         prompt.connect()
 
         try:

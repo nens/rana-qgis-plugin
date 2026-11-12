@@ -40,18 +40,17 @@ The user needs to see the files, and to decide which ones are synced.
   view. A fully expanded tree shows the same information with checkboxes.
 
 ## Decision
-- `SyncDialog(parent, title, confirm_label, cancel_label, changes, show_kinds=True,
-  project_names=None)` is the only sync dialog. The caller passes the title and the labels.
+- `SyncDialog(parent, title, confirm_label, cancel_label, changes, show_kinds=True)` is the
+  only sync dialog. The caller passes the title and the labels.
 - The dialog is a header-less `QTreeWidget`, fully expanded. Sections are "Data changes:"
   and "Style changes:", then the project, the folders, the file, and the layers. The
   on-demand route has a single kind, so it passes `show_kinds=False`: the section roots are
   left out and the summary only counts files.
-- The project node shows the project name. The loader stores the name on each layer as
-  `rana/project_name` when it links it (`RanaLayerRef.project_name`), so the dialog opens
-  without a request. The callers fetch only missing names, from layers linked before this
-  field existed, with `api.get_project_names` (`GET .../projects/{id}`, one small request per
-  project). The dialog falls back to the project ID. A stored name is not refreshed, so a
-  renamed project can show its old name; the name is only a label and the ID is the key.
+- The project node shows the project name. The loader stores it on every layer it links as
+  `rana/project_name` (`RanaLayerRef.project_name`), so the dialog opens without a request.
+  If a name is ever missing, the dialog falls back to the project ID. A stored name is not
+  refreshed, so a renamed project can show its old name; the name is only a label and the ID
+  is the key.
   Names are not read from the layer tree, because users can rename groups there.
 - Sections, projects, folders and files are checkable. Sections, projects and folders are
   auto-tristate. Files are plain checkable. Layers are display only. Everything starts
@@ -65,10 +64,8 @@ The user needs to see the files, and to decide which ones are synced.
   `2 files have unsynced changes.`
 
 ## Consequences
-- The project name lookup, now only for layers without a stored name, is a synchronous request
-  before the dialog opens. It has the
-  network timeout, and `get_project_names` stops after the first network failure, so an
-  offline close adds at most one wait. A failed lookup shows the project ID.
+- The dialog opens without any network request, so an offline close never waits. A layer with
+  no stored name shows its project ID.
 - `CloseSyncDialog`, `OnDemandSyncDialog`, `QgsCollapsibleGroupBox`, height fitting, the
   details formatter and the post-dispatch notice are removed.
 - The on-demand sync is now modal. It waits for the user before it dispatches, so its
@@ -77,3 +74,12 @@ The user needs to see the files, and to decide which ones are synced.
   `20261109-1100-sync-changes-model`.
 - The tree needs a palette Base of Window and `NoFrame`, so it matches the dialog in light
   and dark themes.
+
+## Amendments
+- 2026-11-12: the project name lookup was dropped. `api.get_project_names`,
+  `SyncChanges.known_project_names()` and `SyncChanges.unresolved_project_ids()` were
+  implemented and then removed in `f90c91bb`, because the loader stores
+  `rana/project_name` on every layer it links, so no layer in a released build can lack a
+  name. The dialog's project-ID fallback is kept as a defensive measure for layers linked
+  by pre-release builds of this branch. The Decision and Consequences above have been
+  corrected to describe the shipped behaviour.
