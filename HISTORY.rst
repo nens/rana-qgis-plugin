@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.24 (unreleased)
+1.2.24 (2026-11-12)
 -------------------
 
 - Fix word order of a message so it matches the buttons of a dialog
