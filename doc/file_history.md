@@ -6,9 +6,9 @@ The **Version history** context-menu action shows read-only history for Rana
 files, folders, and the `Files` root, and HCC revision history for
 schematisation files. Both views share one asynchronous dialog base:
 
-- `HistoryDialog` owns the table, Refresh control, loading/error labels, and the fetch lifecycle. It has no  Rana or HCC API knowledge.
+- `HistoryDialog` owns the table, Refresh control, loading/error labels, and the fetch lifecycle. It has no Rana or HCC API knowledge.
 - `RanaHistoryDialog` implements generic Rana file/folder/project history.
-- `SchematisationRevisionHistoryDialog` implements HCC revision history and handles availibity of the `Simulation` and `Rana Model` action buttons.
+- `SchematisationRevisionHistoryDialog` implements HCC revision history and handles availability of the `Simulation` and `Rana Model` action buttons.
 
 Fetching of Rana history runs in a `QgsTask` so long histories do not block the QGIS GUI thread and the history is paginated lazily as the user scrolls. Revision history is fetched completely in one request because button enablement
 depends on the full revision list.

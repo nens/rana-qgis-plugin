@@ -16,8 +16,10 @@ hooks project close today.
 
 Hook `QgsProject.instance().aboutToBeCleared`, which fires before project
 close, new-project, and app quit. On fire, scan rana-linked layers for
-dirty flags (`rana/data_dirty`, `rana/style_dirty`) and prompt "Sync all
-now / Discard / Cancel."
+dirty state (`rana/data_sync_state`, `rana/style_dirty`) and show the shared
+`SyncDialog` (see `20261106-1240-sync-prompt-dialog`). The user picks which
+files to sync with "Sync changes now", or chooses "Continue without
+syncing".
 
 ## Reasoning
 
@@ -32,7 +34,7 @@ now / Discard / Cancel."
 ### Known limitation
 
 - `aboutToBeCleared` is **not cancelable** — showing a modal prompt inside
-  the slot works (it blocks synchronously), but "Cancel" in that prompt
+  the slot works (it blocks synchronously), but declining in that prompt
   can only mean "skip syncing now," not "abort the close/quit." This is a
   deliberate, documented constraint, not something this design attempts to
   solve.
@@ -44,4 +46,5 @@ now / Discard / Cancel."
 ## Related Decisions
 
 - `20260818-1041-remote-change-lazy-guard.md`
+- `20261106-1240-sync-prompt-dialog.md`
 - `.minispec/specs/feat_454_open_generic_files/design.md` (Phase 3)

@@ -13,14 +13,21 @@ are the main shared connection points.
 flowchart LR
     Items[Browser items and dialogs] -->|emit| Errors[ApiErrorSignals]
     Errors -->|connection_lost| Provider[Rana data provider]
+    Errors -->|request_timed_out| Provider
     Errors -->|fetch_error_occurred| Provider
 ```
 
-- `connection_lost` indicates that the connection could not be used.
-- `fetch_error_occurred` carries the error text and a severity indicator.
+- `connection_lost` indicates that the connection could not be used; the plugin
+  shows a "No connection to Rana" warning in the message bar.
+- `request_timed_out` indicates a `NetworkTimeoutError` (a subclass of
+  `NetworkUnavailableError`); the plugin shows an error bar telling the user to
+  check the network connection before retrying.
+- `fetch_error_occurred(message, show_dialog)` carries the error text and a
+  boolean: `True` shows the message in an error dialog, `False` only writes it
+  to the log.
 
-The provider listens for these signals and turns them into the appropriate
-browser or UI response. Components may also connect directly when they need a
+The plugin (`connect_signals()`) listens for these signals and turns them into
+the appropriate UI response. Components may also connect directly when they need a
 local response.
 
 ## Avatar loading
@@ -108,11 +115,15 @@ operation is started.
 
 [`close_sync_prompt.py`](../rana_qgis_plugin/layer_management/close_sync_prompt.py)
 warns about unsynced Rana changes before they'd be lost, and offers to
-dispatch the existing sync actions instead. Two classes handle two genuinely
+dispatch the existing sync actions instead. The prompt is the modal
+`SyncDialog` (a tree of changed files with checkboxes), shown through
+`SyncPromptAction.prompt_and_dispatch` with the buttons "Sync changes now" and
+"Continue without syncing". Only checked files are dispatched; style snapshots
+that are unchecked or declined are released via `discard_layer_sources`. Two classes handle two genuinely
 different scenarios — **`ProjectCloseSyncPrompt`** (closing/switching/
 quitting the whole project) and **`LayerRemovalSyncPrompt`** (removing an
 individual dirty layer or group while the project stays open) — built on a
-shared `SyncPromptAction` (ask + dispatch-or-discard) so both show the
+shared `SyncPromptAction` (show dialog + dispatch-or-discard) so both show the
 identical dialog/outcome. Together they make 7 signal connections (2 in `ProjectCloseSyncPrompt.connect()`, 5 in `LayerRemovalSyncPrompt.connect()`). (Dirty
 qualification itself — which groups even count as "unsynced" — is in
 [`dirty_tracking.md`](dirty_tracking.md); this section is only about the
@@ -129,9 +140,11 @@ sequenceDiagram
     QGIS->>Prompt: aboutToBeCleared
     Prompt->>Prompt: is_clearing = True
     Prompt->>Prompt: scan whole tree, collect dirty groups
-    Prompt->>User: custom_ask (Sync now / Continue without syncing)
-    alt Sync now
-        Prompt->>Prompt: dispatch_style_items / dispatch_data_items
+    Prompt->>User: SyncDialog via prompt_and_dispatch (Sync changes now / Continue without syncing)
+    alt Sync changes now
+        Prompt->>Prompt: dispatch checked style / data items
+    else Continue without syncing
+        Prompt->>Prompt: discard_layer_sources (style snapshots)
     end
     Note over QGIS,Prompt: QGIS then removes every layer as part of\nclearing — layersWillBeRemoved / willRemoveChildren /\nlayersRemoved / removedChildren all fire, but\nLayerRemovalSyncPrompt skips/no-ops while is_clearing is set
     QGIS->>Prompt: cleared
@@ -147,8 +160,8 @@ sequenceDiagram
   same signal (quitting clears the project as part of its own shutdown) —
   see [`20261014-close-sync-prompt-unified-hook.md`](../.minispec/knowledge/decisions/20261014-close-sync-prompt-unified-hook.md) for why there's one hook
   instead of a separate quit-specific one.
-- `aboutToBeCleared` is not cancelable, so the dialog only offers "Sync now"
-  / "Continue without syncing," never "Cancel".
+- `aboutToBeCleared` is not cancelable, so the dialog only offers "Sync changes
+  now" / "Continue without syncing," never "Cancel".
 - **This is where the two classes connect**: clearing a project makes QGIS
   internally remove every layer, which fires the exact same signals
   `LayerRemovalSyncPrompt` listens to (below). `is_clearing` (set here,
@@ -186,19 +199,21 @@ sequenceDiagram
     alt Registry removal (layersWillBeRemoved)
         QGIS->>Prompt: layersWillBeRemoved
         Prompt->>Prompt: find_dirty_groups(), mark _prompted_layer_ids
-        Prompt->>User: custom_ask, immediately
+        Prompt->>User: SyncDialog via prompt_and_dispatch, immediately
     else Tree-driven removal (willRemoveChildren), possibly several times
         loop each notification, node still live
             QGIS->>Prompt: willRemoveChildren
-            Prompt->>Prompt: find_dirty_groups() -> capture_style_items/\ncapture_data_items, accumulate as plain data
+            Prompt->>Prompt: find_dirty_groups() -> capture_style_items/\ncapture_data_items + SyncChanges.merge, accumulate as plain data
             Prompt->>Prompt: mark layer IDs in _prompted_layer_ids
             Prompt->>Timer: start() (if not already running)
         end
         Timer-->>Prompt: timeout -> flush
-        Prompt->>User: custom_ask, once for the whole cascade
+        Prompt->>User: SyncDialog via prompt_and_dispatch, once for the whole cascade
     end
-    alt Sync now
-        Prompt->>Prompt: dispatch_style_items / dispatch_data_items
+    alt Sync changes now
+        Prompt->>Prompt: dispatch checked style / data items
+    else Continue without syncing
+        Prompt->>Prompt: discard_layer_sources (style snapshots)
     end
     Note over QGIS,Prompt: Afterwards, QGIS reports what actually happened
     QGIS->>Prompt: removedChildren
@@ -213,7 +228,9 @@ sequenceDiagram
   `queue_prompt_for_layer_ids` captures that group's upload items as plain
   data (`StyleUploadItem`/`UploadableLayerItem`, snapshotting styles to disk
   since the upload runs after the layers are gone) immediately, accumulating
-  them in `_pending_style_items`/`_pending_data_items`. Only the actual
+  them in `_pending_style_items`/`_pending_data_items`. The `SyncChanges`
+  shown in the dialog are read from the layers at the same moment and
+  accumulated in `_pending_changes` via `SyncChanges.merge`. Only the actual
   prompt is deferred, via a zero-delay `QTimer`, so the whole cascade
   resolves to a **single** prompt once it has finished emitting.
 - `_prompted_layer_ids` deduplicates across both entry points and across a
@@ -225,8 +242,39 @@ sequenceDiagram
   the corresponding IDs from `_prompted_layer_ids` only once that's known —
   otherwise a layer that's momentarily detached but not actually removed
   would be silently skipped if dirtied and removed again later.
+- `_flush_pending_prompt` passes the pending style items, data items and
+  changes to `prompt_and_dispatch`.
 - `disconnect()` stops the flush timer and discards any still-pending style
   snapshots, so nothing fires after the plugin unloads.
+
+### On-demand sync
+
+The layer-tree menu actions use the same dialog, without the close/removal
+triggers. `LayerTreeMenuProvider.sync` shows it for one kind of change (no kind
+sections) before dispatching:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Menu as LayerTreeMenuProvider.sync
+    participant Changes as SyncChanges
+    participant Dialog as SyncDialog
+    participant Loader
+
+    User->>Menu: Sync style / data to Rana
+    Menu->>Menu: capture_style_items / capture_data_items
+    Menu->>Changes: from_layers(include_unknown_data=True)
+    Menu->>Dialog: show_kinds=False, "Continue sync" / "Cancel sync"
+    alt Continue sync
+        Dialog-->>Menu: selected(kind)
+        Menu->>Loader: dispatch checked items
+    else Cancel sync
+        Dialog-->>Menu: rejected, nothing dispatched
+    end
+```
+
+If there are no items to capture, nothing is shown. Project names come from the
+layers; the dialog falls back to the project ID and never calls the API.
 
 ## Project-selection dialog
 

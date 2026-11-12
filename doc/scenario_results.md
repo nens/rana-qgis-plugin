@@ -222,8 +222,9 @@ it does not serialize the downloads themselves.
 
 ### Results Analysis boundary
 
-`open_scenario_results_in_results_analysis()` is the only integration boundary
-between the loader and the Results Analysis plugin. It returns without loading
+`open_scenario_results_in_results_analysis()` (in
+`layer_management/layer_manager.py`, called by the `Loader`) is the only
+integration boundary between the loader and the Results Analysis plugin. It returns without loading
 when either `results_3di.nc` or `gridadmin.h5` is absent. If the plugin is
 missing or has no `load_result` method, it reports a warning.
 

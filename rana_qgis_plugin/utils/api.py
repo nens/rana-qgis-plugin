@@ -194,6 +194,16 @@ def get_tenant_details() -> dict:
     return network_manager.content
 
 
+def get_tenant_project(project_id: str) -> dict:
+    """Fetch the details of one project.
+
+    Raises:
+        RanaFetchError: on network or API failure.
+    """
+    tenant = get_tenant_id()
+    return simple_fetch(f"{api_url()}/tenants/{tenant}/projects/{project_id}")
+
+
 def get_tenant_projects(params: Optional[dict] = None) -> dict:
     """Fetch all tenant projects matching the given filter params.
 

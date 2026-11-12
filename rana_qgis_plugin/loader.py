@@ -2496,6 +2496,7 @@ class Loader(QObject):
             project_id=project["id"],
             file_id=file_item["id"],
             descriptor_id=file_item.get("descriptor_id"),
+            project_name=project["name"],
         )
         parents = [project["name"], "files"] + file_item["id"].split("/")
 
@@ -2522,6 +2523,7 @@ class Loader(QObject):
             file_id=file_item["id"],
             descriptor_id=file_item.get("descriptor_id"),
             layer_id=layer_id,
+            project_name=project["name"],
         )
         parents = [project["name"], "files"] + file_item["id"].split("/")
         open_rana_vector_layer(local_file_path, layer_name, parents, ref)
@@ -2541,6 +2543,7 @@ class Loader(QObject):
             file_id=file_item["id"],
             descriptor_id=file_item.get("descriptor_id"),
             layer_id=table_id,
+            project_name=project["name"],
         )
         parents = [project["name"], "files"] + file_item["id"].split("/")
         open_rana_vector_layer(local_file_path, table_name, parents, ref)

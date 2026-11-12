@@ -21,16 +21,22 @@ flowchart LR
     F[Dock destroyed] --> G[Remove from process_docks]
 ```
 
+## Layout
+
+Below the filter bar, a vertical `QSplitter` holds the jobs table and a log box. The log box is a `QgsCollapsibleGroupBox` titled "Show log" while collapsed and "Hide log" while expanded; it starts collapsed. Expanding it restores the last height the user dragged the splitter to (`_log_height`), or a quarter of the panel on first use, and refreshes the selected job's logs. The user-chosen height is only remembered while the log is expanded.
+
+User cells in the table show avatars through `Loader.get_avatar_for_user`, which uses the shared avatar cache; `ProcessesPanel` updates the cells when `Loader.avatar_updated` fires. See [signals.md](signals.md#avatar-loading).
+
 
 ## Data model
 
-`JobData` ([jobs_models.py:12](../rana_qgis_plugin/widgets/jobs_models.py)) is a dataclass built with `from_job_dict` ([jobs_models.py:41](../rana_qgis_plugin/widgets/jobs_models.py)). If an API item cannot be parsed, `from_job_dict` raises `JobParseError` ([jobs_models.py:7](../rana_qgis_plugin/widgets/jobs_models.py)).
+`JobData` is a dataclass built with `from_job_dict`. If an API item cannot be parsed, `from_job_dict` raises `JobParseError`.
 
-`job_can_be_cancelled` ([jobs_models.py:65](../rana_qgis_plugin/widgets/jobs_models.py)) returns true when the job status is `running` and its `process_id` matches the simulation tracker process.
+`job_can_be_cancelled` returns true when the job status is `running` and its `process_id` matches the simulation tracker process.
 
 ### Reconciliation
 
-`JobsTableModel.update_jobs` ([processes_panel.py:182](../rana_qgis_plugin/widgets/processes_panel.py)) reconciles the table by job ID rather than rebuilding it:
+`JobsTableModel.update_jobs` reconciles the table by job ID rather than rebuilding it:
 
 1. Rows for jobs absent from the API response are removed.
 2. New jobs are inserted.
@@ -57,16 +63,16 @@ sequenceDiagram
     P->>P: _refresh_selected_job_logs()
 ```
 
-- `JobsFetchTask(QgsTask)` ([workers/rana_jobs.py:8](../rana_qgis_plugin/workers/rana_jobs.py)) has flags `CanCancel | CancelWithoutPrompt | Silent`. Its `run()` calls `get_project_jobs`.
-- `get_project_jobs(project_id, params)` ([utils/api.py:791](../rana_qgis_plugin/utils/api.py)) merges `{"project_id", "limit": 100}` with the filter parameters and sends a GET to `{api_url()}/tenants/{tenant}/jobs` (line 804). The result is read from the `items` key.
-- Each item is parsed in `_fetch_completed` (lines 406-409). A `JobParseError` is reported with `fetch_error_occurred(msg, False)` (lines 410-415), and the remaining items are still processed.
+- `JobsFetchTask(QgsTask)` has flags `CanCancel | CancelWithoutPrompt | Silent`. Its `run()` calls `get_project_jobs`.
+- `get_project_jobs(project_id, params)` merges `{"project_id", "limit": 100}` with the filter parameters and sends a GET to `{api_url()}/tenants/{tenant}/jobs`. The result is read from the `items` key.
+- Each item is parsed in `_fetch_completed`. A `JobParseError` is reported with `fetch_error_occurred(msg, False)`, and the remaining items are still processed.
 
 ### Request coalescing
 
-- `_request_fetch` ([processes_panel.py:379](../rana_qgis_plugin/widgets/processes_panel.py)) allows at most one `JobsFetchTask` at a time.
+- `_request_fetch` allows at most one `JobsFetchTask` at a time.
 - A request made while a fetch is running sets `_fetch_requested`, so exactly one follow-up fetch is queued.
-- `_continue_requested_fetch` ([processes_panel.py:480](../rana_qgis_plugin/widgets/processes_panel.py)) drains that queued request once the running task finishes.
-- If the filters changed while a fetch was in flight, its result is discarded and a new fetch is queued (lines 402-403).
+- `_continue_requested_fetch` drains that queued request once the running task finishes.
+- If the filters changed while a fetch was in flight, its result is discarded and a new fetch is queued.
 - Tasks that are no longer `self._current_task` are dropped as stale.
 
 ### Triggers
@@ -75,11 +81,11 @@ A fetch is requested from these places:
 
 | Trigger | Entry point |
 |---|---|
-| Poll timer (10 s) | `_poll_jobs` ([processes_panel.py:375](../rana_qgis_plugin/widgets/processes_panel.py)) |
-| Filter change | `filters_changed` → `_on_filters_changed` ([processes_panel.py:357](../rana_qgis_plugin/widgets/processes_panel.py)) |
-| Deep link | `highlight_jobs` ([processes_panel.py:429](../rana_qgis_plugin/widgets/processes_panel.py)) |
-| Selection change (logs refresh only, no job fetch) | selection model signal → `_on_selection_changed` ([processes_panel.py:493](../rana_qgis_plugin/widgets/processes_panel.py)) |
-| Completed fetch | `_fetch_completed` ([processes_panel.py:397](../rana_qgis_plugin/widgets/processes_panel.py)) |
+| Poll timer (10 s) | `_poll_jobs` |
+| Filter change | `filters_changed` → `_on_filters_changed` |
+| Deep link | `highlight_jobs` |
+| Selection change (logs refresh only, no job fetch) | selection model signal → `_on_selection_changed` |
+| Completed fetch | `_fetch_completed` |
 
 ## Polling lifecycle
 
@@ -101,16 +107,16 @@ sequenceDiagram
     participant P as ProcessesPanel
     participant API as threedi API
     U->>P: Click cancel button
-    P->>P: _cancel_simulation_from_button (line 667/690)
-    P->>P: _cancel_simulation re-checks eligibility (line 695)
+    P->>P: _cancel_simulation_from_button
+    P->>P: _cancel_simulation re-checks eligibility
     P->>U: QMessageBox.question (default No)
     U->>P: Yes
     P->>P: Disable button
-    P->>API: create_simulation_action(simulation_id, "shutdown") (line 723)
+    P->>API: create_simulation_action(simulation_id, "shutdown")
     alt error
         P->>P: fetch_error_occurred(msg, True), re-enable button
     else success
-        P->>P: model.set_job_status(job_id, "cancelling") (line 732)
+        P->>P: model.set_job_status(job_id, "cancelling")
         Note over P: next poll reconciles the status
     end
 ```
@@ -121,12 +127,12 @@ sequenceDiagram
 
 ## Deep linking from other flows
 
-`point_user_to_processes(project, job_ids, error_signals, parent)` ([loader.py:270](../rana_qgis_plugin/loader.py)) opens the panel and highlights jobs:
+`point_user_to_processes(project, job_ids, error_signals, parent)` opens the panel and highlights jobs:
 
-1. If no dock exists for the project, the user is asked first via `communication.ask` (line 280).
-2. The panel is shown and `panel.highlight_jobs` is called (line 295).
+1. If no dock exists for the project, the user is asked first via `communication.ask`.
+2. The panel is shown and `panel.highlight_jobs` is called.
 
 Callers:
 
-- [loader.py:751](../rana_qgis_plugin/loader.py): after simulation tracker jobs start.
-- [widgets/version_history_dialog.py:648](../rana_qgis_plugin/widgets/version_history_dialog.py).
+- [loader.py](../rana_qgis_plugin/loader.py): after simulation tracker jobs start.
+- [widgets/version_history_dialog.py](../rana_qgis_plugin/widgets/version_history_dialog.py).

@@ -98,8 +98,11 @@ post-processing, including QML extraction for supported vector and raster
 files. Other downloader implementations support scenario and schematisation
 flows.
 
-Files opened in QGIS use the configured Rana cache location. The cache is
-available through the `rana_cache_dir` setting; it defaults to `~/Rana`.
+Files opened in QGIS use the Rana root directory, set by the user setting
+`Rana/root_dir` (default `~/Rana`). The projects cache is `<root>/Projects`
+(`rana_cache_dir()` in `utils/settings.py`; `RANA_PROJECTS_DIR_NAME` in
+`constant.py`). Schematisations are stored under `<root>/Models and Simulations`
+(`RANA_MODELS_DIR_NAME`).
 
 Scenario-result downloads have an additional orchestration layer around this same task model. The loader creates one `DownloadTask` per scenario, and a task can contain the raw `results.zip` downloader plus selected or default result downloaders. After a successful 3Di scenario download, the loader hands the local directory to a FIFO queue before opening it in Rana Results Analysis. The hand-offs are serialized even when multiple scenario download tasks are active. See [`scenario_results.md`](scenario_results.md) for more details.
 

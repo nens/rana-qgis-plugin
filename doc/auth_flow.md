@@ -138,7 +138,10 @@ that the OAuth token is usable. Login validates a newly created config with
 
 `NetworkManager.process_request()` applies a 60-second timeout while waiting for
 the network reply. It aborts the pending reply and raises
-`NetworkTimeoutError`; login reports a timeout through the message bar.
+`NetworkTimeoutError`; login reports a timeout through the message bar. Browser
+and panel code that catches `NetworkTimeoutError` emits
+`ApiErrorSignals.request_timed_out` instead (for example the root item when
+restoring the session or listing projects).
 
 ## Abandoned login and the redirect listener
 

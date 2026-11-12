@@ -95,12 +95,11 @@ class RanaQgisPlugin(QObject):
         self.indicator_manager = IndicatorManager(project, iface.layerTreeView())
         self.raster_watch = RasterWatch(project)
         self.project_close_sync_prompt = ProjectCloseSyncPrompt(
-            project, self.layer_tree_menu, self.communication, iface.mainWindow()
+            project, self.layer_tree_menu, iface.mainWindow()
         )
         self.layer_removal_sync_prompt = LayerRemovalSyncPrompt(
             project,
             self.layer_tree_menu,
-            self.communication,
             self.project_close_sync_prompt,
             iface.mainWindow(),
         )

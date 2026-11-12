@@ -40,7 +40,7 @@ classDiagram
     FileInfoModel ..> GeneralInfo : builds
     FileInfoModel ..> InfoSection : builds
     FileInfoModel <|-- ScenarioFileInfoModel
-    FileInfoModel <|-- SchematisationFileInfoModel    
+    FileInfoModel <|-- SchematisationFileInfoModel
     SchematisationFileInfoModel ..> RelatedFile : builds
     GeneralInfo o-- FieldValue
     InfoSection o-- FieldValue
@@ -69,7 +69,7 @@ Widgets render a `None` value as `N/A`; fields marked as errors are displayed in
 - **More information**: projection, human-readable type, status, and storage size.
 - **Related files**: empty for generic files.
 
-`ScenarioFileInfoModel` and `SchematisationFileInfoModel` exent the **More information** section, and `SchematisationFileInfoModel` als adds **Related files**. Note that `SchematisationFileInfoModel` requires also needs a schematisation and a model to fully populate the sections. 
+`ScenarioFileInfoModel` and `SchematisationFileInfoModel` extend the **More information** section, and `SchematisationFileInfoModel` also adds **Related files**. Note that `SchematisationFileInfoModel` needs a schematisation and a model to fully populate the sections.
 
 
 ## Widget composition

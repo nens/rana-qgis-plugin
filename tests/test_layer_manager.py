@@ -38,6 +38,36 @@ def test_unlinked_layer_has_no_rana_refs():
     assert not lm.is_rana_linked(layer)
 
 
+def test_project_name_round_trips_through_layer_property():
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", "test", "memory")
+    ref = lm.RanaLayerRef("project", "file.gpkg", project_name="Project Alpha")
+
+    lm.set_rana_refs(layer, ref)
+
+    assert layer.customProperty("rana/project_name") == "Project Alpha"
+    assert lm.get_rana_refs(layer) == ref
+
+
+def test_layer_without_project_name_still_has_a_valid_ref():
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", "test", "memory")
+    layer.setCustomProperty("rana/project_id", "project")
+    layer.setCustomProperty("rana/file_id", "file.gpkg")
+
+    ref = lm.get_rana_refs(layer)
+
+    assert ref == lm.RanaLayerRef("project", "file.gpkg")
+    assert ref.project_name is None
+
+
+def test_clear_rana_refs_removes_project_name():
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", "test", "memory")
+    lm.set_rana_refs(layer, lm.RanaLayerRef("project", "f", project_name="A"))
+
+    lm.clear_rana_refs(layer)
+
+    assert layer.customProperty("rana/project_name") is None
+
+
 def test_clear_rana_refs():
     layer = QgsVectorLayer("Point?crs=EPSG:4326", "test", "memory")
     lm.set_rana_refs(layer, lm.RanaLayerRef("project", "file.gpkg"))
