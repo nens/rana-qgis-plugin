@@ -113,7 +113,7 @@ unrelated progress callers are out of scope.
 
 ## Progress
 
-- [ ] Task 1: Implement the step-progress helper functions and tests
+- [x] Task 1: Implement the step-progress helper functions and tests
 - [ ] Task 2: Integrate local-preparation progress into both wizards
 - [ ] Task 3: Integrate upload and remote hand-off progress
 - [ ] Task 4: Validate complete workflows and terminal-state cleanup

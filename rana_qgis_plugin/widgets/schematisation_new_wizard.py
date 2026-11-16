@@ -6,7 +6,7 @@ from pathlib import Path
 
 from qgis.core import QgsFeature
 from qgis.PyQt.QtCore import QSettings, QSize
-from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QWizard
+from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QTextBrowser, QWizard
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation
 from threedi_schema import ThreediDatabase
@@ -159,6 +159,23 @@ class SchematisationWizardBase(QWizard):
                 field_value = set_feat[field_name]
                 paths[table_name][field_name] = field_value if field_value else None
         return paths
+
+    @staticmethod
+    def update_step_progress(pb, step, step_pct, detail=None):
+        """Set the overall value of a progress bar and, if given, its message text.
+
+        Three equally weighted steps (0-based): 0-33, 33-66 and 66-100.
+        QgsMessageBar shows the message text in a QTextBrowser of the message
+        widget that holds the progress bar.
+        """
+        pb.setValue(int((step + step_pct / 100) * 100 / 3))
+        if detail is not None:
+            pb.parentWidget().findChild(QTextBrowser).setPlainText(detail)
+
+    @staticmethod
+    def finish_step_progress(iface, pb):
+        """Remove the message-bar item that holds the progress bar."""
+        iface.messageBar().popWidget(pb.parentWidget())
 
 
 class NewSchematisationWizard(SchematisationWizardBase):
