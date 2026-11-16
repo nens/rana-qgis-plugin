@@ -236,7 +236,8 @@ def test_copy_prepared_rasters_preserves_nested_relative_paths(tmp_path):
     assert (local_raster_dir / "sub" / "dem.tif").read_bytes() == b"raster data"
 
 
-def test_create_and_populate_schematisation_geopackage(tmp_path):
+def test_create_and_populate_schematisation_geopackage(tmp_path, step_bar):
+    _, _, pb = step_bar
     geopackage = tmp_path / "generated.gpkg"
     dem = tmp_path / "dem.tif"
     dem.write_bytes(b"test raster")
@@ -255,9 +256,10 @@ def test_create_and_populate_schematisation_geopackage(tmp_path):
         settings,
         (str(dem), ""),
         raster_dir,
-        MagicMock(),
+        pb,
     )
 
+    assert pb.value() <= 33
     assert geopackage.is_file()
     with sqlite3.connect(geopackage) as connection:
         row = connection.execute(

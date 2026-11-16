@@ -66,6 +66,7 @@ class SchematisationWizardBase(QWizard):
         self.raster_paths: dict | None = None
         self.new_schematisation = None
         self.new_local_schematisation = None
+        self.progress_bar = None
         self.available_organisations = organisations
 
         self.schematisation_name_page = SchematisationNamePage(organisations, self)
@@ -110,6 +111,13 @@ class SchematisationWizardBase(QWizard):
     def run_build(self, build: Callable[[], None]) -> None:
         """Run a wizard-specific build and report failures consistently."""
         self._reset_outputs()
+        self.progress_bar = self.communication.progress_bar(
+            msg="Preparing schematisation",
+            minimum=0,
+            maximum=100,
+            init_value=0,
+            clear_msg_bar=True,
+        )
         try:
             build()
         except (ApiException, RanaPostError) as error:
@@ -125,6 +133,9 @@ class SchematisationWizardBase(QWizard):
                 f"('{self.new_schematisation.name}', id {self.new_schematisation.id}) "
                 "before this error occurred."
             )
+        if self.progress_bar is not None:
+            self.finish_step_progress(self.communication.iface, self.progress_bar)
+            self.progress_bar = None
         self._reset_outputs()
         self.communication.bar_error(message)
 
@@ -216,30 +227,21 @@ class NewSchematisationWizard(SchematisationWizardBase):
         schematisation_settings: dict,
         raster_filepaths: tuple[str, str],
         raster_dir: str | Path,
-        communication,
+        progress_bar,
     ) -> None:
         """Initialize and populate a schematisation GeoPackage from collected settings."""
         database = ThreediDatabase(str(geopackage_filepath))
 
         # A new empty database must first be upgraded to the first schema revision.
-        def feedback_callback_factory(communication):
-            """Callback function to track schematisation migration progress."""
-
-            def feedback_callback(progress, message):
-                communication.progress_bar(
-                    msg=message,
-                    minimum=0,
-                    maximum=100,
-                    init_value=int(progress),
-                    clear_msg_bar=True,
-                )
-                QApplication.processEvents()
-
-            return feedback_callback
+        def feedback_callback(progress, message):
+            SchematisationWizardBase.update_step_progress(
+                progress_bar, 0, progress, detail=message
+            )
+            QApplication.processEvents()
 
         database.schema.upgrade(revision="0200")
         database.schema.upgrade(
-            progress_func=feedback_callback_factory(communication),
+            progress_func=feedback_callback,
             epsg_code_override=schematisation_settings["model_settings"]["epsg_code"],
         )
 
@@ -308,11 +310,10 @@ class NewSchematisationWizard(SchematisationWizardBase):
             schematisation_settings,
             raster_filepaths,
             wip_revision.raster_dir,
-            self.communication,
+            self.progress_bar,
         )
         self.raster_paths = self.get_paths_from_geopackage(geopackage_filepath)
-        msg = f"Schematisation '{name} ({schematisation.id})' created!"
-        self.communication.bar_info(msg)
+        self.update_step_progress(self.progress_bar, 0, 100)
 
 
 class UploadExistingSchematisationWizard(SchematisationWizardBase):
@@ -442,5 +443,4 @@ class UploadExistingSchematisationWizard(SchematisationWizardBase):
         self.copy_existing_schematisation_content(
             src_db, raster_paths, name, wip_revision
         )
-        msg = f"Schematisation '{name} ({schematisation.id})' created!"
-        self.communication.bar_info(msg)
+        self.update_step_progress(self.progress_bar, 0, 100)
