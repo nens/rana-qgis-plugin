@@ -127,12 +127,13 @@ sequenceDiagram
 
 ## Deep linking from other flows
 
-`point_user_to_processes(project, job_ids, error_signals, parent)` opens the panel and highlights jobs:
+`point_user_to_processes(project, job_ids, error_signals, parent, question=...)` opens the panel and highlights jobs:
 
-1. If no dock exists for the project, the user is asked first via `communication.ask`.
+1. If no dock exists for the project, the user is asked first via `communication.ask`. Callers can override the prompt with `question` (default "Track progress in the Processes window?").
 2. The panel is shown and `panel.highlight_jobs` is called.
 
 Callers:
 
 - [loader.py](../rana_qgis_plugin/loader.py): after simulation tracker jobs start.
+- [loader.py](../rana_qgis_plugin/loader.py): `handle_initial_model_requested`, after model creation starts for a new schematisation. See [schematisation_wizard.md](schematisation_wizard.md#model-hand-off).
 - [widgets/version_history_dialog.py](../rana_qgis_plugin/widgets/version_history_dialog.py).
