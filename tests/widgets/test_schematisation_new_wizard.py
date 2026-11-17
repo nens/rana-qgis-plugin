@@ -1,8 +1,12 @@
 import sqlite3
 from unittest.mock import MagicMock, patch
 
-from qgis.PyQt.QtWidgets import QDialog
+import pytest
+from qgis.gui import QgsMessageBar
+from qgis.PyQt import sip
+from qgis.PyQt.QtWidgets import QDialog, QTextBrowser
 
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.widgets.schematisation_new_wizard import (
     NewSchematisationWizard,
     SchematisationWizardBase,
@@ -174,6 +178,29 @@ def test_upload_existing_checks_inputs_before_registering_remote_schematisation(
     assert wizard.new_local_schematisation is None
 
 
+def test_wizard_does_not_leave_name_page_when_name_is_taken(qgis_application, tmp_path):
+    (tmp_path / "taken").mkdir()
+    communication = MagicMock()
+    wizard = UploadExistingSchematisationWizard(
+        object(),
+        str(tmp_path),
+        communication,
+        {"owner": MagicMock()},
+        str(tmp_path / "input.gpkg"),
+        "project",
+        "target/",
+    )
+    wizard.restart()
+    name_field = wizard.schematisation_name_page.main_widget.le_schematisation_name
+
+    name_field.setText("taken")
+    assert wizard.validateCurrentPage() is False
+    communication.show_warn.assert_called_once()
+
+    name_field.setText("free")
+    assert wizard.validateCurrentPage() is True
+
+
 def test_copy_prepared_geopackage_and_rasters_into_local_revision(tmp_path):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
@@ -233,7 +260,28 @@ def test_copy_prepared_rasters_preserves_nested_relative_paths(tmp_path):
     assert (local_raster_dir / "sub" / "dem.tif").read_bytes() == b"raster data"
 
 
-def test_create_and_populate_schematisation_geopackage(tmp_path):
+def test_create_and_populate_reports_progress_to_new_bar_after_previous_bar_deleted(
+    tmp_path, step_bar
+):
+    settings = {"model_settings": {"epsg_code": 28992}}
+    first_bar = step_bar[2]
+    NewSchematisationWizard.create_and_populate_schematisation_geopackage(
+        tmp_path / "first.gpkg", settings, ("", ""), tmp_path, first_bar
+    )
+    sip.delete(first_bar)
+
+    second_bar = UICommunication(iface=step_bar[0]).progress_bar(
+        "Preparing", maximum=100
+    )
+    NewSchematisationWizard.create_and_populate_schematisation_geopackage(
+        tmp_path / "second.gpkg", settings, ("", ""), tmp_path, second_bar
+    )
+
+    assert 0 < second_bar.value() <= 33
+
+
+def test_create_and_populate_schematisation_geopackage(tmp_path, step_bar):
+    _, _, pb = step_bar
     geopackage = tmp_path / "generated.gpkg"
     dem = tmp_path / "dem.tif"
     dem.write_bytes(b"test raster")
@@ -252,9 +300,10 @@ def test_create_and_populate_schematisation_geopackage(tmp_path):
         settings,
         (str(dem), ""),
         raster_dir,
-        MagicMock(),
+        pb,
     )
 
+    assert pb.value() <= 33
     assert geopackage.is_file()
     with sqlite3.connect(geopackage) as connection:
         row = connection.execute(
@@ -265,9 +314,10 @@ def test_create_and_populate_schematisation_geopackage(tmp_path):
 
 
 def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_bar
 ):
     communication = MagicMock()
+    communication.progress_bar.return_value = step_bar[2]
     wizard = NewSchematisationWizard(
         object(),
         str(tmp_path),
@@ -317,9 +367,10 @@ def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
 
 
 def test_wizard_base_resets_outputs_and_reports_build_errors(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_bar
 ):
     communication = MagicMock()
+    communication.progress_bar.return_value = step_bar[2]
     wizard = NewSchematisationWizard(
         object(),
         str(tmp_path),
@@ -338,10 +389,11 @@ def test_wizard_base_resets_outputs_and_reports_build_errors(
 
 
 def test_wizard_base_flags_already_registered_schematisation_on_later_failure(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_bar
 ):
     """A failure after remote registration should mention the orphaned record."""
     communication = MagicMock()
+    communication.progress_bar.return_value = step_bar[2]
     wizard = NewSchematisationWizard(
         object(),
         str(tmp_path),
@@ -394,8 +446,8 @@ def test_wizard_base_rejects_name_that_exists_in_working_directory(
 
     assert not wizard.check_name_available("Existing model")
 
-    communication.show_error.assert_called_once()
-    assert "Existing model" in communication.show_error.call_args.args[0]
+    communication.show_warn.assert_called_once()
+    assert "Existing model" in communication.show_warn.call_args.args[0]
 
 
 def test_wizard_base_registers_remote_and_initializes_local_schematisation(
@@ -463,3 +515,87 @@ def test_wizard_base_persists_size_on_close(qgis_application, tmp_path):
     settings.return_value.setValue.assert_called_once_with(
         NewSchematisationWizard.SETTINGS_KEY, wizard.size()
     )
+
+
+@pytest.fixture
+def step_bar(qgis_application):
+    message_bar = QgsMessageBar()
+    iface = MagicMock()
+    iface.messageBar.return_value = message_bar
+    pb = UICommunication(iface=iface).progress_bar("Preparing", maximum=100)
+    return iface, message_bar, pb
+
+
+@pytest.mark.parametrize(
+    "step, step_pct, expected",
+    [
+        (0, 0, 0),
+        (0, 50, 16),
+        (0, 100, 33),
+        (1, 0, 33),
+        (1, 100, 66),
+        (2, 0, 66),
+        (2, 100, 100),
+    ],
+)
+def test_update_step_progress_maps_steps_to_equal_segments(
+    step_bar, step, step_pct, expected
+):
+    _, _, pb = step_bar
+    SchematisationWizardBase.update_step_progress(pb, step, step_pct)
+    assert pb.value() == expected
+
+
+def test_update_step_progress_sets_text(step_bar):
+    _, _, pb = step_bar
+    SchematisationWizardBase.update_step_progress(
+        pb, 1, 50, detail="Uploading: model.zip"
+    )
+    assert pb.parentWidget().findChild(QTextBrowser).toPlainText() == (
+        "Uploading: model.zip"
+    )
+
+
+def test_update_step_progress_without_detail_keeps_text(step_bar):
+    _, _, pb = step_bar
+    SchematisationWizardBase.update_step_progress(pb, 2, 100)
+    assert pb.parentWidget().findChild(QTextBrowser).toPlainText() == "Preparing"
+
+
+def test_finish_step_progress_removes_the_items_widget(step_bar):
+    iface, message_bar, pb = step_bar
+    with patch.object(message_bar, "popWidget") as pop:
+        SchematisationWizardBase.finish_step_progress(iface, pb)
+    pop.assert_called_once_with(pb.parentWidget())
+
+
+def test_step_progress_helpers_log_instead_when_progress_item_is_dismissed(step_bar):
+    iface, _, pb = step_bar
+    sip.delete(pb)
+
+    with patch(
+        "rana_qgis_plugin.widgets.schematisation_new_wizard.plugin_log_info"
+    ) as log:
+        SchematisationWizardBase.update_step_progress(pb, 1, 50, detail="Uploading")
+        SchematisationWizardBase.finish_step_progress(iface, pb)
+
+    messages = [call.args[0] for call in log.call_args_list]
+    assert messages == [
+        "Progress item was dismissed: Uploading",
+        "Progress item was dismissed before the process finished",
+    ]
+
+
+def test_step_progress_helpers_ignore_missing_progress_bar():
+    SchematisationWizardBase.update_step_progress(None, 0, 50, detail="x")
+    SchematisationWizardBase.finish_step_progress(MagicMock(), None)
+
+
+def test_update_step_progress_without_text_browser_still_sets_value(qgis_application):
+    from qgis.PyQt.QtWidgets import QProgressBar, QWidget
+
+    container = QWidget()
+    bar = QProgressBar(container)
+    bar.setMaximum(100)
+    SchematisationWizardBase.update_step_progress(bar, 1, 0, detail="text")
+    assert bar.value() == 33

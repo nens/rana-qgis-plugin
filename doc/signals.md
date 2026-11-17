@@ -84,6 +84,11 @@ sequenceDiagram
 The loader consumes task signals and presents progress or completion through
 the communication layer. It does not re-emit the task signals.
 
+The initial revision upload of a new schematisation (`SchematisationUploadTask`) is
+handled differently: its `progress_changed` and `model_requested` signals update the
+progress item created by the schematisation wizard instead of a separate bar. See
+[schematisation_wizard.md](schematisation_wizard.md).
+
 ## Browser actions
 
 Context-menu actions are regular `QAction` signals. They usually call a
