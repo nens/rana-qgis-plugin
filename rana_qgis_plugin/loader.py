@@ -1011,25 +1011,31 @@ class Loader(QObject):
         SchematisationWizardBase.update_step_progress(
             progress_bar, 1, 0, detail="Uploading initial revision"
         )
-        task.progress_changed.connect(
-            lambda name, current, total, per_task: (
+        handed_off = False
+
+        def on_upload_progress(name, current, total, per_task):
+            # Queued ticks can arrive after the hand-off and the bar is gone by then.
+            if not handed_off:
                 SchematisationWizardBase.update_step_progress(
                     progress_bar,
                     1,
                     total + current * per_task / 100,
                     detail=f"Uploading revision: {name}",
                 )
-            )
-        )
-        task.model_requested.connect(
-            lambda: self.handle_initial_model_requested(
+
+        def on_model_requested():
+            nonlocal handed_off
+            handed_off = True
+            self.handle_initial_model_requested(
                 project["id"],
                 schematisation,
                 task.revision.id,
                 upload_specification["cb_inherit_templates"],
                 progress_bar,
             )
-        )
+
+        task.progress_changed.connect(on_upload_progress)
+        task.model_requested.connect(on_model_requested)
         task.upload_succeeded.connect(lambda _revision_number: refresh_callback())
         task.taskTerminated.connect(
             lambda: self.handle_initial_revision_upload_failure(task, progress_bar)

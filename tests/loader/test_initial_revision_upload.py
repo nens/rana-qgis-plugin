@@ -187,3 +187,62 @@ def test_save_initial_revision_stops_before_task_if_a_raster_is_missing(
     task_manager.assert_not_called()
     communication.show_warn.assert_called_once()
     assert "dem.tif" in communication.show_warn.call_args.args[0]
+
+
+def test_late_upload_progress_after_model_request_is_ignored(
+    qgis_application, tmp_path
+):
+    project, schematisation, local, raster_paths, _ = (
+        make_initial_revision_upload_context(tmp_path)
+    )
+    progress_bar = make_progress_bar(qgis_application)
+    loader = Loader(MagicMock())
+    with (
+        patch("rana_qgis_plugin.loader.get_threedi_api", return_value=object()),
+        patch("rana_qgis_plugin.loader.QgsApplication.taskManager"),
+        patch.object(loader, "handle_initial_model_requested"),
+    ):
+        task = loader.save_initial_revision(
+            project, schematisation, local, raster_paths, MagicMock(), progress_bar
+        )
+        task.revision = SimpleNamespace(id=7)
+        task.model_requested.emit()
+        task.progress_changed.emit("dem.tif", 50, 0, 100)
+
+    assert progress_bar.value() == 33
+
+
+def test_model_request_completes_and_removes_the_progress_item(
+    qgis_application, tmp_path
+):
+    message_bar = QgsMessageBar()
+    iface = MagicMock()
+    iface.messageBar.return_value = message_bar
+    communication = UICommunication(iface=iface)
+    progress_bar = communication.progress_bar("Preparing", maximum=100)
+    loader = Loader(communication)
+
+    with patch.object(loader, "start_model_tracker_process", return_value={"id": "p"}):
+        loader.handle_initial_model_requested(
+            "project", SimpleNamespace(id=1, name="Model"), 7, False, progress_bar
+        )
+
+    assert message_bar.items() == []
+
+
+def test_failed_model_request_also_removes_the_progress_item(
+    qgis_application, tmp_path
+):
+    message_bar = QgsMessageBar()
+    iface = MagicMock()
+    iface.messageBar.return_value = message_bar
+    communication = UICommunication(iface=iface)
+    progress_bar = communication.progress_bar("Preparing", maximum=100)
+    loader = Loader(communication)
+
+    with patch.object(loader, "start_model_tracker_process", return_value=None):
+        loader.handle_initial_model_requested(
+            "project", SimpleNamespace(id=1, name="Model"), 7, False, progress_bar
+        )
+
+    assert message_bar.items() == []
