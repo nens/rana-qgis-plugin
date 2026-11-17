@@ -289,9 +289,10 @@ def test_create_and_populate_schematisation_geopackage(tmp_path, step_bar):
 
 
 def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_bar
 ):
     communication = MagicMock()
+    communication.progress_bar.return_value = step_bar[2]
     wizard = NewSchematisationWizard(
         object(),
         str(tmp_path),
@@ -341,9 +342,10 @@ def test_from_scratch_wizard_exposes_raster_references_for_initial_upload(
 
 
 def test_wizard_base_resets_outputs_and_reports_build_errors(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_bar
 ):
     communication = MagicMock()
+    communication.progress_bar.return_value = step_bar[2]
     wizard = NewSchematisationWizard(
         object(),
         str(tmp_path),
@@ -362,10 +364,11 @@ def test_wizard_base_resets_outputs_and_reports_build_errors(
 
 
 def test_wizard_base_flags_already_registered_schematisation_on_later_failure(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_bar
 ):
     """A failure after remote registration should mention the orphaned record."""
     communication = MagicMock()
+    communication.progress_bar.return_value = step_bar[2]
     wizard = NewSchematisationWizard(
         object(),
         str(tmp_path),
@@ -539,3 +542,20 @@ def test_finish_step_progress_removes_the_items_widget(step_bar):
     with patch.object(message_bar, "popWidget") as pop:
         SchematisationWizardBase.finish_step_progress(iface, pb)
     pop.assert_called_once_with(pb.parentWidget())
+
+
+def test_step_progress_helpers_log_instead_when_progress_item_is_dismissed(step_bar):
+    iface, _, pb = step_bar
+    sip.delete(pb)
+
+    with patch(
+        "rana_qgis_plugin.widgets.schematisation_new_wizard.plugin_log_info"
+    ) as log:
+        SchematisationWizardBase.update_step_progress(pb, 1, 50, detail="Uploading")
+        SchematisationWizardBase.finish_step_progress(iface, pb)
+
+    messages = [call.args[0] for call in log.call_args_list]
+    assert messages == [
+        "Progress item was dismissed: Uploading",
+        "Progress item was dismissed before the process finished",
+    ]

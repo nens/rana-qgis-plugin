@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from qgis.core import QgsFeature
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSettings, QSize
 from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QTextBrowser, QWizard
 from threedi_api_client.openapi import ApiException
@@ -22,6 +23,7 @@ from rana_qgis_plugin.simulation.utils import (
 )
 from rana_qgis_plugin.simulation.utils_ui import ensure_valid_schema
 from rana_qgis_plugin.utils.api import RanaPostError, create_rana_schematisation
+from rana_qgis_plugin.utils.log import plugin_log_info
 from rana_qgis_plugin.widgets.new_wizard_pages.explain import (
     SchematisationExplainPage,
 )
@@ -176,10 +178,17 @@ class SchematisationWizardBase(QWizard):
     def update_step_progress(pb, step, step_pct, detail=None):
         """Set the overall value of a progress bar and, if given, its message text.
 
+        If the user has dismissed the message-bar item, the update is logged instead.
+
         Three equally weighted steps (0-based): 0-33, 33-66 and 66-100.
         QgsMessageBar shows the message text in a QTextBrowser of the message
         widget that holds the progress bar.
         """
+        if sip.isdeleted(pb):
+            plugin_log_info(
+                f"Progress item was dismissed: {detail or f'step {step}, {step_pct:.0f}%'}"
+            )
+            return
         pb.setValue(int((step + step_pct / 100) * 100 / 3))
         if detail is not None:
             pb.parentWidget().findChild(QTextBrowser).setPlainText(detail)
@@ -187,6 +196,9 @@ class SchematisationWizardBase(QWizard):
     @staticmethod
     def finish_step_progress(iface, pb):
         """Remove the message-bar item that holds the progress bar."""
+        if sip.isdeleted(pb):
+            plugin_log_info("Progress item was dismissed before the process finished")
+            return
         iface.messageBar().popWidget(pb.parentWidget())
 
 
