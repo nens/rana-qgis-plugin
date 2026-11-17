@@ -260,7 +260,9 @@ def test_copy_prepared_rasters_preserves_nested_relative_paths(tmp_path):
     assert (local_raster_dir / "sub" / "dem.tif").read_bytes() == b"raster data"
 
 
-def test_create_and_populate_does_not_leave_progress_handler_behind(tmp_path, step_bar):
+def test_create_and_populate_reports_progress_to_new_bar_after_previous_bar_deleted(
+    tmp_path, step_bar
+):
     settings = {"model_settings": {"epsg_code": 28992}}
     first_bar = step_bar[2]
     NewSchematisationWizard.create_and_populate_schematisation_geopackage(

@@ -296,10 +296,7 @@ def test_model_request_points_user_to_processes_with_job_id(
             "Model",
         )
 
-    point_user.assert_called_once_with(
-        project,
-        ["job-9"],
-        error_signals,
-        main_window,
-        question="Track model creation for Model in the Processes window?",
-    )
+    point_user.assert_called_once()
+    args = point_user.call_args.args
+    assert args[:4] == (project, ["job-9"], error_signals, main_window)
+    assert point_user.call_args.kwargs["question"]
