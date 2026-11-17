@@ -82,14 +82,23 @@ class SchematisationWizardBase(QWizard):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.resize(QSettings().value(self.SETTINGS_KEY, QSize(790, 700)))
 
+    def validateCurrentPage(self):
+        """Reject a name that is already taken before leaving the name page."""
+        if self.currentPage() is self.schematisation_name_page:
+            if not self.check_name_available(self.schematisation_name_page.name):
+                return False
+        return super().validateCurrentPage()
+
     def create_schematisation(self):
         raise NotImplementedError
 
     def check_name_available(self, name: str) -> bool:
         """Return whether the name is available locally, reporting conflicts."""
         if (Path(self.working_dir) / name).exists():
-            self.communication.show_error(
-                f"Schematisation with name {name} already exists in working directory. Please choose a different name and try again."
+            self.communication.show_warn(
+                f"Schematisation with name {name} already exists in working directory. Please choose a different name and try again.",
+                self,
+                "Warning",
             )
             return False
         return True

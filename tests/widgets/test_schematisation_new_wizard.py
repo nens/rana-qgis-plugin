@@ -178,6 +178,29 @@ def test_upload_existing_checks_inputs_before_registering_remote_schematisation(
     assert wizard.new_local_schematisation is None
 
 
+def test_wizard_does_not_leave_name_page_when_name_is_taken(qgis_application, tmp_path):
+    (tmp_path / "taken").mkdir()
+    communication = MagicMock()
+    wizard = UploadExistingSchematisationWizard(
+        object(),
+        str(tmp_path),
+        communication,
+        {"owner": MagicMock()},
+        str(tmp_path / "input.gpkg"),
+        "project",
+        "target/",
+    )
+    wizard.restart()
+    name_field = wizard.schematisation_name_page.main_widget.le_schematisation_name
+
+    name_field.setText("taken")
+    assert wizard.validateCurrentPage() is False
+    communication.show_warn.assert_called_once()
+
+    name_field.setText("free")
+    assert wizard.validateCurrentPage() is True
+
+
 def test_copy_prepared_geopackage_and_rasters_into_local_revision(tmp_path):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
@@ -421,8 +444,8 @@ def test_wizard_base_rejects_name_that_exists_in_working_directory(
 
     assert not wizard.check_name_available("Existing model")
 
-    communication.show_error.assert_called_once()
-    assert "Existing model" in communication.show_error.call_args.args[0]
+    communication.show_warn.assert_called_once()
+    assert "Existing model" in communication.show_warn.call_args.args[0]
 
 
 def test_wizard_base_registers_remote_and_initializes_local_schematisation(
