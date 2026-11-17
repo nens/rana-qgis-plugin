@@ -273,13 +273,12 @@ class Loader(QObject):
         job_ids: list[str],
         error_signals: ApiErrorSignals,
         parent=None,
+        question: str = "Track progress in the Processes window?",
     ) -> None:
         """Raise or offer the project's Processes dock and highlight jobs."""
         dock = self.process_docks.get(str(project["id"]))
         if dock is None:
-            if not self.communication.ask(
-                parent, "Processes", "Track progress in the Processes window?"
-            ):
+            if not self.communication.ask(parent, "Processes", question):
                 return
             dock = self.open_processes_dock(project, error_signals)
 
@@ -451,6 +450,7 @@ class Loader(QObject):
         project: dict,
         parent,
         refresh_callback: Callable[[], None],
+        error_signals: ApiErrorSignals,
         wizard_factory: Callable[[ThreediApi, dict], SchematisationWizardBase],
         action_verb: str,
         schematisation_kind: str,
@@ -504,6 +504,8 @@ class Loader(QObject):
             wizard.raster_paths or {},
             refresh_callback,
             wizard.progress_bar,
+            error_signals,
+            wizard.schematisation_name_page.name,
         )
 
     def upload_existing_schematisation(
@@ -512,6 +514,7 @@ class Loader(QObject):
         folder_path: str,
         parent,
         refresh_callback: Callable[[], None],
+        error_signals: ApiErrorSignals,
     ) -> SchematisationUploadTask | None:
         """Run Upload existing and hand its registered result to the upload task."""
         source_path = get_filepath(
@@ -526,6 +529,7 @@ class Loader(QObject):
             project,
             parent,
             refresh_callback,
+            error_signals,
             wizard_factory=lambda api, organisations: (
                 UploadExistingSchematisationWizard(
                     api,
@@ -547,12 +551,14 @@ class Loader(QObject):
         folder_path: str,
         parent,
         refresh_callback: Callable[[], None],
+        error_signals: ApiErrorSignals,
     ) -> SchematisationUploadTask | None:
         """Run the From scratch wizard and upload its initial revision."""
         return self.run_new_schematisation_wizard(
             project,
             parent,
             refresh_callback,
+            error_signals,
             wizard_factory=lambda api, organisations: NewSchematisationWizard(
                 api,
                 hcc_working_dir(),
@@ -943,6 +949,8 @@ class Loader(QObject):
         raster_paths: dict,
         refresh_callback: Callable[[], None],
         progress_bar,
+        error_signals: ApiErrorSignals,
+        display_name: str,
     ) -> SchematisationUploadTask | None:
         """Build and submit the initial revision through the current upload task."""
         api = get_threedi_api()
@@ -1027,11 +1035,13 @@ class Loader(QObject):
             nonlocal handed_off
             handed_off = True
             self.handle_initial_model_requested(
-                project["id"],
+                project,
                 schematisation,
                 task.revision.id,
                 upload_specification["cb_inherit_templates"],
                 progress_bar,
+                error_signals,
+                display_name,
             )
 
         task.progress_changed.connect(on_upload_progress)
@@ -1046,18 +1056,20 @@ class Loader(QObject):
 
     def handle_initial_model_requested(
         self,
-        project_id: str,
+        project: dict,
         schematisation,
         revision_id: int,
         inherit_from_previous_revision: bool,
         progress_bar,
+        error_signals: ApiErrorSignals,
+        display_name: str,
     ) -> None:
-        """Start model creation and complete the progress item if the request succeeds."""
+        """Start model creation, complete the progress item and point to the Processes panel."""
         SchematisationWizardBase.update_step_progress(
             progress_bar, 2, 0, detail="Starting model creation"
         )
         response = self.start_model_tracker_process(
-            project_id,
+            project["id"],
             schematisation.id,
             schematisation.name,
             revision_id,
@@ -1068,6 +1080,17 @@ class Loader(QObject):
         SchematisationWizardBase.finish_step_progress(
             self.communication.iface, progress_bar
         )
+        if response is None:
+            return
+        job_id = response.get("job_id") or response.get("id")
+        if job_id:
+            self.point_user_to_processes(
+                project,
+                [str(job_id)],
+                error_signals,
+                self.communication.iface.mainWindow(),
+                question=f"Track model creation for {display_name} in the Processes window?",
+            )
 
     def handle_initial_revision_upload_failure(
         self, task: SchematisationUploadTask, progress_bar

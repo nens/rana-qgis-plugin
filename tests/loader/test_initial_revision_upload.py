@@ -58,6 +58,8 @@ def test_save_initial_revision_uses_revision_zero_spec_and_success_refresh(
             raster_paths,
             refresh,
             make_progress_bar(qgis_application),
+            MagicMock(),
+            "Model",
         )
 
     assert task is not None
@@ -113,6 +115,8 @@ def test_save_initial_revision_does_not_refresh_after_task_termination(
             raster_paths,
             refresh,
             make_progress_bar(qgis_application),
+            MagicMock(),
+            "Model",
         )
 
     assert task is not None
@@ -148,6 +152,8 @@ def test_save_initial_revision_reports_cancel_without_refresh(
             raster_paths,
             refresh,
             make_progress_bar(qgis_application),
+            MagicMock(),
+            "Model",
         )
 
     assert task is not None
@@ -181,6 +187,8 @@ def test_save_initial_revision_stops_before_task_if_a_raster_is_missing(
             raster_paths,
             MagicMock(),
             make_progress_bar(qgis_application),
+            MagicMock(),
+            "Model",
         )
 
     assert task is None
@@ -203,7 +211,14 @@ def test_late_upload_progress_after_model_request_is_ignored(
         patch.object(loader, "handle_initial_model_requested"),
     ):
         task = loader.save_initial_revision(
-            project, schematisation, local, raster_paths, MagicMock(), progress_bar
+            project,
+            schematisation,
+            local,
+            raster_paths,
+            MagicMock(),
+            progress_bar,
+            MagicMock(),
+            "Model",
         )
         task.revision = SimpleNamespace(id=7)
         task.model_requested.emit()
@@ -218,13 +233,20 @@ def test_model_request_completes_and_removes_the_progress_item(
     message_bar = QgsMessageBar()
     iface = MagicMock()
     iface.messageBar.return_value = message_bar
+    iface.mainWindow.return_value = None
     communication = UICommunication(iface=iface)
     progress_bar = communication.progress_bar("Preparing", maximum=100)
     loader = Loader(communication)
 
     with patch.object(loader, "start_model_tracker_process", return_value={"id": "p"}):
         loader.handle_initial_model_requested(
-            "project", SimpleNamespace(id=1, name="Model"), 7, False, progress_bar
+            {"id": "project"},
+            SimpleNamespace(id=1, name="Model"),
+            7,
+            False,
+            progress_bar,
+            MagicMock(),
+            "Model",
         )
 
     assert message_bar.items() == []
@@ -236,13 +258,54 @@ def test_failed_model_request_also_removes_the_progress_item(
     message_bar = QgsMessageBar()
     iface = MagicMock()
     iface.messageBar.return_value = message_bar
+    iface.mainWindow.return_value = None
     communication = UICommunication(iface=iface)
     progress_bar = communication.progress_bar("Preparing", maximum=100)
     loader = Loader(communication)
 
     with patch.object(loader, "start_model_tracker_process", return_value=None):
         loader.handle_initial_model_requested(
-            "project", SimpleNamespace(id=1, name="Model"), 7, False, progress_bar
+            {"id": "project"},
+            SimpleNamespace(id=1, name="Model"),
+            7,
+            False,
+            progress_bar,
+            MagicMock(),
+            "Model",
         )
 
     assert message_bar.items() == []
+
+
+def test_model_request_points_user_to_processes_with_job_id(qgis_application):
+    project = {"id": "project"}
+    schematisation = SimpleNamespace(id=1, name="Model")
+    error_signals = MagicMock()
+    main_window = object()
+    communication = MagicMock()
+    communication.iface.mainWindow.return_value = main_window
+    loader = Loader(communication)
+
+    with (
+        patch.object(
+            loader, "start_model_tracker_process", return_value={"job_id": "job-9"}
+        ),
+        patch.object(loader, "point_user_to_processes") as point_user,
+    ):
+        loader.handle_initial_model_requested(
+            project,
+            schematisation,
+            7,
+            False,
+            make_progress_bar(qgis_application),
+            error_signals,
+            "Model",
+        )
+
+    point_user.assert_called_once_with(
+        project,
+        ["job-9"],
+        error_signals,
+        main_window,
+        question="Track model creation for Model in the Processes window?",
+    )
