@@ -145,9 +145,8 @@ class SchematisationWizardBase(QWizard):
                 f"('{self.new_schematisation.name}', id {self.new_schematisation.id}) "
                 "before this error occurred."
             )
-        if self.progress_bar is not None:
-            self.finish_step_progress(self.communication.iface, self.progress_bar)
-            self.progress_bar = None
+        self.finish_step_progress(self.communication.iface, self.progress_bar)
+        self.progress_bar = None
         self._reset_outputs()
         self.communication.bar_error(message)
 
@@ -193,18 +192,28 @@ class SchematisationWizardBase(QWizard):
         QgsMessageBar shows the message text in a QTextBrowser of the message
         widget that holds the progress bar.
         """
+        if pb is None:
+            return
         if sip.isdeleted(pb):
             plugin_log_info(
                 f"Progress item was dismissed: {detail or f'step {step}, {step_pct:.0f}%'}"
             )
             return
         pb.setValue(int((step + step_pct / 100) * 100 / 3))
-        if detail is not None:
-            pb.parentWidget().findChild(QTextBrowser).setPlainText(detail)
+        if detail is None:
+            return
+        container = pb.parentWidget()
+        browser = container.findChild(QTextBrowser) if container else None
+        if browser is None:
+            plugin_log_info(f"Progress: {detail}")
+            return
+        browser.setPlainText(detail)
 
     @staticmethod
     def finish_step_progress(iface, pb):
         """Remove the message-bar item that holds the progress bar."""
+        if pb is None:
+            return
         if sip.isdeleted(pb):
             plugin_log_info("Progress item was dismissed before the process finished")
             return

@@ -952,6 +952,39 @@ class Loader(QObject):
         error_signals: ApiErrorSignals,
         display_name: str,
     ) -> SchematisationUploadTask | None:
+        """Submit the initial revision; on failure to start, close the progress item."""
+        task = self.build_initial_revision_task(
+            project,
+            schematisation,
+            local_schematisation,
+            raster_paths,
+            refresh_callback,
+            progress_bar,
+            error_signals,
+            display_name,
+        )
+        if task is None:
+            SchematisationWizardBase.finish_step_progress(
+                self.communication.iface, progress_bar
+            )
+            self.communication.bar_error(
+                f"Schematisation {display_name} was created, but its initial "
+                "revision was not uploaded.",
+                dur=0,
+            )
+        return task
+
+    def build_initial_revision_task(
+        self,
+        project: dict,
+        schematisation,
+        local_schematisation: LocalSchematisation,
+        raster_paths: dict,
+        refresh_callback: Callable[[], None],
+        progress_bar,
+        error_signals: ApiErrorSignals,
+        display_name: str,
+    ) -> SchematisationUploadTask | None:
         """Build and submit the initial revision through the current upload task."""
         api = get_threedi_api()
         if api is None:
@@ -996,7 +1029,7 @@ class Loader(QObject):
             missing = "\n".join(
                 f"{name}: {path}" for name, path in sorted(missing_rasters)
             )
-            self.communication.show_warn(
+            self.communication.show_error(
                 f"The following raster files were not found:\n{missing}"
             )
             return None

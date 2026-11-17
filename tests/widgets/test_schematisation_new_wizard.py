@@ -582,3 +582,18 @@ def test_step_progress_helpers_log_instead_when_progress_item_is_dismissed(step_
         "Progress item was dismissed: Uploading",
         "Progress item was dismissed before the process finished",
     ]
+
+
+def test_step_progress_helpers_ignore_missing_progress_bar():
+    SchematisationWizardBase.update_step_progress(None, 0, 50, detail="x")
+    SchematisationWizardBase.finish_step_progress(MagicMock(), None)
+
+
+def test_update_step_progress_without_text_browser_still_sets_value(qgis_application):
+    from qgis.PyQt.QtWidgets import QProgressBar, QWidget
+
+    container = QWidget()
+    bar = QProgressBar(container)
+    bar.setMaximum(100)
+    SchematisationWizardBase.update_step_progress(bar, 1, 0, detail="text")
+    assert bar.value() == 33

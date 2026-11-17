@@ -1,20 +1,22 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from qgis.gui import QgsMessageBar
+import pytest
 
-from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.simulation.utils import UploadFileStatus, UploadFileType
+from rana_qgis_plugin.widgets.schematisation_new_wizard import (
+    SchematisationWizardBase,
+)
 
 
-def make_progress_bar(qgis_application):
-    iface = MagicMock()
-    message_bar = QgsMessageBar()
-    iface.messageBar.return_value = message_bar
-    progress_bar = UICommunication(iface=iface).progress_bar("Preparing", maximum=100)
-    progress_bar.message_bar = message_bar
-    return progress_bar
+@pytest.fixture
+def step_progress():
+    with (
+        patch.object(SchematisationWizardBase, "update_step_progress") as update,
+        patch.object(SchematisationWizardBase, "finish_step_progress") as finish,
+    ):
+        yield SimpleNamespace(update=update, finish=finish)
 
 
 def make_initial_revision_upload_context(tmp_path):
@@ -34,8 +36,9 @@ def make_initial_revision_upload_context(tmp_path):
 
 
 def test_save_initial_revision_uses_revision_zero_spec_and_success_refresh(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_progress
 ):
+    progress_bar = MagicMock()
     project, schematisation, local, raster_paths, raster_path = (
         make_initial_revision_upload_context(tmp_path)
     )
@@ -57,7 +60,7 @@ def test_save_initial_revision_uses_revision_zero_spec_and_success_refresh(
             local,
             raster_paths,
             refresh,
-            make_progress_bar(qgis_application),
+            progress_bar,
             MagicMock(),
             "Model",
         )
@@ -91,8 +94,9 @@ def test_save_initial_revision_uses_revision_zero_spec_and_success_refresh(
 
 
 def test_save_initial_revision_does_not_refresh_after_task_termination(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_progress
 ):
+    progress_bar = MagicMock()
     project, schematisation, local, raster_paths, _ = (
         make_initial_revision_upload_context(tmp_path)
     )
@@ -114,7 +118,7 @@ def test_save_initial_revision_does_not_refresh_after_task_termination(
             local,
             raster_paths,
             refresh,
-            make_progress_bar(qgis_application),
+            progress_bar,
             MagicMock(),
             "Model",
         )
@@ -128,8 +132,9 @@ def test_save_initial_revision_does_not_refresh_after_task_termination(
 
 
 def test_save_initial_revision_reports_cancel_without_refresh(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_progress
 ):
+    progress_bar = MagicMock()
     project, schematisation, local, raster_paths, _ = (
         make_initial_revision_upload_context(tmp_path)
     )
@@ -151,7 +156,7 @@ def test_save_initial_revision_reports_cancel_without_refresh(
             local,
             raster_paths,
             refresh,
-            make_progress_bar(qgis_application),
+            progress_bar,
             MagicMock(),
             "Model",
         )
@@ -167,7 +172,7 @@ def test_save_initial_revision_reports_cancel_without_refresh(
 
 
 def test_save_initial_revision_stops_before_task_if_a_raster_is_missing(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_progress
 ):
     project, schematisation, local, raster_paths, raster_path = (
         make_initial_revision_upload_context(tmp_path)
@@ -175,6 +180,7 @@ def test_save_initial_revision_stops_before_task_if_a_raster_is_missing(
     raster_path.unlink()
     communication = MagicMock()
     loader = Loader(communication)
+    progress_bar = MagicMock()
 
     with (
         patch("rana_qgis_plugin.loader.get_threedi_api", return_value=object()),
@@ -186,24 +192,27 @@ def test_save_initial_revision_stops_before_task_if_a_raster_is_missing(
             local,
             raster_paths,
             MagicMock(),
-            make_progress_bar(qgis_application),
+            progress_bar,
             MagicMock(),
             "Model",
         )
 
     assert task is None
     task_manager.assert_not_called()
-    communication.show_warn.assert_called_once()
-    assert "dem.tif" in communication.show_warn.call_args.args[0]
+    communication.show_error.assert_called_once()
+    assert "dem.tif" in communication.show_error.call_args.args[0]
+    step_progress.finish.assert_called_once_with(communication.iface, progress_bar)
+    communication.bar_error.assert_called_once()
+    assert "was created" in communication.bar_error.call_args.args[0]
+    assert communication.bar_error.call_args.kwargs["dur"] == 0
 
 
 def test_late_upload_progress_after_model_request_is_ignored(
-    qgis_application, tmp_path
+    qgis_application, tmp_path, step_progress
 ):
     project, schematisation, local, raster_paths, _ = (
         make_initial_revision_upload_context(tmp_path)
     )
-    progress_bar = make_progress_bar(qgis_application)
     loader = Loader(MagicMock())
     with (
         patch("rana_qgis_plugin.loader.get_threedi_api", return_value=object()),
@@ -216,29 +225,35 @@ def test_late_upload_progress_after_model_request_is_ignored(
             local,
             raster_paths,
             MagicMock(),
-            progress_bar,
+            MagicMock(),
             MagicMock(),
             "Model",
         )
         task.revision = SimpleNamespace(id=7)
+        task.progress_changed.emit("dem.tif", 25, 0, 100)
+        calls_before_hand_off = step_progress.update.call_count
         task.model_requested.emit()
         task.progress_changed.emit("dem.tif", 50, 0, 100)
 
-    assert progress_bar.value() == 33
+    assert calls_before_hand_off > 1
+    assert step_progress.update.call_count == calls_before_hand_off
 
 
-def test_model_request_completes_and_removes_the_progress_item(
-    qgis_application, tmp_path
+@pytest.mark.parametrize(
+    "response, expect_prompt",
+    [({"id": "p"}, True), (None, False)],
+)
+def test_model_request_always_finishes_the_progress_item(
+    qgis_application, step_progress, response, expect_prompt
 ):
-    message_bar = QgsMessageBar()
-    iface = MagicMock()
-    iface.messageBar.return_value = message_bar
-    iface.mainWindow.return_value = None
-    communication = UICommunication(iface=iface)
-    progress_bar = communication.progress_bar("Preparing", maximum=100)
+    communication = MagicMock()
     loader = Loader(communication)
+    progress_bar = MagicMock()
 
-    with patch.object(loader, "start_model_tracker_process", return_value={"id": "p"}):
+    with (
+        patch.object(loader, "start_model_tracker_process", return_value=response),
+        patch.object(loader, "point_user_to_processes") as point_user,
+    ):
         loader.handle_initial_model_requested(
             {"id": "project"},
             SimpleNamespace(id=1, name="Model"),
@@ -249,35 +264,13 @@ def test_model_request_completes_and_removes_the_progress_item(
             "Model",
         )
 
-    assert message_bar.items() == []
+    step_progress.finish.assert_called_once_with(communication.iface, progress_bar)
+    assert point_user.called is expect_prompt
 
 
-def test_failed_model_request_also_removes_the_progress_item(
-    qgis_application, tmp_path
+def test_model_request_points_user_to_processes_with_job_id(
+    qgis_application, step_progress
 ):
-    message_bar = QgsMessageBar()
-    iface = MagicMock()
-    iface.messageBar.return_value = message_bar
-    iface.mainWindow.return_value = None
-    communication = UICommunication(iface=iface)
-    progress_bar = communication.progress_bar("Preparing", maximum=100)
-    loader = Loader(communication)
-
-    with patch.object(loader, "start_model_tracker_process", return_value=None):
-        loader.handle_initial_model_requested(
-            {"id": "project"},
-            SimpleNamespace(id=1, name="Model"),
-            7,
-            False,
-            progress_bar,
-            MagicMock(),
-            "Model",
-        )
-
-    assert message_bar.items() == []
-
-
-def test_model_request_points_user_to_processes_with_job_id(qgis_application):
     project = {"id": "project"}
     schematisation = SimpleNamespace(id=1, name="Model")
     error_signals = MagicMock()
@@ -285,6 +278,7 @@ def test_model_request_points_user_to_processes_with_job_id(qgis_application):
     communication = MagicMock()
     communication.iface.mainWindow.return_value = main_window
     loader = Loader(communication)
+    progress_bar = MagicMock()
 
     with (
         patch.object(
@@ -297,7 +291,7 @@ def test_model_request_points_user_to_processes_with_job_id(qgis_application):
             schematisation,
             7,
             False,
-            make_progress_bar(qgis_application),
+            progress_bar,
             error_signals,
             "Model",
         )
