@@ -33,6 +33,10 @@ Its context menu changes with authentication state:
 - authenticated: Refresh, Logout, optional Switch tenant, Select projects, and
   Settings.
 
+Double-clicking the root while unauthenticated runs the login flow; once login
+succeeds, the default expand shows the projects. While authenticated, double-click
+expands or collapses the root as usual.
+
 Expanding an authenticated root calls `get_tenant_projects()`. Hidden project
 IDs are filtered using the tenant-specific settings before
 `RanaProjectDataItem` instances are returned.

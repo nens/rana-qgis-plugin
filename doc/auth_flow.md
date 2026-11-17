@@ -8,7 +8,9 @@ Auth primitives live in `rana_qgis_plugin/auth.py` as a module of plain function
 
 ## Login
 
-Login is always initiated by the user from the Rana Browser context menu. If a
+Login is always initiated by the user, either from the Rana Browser context menu
+(right-click -> "Login") or by double-clicking the Rana root while logged out.
+Double-clicking the root while logged in only expands or collapses it. If a
 tenant is already stored (for example, from a previous session), it is reused;
 otherwise the user is prompted for an organisation. The user then chooses an
 authentication method.
@@ -20,8 +22,12 @@ sequenceDiagram
     participant Auth as auth module
     participant AuthMgr as QgsAuthManager
 
-    Note over User,Browser: Triggered from the Rana tree context menu (right-click -> "Login")
-    User->>Browser: choose Login (context menu)
+    Note over User,Browser: Triggered from the Rana tree context menu (right-click -> "Login") or by double-clicking the root while logged out
+    alt context menu
+        User->>Browser: choose Login (context menu)
+    else double-click (logged out)
+        User->>Browser: double-click Rana root
+    end
     Browser->>Auth: login()
     alt tenant stored
         Auth->>Auth: reuse stored tenant
