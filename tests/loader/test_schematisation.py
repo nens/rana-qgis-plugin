@@ -287,6 +287,7 @@ def test_upload_existing_wizard_hands_prepared_result_to_initial_upload():
         local_schematisation,
         raster_paths,
         refresh_callback,
+        wizard_type.return_value.progress_bar,
     )
 
 
@@ -467,6 +468,7 @@ def test_from_scratch_wizard_hands_prepared_result_to_initial_upload():
         local_schematisation,
         raster_paths,
         refresh_callback,
+        wizard_type.return_value.progress_bar,
     )
 
 

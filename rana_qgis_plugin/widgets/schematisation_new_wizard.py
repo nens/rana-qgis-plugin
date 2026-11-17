@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 from collections import defaultdict
@@ -240,10 +241,21 @@ class NewSchematisationWizard(SchematisationWizardBase):
             QApplication.processEvents()
 
         database.schema.upgrade(revision="0200")
-        database.schema.upgrade(
-            progress_func=feedback_callback,
-            epsg_code_override=schematisation_settings["model_settings"]["epsg_code"],
-        )
+        # upgrade() adds a progress handler to this logger and never removes it. A
+        # handler left behind would call our callback on a progress bar that is gone.
+        migration_logger = logging.getLogger("alembic.runtime.migration")
+        handlers_before = list(migration_logger.handlers)
+        try:
+            database.schema.upgrade(
+                progress_func=feedback_callback,
+                epsg_code_override=schematisation_settings["model_settings"][
+                    "epsg_code"
+                ],
+            )
+        finally:
+            for handler in list(migration_logger.handlers):
+                if handler not in handlers_before:
+                    migration_logger.removeHandler(handler)
 
         for raster_filepath in raster_filepaths:
             if raster_filepath:

@@ -1,8 +1,20 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from qgis.gui import QgsMessageBar
+
+from rana_qgis_plugin.communication import UICommunication
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.simulation.utils import UploadFileStatus, UploadFileType
+
+
+def make_progress_bar(qgis_application):
+    iface = MagicMock()
+    message_bar = QgsMessageBar()
+    iface.messageBar.return_value = message_bar
+    progress_bar = UICommunication(iface=iface).progress_bar("Preparing", maximum=100)
+    progress_bar.message_bar = message_bar
+    return progress_bar
 
 
 def make_initial_revision_upload_context(tmp_path):
@@ -40,7 +52,12 @@ def test_save_initial_revision_uses_revision_zero_spec_and_success_refresh(
         ),
     ):
         task = loader.save_initial_revision(
-            project, schematisation, local, raster_paths, refresh
+            project,
+            schematisation,
+            local,
+            raster_paths,
+            refresh,
+            make_progress_bar(qgis_application),
         )
 
     assert task is not None
@@ -68,9 +85,7 @@ def test_save_initial_revision_uses_revision_zero_spec_and_success_refresh(
     task.upload_succeeded.emit(0)
 
     refresh.assert_called_once_with()
-    communication.bar_info.assert_called_once_with(
-        "Initial schematisation revision uploaded."
-    )
+    communication.bar_info.assert_not_called()
 
 
 def test_save_initial_revision_does_not_refresh_after_task_termination(
@@ -92,7 +107,12 @@ def test_save_initial_revision_does_not_refresh_after_task_termination(
         ),
     ):
         task = loader.save_initial_revision(
-            project, schematisation, local, raster_paths, refresh
+            project,
+            schematisation,
+            local,
+            raster_paths,
+            refresh,
+            make_progress_bar(qgis_application),
         )
 
     assert task is not None
@@ -122,7 +142,12 @@ def test_save_initial_revision_reports_cancel_without_refresh(
         ),
     ):
         task = loader.save_initial_revision(
-            project, schematisation, local, raster_paths, refresh
+            project,
+            schematisation,
+            local,
+            raster_paths,
+            refresh,
+            make_progress_bar(qgis_application),
         )
 
     assert task is not None
@@ -150,7 +175,12 @@ def test_save_initial_revision_stops_before_task_if_a_raster_is_missing(
         patch("rana_qgis_plugin.loader.QgsApplication.taskManager") as task_manager,
     ):
         task = loader.save_initial_revision(
-            project, schematisation, local, raster_paths, MagicMock()
+            project,
+            schematisation,
+            local,
+            raster_paths,
+            MagicMock(),
+            make_progress_bar(qgis_application),
         )
 
     assert task is None

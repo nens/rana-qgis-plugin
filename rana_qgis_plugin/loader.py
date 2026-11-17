@@ -503,6 +503,7 @@ class Loader(QObject):
             wizard.new_local_schematisation,
             wizard.raster_paths or {},
             refresh_callback,
+            wizard.progress_bar,
         )
 
     def upload_existing_schematisation(
@@ -941,6 +942,7 @@ class Loader(QObject):
         local_schematisation: LocalSchematisation,
         raster_paths: dict,
         refresh_callback: Callable[[], None],
+        progress_bar,
     ) -> SchematisationUploadTask | None:
         """Build and submit the initial revision through the current upload task."""
         api = get_threedi_api()
@@ -1006,48 +1008,68 @@ class Loader(QObject):
             return None
 
         task = SchematisationUploadTask(api, local_schematisation, upload_specification)
+        SchematisationWizardBase.update_step_progress(
+            progress_bar, 1, 0, detail="Uploading initial revision"
+        )
         task.progress_changed.connect(
-            lambda name, current, total, per_task: self.communication.progress_bar(
-                f"Uploading revision: {name}",
-                0,
-                100,
-                int(total + current * per_task / 100),
+            lambda name, current, total, per_task: (
+                SchematisationWizardBase.update_step_progress(
+                    progress_bar,
+                    1,
+                    total + current * per_task / 100,
+                    detail=f"Uploading revision: {name}",
+                )
             )
         )
         task.model_requested.connect(
-            lambda: self.start_model_tracker_process(
+            lambda: self.handle_initial_model_requested(
                 project["id"],
-                schematisation.id,
-                schematisation.name,
+                schematisation,
                 task.revision.id,
                 upload_specification["cb_inherit_templates"],
+                progress_bar,
             )
         )
-        task.upload_succeeded.connect(
-            lambda _revision_number: self.handle_initial_revision_upload_success(
-                refresh_callback
-            )
-        )
+        task.upload_succeeded.connect(lambda _revision_number: refresh_callback())
         task.taskTerminated.connect(
-            lambda: self.handle_initial_revision_upload_failure(task)
+            lambda: self.handle_initial_revision_upload_failure(task, progress_bar)
         )
         self._track_task(task)
         task_manager.addTask(task)
         return task
 
-    def handle_initial_revision_upload_success(
-        self, refresh_callback: Callable[[], None]
+    def handle_initial_model_requested(
+        self,
+        project_id: str,
+        schematisation,
+        revision_id: int,
+        inherit_from_previous_revision: bool,
+        progress_bar,
     ) -> None:
-        """Report initial upload success and refresh the invoking Browser item."""
-        self.communication.clear_message_bar()
-        self.communication.bar_info("Initial schematisation revision uploaded.")
-        refresh_callback()
+        """Start model creation and complete the progress item if the request succeeds."""
+        SchematisationWizardBase.update_step_progress(
+            progress_bar, 2, 0, detail="Starting model creation"
+        )
+        response = self.start_model_tracker_process(
+            project_id,
+            schematisation.id,
+            schematisation.name,
+            revision_id,
+            inherit_from_previous_revision,
+        )
+        if response is not None:
+            SchematisationWizardBase.update_step_progress(progress_bar, 2, 100)
+        SchematisationWizardBase.finish_step_progress(
+            self.communication.iface, progress_bar
+        )
 
     def handle_initial_revision_upload_failure(
-        self, task: SchematisationUploadTask
+        self, task: SchematisationUploadTask, progress_bar
     ) -> None:
         """Report cancellation or failure of an initial revision upload."""
-        self.communication.clear_message_bar()
+        SchematisationWizardBase.finish_step_progress(
+            self.communication.iface, progress_bar
+        )
         if task.isCanceled():
             self.communication.bar_warn("Initial schematisation upload cancelled.")
         else:

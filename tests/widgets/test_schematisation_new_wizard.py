@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from qgis.gui import QgsMessageBar
+from qgis.PyQt import sip
 from qgis.PyQt.QtWidgets import QDialog, QTextBrowser
 
 from rana_qgis_plugin.communication import UICommunication
@@ -234,6 +235,24 @@ def test_copy_prepared_rasters_preserves_nested_relative_paths(tmp_path):
     # The relative path (including subdirectory) must be preserved so that
     # later lookups by the same relative path can find the copied file.
     assert (local_raster_dir / "sub" / "dem.tif").read_bytes() == b"raster data"
+
+
+def test_create_and_populate_does_not_leave_progress_handler_behind(tmp_path, step_bar):
+    settings = {"model_settings": {"epsg_code": 28992}}
+    first_bar = step_bar[2]
+    NewSchematisationWizard.create_and_populate_schematisation_geopackage(
+        tmp_path / "first.gpkg", settings, ("", ""), tmp_path, first_bar
+    )
+    sip.delete(first_bar)
+
+    second_bar = UICommunication(iface=step_bar[0]).progress_bar(
+        "Preparing", maximum=100
+    )
+    NewSchematisationWizard.create_and_populate_schematisation_geopackage(
+        tmp_path / "second.gpkg", settings, ("", ""), tmp_path, second_bar
+    )
+
+    assert 0 < second_bar.value() <= 33
 
 
 def test_create_and_populate_schematisation_geopackage(tmp_path, step_bar):
