@@ -124,6 +124,7 @@ class RanaFolderDataItem(QgsDataItem):
                             self.folder_path,
                             parent,
                             refresh_callback=self.refresh_if_populated,
+                            error_signals=self.error_signals,
                         ),
                     ),
                     (
@@ -134,6 +135,7 @@ class RanaFolderDataItem(QgsDataItem):
                             self.folder_path,
                             parent,
                             refresh_callback=self.refresh_if_populated,
+                            error_signals=self.error_signals,
                         ),
                     ),
                 )

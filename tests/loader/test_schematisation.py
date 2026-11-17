@@ -98,7 +98,7 @@ def test_upload_existing_cancelled_file_picker_stops_before_authentication():
         patch("rana_qgis_plugin.loader.get_threedi_api") as get_api,
     ):
         result = loader.upload_existing_schematisation(
-            {"id": "project"}, "folder/", None, MagicMock()
+            {"id": "project"}, "folder/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -128,7 +128,7 @@ def test_upload_existing_cancelled_wizard_stops_before_upload():
         wizard_type.return_value.exec.return_value = QDialog.DialogCode.Rejected
 
         result = loader.upload_existing_schematisation(
-            {"id": "project"}, "folder/", None, MagicMock()
+            {"id": "project"}, "folder/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -161,7 +161,7 @@ def test_upload_existing_preparation_failure_does_not_upload_or_report_success()
         wizard.new_local_schematisation = None
 
         result = loader.upload_existing_schematisation(
-            {"id": "project"}, "folder/", None, MagicMock()
+            {"id": "project"}, "folder/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -243,6 +243,7 @@ def test_upload_existing_wizard_hands_prepared_result_to_initial_upload():
     local_schematisation = MagicMock()
     raster_paths = {"model_settings": {"dem_file": "dem.tif"}}
     task = MagicMock()
+    error_signals = MagicMock()
 
     with (
         patch("rana_qgis_plugin.loader.get_filepath", return_value="/tmp/input.gpkg"),
@@ -268,7 +269,7 @@ def test_upload_existing_wizard_hands_prepared_result_to_initial_upload():
         wizard.raster_paths = raster_paths
 
         result = loader.upload_existing_schematisation(
-            project, "target/", None, refresh_callback
+            project, "target/", None, refresh_callback, error_signals
         )
 
     assert result is task
@@ -287,6 +288,9 @@ def test_upload_existing_wizard_hands_prepared_result_to_initial_upload():
         local_schematisation,
         raster_paths,
         refresh_callback,
+        wizard_type.return_value.progress_bar,
+        error_signals,
+        wizard.schematisation_name_page.name,
     )
 
 
@@ -314,7 +318,7 @@ def test_upload_existing_cancel_does_not_start_initial_upload():
         wizard_type.return_value.exec.return_value = 0
 
         result = loader.upload_existing_schematisation(
-            {"id": "project"}, "target/", None, MagicMock()
+            {"id": "project"}, "target/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -348,7 +352,7 @@ def test_upload_existing_rejected_registration_does_not_start_initial_upload():
         wizard.new_local_schematisation = None
 
         result = loader.upload_existing_schematisation(
-            {"id": "project"}, "target/", None, MagicMock()
+            {"id": "project"}, "target/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -377,7 +381,7 @@ def test_from_scratch_cancelled_wizard_stops_before_upload():
         wizard_type.return_value.exec.return_value = QDialog.DialogCode.Rejected
 
         result = loader.create_schematisation_from_scratch(
-            {"id": "project"}, "folder/", None, MagicMock()
+            {"id": "project"}, "folder/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -408,7 +412,7 @@ def test_from_scratch_preparation_failure_does_not_upload_or_report_success():
         wizard.new_local_schematisation = None
 
         result = loader.create_schematisation_from_scratch(
-            {"id": "project"}, "folder/", None, MagicMock()
+            {"id": "project"}, "folder/", None, MagicMock(), MagicMock()
         )
 
     assert result is None
@@ -427,6 +431,7 @@ def test_from_scratch_wizard_hands_prepared_result_to_initial_upload():
     local_schematisation = MagicMock()
     raster_paths = {"model_settings": {"dem_file": "dem.tif"}}
     task = MagicMock()
+    error_signals = MagicMock()
 
     with (
         patch("rana_qgis_plugin.loader.get_threedi_api", return_value=api),
@@ -449,7 +454,7 @@ def test_from_scratch_wizard_hands_prepared_result_to_initial_upload():
         wizard.raster_paths = raster_paths
 
         result = loader.create_schematisation_from_scratch(
-            project, "target/", None, refresh_callback
+            project, "target/", None, refresh_callback, error_signals
         )
 
     assert result is task
@@ -467,6 +472,9 @@ def test_from_scratch_wizard_hands_prepared_result_to_initial_upload():
         local_schematisation,
         raster_paths,
         refresh_callback,
+        wizard_type.return_value.progress_bar,
+        error_signals,
+        wizard.schematisation_name_page.name,
     )
 
 

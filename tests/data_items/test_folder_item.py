@@ -18,8 +18,9 @@ def test_add_schematisation_submenu_routes_with_folder_context(
     project = {"id": "project"}
     browser_root = QgsDataItem(Qgis.BrowserItemType.Custom, None, "Rana", "Rana")
     parent = QWidget()
+    error_signals = ApiErrorSignals()
     item = RanaFolderDataItem(
-        browser_root, loader, project, folder_path, "Files", ApiErrorSignals()
+        browser_root, loader, project, folder_path, "Files", error_signals
     )
 
     actions = item.actions(parent)
@@ -52,3 +53,4 @@ def test_add_schematisation_submenu_routes_with_folder_context(
         route_call = handler.call_args
         assert route_call.args == (project, folder_path, parent)
         assert callable(route_call.kwargs["refresh_callback"])
+        assert route_call.kwargs["error_signals"] is error_signals
