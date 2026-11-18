@@ -160,6 +160,13 @@ class RanaRootDataItem(QgsDataItem):
             else:
                 self.setName("Rana")
 
+    def handleDoubleClick(self) -> bool:
+        if not is_authenticated():
+            self.login()
+        # Return False so QGIS runs its default expand/collapse, which shows
+        # the projects once login has succeeded.
+        return False
+
     def actions(self, parent) -> list:
         """Return state-aware context menu actions."""
         login_action = QAction("Login", parent)
