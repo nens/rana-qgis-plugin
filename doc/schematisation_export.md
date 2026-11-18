@@ -2,9 +2,9 @@
 
 ## Overview
 
-Schematisation export is a multi-stage workflow that downloads a 3Di schematisation revision, processes it, uploads it to Rana, and applies styling. The flow chains together three workers in sequence: download worker → upload worker → style upload worker.
+Schematisation export is a multi-stage workflow that downloads a Rana schematisation revision, processes it, uploads it to Rana, and applies styling. The flow chains together three workers in sequence: download worker → upload worker → style upload worker.
 
-The process ensures schematisations are upgraded to the latest schema version before being stored in Rana, and automatically applies predefined 3Di styling for consistent visualization.
+The process ensures schematisations are upgraded to the latest schema version before being stored in Rana, and automatically applies predefined Rana styling for consistent visualization.
 
 ## Flow Diagram
 
@@ -14,67 +14,67 @@ sequenceDiagram
     participant DownloadWorker as SingleFileDownloadWorker<br/>(SchematisationGeopackageDownloader)
     participant UploadWorker as FileUploadWorker<br/>or<br/>ExistingFileUploadWorker
     participant StyleWorker as FileDescriptorStyleUploadWorker<br/>(SchematisationStyleBuilder)
-    
+
     Loader->>Loader: export_schematisation_revision()
     Note over Loader: Creates TempDownloadContext<br/>Creates SchematisationDownloader
-    
+
     Loader->>DownloadWorker: start()
     activate DownloadWorker
-    
-    DownloadWorker->>DownloadWorker: download from 3Di API
+
+    DownloadWorker->>DownloadWorker: download from Rana HCC API
     Note over DownloadWorker: Downloads zip to temp directory
-    
+
     DownloadWorker->>DownloadWorker: extract from zip
     Note over DownloadWorker: Extracts .gpkg file
-    
+
     DownloadWorker->>DownloadWorker: upgrade to latest version
     Note over DownloadWorker: Uses threedi-schema library<br/>Emits warnings if upgrade fails
-    
+
     DownloadWorker->>DownloadWorker: add revision number to filename
     Note over DownloadWorker: e.g., "model (rev5).gpkg"
-    
+
     DownloadWorker->>Loader: finished signal
     deactivate DownloadWorker
-    
+
     Loader->>Loader: on_download_schematisation_finished()
     Note over Loader: Checks if file exists on Rana<br/>Asks user to overwrite if exists
-    
+
     alt File already exists
         Loader->>UploadWorker: ExistingFileUploadWorker.start()
     else New file
         Loader->>UploadWorker: FileUploadWorker.start()
     end
-    
+
     activate UploadWorker
-    
+
     UploadWorker->>UploadWorker: upload to Rana
     Note over UploadWorker: Uploads .gpkg to project directory
-    
+
     UploadWorker->>Loader: finished signal
     deactivate UploadWorker
-    
+
     Loader->>Loader: on_upload_schematisation_finished()
     Note over Loader: Cleans up temp directory
-    
+
     Loader->>StyleWorker: start()
     activate StyleWorker
-    
+
     StyleWorker->>StyleWorker: wait for file processing
     Note over StyleWorker: Polls file descriptor status<br/>Retries for up to 60 seconds
-    
+
     StyleWorker->>StyleWorker: upload predefined styles
     Note over StyleWorker: QML zip + MapboxGL + sprites<br/>from bundled resources
-    
+
     StyleWorker->>Loader: finished signal
     deactivate StyleWorker
-    
+
     Loader->>Loader: on_upload_schematisation_style_finished()
     Note over Loader: Shows success message
 ```
 
 ## Workflow Stages
 
-### Stage 1: Download from 3Di
+### Stage 1: Download from Rana HCC
 
 **Trigger**: User selects "Export schematisation" from file menu (`loader.py:487-513`)
 
@@ -82,7 +82,7 @@ sequenceDiagram
 
 **Steps**:
 1. Creates `TempDownloadContext` for transient storage (schematisation will be uploaded, not kept locally)
-2. Downloads schematisation revision sqlite from 3Di API as zip file
+2. Downloads schematisation revision sqlite from Rana HCC API as zip file
 3. Extracts .gpkg file from zip to temp directory
 4. Upgrades schematisation to latest schema version using `threedi-schema` library
    - Emits warnings if upgrade fails (continues with original version)
@@ -180,7 +180,7 @@ Each handler method sets up the next worker and starts it, creating a sequential
 ## Why Three Separate Workers?
 
 **Separation of concerns**:
-- Download worker handles 3Di API and schema upgrades
+- Download worker handles Rana HCC API and schema upgrades
 - Upload worker handles Rana API and file conflicts
 - Style worker handles file processing wait and style upload
 

@@ -15,17 +15,17 @@ Both flows result in the same sequence of API calls to HCC and Rana.
 
 ```mermaid
 flowchart TD
-    subgraph "HCC (3Di API)"
+    subgraph "Rana HCC API"
         HCC1["POST /schematisations/"]
         HCC3["POST /revisions/"]
         HCC4["PUT files to S3"]
         HCC5["POST /commit/"]
     end
-    subgraph "Rana"
+    subgraph "Rana API"
         Rana1["POST /threedi-schematisations/<br/>(register schematisation)"]
         Rana2["Start model_tracker process"]
     end
-    
+
     HCC1 --> Rana1
     Rana1 --> HCC3
     HCC3 --> HCC4
@@ -42,17 +42,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph "HCC (3Di API)"
+    subgraph "Rana HCC API"
         HCC1["POST /schematisations/"]
         HCC2["POST /revisions/"]
         HCC3["PUT files to S3"]
         HCC4["POST /commit/"]
     end
-    subgraph "Rana"
+    subgraph "Rana API"
         Rana1["Start model_tracker process"]
         Rana2["POST /threedi-schematisations/<br/>(register schematisation)"]
     end
-    
+
     HCC1 --> HCC2
     HCC2 --> HCC3
     HCC3 --> HCC4

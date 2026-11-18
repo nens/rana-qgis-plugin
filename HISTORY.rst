@@ -5,7 +5,7 @@ History
 1.2.25 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Refer to Rana Water Intelligence in metadata and docs.
 
 
 1.2.24 (2026-11-12)
