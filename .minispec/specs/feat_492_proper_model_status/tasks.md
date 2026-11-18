@@ -1,6 +1,6 @@
 ---
 feature: feat_492_proper_model_status
-status: planned
+status: complete
 created: 2026-11-17
 chunk_size: adaptive
 total_tasks: 4
@@ -60,4 +60,4 @@ Block Create/Delete of a Rana model per revision while it is generating, using t
 - [x] Task 1: Pure model-state logic + API call
 - [x] Task 2: Wire into fetch_page
 - [x] Task 3: Keep post-action updates consistent
-- [ ] Task 4: Click-time guard on Create/Delete
+- [x] Task 4: Click-time guard on Create/Delete

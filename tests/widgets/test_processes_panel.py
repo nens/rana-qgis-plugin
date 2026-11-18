@@ -498,6 +498,8 @@ def test_model_start_notifies_with_returned_job_id_and_signals():
     dialog.project = {"id": "project-id"}
     dialog.error_signals = ApiErrorSignals()
     dialog.loader = MagicMock()
+    dialog.model = MagicMock()
+    dialog.model.item.return_value = None
     dialog.loader.start_model_tracker_process.return_value = {"job_id": "job-42"}
     button = MagicMock()
     row = HistoryRow(
@@ -509,7 +511,15 @@ def test_model_start_notifies_with_returned_job_id_and_signals():
         },
     )
 
-    SchematisationRevisionHistoryDialog.create_model(dialog, row, button)
+    with (
+        patch(
+            "rana_qgis_plugin.widgets.version_history_dialog.get_threedi_api",
+            return_value=object(),
+        ),
+        patch("rana_qgis_plugin.widgets.version_history_dialog.ThreediCalls") as calls,
+    ):
+        calls.return_value.is_revision_generating.return_value = False
+        SchematisationRevisionHistoryDialog.create_model(dialog, row, button)
 
     assert row.metadata["is_generating"] is True
     assert "being generated" in row.metadata["model_tooltip"]

@@ -669,6 +669,22 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
 
     def create_model(self, row: HistoryRow, button: QPushButton) -> None:
         """Start model creation and point the user to the Processes panel."""
+        try:
+            is_generating = ThreediCalls(get_threedi_api()).is_revision_generating(
+                row.metadata["revision_id"]
+            )
+        except Exception as check_error:
+            self.show_error(str(check_error))
+            return
+        if is_generating:
+            self.show_error(
+                "The Rana model for this revision is being generated. "
+                "Click Refresh to update."
+            )
+            button.setEnabled(False)
+            button.setToolTip(row.metadata["model_tooltip"])
+            row.metadata["is_generating"] = True
+            return
         response = self.loader.start_model_tracker_process(
             self.project["id"],
             row.metadata["schematisation_id"],
@@ -700,6 +716,20 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
 
     def delete_model(self, row: HistoryRow) -> None:
         """Confirm and synchronously delete one revision's Rana model."""
+        try:
+            is_generating = ThreediCalls(get_threedi_api()).is_revision_generating(
+                row.metadata["revision_id"]
+            )
+        except Exception as check_error:
+            self.show_error(str(check_error))
+            return
+        if is_generating:
+            self.show_error(
+                "The Rana model for this revision is being generated. "
+                "Click Refresh to update."
+            )
+            row.metadata["is_generating"] = True
+            return
         revision_number = row.values[0]
         if (
             QMessageBox.question(

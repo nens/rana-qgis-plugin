@@ -1,6 +1,6 @@
 ---
 feature: feat_492_proper_model_status
-status: planned
+status: complete
 created: 2026-11-17
 decisions: [20261117-1000-model-generating-state]
 ---
