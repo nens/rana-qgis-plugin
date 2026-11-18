@@ -186,6 +186,7 @@ class Loader(QObject):
         self.communication = communication
 
         # For simulations
+        self.simulation_wizard: SimulationWizard = None
         self.simulation_runner_pool = QThreadPool()
         self.simulation_runner_pool.setMaxThreadCount(1)
 
@@ -1038,6 +1039,9 @@ class Loader(QObject):
             simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
             )
+            # Keep a reference: the wizard receives the simulation runner signals
+            # after exec() returns and would otherwise be garbage collected.
+            self.simulation_wizard = simulation_wizard
 
             if simulation_wizard.exec() == QDialog.Rejected:
                 self.simulation_wizard_cancelled.emit()
