@@ -57,7 +57,7 @@ Block Create/Delete of a Rana model per revision while it is generating, using t
 - Polling, simulation button and other dialogs deferred.
 
 ## Progress
-- [ ] Task 1: Pure model-state logic + API call
+- [x] Task 1: Pure model-state logic + API call
 - [ ] Task 2: Wire into fetch_page
 - [ ] Task 3: Keep post-action updates consistent
 - [ ] Task 4: Click-time guard on Create/Delete

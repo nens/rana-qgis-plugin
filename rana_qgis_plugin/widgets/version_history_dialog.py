@@ -324,6 +324,34 @@ class RanaHistoryDialog(HistoryDialog):
         return rows, page.get("next")
 
 
+def get_model_state(
+    revision_id: int,
+    model_ids: set[int],
+    generating_ids: set[int],
+    can_create_model: bool,
+) -> dict[str, object]:
+    """Return the Rana model button state for one revision."""
+    has_model = revision_id in model_ids
+    is_generating = revision_id in generating_ids
+    model_enabled = not is_generating and (has_model or can_create_model)
+    return {
+        "has_model": has_model,
+        "is_generating": is_generating,
+        "model_enabled": model_enabled,
+        "model_tooltip": (
+            "The Rana model for this revision is being generated. "
+            "Click Refresh to update."
+            if is_generating
+            else (
+                "The maximum number of Rana models has been reached. "
+                "Please delete one of the existing models before creating a new one."
+                if not has_model and not model_enabled
+                else ""
+            )
+        ),
+    }
+
+
 class SchematisationRevisionHistoryDialog(HistoryDialog):
     """Display the committed revisions for a schematisation file."""
 
@@ -378,12 +406,19 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         revisions = ThreediCalls(threedi_api).fetch_schematisation_revisions(
             schematisation_id
         )
-        model_count = sum(bool(revision.has_threedimodel) for revision in revisions)
         model_limit = schematisation_data["schematisation"]["threedimodel_limit"]
+        model_ids = {revision.id for revision in revisions if revision.has_threedimodel}
+        generating_models = ThreediCalls(threedi_api).fetch_generating_models(
+            schematisation_id
+        )
+        generating_ids = {model.revision_id for model in generating_models}
+        can_create_model = len(model_ids | generating_ids) < model_limit
         rows = []
         for revision in revisions:
-            has_model = bool(revision.has_threedimodel)
-            model_enabled = has_model or model_count < model_limit
+            model_state = get_model_state(
+                revision.id, model_ids, generating_ids, can_create_model
+            )
+            has_model = model_state["has_model"]
             rows.append(
                 HistoryRow(
                     [
@@ -401,14 +436,7 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
                             if not has_model
                             else ""
                         ),
-                        "model_enabled": model_enabled,
-                        "model_tooltip": (
-                            "The maximum number of Rana models has been reached. "
-                            "Please delete one of the existing models before creating a new one."
-                            if not has_model and not model_enabled
-                            else ""
-                        ),
-                        "has_model": has_model,
+                        **model_state,
                         "model_limit": model_limit,
                         "revision_id": revision.id,
                         "revision": revision,
