@@ -1039,8 +1039,9 @@ class Loader(QObject):
             simulation_wizard.simulation_created_failed.connect(
                 self.simulation_started_failed
             )
-            # Keep a reference: the wizard receives the simulation runner signals
-            # after exec() returns and would otherwise be garbage collected.
+            # Keep a reference: PyQt's QDialog.exec() transfers ownership to Python,
+            # so the wizard would be garbage collected (despite its Qt parent) while
+            # it still has to receive the simulation runner signals.
             self.simulation_wizard = simulation_wizard
 
             if simulation_wizard.exec() == QDialog.Rejected:
