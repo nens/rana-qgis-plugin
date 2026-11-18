@@ -163,6 +163,17 @@ class RanaFileDataItem(QgsDataItem):
             q_action.setToolTip(get_action_tooltip(action))
             if action is FileAction.VIEW_FILE_INFO:
                 q_action.triggered.connect(lambda: self.show_file_info(parent))
+            elif action is FileAction.START_SIMULATION:
+                q_action.triggered.connect(
+                    lambda: self.loader.handle_simulation_request_for_latest_revision(
+                        self.project,
+                        self.file_item,
+                        cast(str, self.descriptor_id),
+                        self.error_signals,
+                        parent,
+                        lambda: self.show_revision_history(parent),
+                    )
+                )
             elif action is FileAction.VERSION_HISTORY:
                 if self.data_type == "threedi_schematisation":
                     q_action.triggered.connect(
