@@ -57,10 +57,22 @@ classDiagram
         +metadata: dict
     }
 
+    class ModelDeleteTask {
+        +delete: Callable
+        +result: ModelDeleteResult
+        run() bool
+    }
+    class ModelDeleteResult {
+        +error: str
+        +is_generating: bool
+    }
+
     HistoryDialog <|-- RanaHistoryDialog
     HistoryDialog <|-- SchematisationRevisionHistoryDialog
     HistoryDialog ..> HistoryFetchTask : creates
     HistoryFetchTask ..> HistoryRow : produces
+    SchematisationRevisionHistoryDialog ..> ModelDeleteTask : creates
+    ModelDeleteTask ..> ModelDeleteResult : produces
 ```
 
 The base class owns the asynchronous task lifecycle, but not pagination state or scrollbar behavior. `RanaHistoryDialog` adds cursor state and lazy page loading; `SchematisationRevisionHistoryDialog` uses the base one-shot task lifecycle to fetch its complete revision list.
@@ -111,7 +123,12 @@ When a model is being generated, both Create and Delete are disabled with "The R
 ### Create / Delete behavior
 
 - **Create** first checks `ThreediCalls.has_generating_model_for_revision()`. If generation is detected, or the check fails, creation is blocked and the user is shown an error. Otherwise it calls `Loader.start_model_tracker_process()`. On success it marks the row as generating, disables the clicked button, and calls `Loader.point_user_to_processes()`, which opens the Processes panel (see [processes_panel.md](./processes_panel.md)) and highlights the returned job ID. If the response contains no job ID, the button remains disabled but the user is not pointed to the Processes panel.
-- **Delete** first performs the same `has_generating_model_for_revision()` check, before showing the confirmation dialog. If generation is detected or the check fails, deletion is blocked. Otherwise it asks for confirmation, then calls `Loader.delete_schematisation_revision_3di_model()` synchronously. On failure it shows an action error and leaves the table unchanged. On success it calls `update_action_columns_after_delete_success()`, which updates the existing table in place without a new API request.
+- **Delete** asks for confirmation, disables the button, and starts a `ModelDeleteTask` (tracked via `Loader.track_task()`) so the GUI thread is not blocked. On the worker thread, `delete_model_work()` runs the same `has_generating_model_for_revision()` check and then `Loader.delete_schematisation_revision_3di_model()`. The task is deliberately not cancelable (empty flags), so QGIS waits for it on shutdown instead of leaving a half-finished delete. The task never raises; it returns a `ModelDeleteResult(error, is_generating)`, and any unexpected exception becomes `error`. On the GUI thread, `delete_task_complete()` then handles the outcome:
+  - generating: the row is marked generating, the button is re-enabled, and an error is shown;
+  - error: the button is re-enabled and the error is shown, with the table unchanged;
+  - success: `update_action_columns_after_delete_success()` updates the existing table in place without a new API request.
+
+  Results are ignored if the dialog has been closed in the meantime.
 
 The dialog does not poll the server. Use **Refresh** to update generating state. A click-time server check also protects against stale dialog state when a model starts generating after the last refresh. Job progress is visible in the Processes panel (see [processes_panel.md](./processes_panel.md)).
 
