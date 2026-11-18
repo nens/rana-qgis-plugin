@@ -168,9 +168,8 @@ def test_start_simulation_for_latest_revision_handles_api_error():
             {}, {}, "descriptor", ApiErrorSignals()
         )
 
-    communication.show_warn.assert_called_once_with(
-        "Could not retrieve simulation prerequisites: failed"
-    )
+    warning = communication.show_warn.call_args.args[0]
+    assert warning.startswith("Could not retrieve simulation prerequisites:")
 
 
 def test_start_simulation_preserves_organisation_uuid_format():

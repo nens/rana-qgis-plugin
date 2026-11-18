@@ -842,8 +842,15 @@ class Loader(QObject):
                 self.communication.clear_message_bar()
         except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
             self.communication.clear_message_bar()
+            if isinstance(error, ApiException):
+                try:
+                    error_message = extract_error_message(error)
+                except (TypeError, AttributeError):
+                    error_message = str(error)
+            else:
+                error_message = str(error)
             self.communication.show_warn(
-                f"Could not retrieve simulation prerequisites: {error}"
+                f"Could not retrieve simulation prerequisites: {error_message}"
             )
 
     def start_simulation_tracker_process(
