@@ -596,12 +596,18 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         deleted_metadata["simulation_tooltip"] = (
             "A Rana model must be created before a simulation can be started."
         )
-        model_count = sum(
-            bool((item.data(Qt.ItemDataRole.UserRole) or {})["has_model"])
+        occupied_revisions = {
+            metadata["revision_id"]
             for row_number in range(self.model.rowCount())
             if (item := self.model.item(row_number, 0)) is not None
+            if (metadata := (item.data(Qt.ItemDataRole.UserRole) or {}))
+            and (metadata["has_model"] or metadata.get("is_generating", False))
+        }
+        model_count = len(occupied_revisions)
+        deleted_metadata["model_enabled"] = (
+            not deleted_metadata.get("is_generating", False)
+            and model_count < model_limit
         )
-        deleted_metadata["model_enabled"] = model_count < model_limit
         deleted_metadata["model_tooltip"] = ""
         deleted_item.setData(deleted_metadata, Qt.ItemDataRole.UserRole)
         # Update deleted model actions
@@ -630,7 +636,11 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
                 if item is None:
                     continue
                 metadata = item.data(Qt.ItemDataRole.UserRole)
-                if not metadata or metadata["has_model"]:
+                if (
+                    not metadata
+                    or metadata["has_model"]
+                    or metadata.get("is_generating", False)
+                ):
                     continue
                 if metadata["model_enabled"]:
                     continue
@@ -669,6 +679,17 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
             return
         button.setEnabled(False)
         button.setToolTip("Model creation requested — click Refresh to check status")
+        row.metadata["is_generating"] = True
+        row.metadata["model_tooltip"] = (
+            "The Rana model for this revision is being generated. "
+            "Click Refresh to update."
+        )
+        row_number = self.row_number_for_revision(row.metadata["revision_id"])
+        if row_number is not None:
+            item = self.model.item(row_number, 0)
+            if item is not None:
+                item.setData(row.metadata, Qt.ItemDataRole.UserRole)
+        button.setToolTip(row.metadata["model_tooltip"])
         job_id = response.get("job_id") or response.get("id")
         if not job_id:
             return

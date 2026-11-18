@@ -511,6 +511,8 @@ def test_model_start_notifies_with_returned_job_id_and_signals():
 
     SchematisationRevisionHistoryDialog.create_model(dialog, row, button)
 
+    assert row.metadata["is_generating"] is True
+    assert "being generated" in row.metadata["model_tooltip"]
     dialog.loader.point_user_to_processes.assert_called_once_with(
         dialog.project, ["job-42"], dialog.error_signals, dialog
     )
