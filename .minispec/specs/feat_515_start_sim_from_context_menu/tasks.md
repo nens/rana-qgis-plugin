@@ -83,6 +83,6 @@ history. See `design.md`.
 - [x] Task 1: Context-menu action wiring
 - [x] Task 2: Shared model-creation operation
 - [x] Task 3: Latest-revision simulation preflight
-- [ ] Task 4: Error and boundary handling
+- [x] Task 4: Error and boundary handling
 - [ ] Task 5: UI and responsiveness review
 - [ ] Task 6: Focused and manual validation

@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from threedi_api_client.openapi import ApiException
+
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.api import RanaFetchError, RanaPostError
@@ -100,6 +102,74 @@ def test_start_simulation_requires_valid_model():
 
     communication.show_warn.assert_called_once_with(
         "No enabled valid model for this schematisation revision"
+    )
+
+
+def test_start_simulation_for_latest_revision_handles_missing_revision():
+    communication = MagicMock()
+    loader = Loader(communication)
+    calls = MagicMock()
+    data = {"schematisation": {"id": 1, "name": "Test", "threedimodel_limit": 1}}
+
+    with (
+        patch("rana_qgis_plugin.loader.get_threedi_schematisation", return_value=data),
+        patch("rana_qgis_plugin.loader.get_threedi_api", return_value=MagicMock()),
+        patch("rana_qgis_plugin.loader.ThreediCalls", return_value=calls),
+    ):
+        calls.fetch_schematisation_latest_revision.return_value = None
+        loader.start_simulation_for_latest_revision(
+            {}, {}, "descriptor", ApiErrorSignals()
+        )
+
+    communication.show_warn.assert_called_once_with(
+        "This schematisation has no revision to simulate."
+    )
+    calls.fetch_schematisation_revision_3di_models.assert_not_called()
+
+
+def test_start_simulation_for_latest_revision_handles_empty_revision_id():
+    communication = MagicMock()
+    loader = Loader(communication)
+    calls = MagicMock()
+    data = {"schematisation": {"id": 1, "name": "Test", "threedimodel_limit": 1}}
+
+    with (
+        patch("rana_qgis_plugin.loader.get_threedi_schematisation", return_value=data),
+        patch("rana_qgis_plugin.loader.get_threedi_api", return_value=MagicMock()),
+        patch("rana_qgis_plugin.loader.ThreediCalls", return_value=calls),
+    ):
+        calls.fetch_schematisation_latest_revision.return_value = SimpleNamespace(
+            id=None
+        )
+        loader.start_simulation_for_latest_revision(
+            {}, {}, "descriptor", ApiErrorSignals()
+        )
+
+    communication.show_warn.assert_called_once_with(
+        "This schematisation has no revision to simulate."
+    )
+    calls.fetch_schematisation_revision_3di_models.assert_not_called()
+
+
+def test_start_simulation_for_latest_revision_handles_api_error():
+    communication = MagicMock()
+    loader = Loader(communication)
+    calls = MagicMock()
+    data = {"schematisation": {"id": 1, "name": "Test", "threedimodel_limit": 1}}
+    error = ApiException(status=500, reason="failed")
+
+    with (
+        patch("rana_qgis_plugin.loader.get_threedi_schematisation", return_value=data),
+        patch("rana_qgis_plugin.loader.get_threedi_api", return_value=MagicMock()),
+        patch("rana_qgis_plugin.loader.ThreediCalls", return_value=calls),
+    ):
+        calls.fetch_schematisation_latest_revision.side_effect = error
+        loader.start_simulation_for_latest_revision(
+            {}, {}, "descriptor", ApiErrorSignals()
+        )
+
+    communication.show_warn.assert_called_once_with(
+        "Could not retrieve simulation prerequisites: failed"
     )
 
 

@@ -755,19 +755,28 @@ class Loader(QObject):
         try:
             data = get_threedi_schematisation(descriptor_id)
             schematisation = data["schematisation"]
+            schematisation_id = schematisation.get("id")
+            if not schematisation_id:
+                self.communication.show_warn(
+                    "Could not determine the schematisation for simulation."
+                )
+                return
             api = get_threedi_api()
             if api is None:
                 self.communication.show_warn("Not authenticated with 3Di API.")
                 return
             calls = ThreediCalls(api)
-            revision = calls.fetch_schematisation_latest_revision(schematisation["id"])
-            if revision is None:
+            revision = calls.fetch_schematisation_latest_revision(schematisation_id)
+            revision_id = (
+                getattr(revision, "id", None) if revision is not None else None
+            )
+            if not revision_id:
                 self.communication.show_warn(
                     "This schematisation has no revision to simulate."
                 )
                 return
             models = calls.fetch_schematisation_revision_3di_models(
-                schematisation["id"], revision.id
+                schematisation_id, revision_id
             )
             valid = next((m for m in models if not m.disabled and m.is_valid), None)
             if valid is not None:
@@ -775,13 +784,13 @@ class Loader(QObject):
                 self.start_simulation(
                     project,
                     file_item,
-                    schematisation["id"],
-                    revision.id,
+                    schematisation_id,
+                    revision_id,
                     error_signals,
                     parent,
                 )
                 return
-            if calls.has_generating_model_for_revision(revision.id):
+            if calls.has_generating_model_for_revision(revision_id):
                 self.point_user_to_processes(
                     project,
                     [],
@@ -791,7 +800,7 @@ class Loader(QObject):
                     "A Rana model is being generated. See the Processes panel for progress.",
                 )
                 return
-            generating = calls.fetch_generating_models(schematisation["id"])
+            generating = calls.fetch_generating_models(schematisation_id)
             can_create = (
                 len(
                     {m.revision_id for m in models}
@@ -818,9 +827,9 @@ class Loader(QObject):
                 self.communication.clear_message_bar()
                 self.create_model_for_revision(
                     project,
-                    schematisation["id"],
+                    schematisation_id,
                     schematisation["name"],
-                    revision.id,
+                    revision_id,
                     error_signals,
                     parent,
                 )
