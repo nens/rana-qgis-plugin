@@ -85,4 +85,4 @@ history. See `design.md`.
 - [x] Task 3: Latest-revision simulation preflight
 - [x] Task 4: Error and boundary handling
 - [x] Task 5: UI and responsiveness review
-- [ ] Task 6: Focused and manual validation
+- [x] Task 6: Focused and manual validation
