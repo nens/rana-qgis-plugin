@@ -105,7 +105,7 @@ def test_start_simulation_requires_valid_model():
     )
 
 
-def test_start_simulation_for_latest_revision_handles_missing_revision():
+def test_handle_simulation_request_for_latest_revision_handles_missing_revision():
     communication = MagicMock()
     loader = Loader(communication)
     calls = MagicMock()
@@ -117,7 +117,7 @@ def test_start_simulation_for_latest_revision_handles_missing_revision():
         patch("rana_qgis_plugin.loader.ThreediCalls", return_value=calls),
     ):
         calls.fetch_schematisation_latest_revision.return_value = None
-        loader.start_simulation_for_latest_revision(
+        loader.handle_simulation_request_for_latest_revision(
             {}, {}, "descriptor", ApiErrorSignals()
         )
 
@@ -127,7 +127,7 @@ def test_start_simulation_for_latest_revision_handles_missing_revision():
     calls.fetch_schematisation_revision_3di_models.assert_not_called()
 
 
-def test_start_simulation_for_latest_revision_handles_empty_revision_id():
+def test_handle_simulation_request_for_latest_revision_handles_empty_revision_id():
     communication = MagicMock()
     loader = Loader(communication)
     calls = MagicMock()
@@ -141,7 +141,7 @@ def test_start_simulation_for_latest_revision_handles_empty_revision_id():
         calls.fetch_schematisation_latest_revision.return_value = SimpleNamespace(
             id=None
         )
-        loader.start_simulation_for_latest_revision(
+        loader.handle_simulation_request_for_latest_revision(
             {}, {}, "descriptor", ApiErrorSignals()
         )
 
@@ -151,7 +151,7 @@ def test_start_simulation_for_latest_revision_handles_empty_revision_id():
     calls.fetch_schematisation_revision_3di_models.assert_not_called()
 
 
-def test_start_simulation_for_latest_revision_handles_api_error():
+def test_handle_simulation_request_for_latest_revision_handles_api_error():
     communication = MagicMock()
     loader = Loader(communication)
     calls = MagicMock()
@@ -164,7 +164,7 @@ def test_start_simulation_for_latest_revision_handles_api_error():
         patch("rana_qgis_plugin.loader.ThreediCalls", return_value=calls),
     ):
         calls.fetch_schematisation_latest_revision.side_effect = error
-        loader.start_simulation_for_latest_revision(
+        loader.handle_simulation_request_for_latest_revision(
             {}, {}, "descriptor", ApiErrorSignals()
         )
 

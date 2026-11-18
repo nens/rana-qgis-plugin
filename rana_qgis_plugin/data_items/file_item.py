@@ -165,7 +165,7 @@ class RanaFileDataItem(QgsDataItem):
                 q_action.triggered.connect(lambda: self.show_file_info(parent))
             elif action is FileAction.START_SIMULATION:
                 q_action.triggered.connect(
-                    lambda: self.loader.start_simulation_for_latest_revision(
+                    lambda: self.loader.handle_simulation_request_for_latest_revision(
                         self.project,
                         self.file_item,
                         cast(str, self.descriptor_id),
