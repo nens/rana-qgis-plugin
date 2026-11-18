@@ -757,12 +757,14 @@ class Loader(QObject):
             schematisation = data["schematisation"]
             schematisation_id = schematisation.get("id")
             if not schematisation_id:
+                self.communication.clear_message_bar()
                 self.communication.show_warn(
                     "Could not determine the schematisation for simulation."
                 )
                 return
             api = get_threedi_api()
             if api is None:
+                self.communication.clear_message_bar()
                 self.communication.show_warn("Not authenticated with 3Di API.")
                 return
             calls = ThreediCalls(api)
@@ -771,6 +773,7 @@ class Loader(QObject):
                 getattr(revision, "id", None) if revision is not None else None
             )
             if not revision_id:
+                self.communication.clear_message_bar()
                 self.communication.show_warn(
                     "This schematisation has no revision to simulate."
                 )
@@ -791,6 +794,7 @@ class Loader(QObject):
                 )
                 return
             if calls.has_generating_model_for_revision(revision_id):
+                self.communication.clear_message_bar()
                 self.point_user_to_processes(
                     project,
                     [],
@@ -809,6 +813,7 @@ class Loader(QObject):
                 < data["schematisation"]["threedimodel_limit"]
             )
             if not can_create:
+                self.communication.clear_message_bar()
                 choice = self.communication.custom_ask(
                     parent,
                     "Start simulation",
@@ -833,12 +838,13 @@ class Loader(QObject):
                     error_signals,
                     parent,
                 )
+            else:
+                self.communication.clear_message_bar()
         except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.clear_message_bar()
             self.communication.show_warn(
                 f"Could not retrieve simulation prerequisites: {error}"
             )
-        finally:
-            self.communication.clear_message_bar()
 
     def start_simulation_tracker_process(
         self,
