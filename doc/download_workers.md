@@ -2,15 +2,15 @@
 
 ## Overview
 
-The download worker system separates the concerns of **where** files are saved, **what** needs to be downloaded, and **how** the download is coordinated. 
+The download worker system separates the concerns of **where** files are saved, **what** needs to be downloaded, and **how** the download is coordinated.
 
 **Download contexts** determine the destination path and styling retrieval strategy. For example, tenant files go into project-based folders, while schematisations go into temporary directories.
 
-**Downloaders** know what to download and how to process it. They receive a context at construction time, fetch files from the appropriate API (Rana or 3Di), and perform any necessary post-processing like extracting archives or upgrading schemas.
+**Downloaders** know what to download and how to process it. They receive a context at construction time, fetch files from the appropriate API (Rana or Rana HCC), and perform any necessary post-processing like extracting archives or upgrading schemas.
 
 **Workers** coordinate the download in background threads to keep the UI responsive. They create downloaders, run them, and communicate progress and results back to the main thread via Qt signals.
 
-This separation means you can mix and match contexts with downloaders (e.g., download a schematisation to either a temp directory or a project folder) without duplicating code, and new download types can be added by creating new context or downloader classes. 
+This separation means you can mix and match contexts with downloaders (e.g., download a schematisation to either a temp directory or a project folder) without duplicating code, and new download types can be added by creating new context or downloader classes.
 
 ```mermaid
 classDiagram
@@ -62,8 +62,8 @@ Download contexts implement the **where** and **styling** aspects of downloading
   - Preserves publication folder hierarchy during download
 
 - **ResultsDownloadContext**: Manages downloads for lizard scenario results
-  - Resolves target folder based on whether a 3Di simulation is linked
-  - If linked: saves to the simulation results folder in the 3Di working directory
+  - Resolves target folder based on whether a Rana simulation is linked
+  - If linked: saves to the simulation results folder in the Rana working directory
   - If not: falls back to the standard project file directory structure
   - Takes a `filename` parameter to determine the final file path
 
@@ -167,8 +167,8 @@ Downloaders implement the **what** and **how** aspects of downloading:
   - Builds VRT if multi-tile
   - Progress: 0-10% requesting, 10-90% downloading tiles, 90-100% VRT
 
-- **SchematisationGeopackageDownloader**: Specialized downloader for 3Di schematisation geopackages (used in schematisation export)
-  - Downloads from 3Di API using schematisation and revision IDs
+- **SchematisationGeopackageDownloader**: Specialized downloader for Rana schematisation geopackages (used in schematisation export)
+  - Downloads from Rana HCC API using schematisation and revision IDs
   - Post-processes by:
     1. Extracting the zip archive
     2. Upgrading schematisation to latest schema version (with error handling)
@@ -323,7 +323,7 @@ The Loader class demonstrates three main usage patterns for the download workers
 
 **Key points:**
 - Uses `TempDownloadContext` for transient files
-- `SchematisationGeopackageDownloader` fetches from 3Di API and automatically extracts zip, upgrades schema, adds revision number to filename
+- `SchematisationGeopackageDownloader` fetches from Rana HCC API and automatically extracts zip, upgrades schema, adds revision number to filename
 - `SingleFileDownloadWorker` handles everything for a single file
 
 
@@ -359,5 +359,3 @@ The Loader class demonstrates three main usage patterns for the download workers
 - Uses `ResultsDownloadContext` with appropriate filename per downloader
 - Checks for existing files and prompts overwrite/skip/cancel
 - `BatchFileDownloadWorker` handles downloading all downloaders sequentially
-
-

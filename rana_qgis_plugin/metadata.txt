@@ -9,8 +9,8 @@ qgisMinimumVersion=3.38
 qgisMaximumVersion=3.99
 description=Rana QGIS plugin
 version=1.2.25
-author=Nelen & Schuurmans
-email=servicedesk@nelen-schuurmans.nl
+author=Rana Water Intelligence
+email=support@ranawaterintelligence.com
 
 about=Interact with Rana from QGIS.
 
@@ -20,7 +20,7 @@ repository=https://github.com/nens/rana-qgis-plugin
 
 # Recommended items:
 
-homepage=https://test.ranawaterintelligence.com/
+homepage=https://www.ranawaterintelligence.com
 category=Plugins
 icon=icons/rana.svg
 # experimental flag
