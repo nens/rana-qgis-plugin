@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QImage, QPixmap
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
@@ -274,20 +275,23 @@ class Loader(QObject):
         error_signals: ApiErrorSignals,
         parent=None,
         question: str = "Track progress in the Processes window?",
+        info_message: str = "See the Processes panel for progress.",
     ) -> None:
         """Raise or offer the project's Processes dock and highlight jobs."""
         dock = self.process_docks.get(str(project["id"]))
-        if dock is None:
+        if dock is None or not dock.isVisible():
             if not self.communication.ask(parent, "Processes", question):
                 return
-            dock = self.open_processes_dock(project, error_signals)
+            if dock is None:
+                dock = self.open_processes_dock(project, error_signals)
+            else:
+                dock.show()
 
         dock.show()
         dock.raise_()
         if dock.isFloating():
             dock.activateWindow()
-        else:
-            self.communication.bar_info("See the Processes panel for progress.")
+        self.communication.bar_info(info_message)
 
         panel = dock.widget()
         if panel is not None:
@@ -697,6 +701,135 @@ class Loader(QObject):
             )
         except (RanaFetchError, NetworkUnavailableError) as error:
             self.communication.show_error(f"Could not prepare simulation: {error}")
+
+    def create_model_for_revision(
+        self,
+        project: dict,
+        schematisation_id: int,
+        schematisation_name: str,
+        revision_id: int,
+        error_signals: ApiErrorSignals,
+        parent=None,
+    ) -> str:
+        """Start model creation and return its outcome."""
+        try:
+            if ThreediCalls(get_threedi_api()).has_generating_model_for_revision(
+                revision_id
+            ):
+                self.point_user_to_processes(
+                    project,
+                    [],
+                    error_signals,
+                    parent,
+                    "A Rana model is being generated for this revision. Open the Processes window?",
+                    "A Rana model is being generated. See the Processes panel for progress.",
+                )
+                return "generating"
+        except Exception as error:
+            self.communication.show_error(str(error))
+            return "failed"
+        response = self.start_model_tracker_process(
+            str(project["id"]), schematisation_id, schematisation_name, revision_id
+        )
+        if response is None:
+            return "failed"
+        job_id = response.get("job_id") or response.get("id")
+        if job_id:
+            self.point_user_to_processes(project, [str(job_id)], error_signals, parent)
+        return "started"
+
+    def start_simulation_for_latest_revision(
+        self,
+        project: dict,
+        file_item: dict,
+        descriptor_id: str,
+        error_signals: ApiErrorSignals,
+        parent=None,
+        open_version_history=None,
+    ) -> None:
+        """Start simulation for the latest revision, creating a model if needed."""
+        checking_message = "Checking whether schematisation is ready for simulation…"
+        self.communication.progress_bar(
+            checking_message, init_value=0, minimum=0, maximum=0
+        )
+        try:
+            data = get_threedi_schematisation(descriptor_id)
+            schematisation = data["schematisation"]
+            api = get_threedi_api()
+            if api is None:
+                self.communication.show_warn("Not authenticated with 3Di API.")
+                return
+            calls = ThreediCalls(api)
+            revision = calls.fetch_schematisation_latest_revision(schematisation["id"])
+            if revision is None:
+                self.communication.show_warn(
+                    "This schematisation has no revision to simulate."
+                )
+                return
+            models = calls.fetch_schematisation_revision_3di_models(
+                schematisation["id"], revision.id
+            )
+            valid = next((m for m in models if not m.disabled and m.is_valid), None)
+            if valid is not None:
+                self.communication.clear_message_bar()
+                self.start_simulation(
+                    project,
+                    file_item,
+                    schematisation["id"],
+                    revision.id,
+                    error_signals,
+                    parent,
+                )
+                return
+            if calls.has_generating_model_for_revision(revision.id):
+                self.point_user_to_processes(
+                    project,
+                    [],
+                    error_signals,
+                    parent,
+                    "A Rana model is being generated for the latest revision. Open the Processes window?",
+                    "A Rana model is being generated. See the Processes panel for progress.",
+                )
+                return
+            generating = calls.fetch_generating_models(schematisation["id"])
+            can_create = (
+                len(
+                    {m.revision_id for m in models}
+                    | {m.revision_id for m in generating}
+                )
+                < data["schematisation"]["threedimodel_limit"]
+            )
+            if not can_create:
+                choice = self.communication.custom_ask(
+                    parent,
+                    "Start simulation",
+                    "No model exists and no model can be generated. Manage models in Version history.",
+                    "Open version history",
+                    "Close",
+                )
+                if choice == "Open version history" and open_version_history:
+                    open_version_history()
+                return
+            if self.communication.ask(
+                parent,
+                "Start simulation",
+                "No model exists for the latest revision. Create one?",
+            ):
+                self.communication.clear_message_bar()
+                self.create_model_for_revision(
+                    project,
+                    schematisation["id"],
+                    schematisation["name"],
+                    revision.id,
+                    error_signals,
+                    parent,
+                )
+        except (ApiException, RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_warn(
+                f"Could not retrieve simulation prerequisites: {error}"
+            )
+        finally:
+            self.communication.clear_message_bar()
 
     def start_simulation_tracker_process(
         self,

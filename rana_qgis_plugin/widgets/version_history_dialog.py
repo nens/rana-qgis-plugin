@@ -669,29 +669,19 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
 
     def create_model(self, row: HistoryRow, button: QPushButton) -> None:
         """Start model creation and point the user to the Processes panel."""
-        try:
-            is_generating = ThreediCalls(get_threedi_api()).is_revision_generating(
-                row.metadata["revision_id"]
-            )
-        except Exception as check_error:
-            self.show_error(str(check_error))
-            return
-        if is_generating:
-            self.show_error(
-                "The Rana model for this revision is being generated. "
-                "Click Refresh to update."
-            )
-            button.setEnabled(False)
-            button.setToolTip(row.metadata["model_tooltip"])
-            row.metadata["is_generating"] = True
-            return
-        response = self.loader.start_model_tracker_process(
-            self.project["id"],
+        outcome = self.loader.create_model_for_revision(
+            self.project,
             row.metadata["schematisation_id"],
             row.metadata["schematisation_name"],
             row.metadata["revision_id"],
+            self.error_signals,
+            self,
         )
-        if response is None:
+        if outcome != "started":
+            if outcome == "generating":
+                button.setEnabled(False)
+                button.setToolTip(row.metadata["model_tooltip"])
+                row.metadata["is_generating"] = True
             return
         button.setEnabled(False)
         button.setToolTip("Model creation requested — click Refresh to check status")
@@ -706,20 +696,14 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
             if item is not None:
                 item.setData(row.metadata, Qt.ItemDataRole.UserRole)
         button.setToolTip(row.metadata["model_tooltip"])
-        job_id = response.get("job_id") or response.get("id")
-        if not job_id:
-            return
         button.setEnabled(False)
-        self.loader.point_user_to_processes(
-            self.project, [str(job_id)], self.error_signals, self
-        )
 
     def delete_model(self, row: HistoryRow) -> None:
         """Confirm and synchronously delete one revision's Rana model."""
         try:
-            is_generating = ThreediCalls(get_threedi_api()).is_revision_generating(
-                row.metadata["revision_id"]
-            )
+            is_generating = ThreediCalls(
+                get_threedi_api()
+            ).has_generating_model_for_revision(row.metadata["revision_id"])
         except Exception as check_error:
             self.show_error(str(check_error))
             return

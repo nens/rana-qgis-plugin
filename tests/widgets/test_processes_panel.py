@@ -518,7 +518,7 @@ def test_model_start_notifies_with_returned_job_id_and_signals():
         ),
         patch("rana_qgis_plugin.widgets.version_history_dialog.ThreediCalls") as calls,
     ):
-        calls.return_value.is_revision_generating.return_value = False
+        calls.return_value.has_generating_model_for_revision.return_value = False
         SchematisationRevisionHistoryDialog.create_model(dialog, row, button)
 
     assert row.metadata["is_generating"] is True

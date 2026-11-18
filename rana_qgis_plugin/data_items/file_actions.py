@@ -20,6 +20,7 @@ class FileAction(Enum):
     ADD_SCHEMATISATION = "Add schematisation"
     VERSION_HISTORY = "Version history"
     VIEW_FILE_INFO = "View file info"
+    START_SIMULATION = "Start simulation"
 
     @property
     def icon(self) -> QIcon:
@@ -37,6 +38,7 @@ _ICONS = {
     FileAction.UPLOAD_FILES: icons.upload_icon,
     FileAction.VERSION_HISTORY: icons.history_icon,
     FileAction.ADD_SCHEMATISATION: icons.add_icon,
+    FileAction.START_SIMULATION: icons.settings_icon,
 }
 
 _TOOLTIPS = {
@@ -47,6 +49,7 @@ _TOOLTIPS = {
     FileAction.ADD_SCHEMATISATION: "Add a schematisation to this location",
     FileAction.VERSION_HISTORY: "View file version history",
     FileAction.VIEW_FILE_INFO: "View file metadata",
+    FileAction.START_SIMULATION: "Start a simulation using the latest revision",
 }
 
 
@@ -70,6 +73,8 @@ def get_file_actions(data_type: str) -> list[FileAction]:
         actions = [FileAction.OPEN_IN_QGIS, FileAction.OPEN_WMS]
     else:
         actions = [FileAction.OPEN_IN_BROWSER] if data_type == "other" else []
+    if data_type == "threedi_schematisation":
+        actions.insert(0, FileAction.START_SIMULATION)
     return (
         [FileAction.VIEW_FILE_INFO, FileAction.VERSION_HISTORY]
         + actions

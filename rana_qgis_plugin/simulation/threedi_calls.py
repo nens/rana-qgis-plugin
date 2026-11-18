@@ -187,7 +187,7 @@ class ThreediCalls:
             revision__schematisation__id=schematisation_id,
         )
 
-    def is_revision_generating(self, revision_id: int) -> bool:
+    def has_generating_model_for_revision(self, revision_id: int) -> bool:
         """Return whether a revision currently has a generating model."""
         response = self.threedi_api.threedimodels_list(
             revision__id=revision_id, is_generating=True, limit=1

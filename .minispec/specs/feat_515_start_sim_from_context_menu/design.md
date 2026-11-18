@@ -32,12 +32,14 @@ being constructed.
 2. On activation, the loader resolves the latest revision and model state.
 3. If an enabled, valid model exists, the existing simulation setup flow opens.
 4. If a model is being generated, the user is offered the current project's
-   Processes view.
+   Processes view. This offer is made whenever the Processes dock is not
+   visibly open; an existing but hidden dock also requires confirmation.
 5. If no model exists and the model limit allows creation, the user is asked
    whether to create one. Confirmation starts model creation and points to
    Processes.
-6. If a model exists but is disabled or invalid, or the model limit prevents
-   creation, the user is offered Version history for management.
+6. If no enabled valid model exists but model capacity remains, the user is
+   offered model creation. If the model limit prevents creation, the user is
+   offered Version history for management.
 7. If no revision exists, the user receives a warning and the flow stops.
 
 ## Components
