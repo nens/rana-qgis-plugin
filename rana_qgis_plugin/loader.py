@@ -296,6 +296,10 @@ class Loader(QObject):
         if panel is not None:
             panel.highlight_jobs(job_ids)
 
+    def track_task(self, task: QgsTask) -> None:
+        """Public entry point for dialogs that start tasks owned by the loader."""
+        self._track_task(task)
+
     def _track_task(self, task: QgsTask) -> None:
         """Keep a Python reference to a task until it completes or terminates."""
         self.active_tasks.add(task)

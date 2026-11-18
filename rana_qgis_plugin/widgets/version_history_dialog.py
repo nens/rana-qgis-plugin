@@ -34,7 +34,12 @@ from rana_qgis_plugin.utils.api import (
 from rana_qgis_plugin.utils.data_models import OpenSchematisationRequest
 from rana_qgis_plugin.utils.generic import get_threedi_api
 from rana_qgis_plugin.utils.time import format_timestamp, parse_timestamp_str
-from rana_qgis_plugin.workers.history import HistoryFetchTask, HistoryRow
+from rana_qgis_plugin.workers.history import (
+    HistoryFetchTask,
+    HistoryRow,
+    ModelDeleteResult,
+    ModelDeleteTask,
+)
 
 
 class MissingThreeDiAuthenticationError(Exception):
@@ -699,21 +704,7 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         button.setEnabled(False)
 
     def delete_model(self, row: HistoryRow) -> None:
-        """Confirm and synchronously delete one revision's Rana model."""
-        try:
-            is_generating = ThreediCalls(
-                get_threedi_api()
-            ).has_generating_model_for_revision(row.metadata["revision_id"])
-        except Exception as check_error:
-            self.show_error(str(check_error))
-            return
-        if is_generating:
-            self.show_error(
-                "The Rana model for this revision is being generated. "
-                "Click Refresh to update."
-            )
-            row.metadata["is_generating"] = True
-            return
+        """Confirm, then delete one revision's Rana model in a background task."""
         revision_number = row.values[0]
         if (
             QMessageBox.question(
@@ -730,16 +721,61 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         button = self.action_button(row_number, 5) if row_number is not None else None
         if button is not None:
             button.setEnabled(False)
-        deleted = False
-        try:
-            error = self.loader.delete_schematisation_revision_3di_model(
-                row.metadata["schematisation_id"], row.metadata["revision_id"]
+        schematisation_id = row.metadata["schematisation_id"]
+        revision_id = row.metadata["revision_id"]
+        task = ModelDeleteTask(
+            lambda: self.delete_model_work(schematisation_id, revision_id)
+        )
+        self.loader.track_task(task)
+        task.taskCompleted.connect(lambda: self.delete_task_complete(task, row))
+        task.taskTerminated.connect(lambda: self.delete_task_terminated(row))
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self.restore_delete_button(revision_id)
+            self.show_error("Could not start model deletion")
+            return
+        task_manager.addTask(task)
+
+    def delete_model_work(
+        self, schematisation_id: int, revision_id: int
+    ) -> ModelDeleteResult:
+        """Check for generation and delete the model; runs on the task thread."""
+        if ThreediCalls(get_threedi_api()).has_generating_model_for_revision(
+            revision_id
+        ):
+            return ModelDeleteResult(is_generating=True)
+        error = self.loader.delete_schematisation_revision_3di_model(
+            schematisation_id, revision_id
+        )
+        return ModelDeleteResult(error=error)
+
+    def delete_task_complete(self, task: ModelDeleteTask, row: HistoryRow) -> None:
+        """Apply the delete outcome on the GUI thread."""
+        revision_id = row.metadata["revision_id"]
+        if self._closed:
+            return
+        result = task.result
+        if result.is_generating:
+            row.metadata["is_generating"] = True
+            self.restore_delete_button(revision_id)
+            self.show_error(
+                "The Rana model for this revision is being generated. "
+                "Click Refresh to update."
             )
-            if error:
-                self.loader.communication.show_error(error, parent=self)
-                return
-            deleted = True
-            self.update_action_columns_after_delete_success(row.metadata["revision_id"])
-        finally:
-            if button is not None and not deleted:
-                button.setEnabled(True)
+        elif result.error:
+            self.restore_delete_button(revision_id)
+            self.loader.communication.show_error(result.error, parent=self)
+        else:
+            self.update_action_columns_after_delete_success(revision_id)
+
+    def delete_task_terminated(self, row: HistoryRow) -> None:
+        """Re-enable the button if the task was terminated without running."""
+        if not self._closed:
+            self.restore_delete_button(row.metadata["revision_id"])
+
+    def restore_delete_button(self, revision_id: int) -> None:
+        """Re-enable the delete button of a revision row."""
+        row_number = self.row_number_for_revision(revision_id)
+        button = self.action_button(row_number, 5) if row_number is not None else None
+        if button is not None:
+            button.setEnabled(True)
