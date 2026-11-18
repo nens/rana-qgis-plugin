@@ -16,7 +16,6 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QImage, QPixmap
 from qgis.PyQt.QtWidgets import (
-    QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
@@ -771,7 +770,7 @@ class Loader(QObject):
                 {model.revision_id for model in models}
                 | {model.revision_id for model in generating}
             )
-            < schematisation.get("threedimodel_limit", 0),
+            < schematisation["threedimodel_limit"],
         }
 
     def handle_simulation_request_for_latest_revision(
@@ -805,8 +804,11 @@ class Loader(QObject):
                 f"Could not retrieve simulation prerequisites: {error_message}"
             )
             return
-
+        except BaseException:
+            self.communication.clear_message_bar()
+            raise
         self.communication.clear_message_bar()
+
         if prerequisites is None:
             self.communication.show_warn(
                 "This schematisation has no revision to simulate."
