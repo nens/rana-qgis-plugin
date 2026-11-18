@@ -324,6 +324,34 @@ class RanaHistoryDialog(HistoryDialog):
         return rows, page.get("next")
 
 
+def get_model_state(
+    revision_id: int,
+    model_ids: set[int],
+    generating_ids: set[int],
+    can_create_model: bool,
+) -> dict[str, object]:
+    """Return the Rana model button state for one revision."""
+    has_model = revision_id in model_ids
+    is_generating = revision_id in generating_ids
+    model_enabled = not is_generating and (has_model or can_create_model)
+    return {
+        "has_model": has_model,
+        "is_generating": is_generating,
+        "model_enabled": model_enabled,
+        "model_tooltip": (
+            "The Rana model for this revision is being generated. "
+            "Click Refresh to update."
+            if is_generating
+            else (
+                "The maximum number of Rana models has been reached. "
+                "Please delete one of the existing models before creating a new one."
+                if not has_model and not model_enabled
+                else ""
+            )
+        ),
+    }
+
+
 class SchematisationRevisionHistoryDialog(HistoryDialog):
     """Display the committed revisions for a schematisation file."""
 
@@ -378,12 +406,19 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         revisions = ThreediCalls(threedi_api).fetch_schematisation_revisions(
             schematisation_id
         )
-        model_count = sum(bool(revision.has_threedimodel) for revision in revisions)
         model_limit = schematisation_data["schematisation"]["threedimodel_limit"]
+        model_ids = {revision.id for revision in revisions if revision.has_threedimodel}
+        generating_models = ThreediCalls(threedi_api).fetch_generating_models(
+            schematisation_id
+        )
+        generating_ids = {model.revision_id for model in generating_models}
+        can_create_model = len(model_ids | generating_ids) < model_limit
         rows = []
         for revision in revisions:
-            has_model = bool(revision.has_threedimodel)
-            model_enabled = has_model or model_count < model_limit
+            model_state = get_model_state(
+                revision.id, model_ids, generating_ids, can_create_model
+            )
+            has_model = model_state["has_model"]
             rows.append(
                 HistoryRow(
                     [
@@ -401,14 +436,7 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
                             if not has_model
                             else ""
                         ),
-                        "model_enabled": model_enabled,
-                        "model_tooltip": (
-                            "The maximum number of Rana models has been reached. "
-                            "Please delete one of the existing models before creating a new one."
-                            if not has_model and not model_enabled
-                            else ""
-                        ),
-                        "has_model": has_model,
+                        **model_state,
                         "model_limit": model_limit,
                         "revision_id": revision.id,
                         "revision": revision,
@@ -568,12 +596,18 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
         deleted_metadata["simulation_tooltip"] = (
             "A Rana model must be created before a simulation can be started."
         )
-        model_count = sum(
-            bool((item.data(Qt.ItemDataRole.UserRole) or {})["has_model"])
+        occupied_revisions = {
+            metadata["revision_id"]
             for row_number in range(self.model.rowCount())
             if (item := self.model.item(row_number, 0)) is not None
+            if (metadata := (item.data(Qt.ItemDataRole.UserRole) or {}))
+            and (metadata["has_model"] or metadata.get("is_generating", False))
+        }
+        model_count = len(occupied_revisions)
+        deleted_metadata["model_enabled"] = (
+            not deleted_metadata.get("is_generating", False)
+            and model_count < model_limit
         )
-        deleted_metadata["model_enabled"] = model_count < model_limit
         deleted_metadata["model_tooltip"] = ""
         deleted_item.setData(deleted_metadata, Qt.ItemDataRole.UserRole)
         # Update deleted model actions
@@ -602,7 +636,11 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
                 if item is None:
                     continue
                 metadata = item.data(Qt.ItemDataRole.UserRole)
-                if not metadata or metadata["has_model"]:
+                if (
+                    not metadata
+                    or metadata["has_model"]
+                    or metadata.get("is_generating", False)
+                ):
                     continue
                 if metadata["model_enabled"]:
                     continue
@@ -631,6 +669,22 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
 
     def create_model(self, row: HistoryRow, button: QPushButton) -> None:
         """Start model creation and point the user to the Processes panel."""
+        try:
+            is_generating = ThreediCalls(get_threedi_api()).is_revision_generating(
+                row.metadata["revision_id"]
+            )
+        except Exception as check_error:
+            self.show_error(str(check_error))
+            return
+        if is_generating:
+            self.show_error(
+                "The Rana model for this revision is being generated. "
+                "Click Refresh to update."
+            )
+            button.setEnabled(False)
+            button.setToolTip(row.metadata["model_tooltip"])
+            row.metadata["is_generating"] = True
+            return
         response = self.loader.start_model_tracker_process(
             self.project["id"],
             row.metadata["schematisation_id"],
@@ -641,6 +695,17 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
             return
         button.setEnabled(False)
         button.setToolTip("Model creation requested — click Refresh to check status")
+        row.metadata["is_generating"] = True
+        row.metadata["model_tooltip"] = (
+            "The Rana model for this revision is being generated. "
+            "Click Refresh to update."
+        )
+        row_number = self.row_number_for_revision(row.metadata["revision_id"])
+        if row_number is not None:
+            item = self.model.item(row_number, 0)
+            if item is not None:
+                item.setData(row.metadata, Qt.ItemDataRole.UserRole)
+        button.setToolTip(row.metadata["model_tooltip"])
         job_id = response.get("job_id") or response.get("id")
         if not job_id:
             return
@@ -651,6 +716,20 @@ class SchematisationRevisionHistoryDialog(HistoryDialog):
 
     def delete_model(self, row: HistoryRow) -> None:
         """Confirm and synchronously delete one revision's Rana model."""
+        try:
+            is_generating = ThreediCalls(get_threedi_api()).is_revision_generating(
+                row.metadata["revision_id"]
+            )
+        except Exception as check_error:
+            self.show_error(str(check_error))
+            return
+        if is_generating:
+            self.show_error(
+                "The Rana model for this revision is being generated. "
+                "Click Refresh to update."
+            )
+            row.metadata["is_generating"] = True
+            return
         revision_number = row.values[0]
         if (
             QMessageBox.question(

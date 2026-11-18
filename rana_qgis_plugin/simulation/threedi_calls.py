@@ -179,6 +179,21 @@ class ThreediCalls:
         )
         return simulations_list
 
+    def fetch_generating_models(self, schematisation_id: int) -> List[ThreediModel]:
+        """Fetch models currently being generated for a schematisation."""
+        return self.paginated_fetch(
+            self.threedi_api.threedimodels_list,
+            is_generating=True,
+            revision__schematisation__id=schematisation_id,
+        )
+
+    def is_revision_generating(self, revision_id: int) -> bool:
+        """Return whether a revision currently has a generating model."""
+        response = self.threedi_api.threedimodels_list(
+            revision__id=revision_id, is_generating=True, limit=1
+        )
+        return response.count > 0
+
     def fetch_simulation(self, simulation_pk: int) -> Simulation:
         """Fetch single simulation."""
         logger.debug("Fetching single simulation %s...", simulation_pk)

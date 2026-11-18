@@ -103,15 +103,17 @@ sequenceDiagram
 |---|---|---|---|
 | `Simulation` | `New` | revision has a model | "A Rana model must be created before a simulation can be started." |
 | `Rana Model` | `Delete` | revision has a model | — |
-| `Rana Model` | `Create` | no model and model count < `threedimodel_limit` | "The maximum number of Rana models has been reached. Please delete one of the existing models before creating a new one." |
+| `Rana Model` | `Create` | no model, no generation in progress, and model count < `threedimodel_limit` | "The maximum number of Rana models has been reached. Please delete one of the existing models before creating a new one." |
+
+When a model is being generated, both Create and Delete are disabled with "The Rana model for this revision is being generated. Click Refresh to update." as tooltip
 
 
 ### Create / Delete behavior
 
-- **Create** calls `Loader.start_model_tracker_process()`. On success it disables the clicked button for the current dialog instance, changes its tooltip to prompt a manual Refresh, and calls `Loader.point_user_to_processes()`, which opens the Processes panel (see [processes_panel.md](./processes_panel.md)) and highlights the returned job ID. If the response contains no job ID, the button is disabled but the user is not pointed to the Processes panel.
-- **Delete** asks for confirmation, then calls `Loader.delete_schematisation_revision_3di_model()` synchronously. On failure it shows an action error and leaves the table unchanged. On success it calls `update_action_columns_after_delete_success()`, which updates the existing table in place without a new API request.
+- **Create** first checks `ThreediCalls.is_revision_generating()`. If generation is detected, or the check fails, creation is blocked and the user is shown an error. Otherwise it calls `Loader.start_model_tracker_process()`. On success it marks the row as generating, disables the clicked button, and calls `Loader.point_user_to_processes()`, which opens the Processes panel (see [processes_panel.md](./processes_panel.md)) and highlights the returned job ID. If the response contains no job ID, the button remains disabled but the user is not pointed to the Processes panel.
+- **Delete** first performs the same generating-state check, before showing the confirmation dialog. If generation is detected or the check fails, deletion is blocked. Otherwise it asks for confirmation, then calls `Loader.delete_schematisation_revision_3di_model()` synchronously. On failure it shows an action error and leaves the table unchanged. On success it calls `update_action_columns_after_delete_success()`, which updates the existing table in place without a new API request.
 
-**Known limitation:** the Create click is not tracked by the file history dialog. After it, the button is disabled only for that dialog instance; the dialog does not poll the server-side job or persist its state, so closing and reopening the dialog, or refreshing before the job finishes, re-enables Create and allows a second request for the same revision. Job progress is only visible in the Processes panel (see [processes_panel.md](./processes_panel.md)), which is the place to check whether a model is already being created.
+The dialog does not poll the server. Use **Refresh** to update generating state. A click-time server check also protects against stale dialog state when a model starts generating after the last refresh. Job progress is visible in the Processes panel (see [processes_panel.md](./processes_panel.md)).
 
 ### Revision row context menu
 
@@ -125,5 +127,3 @@ Right-clicking a revision row (`show_revision_context_menu`) offers:
 - **Open in web viewer** — substitutes the selected revision's ID into the
   schematisation's existing `management_url` and opens it with
   `QDesktopServices.openUrl()`.
-
-
