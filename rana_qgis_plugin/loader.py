@@ -2708,12 +2708,15 @@ class Loader(QObject):
 
         revision_number = int(revision.get("number"))
         project_name = request.project.get("name", "")
+        wip_suffix = ""
+        if target_dir == local_schematisation.wip_revision.schematisation_dir:
+            wip_suffix = " WIP"
+        group_name = f"{PurePosixPath(request.file_item['id']).name} (#{revision_number}{wip_suffix})"
 
         def on_downloaded(_local_path: str) -> None:
             parents = [project_name, "files"] + list(
                 PurePosixPath(request.file_item["id"]).parts[:-1]
             )
-            group_name = PurePosixPath(request.file_item["id"]).name
             open_rana_schematisation(
                 self.communication,
                 project_name,
