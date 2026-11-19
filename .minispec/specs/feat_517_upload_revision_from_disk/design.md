@@ -61,7 +61,7 @@ started it.
 
 ### File action
 
-`FileAction.UPLOAD_LOCAL_REVISION` ("Upload local revision", `icons.upload_icon`),
+`FileAction.SAVE_LOCAL_REVISION` ("Save local revision", `icons.upload_icon`),
 included only for `threedi_schematisation` items in `get_file_actions`. Its
 callback in `RanaFileDataItem.actions` delegates to the loader. No API calls or
 disk scans while the menu is built. No tooltip.

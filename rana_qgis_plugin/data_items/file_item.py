@@ -174,6 +174,15 @@ class RanaFileDataItem(QgsDataItem):
                         lambda: self.show_revision_history(parent),
                     )
                 )
+            elif action is FileAction.SAVE_LOCAL_REVISION:
+                q_action.triggered.connect(
+                    lambda: self.loader.commit_stored_revision(
+                        self.project,
+                        self.file_item,
+                        cast(str, self.descriptor_id),
+                        parent,
+                    )
+                )
             elif action is FileAction.VERSION_HISTORY:
                 if self.data_type == "threedi_schematisation":
                     q_action.triggered.connect(

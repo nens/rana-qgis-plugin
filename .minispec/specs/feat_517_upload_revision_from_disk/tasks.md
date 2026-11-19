@@ -59,7 +59,7 @@ allowing one revision upload per schematisation at a time.
 #### Task 5: Context-menu action
 - **Estimate:** ~30 lines (incl. tests)
 - **Files:** `rana_qgis_plugin/data_items/file_actions.py`, `rana_qgis_plugin/data_items/file_item.py`, `tests/data_items/test_file_actions.py`
-- **Description:** Add `FileAction.UPLOAD_LOCAL_REVISION` ("Upload local revision", upload icon, no tooltip), include it for `threedi_schematisation` in `get_file_actions`, and wire it in `RanaFileDataItem.actions` to `commit_stored_revision`.
+- **Description:** Add `FileAction.SAVE_LOCAL_REVISION` ("Save local revision", upload icon, no tooltip), include it for `threedi_schematisation` in `get_file_actions`, and wire it in `RanaFileDataItem.actions` to `commit_stored_revision`.
 - **Depends on:** Task 4
 - **Acceptance:** Action appears only for `threedi_schematisation` items; no API or disk access during menu construction.
 - **Evidence:** Updated parametrized `test_get_file_actions` passes.

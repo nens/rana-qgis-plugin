@@ -1187,11 +1187,16 @@ class Loader(QObject):
                 "Open the schematisation first to create one."
             )
             return None
+        wip_path = Path(wip_revision.main_dir)
+        try:
+            display_path = f"your home folder:\n  {wip_path.relative_to(Path.home())}"
+        except ValueError:
+            display_path = str(wip_path)
         if not self.communication.ask(
             parent,
             "Upload local revision",
-            f"Upload local work in progress from '{wip_revision.main_dir}' as a new revision?",
-            QMessageBox.Question,
+            f"Upload local work in progress from {display_path} as a new revision?",
+            QMessageBox.Icon.Question,
         ):
             return None
         group = find_schematisation_group(db_filepath)
