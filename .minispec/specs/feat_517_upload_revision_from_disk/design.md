@@ -86,7 +86,7 @@ Replaces the `rana/schematisation_uploading` group property and
 - `commit_opened_revision(group, parent)`: reads `rana/project_id`,
   `rana/schematisation_id`, `rana/revision_number` and
   `rana/schematisation_db_filepath` from the group; lock check; unsaved-edits
-  prompt; `save_revision`; `attach_revision_number_update`. Called from
+  prompt; `save_revision`. Called from
   `layer_tree_menu.py` and from `commit_stored_revision`. The prompt now precedes
   the network fetch. Saving layer changes keeps its error handling: a failed save
   or an `OSError` / `ValueError` reports via `bar_error` and starts nothing.
@@ -98,8 +98,6 @@ Replaces the `rana/schematisation_uploading` group property and
 - `find_schematisation_group(db_filepath)`: the layer group whose
   `rana/schematisation_db_filepath` matches the WIP DB (normalized path
   comparison), or `None`.
-- `attach_revision_number_update(group, task)`: set `rana/revision_number` on
-  `upload_succeeded`. Extracted from `layer_tree_menu.save_revision`.
 
 ### Layer panel
 

@@ -38,7 +38,6 @@ from rana_qgis_plugin.layer_management.layer_dirty_flags import (
 )
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
-    attach_revision_number_update,
     clear_rana_refs,
     find_schematisation_group,
     get_rana_refs,
@@ -1140,8 +1139,6 @@ class Loader(QObject):
         task = self.save_revision(
             project_id, schematisation_id, revision_number, filepath, parent
         )
-        if task is not None:
-            attach_revision_number_update(group, task)
         return task
 
     def commit_stored_revision(

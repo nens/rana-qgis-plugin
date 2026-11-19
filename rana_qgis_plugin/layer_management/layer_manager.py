@@ -474,15 +474,6 @@ def find_schematisation_group(db_filepath: str) -> Optional[QgsLayerTreeGroup]:
     return find(root)
 
 
-def attach_revision_number_update(group: QgsLayerTreeGroup, task) -> None:
-    """Update a group's revision number after a successful upload."""
-    task.upload_succeeded.connect(
-        lambda new_revision: group.setCustomProperty(
-            _GROUP_REVISION_NUMBER_KEY, new_revision
-        )
-    )
-
-
 def add_layer_to_group(layer: QgsMapLayer, group: QgsLayerTreeGroup) -> None:
     """Add *layer* to *group*, replacing an existing layer with the same source."""
     project = QgsProject.instance()

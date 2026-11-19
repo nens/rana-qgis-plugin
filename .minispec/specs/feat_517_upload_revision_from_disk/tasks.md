@@ -31,7 +31,7 @@ allowing one revision upload per schematisation at a time.
 #### Task 2: Group helpers in `layer_manager.py`
 - **Estimate:** ~45 lines (incl. tests)
 - **Files:** `rana_qgis_plugin/layer_management/layer_manager.py`, `tests/test_layer_manager.py`
-- **Description:** Add `find_schematisation_group(db_filepath)` (normalized path match on `rana/schematisation_db_filepath`, `None` if not found) and `attach_revision_number_update(group, task)` (set `rana/revision_number` on `upload_succeeded`).
+- **Description:** Add `find_schematisation_group(db_filepath)` (normalized path match on `rana/schematisation_db_filepath`, `None` if not found).
 - **Depends on:** None
 - **Acceptance:** Helpers exist in `layer_manager.py` and work against a real `QgsLayerTree`.
 - **Evidence:** Unit tests: match with differently normalized paths, no match returns `None`, revision number updated on `upload_succeeded`.
@@ -41,7 +41,7 @@ allowing one revision upload per schematisation at a time.
 #### Task 3: Split `save_revision` into the shared core and `commit_opened_revision`
 - **Estimate:** ~80 lines (incl. tests)
 - **Files:** `rana_qgis_plugin/loader.py`, `rana_qgis_plugin/layer_management/layer_tree_menu.py`, `rana_qgis_plugin/utils/qgis.py`, `tests/loader/test_schematisation.py`
-- **Description:** Remove the unsaved-edits prompt and the "not loaded in editor" warning from `save_revision`. Add `commit_opened_revision(group, parent)`: read group properties, lock check, unsaved-edits prompt (keeping `bar_error` + stop on save failure and on `OSError` / `ValueError`), `save_revision`, `attach_revision_number_update`. `layer_tree_menu.save_revision` calls it. Delete `is_loaded_in_schematisation_editor`.
+- **Description:** Remove the unsaved-edits prompt and the "not loaded in editor" warning from `save_revision`. Add `commit_opened_revision(group, parent)`: read group properties, lock check, unsaved-edits prompt (keeping `bar_error` + stop on save failure and on `OSError` / `ValueError`), then call `save_revision`. `layer_tree_menu.save_revision` calls it. Delete `is_loaded_in_schematisation_editor`.
 - **Depends on:** Tasks 1, 2
 - **Acceptance:** Layer-panel "Save revision" behaves as before except no editor warning; prompt precedes the network fetch; errors while saving layer changes still stop the upload with a message.
 - **Evidence:** `test_save_revision_requires_authenticated_api` passes unchanged; new tests: `commit_opened_revision` stops on "Cancel Upload", stops with `bar_error` when saving a layer fails, and stops before any prompt when locked; no remaining references to the deleted function.
@@ -78,4 +78,4 @@ allowing one revision upload per schematisation at a time.
 - [x] Task 2: Group helpers in `layer_manager.py`
 - [x] Task 3: Split `save_revision` into the shared core and `commit_opened_revision`
 - [x] Task 4: `Loader.commit_stored_revision`
-- [ ] Task 5: Context-menu action
+- [x] Task 5: Context-menu action

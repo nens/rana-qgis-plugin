@@ -93,18 +93,6 @@ def test_find_schematisation_group_returns_none_when_not_found(tmp_path):
     assert lm.find_schematisation_group(str(tmp_path / "missing.gpkg")) is None
 
 
-def test_attach_revision_number_update():
-    group = QgsLayerTreeGroup("Schematisation")
-    callbacks = []
-    task = Mock()
-    task.upload_succeeded.connect.side_effect = callbacks.append
-
-    lm.attach_revision_number_update(group, task)
-    callbacks[0](42)
-
-    assert group.customProperty("rana/revision_number") == 42
-
-
 # --- Test layer management ---
 
 

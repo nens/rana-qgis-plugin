@@ -22,8 +22,6 @@ participants: [margriet, agent]
 
 - `find_schematisation_group(db_filepath)`: find the layer group whose
   `rana/schematisation_db_filepath` matches a gpkg (normalized path comparison).
-- `attach_revision_number_update(group, task)`: set `rana/revision_number` on
-  `upload_succeeded`. Extracted from `layer_tree_menu.save_revision`.
 
 `loader.py` already imports from `layer_manager.py` but not from
 `layer_tree_menu.py` (a QGIS menu provider, imported by `rana_qgis_plugin.py` and
