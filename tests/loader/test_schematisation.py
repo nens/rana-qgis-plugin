@@ -90,6 +90,78 @@ def test_save_revision_refuses_schematisation_with_upload_in_progress():
     )
 
 
+def test_commit_opened_revision_cancel_stops_before_save():
+    communication = MagicMock()
+    communication.custom_ask.return_value = "Cancel Upload"
+    loader = Loader(communication)
+    group = MagicMock()
+    group.customProperty.side_effect = {
+        "rana/project_id": "project",
+        "rana/schematisation_id": 1,
+        "rana/revision_number": 2,
+        "rana/schematisation_db_filepath": "/tmp/schema.gpkg",
+    }.get
+
+    with (
+        patch(
+            "rana_qgis_plugin.loader.get_editable_layers_for_file",
+            return_value=[MagicMock()],
+        ),
+        patch.object(loader, "save_revision") as save_revision,
+    ):
+        assert loader.commit_opened_revision(group, None) is None
+
+    save_revision.assert_not_called()
+
+
+def test_commit_opened_revision_reports_layer_save_failure():
+    communication = MagicMock()
+    communication.custom_ask.return_value = "Save Changes"
+    loader = Loader(communication)
+    group = MagicMock()
+    group.customProperty.side_effect = {
+        "rana/schematisation_id": 1,
+        "rana/revision_number": 2,
+        "rana/schematisation_db_filepath": "/tmp/schema.gpkg",
+    }.get
+    layer = MagicMock()
+    layer.name.return_value = "roads"
+
+    with (
+        patch(
+            "rana_qgis_plugin.loader.get_editable_layers_for_file", return_value=[layer]
+        ),
+        patch(
+            "rana_qgis_plugin.loader.save_layer_changes", return_value=(False, "locked")
+        ),
+        patch.object(loader, "save_revision") as save_revision,
+    ):
+        assert loader.commit_opened_revision(group, None) is None
+
+    save_revision.assert_not_called()
+    communication.bar_error.assert_called_once_with(
+        "Failed to save changes in layer 'roads': locked"
+    )
+
+
+def test_commit_opened_revision_locked_stops_before_prompt():
+    communication = MagicMock()
+    loader = Loader(communication)
+    loader._revision_uploads_in_progress.add(1)
+    group = MagicMock()
+    group.customProperty.side_effect = {
+        "rana/schematisation_id": 1,
+        "rana/revision_number": 2,
+        "rana/schematisation_db_filepath": "/tmp/schema.gpkg",
+    }.get
+
+    with patch("rana_qgis_plugin.loader.get_editable_layers_for_file") as get_editable:
+        assert loader.commit_opened_revision(group, None) is None
+
+    get_editable.assert_not_called()
+    communication.custom_ask.assert_not_called()
+
+
 def test_import_schematisation_from_hcc_requires_authenticated_api():
     communication = MagicMock()
     loader = Loader(communication)

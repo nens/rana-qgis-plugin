@@ -76,6 +76,6 @@ allowing one revision upload per schematisation at a time.
 
 - [x] Task 1: Loader upload lock replaces the group lock
 - [x] Task 2: Group helpers in `layer_manager.py`
-- [ ] Task 3: Split `save_revision` into the shared core and `commit_opened_revision`
+- [x] Task 3: Split `save_revision` into the shared core and `commit_opened_revision`
 - [ ] Task 4: `Loader.commit_stored_revision`
 - [ ] Task 5: Context-menu action

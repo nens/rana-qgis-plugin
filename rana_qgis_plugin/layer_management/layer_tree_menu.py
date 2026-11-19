@@ -265,28 +265,7 @@ class LayerTreeMenuProvider:
         if self.loader is None or len(groups) != 1:
             return
         group = groups[0]
-        schematisation_id = group.customProperty("rana/schematisation_id")
-        revision_number = group.customProperty("rana/revision_number")
-        # working_dir = group.customProperty("rana/schematisation_working_dir")
-        # is_wip = group.customProperty("rana/schematisation_is_wip")
-        schematisation_db_filepath = group.customProperty(
-            "rana/schematisation_db_filepath"
-        )
-        if schematisation_id is None or revision_number is None:
-            return
-        task = self.loader.save_revision(
-            group.customProperty("rana/project_id"),
-            schematisation_id,
-            revision_number,
-            schematisation_db_filepath,
-            self.iface.mainWindow(),
-        )
-        if task is not None:
-            task.upload_succeeded.connect(
-                lambda new_revision: group.setCustomProperty(
-                    "rana/revision_number", new_revision
-                )
-            )
+        self.loader.commit_opened_revision(group, self.iface.mainWindow())
 
     @staticmethod
     def file_groups(groups: list[QgsLayerTreeGroup]) -> list[QgsLayerTreeGroup]:

@@ -38,6 +38,7 @@ from rana_qgis_plugin.layer_management.layer_dirty_flags import (
 )
 from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
+    attach_revision_number_update,
     clear_rana_refs,
     get_rana_refs,
     get_vector_layer_names,
@@ -108,9 +109,6 @@ from rana_qgis_plugin.utils.generic import (
     get_threedi_api,
     get_threedi_organisations,
     save_layer_changes,
-)
-from rana_qgis_plugin.utils.qgis import (
-    is_loaded_in_schematisation_editor,
 )
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
@@ -1027,42 +1025,10 @@ class Loader(QObject):
                 create=False,
                 parent_revision_number=revision_number,
             )
-            filepath = schematisation_db_filepath
-            editable = get_editable_layers_for_file(filepath)
-            if editable:
-                choice = self.communication.custom_ask(
-                    parent,
-                    "Unsaved Changes Detected",
-                    "There are unsaved changes in the revision layers. What would you like to do?",
-                    "Save Changes",
-                    "Discard Changes",
-                    "Cancel Upload",
-                )
-                if choice == "Cancel Upload":
-                    return None
-                if choice == "Save Changes":
-                    for layer in editable:
-                        self.communication.progress_bar("Save changed layers", 0, 0, 0)
-                        ok, save_error = save_layer_changes(layer)
-                        if not ok:
-                            self.communication.bar_error(
-                                f"Failed to save changes in layer '{layer.name()}': {save_error}"
-                            )
-                            return None
-            self.communication.clear_message_bar()
-            if is_loaded_in_schematisation_editor(
-                filepath
-            ) is False and not self.communication.ask(
-                parent,
-                "Warning",
-                "The revision is not loaded in the Rana Schematisation Editor. Continue?",
-                QMessageBox.Warning,
-            ):
-                return None
             upload = UploadWizard(
                 local,
                 schematisation,
-                filepath,
+                schematisation_db_filepath,
                 organisation,
                 self.communication,
                 tc,
@@ -1129,6 +1095,53 @@ class Loader(QObject):
                 f"Could not open the local schematisation: {error}"
             )
             return None
+
+    def commit_opened_revision(self, group, parent) -> SchematisationUploadTask | None:
+        """Prepare and upload a revision represented by an open layer group."""
+        project_id = group.customProperty("rana/project_id")
+        schematisation_id = group.customProperty("rana/schematisation_id")
+        revision_number = group.customProperty("rana/revision_number")
+        filepath = group.customProperty("rana/schematisation_db_filepath")
+        if schematisation_id is None or revision_number is None:
+            return None
+        if self.is_revision_upload_in_progress(schematisation_id):
+            self.communication.bar_error(
+                "A revision of this schematisation is already being uploaded. "
+                "Wait until it has finished."
+            )
+            return None
+        try:
+            editable = get_editable_layers_for_file(filepath)
+            if editable:
+                choice = self.communication.custom_ask(
+                    parent,
+                    "Unsaved Changes Detected",
+                    "There are unsaved changes in the revision layers. What would you like to do?",
+                    "Save Changes",
+                    "Discard Changes",
+                    "Cancel Upload",
+                )
+                if choice == "Cancel Upload":
+                    return None
+                if choice == "Save Changes":
+                    for layer in editable:
+                        self.communication.progress_bar("Save changed layers", 0, 0, 0)
+                        ok, save_error = save_layer_changes(layer)
+                        if not ok:
+                            self.communication.bar_error(
+                                f"Failed to save changes in layer '{layer.name()}': {save_error}"
+                            )
+                            return None
+            self.communication.clear_message_bar()
+        except (OSError, ValueError) as error:
+            self.communication.bar_error(f"Could not save layer changes: {error}")
+            return None
+        task = self.save_revision(
+            project_id, schematisation_id, revision_number, filepath, parent
+        )
+        if task is not None:
+            attach_revision_number_update(group, task)
+        return task
 
     def is_revision_upload_in_progress(self, schematisation_id: int) -> bool:
         """Return whether a revision upload is running for a schematisation."""
