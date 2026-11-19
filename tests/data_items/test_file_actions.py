@@ -33,6 +33,19 @@ from rana_qgis_plugin.data_items.file_actions import (
             ],
         ),
         (
+            "threedi_schematisation",
+            [
+                FileAction.VIEW_FILE_INFO,
+                FileAction.VERSION_HISTORY,
+                FileAction.START_SIMULATION,
+                FileAction.SAVE_LOCAL_REVISION,
+                FileAction.OPEN_IN_QGIS,
+                FileAction.OPEN_IN_BROWSER,
+                FileAction.RENAME,
+                FileAction.DELETE,
+            ],
+        ),
+        (
             "other",
             [
                 FileAction.VIEW_FILE_INFO,

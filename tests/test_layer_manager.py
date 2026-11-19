@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
-from qgis.core import Qgis, QgsProject, QgsVectorLayer
+from qgis.core import Qgis, QgsLayerTreeGroup, QgsProject, QgsVectorLayer
 
 import rana_qgis_plugin.layer_management.layer_manager as lm
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
@@ -75,6 +75,22 @@ def test_clear_rana_refs():
     lm.clear_rana_refs(layer)
 
     assert lm.get_rana_refs(layer) is None
+
+
+def test_find_schematisation_group_matches_normalized_path(tmp_path):
+    root = QgsProject.instance().layerTreeRoot()
+    group = root.addGroup("Schematisation")
+    db_filepath = tmp_path / "schema.gpkg"
+    group.setCustomProperty("rana/schematisation_db_filepath", str(db_filepath))
+
+    assert (
+        lm.find_schematisation_group(str(tmp_path / "folder" / ".." / "schema.gpkg"))
+        == group
+    )
+
+
+def test_find_schematisation_group_returns_none_when_not_found(tmp_path):
+    assert lm.find_schematisation_group(str(tmp_path / "missing.gpkg")) is None
 
 
 # --- Test layer management ---

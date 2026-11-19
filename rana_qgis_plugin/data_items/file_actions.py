@@ -21,6 +21,7 @@ class FileAction(Enum):
     VERSION_HISTORY = "Version history"
     VIEW_FILE_INFO = "View file info"
     START_SIMULATION = "Start simulation"
+    SAVE_LOCAL_REVISION = "Save local revision"
 
     @property
     def icon(self) -> QIcon:
@@ -39,6 +40,7 @@ _ICONS = {
     FileAction.VERSION_HISTORY: icons.history_icon,
     FileAction.ADD_SCHEMATISATION: icons.add_icon,
     FileAction.START_SIMULATION: icons.settings_icon,
+    FileAction.SAVE_LOCAL_REVISION: icons.upload_icon,
 }
 
 _TOOLTIPS = {
@@ -50,6 +52,7 @@ _TOOLTIPS = {
     FileAction.VERSION_HISTORY: "View file version history",
     FileAction.VIEW_FILE_INFO: "View file metadata",
     FileAction.START_SIMULATION: "Start a simulation using the latest revision",
+    FileAction.SAVE_LOCAL_REVISION: "Save the current work in progress as a new revision",
 }
 
 
@@ -74,7 +77,10 @@ def get_file_actions(data_type: str) -> list[FileAction]:
     else:
         actions = [FileAction.OPEN_IN_BROWSER] if data_type == "other" else []
     if data_type == "threedi_schematisation":
-        actions.insert(0, FileAction.START_SIMULATION)
+        actions[0:0] = [
+            FileAction.START_SIMULATION,
+            FileAction.SAVE_LOCAL_REVISION,
+        ]
     return (
         [FileAction.VIEW_FILE_INFO, FileAction.VERSION_HISTORY]
         + actions

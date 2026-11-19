@@ -451,6 +451,29 @@ def find_or_create_rana_groups(
     return current
 
 
+def find_schematisation_group(db_filepath: str) -> Optional[QgsLayerTreeGroup]:
+    """Find the open schematisation group for a database path."""
+    project = QgsProject.instance()
+    assert project is not None
+    target = Path(db_filepath).expanduser().resolve()
+
+    def find(group: QgsLayerTreeGroup) -> Optional[QgsLayerTreeGroup]:
+        for child in group.children():
+            if not isinstance(child, QgsLayerTreeGroup):
+                continue
+            child_filepath = child.customProperty("rana/schematisation_db_filepath")
+            if child_filepath and Path(child_filepath).expanduser().resolve() == target:
+                return child
+            match = find(child)
+            if match is not None:
+                return match
+        return None
+
+    root = project.layerTreeRoot()
+    assert root is not None
+    return find(root)
+
+
 def add_layer_to_group(layer: QgsMapLayer, group: QgsLayerTreeGroup) -> None:
     """Add *layer* to *group*, replacing an existing layer with the same source."""
     project = QgsProject.instance()

@@ -39,12 +39,18 @@ After loading, the top-level group is tagged with:
 - `rana/revision_number`; and
 - `rana/schematisation_db_filepath`.
 
-That group receives a **Save revision** action. The save flow checks for unsaved
-layer edits, confirms the upload through the upload wizard, and runs the upload
-through `SchematisationUploadTask`. The action is disabled while that task is
-active and the revision number is updated only after success. QGIS 4.2 Python
-bindings do not currently provide a reliable layer-level edit/commit guard, so
-users should not edit schematisation layers during upload.
+That group receives a **Save revision** action in the layer panel. The action
+handles unsaved edits in the open schematisation layers and uploads the local
+working-in-progress (WIP) revision through the local WIP upload flow, using
+`SchematisationUploadTask`. The action is disabled while an upload is active.
+After a successful upload, the layer-group revision metadata
+(`rana/revision_number` and related group tags) is not rewritten; the group
+keeps the metadata it was loaded with.
+
+A schematisation's local revision can also be uploaded from the Browser without
+opening it as a WIP layer group. The file-browser **Save local revision** action
+is that non-open-WIP entry point.
+
 
 ## Layer-tree groups
 
