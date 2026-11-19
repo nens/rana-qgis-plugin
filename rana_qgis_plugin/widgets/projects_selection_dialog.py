@@ -188,9 +188,15 @@ class ProjectsModel(QAbstractTableModel):
         bottom_right = self.index(len(self._rows) - 1, _COL_VISIBLE)
         self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.CheckStateRole])
 
-    def hidden_ids(self) -> set:
-        """Return IDs of all projects with visibility=False (including those not currently displayed)."""
-        return {pid for pid, visible in self._visibility.items() if not visible}
+    def effective_hidden_ids(self, base_hidden_ids: set) -> set:
+        """Apply this session's user toggles on top of the persisted hidden set.
+
+        Projects not touched in this session keep their state from base_hidden_ids,
+        including projects that are not currently displayed.
+        """
+        toggled_visible = {p for p, visible in self._visibility.items() if visible}
+        toggled_hidden = {p for p, visible in self._visibility.items() if not visible}
+        return (base_hidden_ids - toggled_visible) | toggled_hidden
 
     def header_check_state(self) -> Qt.CheckState:
         """Tri-state summary of visible rows: all checked, none checked, or mixed."""
@@ -524,10 +530,10 @@ class ProjectsSelectionDialog(QDialog):
 
     def accept(self):
         self.disconnect_avatar_updated()
-        shown_ids = {p["id"] for p in self._all_projects}
-        preserved = self._hidden_ids - shown_ids
         set_hidden_projects(
-            base_url(), get_tenant_id(), self.projects_model.hidden_ids() | preserved
+            base_url(),
+            get_tenant_id(),
+            self.projects_model.effective_hidden_ids(self._hidden_ids),
         )
         super().accept()
 
