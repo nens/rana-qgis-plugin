@@ -2,7 +2,7 @@ History
 =======
 
 
-1.2.25 (unreleased)
+1.2.25 (2026-11-19)
 -------------------
 
 - Refer to Rana Water Intelligence in metadata and docs (nens/rana#4914)
