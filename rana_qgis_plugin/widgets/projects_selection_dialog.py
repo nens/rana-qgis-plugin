@@ -387,7 +387,7 @@ class ProjectsSelectionDialog(QDialog):
         if filters.get("name"):
             filter_params["search"] = filters["name"]
         if filters.get("who"):
-            filter_params["project_user_id"] = filters["who"]
+            filter_params["contributor_user_id"] = filters["who"]
         return filter_params
 
     def fetch_and_populate(self):
