@@ -1089,6 +1089,7 @@ class Loader(QObject):
                 self._track_task(task)
                 task_manager.addTask(task)
                 return task
+            self.communication.clear_message_bar()
             return None
         except (OSError, ValueError) as error:
             self.communication.bar_error(
