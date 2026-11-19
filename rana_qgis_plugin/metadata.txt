@@ -8,7 +8,7 @@ name=Rana
 qgisMinimumVersion=3.38
 qgisMaximumVersion=3.99
 description=Rana QGIS plugin
-version=1.2.25
+version=1.2.26
 author=Rana Water Intelligence
 email=support@ranawaterintelligence.com
 
