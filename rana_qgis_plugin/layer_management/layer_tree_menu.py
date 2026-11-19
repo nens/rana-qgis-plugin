@@ -49,7 +49,6 @@ if TYPE_CHECKING:
 
 _GROUP_PROJECT_ID_KEY = "rana/project_id"
 _GROUP_LOADING_KEY = "rana/loading"
-_GROUP_LOCKED_KEY = "rana/schematisation_uploading"
 
 
 class LayerTreeMenuProvider:
@@ -105,7 +104,12 @@ class LayerTreeMenuProvider:
             save_revision = QAction(rana_icon, "Save revision", menu)
             save_revision.setEnabled(
                 not bool(node.customProperty(_GROUP_LOADING_KEY, False))
-                and not bool(node.customProperty(_GROUP_LOCKED_KEY, False))
+                and (
+                    self.loader is None
+                    or not self.loader.is_revision_upload_in_progress(
+                        node.customProperty(_GROUP_SCHEMATISATION_ID_KEY)
+                    )
+                )
             )
             save_revision.triggered.connect(lambda: self.save_revision([node]))
             menu.addAction(save_revision)
@@ -278,13 +282,6 @@ class LayerTreeMenuProvider:
             self.iface.mainWindow(),
         )
         if task is not None:
-            group.setCustomProperty(_GROUP_LOCKED_KEY, True)
-
-            def unlock_group() -> None:
-                group.setCustomProperty(_GROUP_LOCKED_KEY, False)
-
-            task.upload_succeeded.connect(unlock_group)
-            task.taskTerminated.connect(unlock_group)
             task.upload_succeeded.connect(
                 lambda new_revision: group.setCustomProperty(
                     "rana/revision_number", new_revision

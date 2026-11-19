@@ -74,6 +74,22 @@ def test_save_revision_requires_authenticated_api():
     )
 
 
+def test_save_revision_refuses_schematisation_with_upload_in_progress():
+    communication = MagicMock()
+    loader = Loader(communication)
+    loader._revision_uploads_in_progress.add(1)
+
+    with patch("rana_qgis_plugin.loader.get_threedi_api") as get_api:
+        result = loader.save_revision("project", 1, 1, "/tmp/schema.gpkg", None)
+
+    assert result is None
+    get_api.assert_not_called()
+    communication.bar_error.assert_called_once_with(
+        "A revision of this schematisation is already being uploaded. "
+        "Wait until it has finished."
+    )
+
+
 def test_import_schematisation_from_hcc_requires_authenticated_api():
     communication = MagicMock()
     loader = Loader(communication)

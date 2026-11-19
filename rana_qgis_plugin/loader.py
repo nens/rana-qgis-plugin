@@ -186,6 +186,7 @@ class Loader(QObject):
         self.avatar_pool.setMaxThreadCount(1)
         self.avatar_workers: list[AvatarWorker] = []
         self.active_tasks: set[QgsTask] = set()
+        self._revision_uploads_in_progress: set[int] = set()
         self._accept_async_callbacks = True
         self.scenario_action_busy = False
         self.scenario_action_pending = 0
@@ -989,6 +990,12 @@ class Loader(QObject):
         parent: object,
     ) -> SchematisationUploadTask | None:
         """Prepare a local schematisation revision for upload."""
+        if self.is_revision_upload_in_progress(schematisation_id):
+            self.communication.bar_error(
+                "A revision of this schematisation is already being uploaded. "
+                "Wait until it has finished."
+            )
+            return None
         self.communication.progress_bar("preparing for save revision", 0, 0, 0)
         try:
             # TODO: this takes quite some time and progress bar is blocked during that time
@@ -1096,12 +1103,23 @@ class Loader(QObject):
                         or "Schematisation upload failed or was cancelled."
                     )
                 )
+                task.taskCompleted.connect(
+                    lambda: self._revision_uploads_in_progress.discard(
+                        schematisation_id
+                    )
+                )
+                task.taskTerminated.connect(
+                    lambda: self._revision_uploads_in_progress.discard(
+                        schematisation_id
+                    )
+                )
                 task_manager = QgsApplication.taskManager()
                 if task_manager is None:
                     self.communication.bar_error(
                         "Could not start schematisation upload."
                     )
                     return None
+                self._revision_uploads_in_progress.add(schematisation_id)
                 self._track_task(task)
                 task_manager.addTask(task)
                 return task
@@ -1111,6 +1129,10 @@ class Loader(QObject):
                 f"Could not open the local schematisation: {error}"
             )
             return None
+
+    def is_revision_upload_in_progress(self, schematisation_id: int) -> bool:
+        """Return whether a revision upload is running for a schematisation."""
+        return schematisation_id in self._revision_uploads_in_progress
 
     def save_initial_revision(
         self,
