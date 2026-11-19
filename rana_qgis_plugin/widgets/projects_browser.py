@@ -158,7 +158,7 @@ class ProjectsBrowser(QWidget):
                     <h2 style="font-weight:600; margin-bottom:12px;">
                         No projects found
                     </h2>
-                    <br><br> 
+                    <br><br>
                     <a href="{new_project_url}" style="display:inline-block; margin-top:4px;">
                         Create a project
                     </a>
@@ -178,7 +178,7 @@ class ProjectsBrowser(QWidget):
         if filters.get("name"):
             params["search"] = filters["name"]
         if filters.get("who"):
-            params["project_user_id"] = filters["who"]
+            params["contributor_user_id"] = filters["who"]
         return params
 
     def _fetch_and_populate(self):

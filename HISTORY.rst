@@ -7,6 +7,7 @@ History
 
 - Refer to Rana Water Intelligence in metadata and docs.
 - Fixed simulations not being started due to signal destruction (nens/rana#5314, nens/rana#5258)
+- Filter projects based on contributor instead of project user id (nens/rana#4908)
 
 
 1.2.24 (2026-11-12)
