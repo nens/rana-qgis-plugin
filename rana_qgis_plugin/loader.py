@@ -40,6 +40,7 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     RanaLayerRef,
     attach_revision_number_update,
     clear_rana_refs,
+    find_schematisation_group,
     get_rana_refs,
     get_vector_layer_names,
     open_rana_raster,
@@ -1142,6 +1143,67 @@ class Loader(QObject):
         if task is not None:
             attach_revision_number_update(group, task)
         return task
+
+    def commit_stored_revision(
+        self, project: dict, file_item: dict, descriptor_id: str, parent
+    ) -> SchematisationUploadTask | None:
+        """Find and upload a local WIP revision without opening it first."""
+        api = get_threedi_api()
+        if api is None:
+            self.communication.bar_error(
+                "Not authenticated with HCC API — cannot save schematisation revision."
+            )
+            return None
+        try:
+            metadata = get_threedi_schematisation(descriptor_id)
+        except (RanaFetchError, NetworkUnavailableError) as error:
+            self.communication.show_warn(str(error))
+            return None
+        schematisation = metadata["schematisation"]
+        schematisation_id = schematisation["id"]
+        if self.is_revision_upload_in_progress(schematisation_id):
+            self.communication.bar_error(
+                "A revision of this schematisation is already being uploaded. "
+                "Wait until it has finished."
+            )
+            return None
+        try:
+            candidate = LocalSchematisation(
+                hcc_working_dir(), schematisation_id, schematisation["name"]
+            )
+            local = LocalSchematisation.initialize_from_location(candidate.main_dir)
+            wip_revision = local.wip_revision if local is not None else None
+            db_filepath = (
+                wip_revision.schematisation_db_filepath
+                if wip_revision is not None
+                else None
+            )
+        except OSError:
+            db_filepath = None
+            wip_revision = None
+        if wip_revision is None or db_filepath is None:
+            self.communication.show_warn(
+                f"No local work in progress found for '{schematisation['name']}'. "
+                "Open the schematisation first to create one."
+            )
+            return None
+        if not self.communication.ask(
+            parent,
+            "Upload local revision",
+            f"Upload local work in progress from '{wip_revision.main_dir}' as a new revision?",
+            QMessageBox.Question,
+        ):
+            return None
+        group = find_schematisation_group(db_filepath)
+        if group is not None:
+            return self.commit_opened_revision(group, parent)
+        return self.save_revision(
+            project["id"],
+            schematisation_id,
+            wip_revision.number,
+            db_filepath,
+            parent,
+        )
 
     def is_revision_upload_in_progress(self, schematisation_id: int) -> bool:
         """Return whether a revision upload is running for a schematisation."""
