@@ -2,8 +2,28 @@
 # Copyright (C) 2023 by Lutra Consulting for 3Di Water Management
 from qgis.core import Qgis, QgsMessageLog
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox, QProgressBar, QPushButton
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QInputDialog,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+)
 from threedi_mi_utils.ui import ColoredProgressBar
+
+
+def resolve_parent(parent=None):
+    """Return parent if given, else QApplication.activeModalWidget(), else iface.mainWindow() (if iface available), else None."""
+    if parent is not None:
+        return parent
+    modal_widget = QApplication.activeModalWidget()
+    if modal_widget is not None:
+        return modal_widget
+    from qgis.utils import iface
+
+    if iface is not None:
+        return iface.mainWindow()
+    return None
 
 
 class UICommunication:
@@ -17,7 +37,7 @@ class UICommunication:
     def show_info(self, msg, parent=None, context=None):
         """Showing info dialog."""
         if self.iface is not None:
-            parent = parent if parent is not None else self.iface.mainWindow()
+            parent = resolve_parent(parent)
             context = self.context if context is None else context
             QMessageBox.information(parent, context, msg)
         else:
@@ -26,7 +46,7 @@ class UICommunication:
     def show_warn(self, msg, parent=None, context=None):
         """Showing warning dialog."""
         if self.iface is not None:
-            parent = parent if parent is not None else self.iface.mainWindow()
+            parent = resolve_parent(parent)
             context = self.context if context is None else context
             QMessageBox.warning(parent, context, msg)
         else:
@@ -35,7 +55,7 @@ class UICommunication:
     def show_error(self, msg, parent=None, context=None):
         """Showing error dialog."""
         if self.iface is not None:
-            parent = parent if parent is not None else self.iface.mainWindow()
+            parent = resolve_parent(parent)
             context = self.context if context is None else context
             QMessageBox.critical(parent, context, msg)
         else:
@@ -71,7 +91,7 @@ class UICommunication:
     @staticmethod
     def ask(parent, title, question, box_icon=QMessageBox.Icon.Question):
         """Ask for operation confirmation."""
-        msg_box = QMessageBox(parent)
+        msg_box = QMessageBox(resolve_parent(parent))
         msg_box.setIcon(box_icon)
         msg_box.setWindowTitle(title)
         msg_box.setTextFormat(Qt.TextFormat.RichText)
@@ -89,7 +109,7 @@ class UICommunication:
     @staticmethod
     def custom_ask(parent, title, question, *buttons_labels):
         """Ask for custom operation confirmation."""
-        msg_box = QMessageBox(parent)
+        msg_box = QMessageBox(resolve_parent(parent))
         msg_box.setIcon(QMessageBox.Icon.Question)
         msg_box.setWindowTitle(title)
         msg_box.setTextFormat(Qt.TextFormat.RichText)
@@ -103,13 +123,13 @@ class UICommunication:
 
     @staticmethod
     def input_ask(parent, title, label):
-        return QInputDialog.getText(parent, title, label)
+        return QInputDialog.getText(resolve_parent(parent), title, label)
 
     def pick_item(self, title, message, parent=None, *items):
         """Getting item from list of items."""
         if self.iface is None:
             return None
-        parent = parent if parent is not None else self.iface.mainWindow()
+        parent = resolve_parent(parent)
         item, accept = QInputDialog.getItem(
             parent, title, message, items, editable=False
         )
