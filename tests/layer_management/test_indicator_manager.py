@@ -11,6 +11,7 @@ from rana_qgis_plugin.layer_management.layer_manager import (
     clear_rana_refs,
     set_rana_refs,
 )
+from rana_qgis_plugin.layer_management.upload_lock import UPLOAD_LOCK_PROPERTY
 
 
 def make_linked_vector_layer(name: str) -> QgsVectorLayer:
@@ -280,5 +281,51 @@ def test_disconnect_removes_managed_indicators(qgis_application):
     assert view.indicators(node) == []
     assert view.indicators(group) == []
     layer.styleChanged.emit()
+    assert view.indicators(node) == []
+    project.clear()
+
+
+def test_upload_lock_indicator_follows_the_lock_property(qgis_application):
+    project = QgsProject.instance()
+    project.clear()
+    view, manager = make_indicator_manager(project)
+    group = project.layerTreeRoot().addGroup("files")
+    layer = make_vector_layer("unlinked")
+    project.addMapLayer(layer, False)
+    node = group.addLayer(layer)
+
+    layer.setCustomProperty(UPLOAD_LOCK_PROPERTY, "false")
+
+    assert [i.toolTip() for i in view.indicators(node)] == [
+        "Uploading to Rana \u2014 read-only until the upload finishes"
+    ]
+    assert view.indicators(group) == []
+
+    layer.removeCustomProperty(UPLOAD_LOCK_PROPERTY)
+
+    assert view.indicators(node) == []
+    manager.disconnect()
+    project.clear()
+
+
+def test_dirty_and_upload_indicators_coexist(qgis_application):
+    project = QgsProject.instance()
+    project.clear()
+    view, manager = make_indicator_manager(project)
+    layer = make_linked_vector_layer("linked")
+    project.addMapLayer(layer, False)
+    node = project.layerTreeRoot().addLayer(layer)
+    layer.styleChanged.emit()
+
+    layer.setCustomProperty(UPLOAD_LOCK_PROPERTY, "false")
+
+    assert len(view.indicators(node)) == 2
+
+    layer.removeCustomProperty(UPLOAD_LOCK_PROPERTY)
+
+    assert [i.toolTip() for i in view.indicators(node)] == [
+        "Has unsynced changes to Rana"
+    ]
+    manager.disconnect()
     assert view.indicators(node) == []
     project.clear()

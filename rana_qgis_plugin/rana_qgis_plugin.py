@@ -25,6 +25,7 @@ from rana_qgis_plugin.layer_management.indicator_manager import IndicatorManager
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
 from rana_qgis_plugin.layer_management.local_linking import LocalLinkingListener
 from rana_qgis_plugin.layer_management.raster_watch import RasterWatch
+from rana_qgis_plugin.layer_management.upload_lock import restore_stale_upload_locks
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.settings import initialize_settings
 
@@ -125,10 +126,16 @@ class RanaQgisPlugin(QObject):
         self.raster_watch.connect()
         self.project_close_sync_prompt.connect()
         self.layer_removal_sync_prompt.connect()
+        QgsProject.instance().readProject.connect(self.on_project_read)
         self.iface.mainWindow().installEventFilter(self)
+
+    def on_project_read(self, _document) -> None:
+        """Undo upload locks that were saved in a project mid-upload."""
+        restore_stale_upload_locks(QgsProject.instance())
 
     def unload(self):
         self.iface.mainWindow().removeEventFilter(self)
+        QgsProject.instance().readProject.disconnect(self.on_project_read)
         self.layer_removal_sync_prompt.disconnect()
         self.project_close_sync_prompt.disconnect()
         self.indicator_manager.disconnect()

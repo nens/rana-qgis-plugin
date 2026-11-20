@@ -1,3 +1,5 @@
+import sqlite3
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
@@ -7,6 +9,8 @@ import requests
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import QSettings, pyqtSignal
 
+from rana_qgis_plugin.layer_management.file_fingerprint import fingerprint_file
+from rana_qgis_plugin.layer_management.sync_lock import SyncKey
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     finish_file_upload,
@@ -18,6 +22,10 @@ from rana_qgis_plugin.utils.local_paths import get_local_file_path
 from rana_qgis_plugin.utils.qgis import convert_vectorfile_to_geopackage
 from rana_qgis_plugin.utils.time import convert_timestamp_str_to_local_time
 
+CHECKPOINT_ATTEMPTS = 3
+CHECKPOINT_TIMEOUT = 1.0
+CHECKPOINT_RETRY_DELAY = 0.5
+
 
 @dataclass
 class UploadJob:
@@ -28,9 +36,35 @@ class UploadJob:
     upload_url: str
     payload: dict
     last_modified_key: str | None = field(default=None, init=False, compare=False)
+    sync_key: SyncKey | None = field(default=None, init=False, compare=False)
+    start_fingerprint: str | None = field(default=None, init=False, compare=False)
 
     def preprocess(self) -> None:
         """Perform any work required before transferring the file."""
+        if self.local_path.suffix.lower() == ".gpkg":
+            self.checkpoint_geopackage()
+
+    def checkpoint_geopackage(self) -> None:
+        """Move committed edits from the WAL into the main GeoPackage file.
+
+        QGIS can keep a GeoPackage in WAL mode while it is open, so the main
+        file alone may miss recent commits. Runs on the worker thread.
+        """
+        for attempt in range(CHECKPOINT_ATTEMPTS):
+            connection = sqlite3.connect(self.local_path, timeout=CHECKPOINT_TIMEOUT)
+            try:
+                result = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                busy = result.fetchone()[0]
+            finally:
+                connection.close()
+            if not busy:
+                return
+            if attempt < CHECKPOINT_ATTEMPTS - 1:
+                time.sleep(CHECKPOINT_RETRY_DELAY)
+        raise RuntimeError(
+            f"Could not write the latest edits of {self.local_path.name} to the "
+            "file because another program is using it. Try again later."
+        )
 
 
 @dataclass
@@ -218,6 +252,7 @@ def prepare_existing_file_upload(
 class FileUploadTask(QgsTask):
     """Upload prepared files without blocking QGIS's main thread."""
 
+    file_completed = pyqtSignal(object)
     file_failed = pyqtSignal(str, str)
     file_started = pyqtSignal(str)
 
@@ -241,6 +276,8 @@ class FileUploadTask(QgsTask):
             self.file_started.emit(job.local_path.name)
             try:
                 job.preprocess()
+                # Taken right before the file is read, so later changes show up.
+                job.start_fingerprint = fingerprint_file(job.local_path)
                 with job.local_path.open("rb") as file:
                     # timout guerds against failing to reach the server
                     # no read timeout because S3 only responds at the end of the PUT
@@ -263,5 +300,7 @@ class FileUploadTask(QgsTask):
             except Exception as error:
                 self.failed_files.append((job.local_path, str(error)))
                 self.file_failed.emit(str(job.local_path), str(error))
+            else:
+                self.file_completed.emit(job)
             self.setProgress((index + 1) * 100 / len(self.jobs))
         return len(self.failed_files) == 0

@@ -41,6 +41,7 @@ def style_item():
         upload_func=MagicMock(),
         project_id="project",
         descriptor_id="descriptor",
+        file_id="folder/roads.gpkg",
     )
 
 

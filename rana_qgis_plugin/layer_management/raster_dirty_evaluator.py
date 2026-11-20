@@ -46,3 +46,19 @@ def evaluate_raster_data_dirty(layer: QgsRasterLayer) -> LayerSyncState:
 
     set_data_sync_state(layer, LayerSyncState.DIRTY.value)
     return LayerSyncState.DIRTY
+
+
+def finish_raster_upload(layer: QgsRasterLayer, start_fingerprint: str | None) -> None:
+    """Set the raster's data state after its file was uploaded.
+
+    *start_fingerprint* was taken just before the file was read for upload. A
+    file that changed since then holds edits that were not uploaded, so the
+    layer stays dirty. A missing fingerprint counts as changed.
+    """
+    source = raster_source_path(layer)
+    if source is None:
+        return
+    if start_fingerprint is not None and fingerprint_file(source) == start_fingerprint:
+        capture_raster_baseline(layer)
+    else:
+        set_data_sync_state(layer, LayerSyncState.DIRTY.value)
