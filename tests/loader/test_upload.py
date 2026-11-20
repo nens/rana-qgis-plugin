@@ -6,6 +6,7 @@ import pytest
 from qgis.core import QgsApplication, QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import QCoreApplication
 
+from rana_qgis_plugin.layer_management.file_fingerprint import fingerprint_file
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_FINGERPRINT_PROPERTY,
     DATA_SYNC_STATE_PROPERTY,
@@ -16,6 +17,7 @@ from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
     evaluate_raster_data_dirty,
 )
+from rana_qgis_plugin.layer_management.upload_lock import FileLock
 from rana_qgis_plugin.loader import Loader, UploadChoice
 from rana_qgis_plugin.workers.upload import UploadJob, UploadPreparationResult
 
@@ -290,7 +292,7 @@ def test_handle_upload_file_failed_logs_error():
     communication.log_err.assert_called_once()
 
 
-def test_data_sync_acquires_and_releases_lock_and_clears_dirty_state():
+def test_data_sync_completion_releases_lock_and_leaves_state_to_file_handlers():
     loader, communication = make_loader()
     task = MagicMock()
     task.rana_sync_keys = [("project", "descriptor")]
@@ -308,14 +310,14 @@ def test_data_sync_acquires_and_releases_lock_and_clears_dirty_state():
         )
 
     clear_dirty.assert_not_called()
-    layer.setCustomProperty.assert_called_once_with(
-        DATA_SYNC_STATE_PROPERTY, LayerSyncState.CLEAN.value
-    )
+    layer.setCustomProperty.assert_not_called()
     assert not loader.layer_lock_registry.is_locked(("project", "descriptor"))
     communication.bar_info.assert_called_once()
 
 
-def test_successful_raster_data_sync_captures_new_baseline(tmp_path, qgis_application):
+def test_successful_raster_file_upload_captures_new_baseline(
+    tmp_path, qgis_application
+):
     QgsProject.instance().clear()
     loader, _ = make_loader()
     cache_dir = tmp_path / "cache"
@@ -333,14 +335,14 @@ def test_successful_raster_data_sync_captures_new_baseline(tmp_path, qgis_applic
         raster_path.write_bytes(raster_path.read_bytes() + b"edited")
         layer.setCustomProperty(DATA_SYNC_STATE_PROPERTY, LayerSyncState.DIRTY.value)
 
-        task = MagicMock()
-        task.rana_sync_keys = [("project", "descriptor")]
-        task.isCanceled.return_value = False
-        with patch.object(loader, "layers_for_keys", return_value=[layer]):
-            loader.handle_sync_completed(
-                task, DATA_SYNC_STATE_PROPERTY, "Data saved to Rana.", []
-            )
+        job = UploadJob("project", raster_path, "url", {})
+        job.start_fingerprint = fingerprint_file(raster_path)
+        key = ("project", "dem.tif")
+        lock = FileLock(key, loader.layer_lock_registry, [])
+        assert loader.layer_lock_registry.acquire(key)
+        loader.handle_data_file_completed(job, lock)
 
+        assert not loader.layer_lock_registry.is_locked(key)
         assert layer.customProperty(DATA_FINGERPRINT_PROPERTY) != original_baseline
         assert (
             layer.customProperty(DATA_SYNC_STATE_PROPERTY) == LayerSyncState.CLEAN.value

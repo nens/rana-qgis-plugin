@@ -3,7 +3,7 @@ feature: fix_539_upload_race_condition
 status: planned
 created: 2026-11-20
 chunk_size: adaptive
-total_tasks: 9
+total_tasks: 10
 estimated_lines: 570
 ---
 
@@ -71,19 +71,27 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - **Acceptance:** Indicator appears when the property is set and disappears when it is removed; dirty indicator unaffected.
 - **Evidence:** unit tests on `IndicatorManager` with a real layer tree view.
 
-#### Task 7: Wire locking into `upload_existing_files`
-- **Estimate:** ~110 lines (incl. tests)
-- **Files:** `rana_qgis_plugin/loader.py` (`:1784-1901`, `:2020-2022`, `:2044-2059`, `:1750`), plugin project-read hookup, `tests/loader/`
-- **Description:** Pre-check for editable layers before `prepare_existing_file_upload` ("Save or discard your edits first."); call `lock_jobs` after all early returns (items empty, conflict abort/skip, no jobs, no task manager) and only for the files that have a job (fixes keys for skipped files); try/except from lock to `addTask` that releases all locks; `file_completed` handler (unlock, vector -> clean, raster -> Task 5) and `file_failed` handler, each in try/finally; `taskCompleted`/`taskTerminated` release any remaining locks. Remove the data-sync state updates (`capture_raster_baseline` / `set_data_sync_state`) from `handle_sync_completed` for data uploads, so the task-level handler cannot override the per-file raster decision. Call `restore_stale_upload_locks` on project read. Drive-by: new-file upload shows "Downloading {name}" (`:1750`); change to "Uploading {name}".
+#### Task 7a: Wire locking into `upload_existing_files` (core)
+- **Estimate:** ~70 lines (incl. tests)
+- **Files:** `rana_qgis_plugin/loader.py`, `tests/loader/`
+- **Description:** Set `sync_key` on each prepared job. Call `lock_jobs` after all early returns (items empty, conflict abort/skip, no jobs, no task manager), only for the files that have a job (fixes keys for skipped files). One try/except from lock to `addTask` releases all locks; task construction lives in `create_data_upload_task`. `file_completed` handler (unlock, vector -> clean, raster -> `finish_raster_upload`) and `file_failed` handler, each in try/finally; `taskCompleted`/`taskTerminated` release any remaining locks. Remove the data-sync state updates from `handle_sync_completed` for data uploads, so the task-level handler cannot override the per-file raster decision.
 - **Depends on:** Tasks 2, 3, 5
 - **Acceptance:** Per-file unlock as each file finishes; skipped/errored files never locked; failures, cancel and setup exceptions leave nothing locked or read-only.
-- **Evidence:** loader unit tests (the raster-changed-during-upload test runs the real `FileUploadTask` with only the network stubbed, so it also guards that `start_fingerprint` is taken right before the file is read, `workers/upload.py` `run()`; lock released on completed, failed, terminated, and on exception during task setup; skipped job never locked; raster changed during upload is still dirty after `taskCompleted`). Manual test paths in Notes.
+- **Evidence:** loader unit tests (failed file unlocked, `release_file_locks` unlocks all and is repeatable, unlock on exception during task setup, skipped job never locked). Happy path, raster state and per-file timing are covered by e2e `test_sync_lifecycle` (with explicit permission, add `not readOnly()` and no `rana/upload_lock` assertions after the vector sync) and by Task 9. Manual test paths in Notes.
+
+#### Task 7b: Pre-check, stale locks on project read, wording
+- **Estimate:** ~40 lines (incl. tests)
+- **Files:** `rana_qgis_plugin/loader.py` (`upload_existing_files` start, `:1750`), `rana_qgis_plugin/rana_qgis_plugin.py`, `tests/loader/`
+- **Description:** Pre-check for editable layers before `prepare_existing_file_upload` ("Save or discard your edits first."), so a refused file does not open an upload session. Call `restore_stale_upload_locks` on project read (`QgsProject.readProject`, connected in `initGui`, disconnected in `unload`). Drive-by: new-file upload shows "Downloading {name}" (`:1750`); change to "Uploading {name}".
+- **Depends on:** Task 7a
+- **Acceptance:** A file with a layer in edit mode is refused before preparing; a project saved mid-upload and reopened has nothing read-only.
+- **Evidence:** loader unit test for the refusal (no `prepare_existing_file_upload` call); `restore_stale_upload_locks` is already unit tested (Task 2). Manual: edit-mode refusal, save project during upload and reopen.
 
 #### Task 8: Download takes the same file lock
 - **Estimate:** ~70 lines (incl. tests)
 - **Files:** `rana_qgis_plugin/loader.py` (`download_and_open` `:2245-2285`, folder dispatch `:2181-2191`), `tests/loader/`
 - **Description:** After the `resolve_url` and `task_manager` early returns, take `sync_key(project["id"], file_item["id"])`; if held by an upload show "`<file>` is being uploaded. Open it again when the upload has finished." and do not download. Release in `taskCompleted`/`taskTerminated` of the `DownloadTask`, with guarded setup. In folder opens, skip such files and report how many were skipped. An upload of a file being downloaded is refused by the existing message.
-- **Depends on:** Task 1 (shared key), Task 7 (key semantics per file)
+- **Depends on:** Task 1 (shared key), Task 7a (key semantics per file)
 - **Acceptance:** No download starts while the file's upload key is held; key released after download success, failure and cancel.
 - **Evidence:** unit tests for refusal, release paths, and folder skip count.
 
@@ -93,14 +101,14 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - **Estimate:** ~0 lines (checklist)
 - **Files:** none (PR description)
 - **Description:** Run the manual QGIS checks from `design.md` and record results: multi-table GeoPackage locked/unlocked per file with lock indicator; batch unlock one by one; edit mode refusal; cancel and forced failure; skipped file never locked; close project / remove layer during upload; save project during upload and reopen; raster overwritten during upload stays dirty; commit, upload, download shows edits; reopen a file during its upload refused and folder skips it; style upload during data upload of the same file refused. Also check bytes 18-19 of a `.gpkg` after closing QGIS (WAL question in the design).
-- **Depends on:** Tasks 1-8
+- **Depends on:** Tasks 1-8 (incl. 7a, 7b)
 - **Acceptance:** All checks pass or are filed as follow-ups.
 - **Evidence:** checklist in the PR description. E2E tests are not added; propose them only with explicit permission.
 
 ## Notes
 
 - Parallel: Tasks 1 and 3 are independent; Tasks 4 and 5 can run together after Task 3; Task 6 can run after Task 2.
-- Task 7 is the largest and riskiest; if review feels heavy, split off the per-file handlers (unlock/state) from the setup guard.
+- Task 7 was split into 7a (core wiring) and 7b (pre-check, stale locks, wording) because it was the largest and riskiest.
 - Complexity check: one new module (`upload_lock.py`) plus its test file; everything else modifies existing files. The shared `sync_key` function has 4 call sites (data upload, style upload, `layers_for_keys`, download); extraction accepted by the engineer.
 - Out of scope / deferred: locking layers for new-file uploads (unlikely; fix when it turns up), downloading over un-uploaded local edits, remote conflict detection (`If-Match`), unused server upload sessions after conflict skip/abort, edits by external programs.
 - Windows-only rare read failure on rollback-mode GeoPackages over 1 GB: a failed upload can be retried; no task.
@@ -112,6 +120,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - [x] Task 4: GeoPackage checkpoint before upload
 - [x] Task 5: Raster completion decision
 - [x] Task 6: Upload lock indicator
-- [ ] Task 7: Wire locking into `upload_existing_files`
+- [x] Task 7a: Wire locking into `upload_existing_files` (core)
+- [ ] Task 7b: Pre-check, stale locks on project read, wording
 - [ ] Task 8: Download takes the same file lock
 - [ ] Task 9: Manual verification and PR notes

@@ -1,5 +1,6 @@
 """Central loader: owns background workers and the avatar cache."""
 
+import traceback
 from collections.abc import Callable, Sequence
 from enum import Enum
 from pathlib import Path, PurePosixPath
@@ -51,8 +52,10 @@ from rana_qgis_plugin.layer_management.layer_manager import (
 )
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
+    finish_raster_upload,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
+from rana_qgis_plugin.layer_management.upload_lock import FileLock, lock_jobs
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
@@ -1814,6 +1817,7 @@ class Loader(QObject):
             if result.error:
                 errors.append(f"{item.layer_name}: {result.error}")
             if result.job is not None:
+                result.job.sync_key = sync_key(ref.project_id, ref.file_id)
                 jobs.append(result.job)
         for error in errors:
             self.communication.log_err(error)
@@ -1852,6 +1856,7 @@ class Loader(QObject):
                 message=message,
             )
             if result.job is not None:
+                result.job.sync_key = sync_key(ref.project_id, ref.file_id)
                 jobs.append(result.job)
         if not jobs:
             return
@@ -1859,19 +1864,48 @@ class Loader(QObject):
         if task_manager is None:
             self.communication.bar_error("Could not start file sync.")
             return
-        keys = list(
-            {
-                sync_key(item.rana_ref.project_id, item.rana_ref.file_id)
-                for item in verified_items
-            }
-        )
-        if not self.acquire_sync_keys(keys):
-            self.communication.bar_warn("A sync is already in progress.")
-            return
 
-        task = FileUploadTask(jobs)
-        task.rana_sync_keys = keys
-        task.file_failed.connect(self.handle_upload_file_failed)
+        # The locks make layers read-only, so any failure between taking them and
+        # handing the task to the task manager must release them (`locks` starts
+        # empty so the except block can always release whatever was taken).
+        locks: list[FileLock] = []
+        try:
+            locks, warnings = lock_jobs(jobs, self.layer_lock_registry)
+            if warnings:
+                self.communication.bar_warn("\n".join(warnings))
+            if not locks:
+                return
+            task_manager.addTask(self.create_data_upload_task(jobs, locks))
+        except Exception as error:
+            self.release_file_locks(locks)
+            self.communication.log_err(
+                f"Could not start file sync: {error}\n{traceback.format_exc()}"
+            )
+            self.communication.bar_error("Could not start file sync.")
+
+    def create_data_upload_task(
+        self, jobs: list[UploadJob], locks: list[FileLock]
+    ) -> FileUploadTask:
+        """Build the upload task for the locked jobs and connect its handlers."""
+        locks_by_path = {
+            str(job.local_path): lock
+            for job in jobs
+            for lock in locks
+            if lock.key == job.sync_key
+        }
+        locked_jobs = [j for j in jobs if str(j.local_path) in locks_by_path]
+        task = FileUploadTask(locked_jobs)
+        task.rana_sync_keys = [lock.key for lock in locks]
+        task.file_completed.connect(
+            lambda job: self.handle_data_file_completed(
+                job, locks_by_path[str(job.local_path)]
+            )
+        )
+        task.file_failed.connect(
+            lambda path, error: self.handle_data_file_failed(
+                path, error, locks_by_path[path]
+            )
+        )
         task.file_started.connect(
             lambda name: self.set_progress_bar_busy(f"Uploading {name}")
         )
@@ -1887,10 +1921,36 @@ class Loader(QObject):
             )
         )
         task.taskCompleted.connect(lambda: self.update_descriptor_ids(task))
+        task.taskCompleted.connect(lambda: self.release_file_locks(locks))
         task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
+        task.taskTerminated.connect(lambda: self.release_file_locks(locks))
         task.taskTerminated.connect(lambda: self.handle_data_sync_terminated(task))
         self._track_task(task)
-        task_manager.addTask(task)
+        return task
+
+    def handle_data_file_completed(self, job: UploadJob, lock: FileLock) -> None:
+        """Mark one uploaded file's layers as synced, then unlock them."""
+        try:
+            for layer in self.layers_for_keys([lock.key]):
+                if isinstance(layer, QgsRasterLayer):
+                    finish_raster_upload(layer, job.start_fingerprint)
+                else:
+                    set_data_sync_state(layer, "clean")
+        finally:
+            lock.release()
+
+    def handle_data_file_failed(self, path: str, error: str, lock: FileLock) -> None:
+        """Log one failed file upload and unlock its layers."""
+        try:
+            self.handle_upload_file_failed(path, error)
+        finally:
+            lock.release()
+
+    @staticmethod
+    def release_file_locks(locks: list[FileLock]) -> None:
+        """Release every lock still held; safe after per-file releases."""
+        for lock in locks:
+            lock.release()
 
     def upload_styles(self, items: list[StyleUploadItem]) -> None:
         """Submit a background task for the supplied style uploads."""
@@ -2033,16 +2093,14 @@ class Loader(QObject):
     def handle_sync_completed(
         self, task, dirty_property: str, message: str, failures: list
     ) -> None:
-        if not failures and not task.isCanceled():
+        # Data uploads set the sync state per file (handle_data_file_completed).
+        if (
+            dirty_property != DATA_SYNC_STATE_PROPERTY
+            and not failures
+            and not task.isCanceled()
+        ):
             for layer in self.layers_for_keys(task.rana_sync_keys):
-                if dirty_property == DATA_SYNC_STATE_PROPERTY and isinstance(
-                    layer, QgsRasterLayer
-                ):
-                    capture_raster_baseline(layer)
-                elif dirty_property == DATA_SYNC_STATE_PROPERTY:
-                    set_data_sync_state(layer, "clean")
-                else:
-                    clear_dirty(layer, dirty_property)
+                clear_dirty(layer, dirty_property)
         self.release_sync_keys(task.rana_sync_keys)
         self.communication.clear_message_bar()
         self.communication.bar_info(message)
