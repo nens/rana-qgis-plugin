@@ -7,6 +7,7 @@ import requests
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import QSettings, pyqtSignal
 
+from rana_qgis_plugin.layer_management.sync_lock import SyncKey
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     finish_file_upload,
@@ -28,6 +29,7 @@ class UploadJob:
     upload_url: str
     payload: dict
     last_modified_key: str | None = field(default=None, init=False, compare=False)
+    sync_key: SyncKey | None = field(default=None, init=False, compare=False)
 
     def preprocess(self) -> None:
         """Perform any work required before transferring the file."""
@@ -218,6 +220,7 @@ def prepare_existing_file_upload(
 class FileUploadTask(QgsTask):
     """Upload prepared files without blocking QGIS's main thread."""
 
+    file_completed = pyqtSignal(object)
     file_failed = pyqtSignal(str, str)
     file_started = pyqtSignal(str)
 
@@ -263,5 +266,7 @@ class FileUploadTask(QgsTask):
             except Exception as error:
                 self.failed_files.append((job.local_path, str(error)))
                 self.file_failed.emit(str(job.local_path), str(error))
+            else:
+                self.file_completed.emit(job)
             self.setProgress((index + 1) * 100 / len(self.jobs))
         return len(self.failed_files) == 0
