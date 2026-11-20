@@ -25,7 +25,7 @@ from rana_qgis_plugin.layer_management.sync_changes import (
     SyncChanges,
     SyncKind,
 )
-from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
     SyncDialog,
     dispatch_selected,
@@ -167,7 +167,7 @@ class LayerTreeMenuProvider:
         for group, ref, layer in self.iterate_file_groups(groups):
             if ref is None or not ref.descriptor_id:
                 continue
-            key = (ref.project_id, ref.descriptor_id)
+            key = sync_key(ref.project_id, ref.file_id)
             if key in seen:
                 continue
             data_type = (
@@ -189,6 +189,7 @@ class LayerTreeMenuProvider:
                     f"file {ref.file_id}",
                     layer_source,
                     project_id=ref.project_id,
+                    file_id=ref.file_id,
                 )
             )
             seen.add(key)

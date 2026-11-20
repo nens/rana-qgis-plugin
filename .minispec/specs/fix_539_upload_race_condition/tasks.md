@@ -106,7 +106,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - Windows-only rare read failure on rollback-mode GeoPackages over 1 GB: a failed upload can be retried; no task.
 
 ## Progress
-- [ ] Task 1: Stable shared `sync_key(project_id, file_id)`
+- [x] Task 1: Stable shared `sync_key(project_id, file_id)`
 - [ ] Task 2: `layers_for_file` and `FileLock` / `lock_jobs`
 - [ ] Task 3: Per-file completion on the upload task
 - [ ] Task 4: GeoPackage checkpoint before upload
