@@ -141,6 +141,7 @@ def prepare_existing_file_upload(
     file: dict,
     local_file: Path | None = None,
     overwrite: bool = False,
+    message: str | None = None,
 ) -> UploadPreparationResult:
     """Prepare an upload for a file already stored on the server."""
     try:
@@ -201,6 +202,8 @@ def prepare_existing_file_upload(
                 "description": descriptor["description"],
                 "data_type": descriptor["data_type"],
             }
+        if message is not None:
+            payload["message"] = message
         job = UploadJob(project["id"], local_file, response["urls"][0], payload)
         job.last_modified_key = timestamp_key
         return UploadPreparationResult(job, status=ExistingUploadStatus.READY)

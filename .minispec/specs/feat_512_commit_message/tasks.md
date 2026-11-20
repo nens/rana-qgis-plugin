@@ -126,7 +126,7 @@ the data dispatch and the loader into the finish-upload payload as `message`. Se
 - Conflict, then overwrite: the message is in the history.
 
 ## Progress
-- [ ] Task 1: Message in the upload payload
+- [x] Task 1: Message in the upload payload
 - [ ] Task 2: Commit message field in `SyncDialog`
 - [ ] Task 3: Connect the callers
 - [ ] Task 4: Extend the e2e sync lifecycle test

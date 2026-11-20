@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from rana_qgis_plugin.workers.upload import (
     FileUploadTask,
     UploadJob,
@@ -115,7 +117,8 @@ def test_prepare_new_file_failed_initiation(tmp_path):
     assert prep_result.error is not None
 
 
-def test_prepare_existing_file_timestamp_match():
+@pytest.mark.parametrize("commit_message", ["foo", None])
+def test_prepare_existing_file_timestamp_match(commit_message):
     project = {"id": "project", "slug": "slug", "name": "Project"}
     file = {"id": "folder/file.tif", "descriptor_id": "descriptor"}
     with (
@@ -133,11 +136,15 @@ def test_prepare_existing_file_timestamp_match():
             return_value=None,
         ),
     ):
-        result = prepare_existing_file_upload(project, file)
+        result = prepare_existing_file_upload(project, file, message=commit_message)
     assert result.job is not None
     assert result.error is None
     assert result.status is not None
     assert result.status.value == "ready"
+    if commit_message:
+        assert result.job.payload["message"] == commit_message
+    else:
+        assert "message" not in result.job.payload
 
 
 def test_prepare_existing_file_timestamp_diverged():

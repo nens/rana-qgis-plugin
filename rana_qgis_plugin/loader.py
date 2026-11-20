@@ -1775,7 +1775,9 @@ class Loader(QObject):
         else:
             self.communication.bar_error("File upload failed.")
 
-    def upload_existing_files(self, items: list[UploadableLayerItem]) -> None:
+    def upload_existing_files(
+        self, items: list[UploadableLayerItem], message: str | None = None
+    ) -> None:
         """Prepare and upload linked Rana files as one background task."""
         # Verify targets exist before preparing uploads. The lazy guard
         # clears refs and warns the user if a file was deleted remotely.
@@ -1803,6 +1805,7 @@ class Loader(QObject):
                 {"id": ref.project_id, "name": item.project_name},
                 {"id": ref.file_id, "descriptor_id": ref.descriptor_id},
                 local_file=item.local_file_path,
+                message=message,
             )
             if result.status == ExistingUploadStatus.REMOTE_NEWER:
                 conflicts.append((item, result))
@@ -1845,6 +1848,7 @@ class Loader(QObject):
                 {"id": ref.file_id, "descriptor_id": ref.descriptor_id},
                 local_file=item.local_file_path,
                 overwrite=True,
+                message=message,
             )
             if result.job is not None:
                 jobs.append(result.job)
