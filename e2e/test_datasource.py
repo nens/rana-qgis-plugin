@@ -12,6 +12,8 @@ from rana_qgis_plugin.data_items.folder_item import (
     RanaFolderDataItem,
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.utils.api import get_tenant_project_file_history_page
+from rana_qgis_plugin.widgets.commit_message_dialog import CommitMessageDialog
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
 
 from .test_utils import (
@@ -260,6 +262,18 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
 
     def select_upload_file(qtbot, modal):
         modal.selectFile(os.path.join(os.path.dirname(__file__), "data", "upload.gpkg"))
+
+        def enter_commit_message(qtbot, message_dialog):
+            message_dialog.message_edit.setPlainText("Upload fixture through browser")
+            qtbot.keyClick(
+                message_dialog,
+                Qt.Key.Key_Enter,
+            )
+
+        QTimer.singleShot(
+            500,
+            make_modal_handler(qtbot, CommitMessageDialog, enter_commit_message),
+        )
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
     # Upload a real fixture into foo. This keeps the subsequent file rename and
@@ -280,6 +294,10 @@ def test_files(plugin, qtbot, qgis_application, rana_project):
         if isinstance(child, RanaFileDataItem) and child.name() == "upload.gpkg"
     )
     assert_visible(upload_item)
+    history = get_tenant_project_file_history_page(
+        rana_project["id"], {"path": f"foo/upload.gpkg", "limit": 1}
+    )
+    assert history["items"][0]["message"] == "Upload fixture through browser"
 
     # Rename the uploaded file and wait for the refreshed Browser item. This
     # verifies the file-specific move endpoint and the UI refresh afterward.

@@ -50,6 +50,7 @@ from rana_qgis_plugin.utils.api import (
     delete_tenant_project_file,
     get_tenant_file_descriptor,
     get_tenant_project_file,
+    get_tenant_project_file_history_page,
     get_tenant_project_files,
 )
 from rana_qgis_plugin.workers.upload import FileUploadTask, prepare_new_file_upload
@@ -402,11 +403,14 @@ def trigger_layer_tree_action(plugin, node, action_text):
     action.trigger()
 
 
-def trigger_sync_action(qtbot, plugin, node, action_text):
+def trigger_sync_action(qtbot, plugin, node, action_text, message=None):
     """Trigger a Rana sync menu action and continue the modal sync dialog it opens."""
 
     def continue_sync(qtbot, modal):
         assert modal.windowTitle() == action_text
+        if message is not None:
+            assert modal.commit_message is not None
+            qtbot.keyClicks(modal.commit_message, message)
         click_dialog_button(qtbot, modal, "Continue sync")
 
     QTimer.singleShot(500, make_modal_handler(qtbot, SyncDialog, continue_sync))
@@ -568,7 +572,10 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
     assert is_data_dirty(vector_layer)
 
     # Trigger "Sync data to Rana" from the layer tree context menu
-    trigger_sync_action(qtbot, plugin, vector_group, "Sync data to Rana")
+    commit_message = f"Vector sync {uuid.uuid4().hex}"
+    trigger_sync_action(
+        qtbot, plugin, vector_group, "Sync data to Rana", commit_message
+    )
     wait_for_qgis_tasks(qtbot)
 
     # Verify data dirty flag is cleared
@@ -580,6 +587,10 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
     assert file_after.get("last_modified") != modified_before, (
         "File last_modified did not change after data upload"
     )
+    history = get_tenant_project_file_history_page(
+        ref.project_id, {"path": ref.file_id, "limit": 1}
+    )
+    assert history["items"][0]["message"] == commit_message
 
     # --- Style sync: change style, save style to Rana ---
 

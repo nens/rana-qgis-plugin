@@ -106,11 +106,12 @@ the data dispatch and the loader into the finish-upload payload as `message`. Se
 
 #### Task 5: Extend the e2e sync and upload lifecycle tests
 - **Estimate:** ~50 lines
-- **Files:** `e2e/test_layer_sync.py` and the existing new-file upload e2e test module
+- **Files:** `e2e/test_layer_sync.py`, `e2e/test_datasource.py`, `e2e/test_file_history.py`
 - **Description:**
   - Retain the linked-file sync message assertion.
-  - Add a new-file upload message to the upload lifecycle test, type it like a user, and
-    assert the newest file-history entry contains it.
+  - Keep the API-level message assertion in `test_datasource.py`.
+  - Extend `test_file_history.py` to type a message and assert it in the displayed history
+    table.
 - **Depends on:** Task 3 and Task 4
 - **Acceptance:** Both e2e flows type a message like a user and check it on Rana.
 - **Evidence:** The e2e job passes in CI on the PR. Per AGENTS.md, it is not run locally.
@@ -146,4 +147,4 @@ the data dispatch and the loader into the finish-upload payload as `message`. Se
 - [x] Task 2: Commit message field in `SyncDialog`
 - [x] Task 3: Connect the callers
 - [x] Task 4: Add commit messages to new-file uploads
-- [ ] Task 5: Extend the e2e sync and upload lifecycle tests
+- [x] Task 5: Extend the e2e sync and upload lifecycle tests

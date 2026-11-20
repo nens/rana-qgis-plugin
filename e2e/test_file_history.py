@@ -13,6 +13,7 @@ from rana_qgis_plugin.data_items.folder_item import (
     RanaFolderDataItem,
 )
 from rana_qgis_plugin.data_items.project_item import RanaProjectDataItem
+from rana_qgis_plugin.widgets.commit_message_dialog import CommitMessageDialog
 from rana_qgis_plugin.widgets.version_history_dialog import RanaHistoryDialog
 
 from .test_utils import click_context_menu_action, make_modal_handler
@@ -75,7 +76,7 @@ def test_file_history(plugin, qtbot, qgis_application, rana_project):
         tree.expand(index)
         qgis_application.processEvents()
 
-    # Open history and return the number of entries.
+    # Open history and return the displayed rows.
     def history_rows(item):
         result = []
         deadline: list[float | None] = [None]
@@ -85,7 +86,12 @@ def test_file_history(plugin, qtbot, qgis_application, rana_project):
                 deadline[0] = time.monotonic() + 30
             dialog = QApplication.activeModalWidget()
             if isinstance(dialog, RanaHistoryDialog) and dialog.current_task is None:
-                result.append(dialog.model.rowCount())
+                result.append(
+                    [
+                        dialog.model.index(row, 2).data()
+                        for row in range(dialog.model.rowCount())
+                    ]
+                )
                 dialog.accept()
                 return
             if deadline[0] is not None and time.monotonic() < deadline[0]:
@@ -135,14 +141,23 @@ def test_file_history(plugin, qtbot, qgis_application, rana_project):
     )
 
     # Check history for the Files item and the new folder.
-    assert history_rows(files_item) == 1
-    assert history_rows(folder_item) == 1
+    assert len(history_rows(files_item)) == 1
+    assert len(history_rows(folder_item)) == 1
     expand_item(folder_item)
 
     # Upload a file to the folder.
     # bypassing UI (mostly) because that is covered by other tests
     def select_upload_file(qtbot, modal):
         modal.selectFile(str(Path(__file__).parent / "data" / "upload.gpkg"))
+
+        def enter_commit_message(qtbot, message_dialog):
+            message_dialog.message_edit.setPlainText("History dialog upload")
+            qtbot.keyClick(message_dialog, Qt.Key.Key_Enter)
+
+        QTimer.singleShot(
+            500,
+            make_modal_handler(qtbot, CommitMessageDialog, enter_commit_message),
+        )
         qtbot.keyClick(modal, Qt.Key.Key_Enter)
 
     QTimer.singleShot(500, make_modal_handler(qtbot, QFileDialog, select_upload_file))
@@ -167,4 +182,4 @@ def test_file_history(plugin, qtbot, qgis_application, rana_project):
     )
 
     # Check history for the uploaded file.
-    assert history_rows(file_item) == 1
+    assert history_rows(file_item) == ["History dialog upload"]
