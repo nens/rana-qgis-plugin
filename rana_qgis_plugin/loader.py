@@ -1824,10 +1824,10 @@ class Loader(QObject):
             self.communication.log_err(error)
         if errors:
             if len(items) == 1:
-                message = errors[0]
+                warning_message = errors[0]
             else:
-                message = f"{len(errors)} files could not be uploaded due to errors, check the logs for details."
-            self.communication.show_warn(message)
+                warning_message = f"{len(errors)} files could not be uploaded due to errors, check the logs for details."
+            self.communication.show_warn(warning_message)
         overwrite_all = False
         for item, result in conflicts:
             conflict = result.conflict
