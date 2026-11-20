@@ -111,7 +111,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - [x] Task 3: Per-file completion on the upload task
 - [x] Task 4: GeoPackage checkpoint before upload
 - [x] Task 5: Raster completion decision
-- [ ] Task 6: Upload lock indicator
+- [x] Task 6: Upload lock indicator
 - [ ] Task 7: Wire locking into `upload_existing_files`
 - [ ] Task 8: Download takes the same file lock
 - [ ] Task 9: Manual verification and PR notes
