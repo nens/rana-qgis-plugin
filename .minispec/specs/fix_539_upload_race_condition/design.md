@@ -69,7 +69,9 @@ tables of a GeoPackage. Do not reuse the substring match in
 
 ### Layer locking (new, `layer_management/`)
 
-Main thread, before the task starts:
+Main thread, before the task starts. Only vector layers are locked: raster
+layers cannot be edited in QGIS and have no `setReadOnly` (see Raster dirty
+state for how rasters are handled).
 - If any layer from `layers_for_file` is editable, refuse the upload:
   "Save or discard your edits first."
 - Otherwise store each layer's previous read-only state in the custom property
