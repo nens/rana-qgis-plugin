@@ -77,7 +77,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - **Description:** Pre-check for editable layers before `prepare_existing_file_upload` ("Save or discard your edits first."); call `lock_jobs` after all early returns (items empty, conflict abort/skip, no jobs, no task manager) and only for the files that have a job (fixes keys for skipped files); try/except from lock to `addTask` that releases all locks; `file_completed` handler (unlock, vector -> clean, raster -> Task 5) and `file_failed` handler, each in try/finally; `taskCompleted`/`taskTerminated` release any remaining locks. Remove the data-sync state updates (`capture_raster_baseline` / `set_data_sync_state`) from `handle_sync_completed` for data uploads, so the task-level handler cannot override the per-file raster decision. Call `restore_stale_upload_locks` on project read. Drive-by: new-file upload shows "Downloading {name}" (`:1750`); change to "Uploading {name}".
 - **Depends on:** Tasks 2, 3, 5
 - **Acceptance:** Per-file unlock as each file finishes; skipped/errored files never locked; failures, cancel and setup exceptions leave nothing locked or read-only.
-- **Evidence:** loader unit tests (lock released on completed, failed, terminated, and on exception during task setup; skipped job never locked; raster changed during upload is still dirty after `taskCompleted`). Manual test paths in Notes.
+- **Evidence:** loader unit tests (the raster-changed-during-upload test runs the real `FileUploadTask` with only the network stubbed, so it also guards that `start_fingerprint` is taken right before the file is read, `workers/upload.py` `run()`; lock released on completed, failed, terminated, and on exception during task setup; skipped job never locked; raster changed during upload is still dirty after `taskCompleted`). Manual test paths in Notes.
 
 #### Task 8: Download takes the same file lock
 - **Estimate:** ~70 lines (incl. tests)
@@ -110,7 +110,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - [ ] Task 2: `layers_for_file` and `FileLock` / `lock_jobs`
 - [x] Task 3: Per-file completion on the upload task
 - [x] Task 4: GeoPackage checkpoint before upload
-- [ ] Task 5: Raster completion decision
+- [x] Task 5: Raster completion decision
 - [ ] Task 6: Upload lock indicator
 - [ ] Task 7: Wire locking into `upload_existing_files`
 - [ ] Task 8: Download takes the same file lock
