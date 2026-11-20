@@ -112,6 +112,7 @@ from rana_qgis_plugin.utils.generic import (
 )
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.widgets.commit_message_dialog import CommitMessageDialog
 from rana_qgis_plugin.widgets.processes_panel import ProcessesPanel
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
@@ -1648,6 +1649,9 @@ class Loader(QObject):
         QSettings().setValue(
             "Rana/last_upload_folder", str(Path(local_paths[0]).parent)
         )
+        message_dialog = CommitMessageDialog(parent)
+        message_dialog.exec()
+        message = message_dialog.message()
 
         jobs: list[UploadJob] = []
         convert_all = False
@@ -1687,6 +1691,7 @@ class Loader(QObject):
                 folder_path,
                 overwrite_exact=False,
                 overwrite_case=overwrite_all,
+                message=message,
             )
             if (
                 result.conflict_path and not result.exact_conflict
@@ -1719,6 +1724,7 @@ class Loader(QObject):
                         folder_path,
                         overwrite_exact=False,
                         overwrite_case=True,
+                        message=message,
                     )
             if result.error:
                 self.communication.show_warn(result.error)

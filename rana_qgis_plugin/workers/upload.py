@@ -93,6 +93,7 @@ def prepare_new_file_upload(
     online_dir: str,
     overwrite_exact: bool = False,
     overwrite_case: bool = False,
+    message: str | None = None,
 ) -> UploadPreparationResult:
     """Prepare a new file upload after resolving supplied conflict decisions.
 
@@ -131,8 +132,11 @@ def prepare_new_file_upload(
                 None, f"Failed to initiate file upload: {error}."
             )
 
+    payload = response.copy()
+    if message is not None:
+        payload["message"] = message
     return UploadPreparationResult(
-        UploadJob(project_id, local_path, response["urls"][0], response.copy())
+        UploadJob(project_id, local_path, response["urls"][0], payload)
     )
 
 

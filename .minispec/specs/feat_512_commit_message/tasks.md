@@ -145,5 +145,5 @@ the data dispatch and the loader into the finish-upload payload as `message`. Se
 - [x] Task 1: Message in the upload payload
 - [x] Task 2: Commit message field in `SyncDialog`
 - [x] Task 3: Connect the callers
-- [ ] Task 4: Add commit messages to new-file uploads
+- [x] Task 4: Add commit messages to new-file uploads
 - [ ] Task 5: Extend the e2e sync and upload lifecycle tests
