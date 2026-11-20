@@ -74,6 +74,8 @@ the `message` key is only present when the message is non-empty.
 - `LayerTreeMenuProvider.dispatch_data_items(items, message=None)`
 - `Loader.upload_existing_files(items, message=None)`
 - `prepare_existing_file_upload(project, file, local_file=None, overwrite=False, message=None)`
+- `prepare_new_file_upload(project, local_path, folder, ..., message=None)`
+- New-file upload message dialog: optional multi-line input with an OK action
 
 ## Testing
 - `tests/layer_management/test_sync_dialog.py`:
@@ -85,6 +87,7 @@ the `message` key is only present when the message is non-empty.
   the message reaches the data dispatch. `FakeSyncDialog` needs a `message()`.
 - `tests/utils/test_upload.py`: the payload contains `message` only when one is given.
 - `tests/loader/test_upload.py`: the message reaches the overwrite pass after a conflict.
+- New-file upload dialog and preparation tests cover empty and non-empty messages.
 
 ## Manual UI Testing
 - Layer panel → "Sync data to Rana" on a group with several files: type a message, sync,
@@ -93,6 +96,8 @@ the `message` key is only present when the message is non-empty.
 - Close a project with both data and style changes: uncheck all data files and check that
   the field is disabled. Check one again and check that the text comes back.
 - Sync with an empty message: the upload succeeds.
+- File picker upload with an empty message: the upload succeeds.
+- File picker upload with a message: the file history shows it.
 - Trigger a conflict and choose overwrite: the message is still in the history.
 
 ## Out Of Scope
@@ -102,21 +107,22 @@ the `message` key is only present when the message is non-empty.
 - Style syncs, which don't create file versions
 - Showing multi-line messages properly in the version history table (follow-up task)
 
-## Extension: New-File Uploads
-The design keeps this open, so it can be added later without rework:
-- `prepare_new_file_upload` (`workers/upload.py`) also stores the start response as
-  `UploadJob.payload`, which `FileUploadTask` sends when it finishes. So it can take the
-  same optional `message: str | None = None` parameter, and add `payload["message"]` the
-  same way `prepare_existing_file_upload` does.
-- `FileUploadTask` and `UploadJob` need no changes for this feature or for the extension.
-  The message lives entirely in the payload.
-- The UI is the only missing part. New uploads start from `QFileDialog.getOpenFileNames`
-  in `Loader.upload_files`, not from `SyncDialog`. They will need their own place to enter
-  a message, for example a small prompt after picking files, with the same field behaviour
-  (optional, multi-line, stripped, `None` when empty).
-- The one-line payload rule (`if message: payload["message"] = message`) will then exist
-  twice. Following the constitution's abstraction threshold, it stays inline until a third
-  use appears.
+## New-File Uploads
+New-file uploads use the same optional batch message as existing-file syncs. After
+`QFileDialog.getOpenFileNames` returns files, a small commit-message dialog is shown. It
+contains an optional multi-line field with the same behavior as `SyncDialog`: stripped text
+is returned, and empty or whitespace-only input becomes `None`. The dialog has an OK action
+and no cancel action; if the dialog is externally rejected, the upload proceeds with an
+empty message.
+
+`prepare_new_file_upload` (`workers/upload.py`) accepts the same optional
+`message: str | None = None` parameter and adds `payload["message"]` only when a message is
+provided. `Loader.upload_files` passes the message to both the initial preparation call and
+the `overwrite_case=True` retry after a conflict. `FileUploadTask` and `UploadJob` need no
+changes because the message travels in the payload.
+
+The payload rule is intentionally inline in both preparation functions. Following the
+constitution's abstraction threshold, it stays inline until a third use appears.
 
 ## Open Questions
 - What does the server store when `message` is left out: an empty string or a default?
@@ -125,4 +131,3 @@ The design keeps this open, so it can be added later without rework:
 ## Follow-Up Tasks
 - Show multi-line commit messages properly in the version history table
   (`widgets/version_history_dialog.py`).
-- Commit messages for new-file uploads (see "Extension: new-file uploads").

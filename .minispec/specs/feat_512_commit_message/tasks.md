@@ -3,7 +3,7 @@ feature: feat_512_commit_message
 status: planned
 created: 2026-11-20
 chunk_size: adaptive
-total_tasks: 4
+total_tasks: 5
 estimated_lines: 180
 ---
 
@@ -85,18 +85,34 @@ the data dispatch and the loader into the finish-upload payload as `message`. Se
 - **Evidence:** New or extended tests show the message reaching the data dispatch on both
   routes. The existing sync tests pass.
 
-#### Task 4: Extend the e2e sync lifecycle test
-- **Estimate:** ~30 lines
-- **Files:** `e2e/test_layer_sync.py`
+#### Task 4: Add commit messages to new-file uploads
+- **Estimate:** ~70 lines including tests
+- **Files:** `rana_qgis_plugin/workers/upload.py`, `rana_qgis_plugin/loader.py`,
+  a new upload-message dialog module, and their unit tests
 - **Description:**
-  - Give `trigger_sync_action` an optional `message`. When it is set, the modal handler
-    types it into the dialog's commit message field (`qtbot.keyClicks`) before clicking
-    "Continue sync".
-  - In `test_sync_lifecycle`, use a unique message for the vector data sync. After the
-    sync, fetch `get_tenant_project_file_history_page(project_id, {"path": file_id,
-    "limit": 1})` and assert that the newest item's `message` matches.
-- **Depends on:** Task 3
-- **Acceptance:** The e2e test types a message like a user would and checks it on Rana.
+  - Show an optional multi-line commit-message dialog after the file picker returns files.
+  - The dialog has an OK action and no cancel action; an externally rejected dialog is
+    treated as OK with an empty message.
+  - Add `message: str | None = None` to `prepare_new_file_upload` and include the payload
+    key only when a message is provided.
+  - Pass the message to both the initial preparation call and the case-conflict overwrite
+    preparation call in `Loader.upload_files`.
+  - Cover dialog behavior and payload inclusion/omission with unit tests.
+- **Depends on:** None
+- **Acceptance:** New-file uploads can carry one optional message for the complete batch,
+  including the overwrite-after-conflict path. Existing uploads without a message behave
+  unchanged. Empty messages still proceed with the upload.
+- **Evidence:** Focused dialog and upload tests pass, and the existing unit tests pass.
+
+#### Task 5: Extend the e2e sync and upload lifecycle tests
+- **Estimate:** ~50 lines
+- **Files:** `e2e/test_layer_sync.py` and the existing new-file upload e2e test module
+- **Description:**
+  - Retain the linked-file sync message assertion.
+  - Add a new-file upload message to the upload lifecycle test, type it like a user, and
+    assert the newest file-history entry contains it.
+- **Depends on:** Task 3 and Task 4
+- **Acceptance:** Both e2e flows type a message like a user and check it on Rana.
 - **Evidence:** The e2e job passes in CI on the PR. Per AGENTS.md, it is not run locally.
 
 ## Notes
@@ -129,4 +145,5 @@ the data dispatch and the loader into the finish-upload payload as `message`. Se
 - [x] Task 1: Message in the upload payload
 - [x] Task 2: Commit message field in `SyncDialog`
 - [x] Task 3: Connect the callers
-- [ ] Task 4: Extend the e2e sync lifecycle test
+- [ ] Task 4: Add commit messages to new-file uploads
+- [ ] Task 5: Extend the e2e sync and upload lifecycle tests
