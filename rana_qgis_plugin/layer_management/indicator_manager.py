@@ -1,6 +1,7 @@
-"""Show dirty-state indicators on Rana-linked layer tree items."""
+"""Show dirty-state and upload-lock indicators on layer tree items."""
 
 from collections.abc import Callable
+from enum import Enum
 
 from qgis.core import (
     QgsApplication,
@@ -18,9 +19,25 @@ from rana_qgis_plugin.layer_management.layer_dirty_flags import (
 )
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef
 from rana_qgis_plugin.layer_management.layer_sync_state import should_badge
+from rana_qgis_plugin.layer_management.upload_lock import UPLOAD_LOCK_PROPERTY
 
-_INDICATOR_TOOLTIP = "Has unsynced changes to Rana"
+
+class IndicatorKind(Enum):
+    """The kinds of indicator this manager can attach to a layer tree node."""
+
+    DIRTY = "dirty"
+    UPLOAD = "upload"
+
+
+_INDICATOR_STYLES = {
+    IndicatorKind.DIRTY: ("/mIconWarning.svg", "Has unsynced changes to Rana"),
+    IndicatorKind.UPLOAD: (
+        "/locked.svg",
+        "Uploading to Rana \u2014 read-only until the upload finishes",
+    ),
+}
 _TRACKED_PROPERTY_KEYS = {
+    UPLOAD_LOCK_PROPERTY,
     DATA_SYNC_STATE_PROPERTY,
     STYLE_DIRTY_PROPERTY,
     *RanaLayerRef.PROPERTY_KEYS.values(),
@@ -34,7 +51,9 @@ class IndicatorManager:
         self.project = project
         self.layer_tree_view = layer_tree_view
         self._tracked_layers: dict[str, tuple[QgsMapLayer, Callable[[str], None]]] = {}
-        self._indicators: list[tuple[QgsLayerTreeNode, QgsLayerTreeViewIndicator]] = []
+        self._indicators: list[
+            tuple[QgsLayerTreeNode, IndicatorKind, QgsLayerTreeViewIndicator]
+        ] = []
 
     def connect(self) -> None:
         """Start tracking layers added to the project."""
@@ -112,7 +131,10 @@ class IndicatorManager:
         node = root.findLayer(layer_id)
         if node is None:
             return
-        self.set_indicator(node, is_dirty)
+        self.set_indicator(node, IndicatorKind.DIRTY, is_dirty)
+        # Not tied to Rana linking: any layer on the uploading file is locked.
+        is_locked = layer.customProperty(UPLOAD_LOCK_PROPERTY) is not None
+        self.set_indicator(node, IndicatorKind.UPLOAD, is_locked)
         parent = node.parent()
         while isinstance(parent, QgsLayerTreeGroup):
             self.update_group(parent)
@@ -126,7 +148,7 @@ class IndicatorManager:
             if layer is not None and should_badge(layer):
                 is_dirty = True
                 break
-        self.set_indicator(group, is_dirty)
+        self.set_indicator(group, IndicatorKind.DIRTY, is_dirty)
 
     @staticmethod
     def descendant_layers(group: QgsLayerTreeGroup) -> list[QgsLayerTreeLayer]:
@@ -139,31 +161,40 @@ class IndicatorManager:
                 layer_nodes.extend(IndicatorManager.descendant_layers(child))
         return layer_nodes
 
-    def set_indicator(self, node: QgsLayerTreeNode, is_dirty: bool) -> None:
-        """Attach or detach the managed indicator on one tree node."""
-        indicator = self.managed_indicator(node)
-        if is_dirty and indicator is None:
+    def set_indicator(
+        self, node: QgsLayerTreeNode, kind: IndicatorKind, show: bool
+    ) -> None:
+        """Attach or detach one kind of managed indicator on a tree node."""
+        indicator = self.managed_indicator(node, kind)
+        if show and indicator is None:
+            icon, tooltip = _INDICATOR_STYLES[kind]
             indicator = QgsLayerTreeViewIndicator(self.layer_tree_view)
-            indicator.setIcon(QgsApplication.getThemeIcon("/mIconWarning.svg"))
-            indicator.setToolTip(_INDICATOR_TOOLTIP)
+            indicator.setIcon(QgsApplication.getThemeIcon(icon))
+            indicator.setToolTip(tooltip)
             self.layer_tree_view.addIndicator(node, indicator)
-            self._indicators.append((node, indicator))
-        elif not is_dirty and indicator is not None:
-            self.layer_tree_view.removeIndicator(node, indicator)
-            indicator.deleteLater()
-            self._indicators = [
-                entry for entry in self._indicators if entry[1] != indicator
-            ]
+            self._indicators.append((node, kind, indicator))
+        elif not show and indicator is not None:
+            self.detach_indicator(node, indicator)
+
+    def detach_indicator(
+        self, node: QgsLayerTreeNode, indicator: QgsLayerTreeViewIndicator
+    ) -> None:
+        """Remove one managed indicator from its node and forget it."""
+        self.layer_tree_view.removeIndicator(node, indicator)
+        indicator.deleteLater()
+        self._indicators = [
+            entry for entry in self._indicators if entry[2] != indicator
+        ]
 
     def managed_indicator(
-        self, node: QgsLayerTreeNode
+        self, node: QgsLayerTreeNode, kind: IndicatorKind
     ) -> QgsLayerTreeViewIndicator | None:
-        """Return this manager's indicator on a node, if one is attached."""
+        """Return this manager's indicator of one kind on a node, if attached."""
         return next(
             (
                 indicator
-                for tracked_node, indicator in self._indicators
-                if tracked_node == node
+                for tracked_node, tracked_kind, indicator in self._indicators
+                if tracked_node == node and tracked_kind == kind
             ),
             None,
         )
@@ -190,13 +221,9 @@ class IndicatorManager:
 
     def remove_subtree_indicators(self, node: QgsLayerTreeNode) -> None:
         """Detach indicators owned by this manager from a removed subtree."""
-        indicator = self.managed_indicator(node)
-        if indicator is not None:
-            self.layer_tree_view.removeIndicator(node, indicator)
-            indicator.deleteLater()
-            self._indicators = [
-                entry for entry in self._indicators if entry[1] != indicator
-            ]
+        for tracked_node, _kind, indicator in list(self._indicators):
+            if tracked_node == node:
+                self.detach_indicator(node, indicator)
         if isinstance(node, QgsLayerTreeGroup):
             for child in node.children():
                 self.remove_subtree_indicators(child)
