@@ -108,7 +108,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 ## Progress
 - [x] Task 1: Stable shared `sync_key(project_id, file_id)`
 - [ ] Task 2: `layers_for_file` and `FileLock` / `lock_jobs`
-- [ ] Task 3: Per-file completion on the upload task
+- [x] Task 3: Per-file completion on the upload task
 - [ ] Task 4: GeoPackage checkpoint before upload
 - [ ] Task 5: Raster completion decision
 - [ ] Task 6: Upload lock indicator
