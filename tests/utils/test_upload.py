@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from rana_qgis_plugin.workers.upload import (
     FileUploadTask,
     UploadJob,
@@ -39,6 +41,25 @@ def test_prepare_new_file_without_conflict(tmp_path):
     assert prep_result.job == UploadJob(
         "project", local_path, "https://upload", {"urls": ["https://upload"]}
     )
+
+
+def test_prepare_new_file_includes_message(tmp_path):
+    local_path = tmp_path / "file.tif"
+    local_path.write_bytes(b"data")
+    with (
+        patch(
+            "rana_qgis_plugin.workers.upload.get_tenant_project_file", return_value=None
+        ),
+        patch(
+            "rana_qgis_plugin.workers.upload.start_file_upload",
+            return_value=({"urls": ["https://upload"]}, None),
+        ),
+    ):
+        prep_result = prepare_new_file_upload(
+            "project", local_path, "folder", message="Upload roads"
+        )
+    assert prep_result.job is not None
+    assert prep_result.job.payload["message"] == "Upload roads"
 
 
 def test_prepare_new_file_exact_conflict(tmp_path):
@@ -115,7 +136,8 @@ def test_prepare_new_file_failed_initiation(tmp_path):
     assert prep_result.error is not None
 
 
-def test_prepare_existing_file_timestamp_match():
+@pytest.mark.parametrize("commit_message", ["foo", None])
+def test_prepare_existing_file_timestamp_match(commit_message):
     project = {"id": "project", "slug": "slug", "name": "Project"}
     file = {"id": "folder/file.tif", "descriptor_id": "descriptor"}
     with (
@@ -133,11 +155,15 @@ def test_prepare_existing_file_timestamp_match():
             return_value=None,
         ),
     ):
-        result = prepare_existing_file_upload(project, file)
+        result = prepare_existing_file_upload(project, file, message=commit_message)
     assert result.job is not None
     assert result.error is None
     assert result.status is not None
     assert result.status.value == "ready"
+    if commit_message:
+        assert result.job.payload["message"] == commit_message
+    else:
+        assert "message" not in result.job.payload
 
 
 def test_prepare_existing_file_timestamp_diverged():

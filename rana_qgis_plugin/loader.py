@@ -112,6 +112,7 @@ from rana_qgis_plugin.utils.generic import (
 )
 from rana_qgis_plugin.utils.scenario import ScenarioInfo
 from rana_qgis_plugin.utils.settings import hcc_working_dir
+from rana_qgis_plugin.widgets.commit_message_dialog import CommitMessageDialog
 from rana_qgis_plugin.widgets.processes_panel import ProcessesPanel
 from rana_qgis_plugin.widgets.result_browser import ResultBrowser
 from rana_qgis_plugin.widgets.schematisation_browser import SchematisationBrowser
@@ -1648,6 +1649,9 @@ class Loader(QObject):
         QSettings().setValue(
             "Rana/last_upload_folder", str(Path(local_paths[0]).parent)
         )
+        message_dialog = CommitMessageDialog(parent)
+        message_dialog.exec()
+        message = message_dialog.message()
 
         jobs: list[UploadJob] = []
         convert_all = False
@@ -1687,6 +1691,7 @@ class Loader(QObject):
                 folder_path,
                 overwrite_exact=False,
                 overwrite_case=overwrite_all,
+                message=message,
             )
             if (
                 result.conflict_path and not result.exact_conflict
@@ -1719,6 +1724,7 @@ class Loader(QObject):
                         folder_path,
                         overwrite_exact=False,
                         overwrite_case=True,
+                        message=message,
                     )
             if result.error:
                 self.communication.show_warn(result.error)
@@ -1775,7 +1781,9 @@ class Loader(QObject):
         else:
             self.communication.bar_error("File upload failed.")
 
-    def upload_existing_files(self, items: list[UploadableLayerItem]) -> None:
+    def upload_existing_files(
+        self, items: list[UploadableLayerItem], message: str | None = None
+    ) -> None:
         """Prepare and upload linked Rana files as one background task."""
         # Verify targets exist before preparing uploads. The lazy guard
         # clears refs and warns the user if a file was deleted remotely.
@@ -1803,6 +1811,7 @@ class Loader(QObject):
                 {"id": ref.project_id, "name": item.project_name},
                 {"id": ref.file_id, "descriptor_id": ref.descriptor_id},
                 local_file=item.local_file_path,
+                message=message,
             )
             if result.status == ExistingUploadStatus.REMOTE_NEWER:
                 conflicts.append((item, result))
@@ -1815,10 +1824,10 @@ class Loader(QObject):
             self.communication.log_err(error)
         if errors:
             if len(items) == 1:
-                message = errors[0]
+                warning_message = errors[0]
             else:
-                message = f"{len(errors)} files could not be uploaded due to errors, check the logs for details."
-            self.communication.show_warn(message)
+                warning_message = f"{len(errors)} files could not be uploaded due to errors, check the logs for details."
+            self.communication.show_warn(warning_message)
         overwrite_all = False
         for item, result in conflicts:
             conflict = result.conflict
@@ -1845,6 +1854,7 @@ class Loader(QObject):
                 {"id": ref.file_id, "descriptor_id": ref.descriptor_id},
                 local_file=item.local_file_path,
                 overwrite=True,
+                message=message,
             )
             if result.job is not None:
                 jobs.append(result.job)

@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPlainTextEdit,
     QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -67,6 +68,7 @@ class SyncDialog(QDialog):
         self.file_items: dict[SyncKind, dict[SyncFileKey, QTreeWidgetItem]] = {
             kind: {} for kind in SyncKind
         }
+        self.commit_message: QPlainTextEdit | None = None
 
         summary_label = QLabel(build_summary(changes, include_kinds=show_kinds))
         summary_label.setWordWrap(True)
@@ -95,10 +97,22 @@ class SyncDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(summary_label)
         layout.addWidget(self.tree, 1)
+        if changes.files(SyncKind.DATA):
+            layout.addWidget(QLabel("Commit message:"))
+            self.commit_message = QPlainTextEdit()
+            self.commit_message.setPlaceholderText(
+                "Describe these data changes (optional)"
+            )
+            self.commit_message.setFixedHeight(
+                self.commit_message.fontMetrics().lineSpacing() * 3
+                + self.commit_message.contentsMargins().top()
+                + self.commit_message.contentsMargins().bottom()
+            )
+            layout.addWidget(self.commit_message)
         layout.addLayout(button_row)
 
         self.tree.itemChanged.connect(self.on_item_changed)
-        self.update_confirm_button()
+        self.on_selection_changed()
 
     def add_section(
         self, kind: SyncKind, files: dict[SyncFileKey, ChangedFile]
@@ -166,10 +180,18 @@ class SyncDialog(QDialog):
         }
 
     def on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
-        self.update_confirm_button()
+        self.on_selection_changed()
 
-    def update_confirm_button(self) -> None:
+    def on_selection_changed(self) -> None:
         self.confirm_button.setEnabled(any(self.selected(kind) for kind in SyncKind))
+        if self.commit_message is not None:
+            self.commit_message.setEnabled(bool(self.selected(SyncKind.DATA)))
+
+    def message(self) -> str | None:
+        if self.commit_message is None:
+            return None
+        message = self.commit_message.toPlainText().strip()
+        return message or None
 
 
 def dispatch_selected(

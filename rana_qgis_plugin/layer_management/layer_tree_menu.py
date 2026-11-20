@@ -228,7 +228,7 @@ class LayerTreeMenuProvider:
             dialog.selected(SyncKind.STYLE) if confirmed else set(),
             dialog.selected(SyncKind.DATA) if confirmed else set(),
             self.dispatch_style_items,
-            self.dispatch_data_items,
+            lambda items: self.dispatch_data_items(items, dialog.message()),
         )
 
     def capture_data_items(
@@ -254,11 +254,13 @@ class LayerTreeMenuProvider:
             seen.add(key)
         return items
 
-    def dispatch_data_items(self, items: list[UploadableLayerItem]) -> None:
+    def dispatch_data_items(
+        self, items: list[UploadableLayerItem], message: str | None = None
+    ) -> None:
         """Delegate previously-captured linked-file uploads to Loader."""
         if self.loader is None:
             return
-        self.loader.upload_existing_files(items)
+        self.loader.upload_existing_files(items, message)
 
     def save_revision(self, groups: list[QgsLayerTreeGroup]) -> None:
         """Prepare the selected schematisation revision for upload."""

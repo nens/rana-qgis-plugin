@@ -93,6 +93,7 @@ def prepare_new_file_upload(
     online_dir: str,
     overwrite_exact: bool = False,
     overwrite_case: bool = False,
+    message: str | None = None,
 ) -> UploadPreparationResult:
     """Prepare a new file upload after resolving supplied conflict decisions.
 
@@ -131,8 +132,11 @@ def prepare_new_file_upload(
                 None, f"Failed to initiate file upload: {error}."
             )
 
+    payload = response.copy()
+    if message is not None:
+        payload["message"] = message
     return UploadPreparationResult(
-        UploadJob(project_id, local_path, response["urls"][0], response.copy())
+        UploadJob(project_id, local_path, response["urls"][0], payload)
     )
 
 
@@ -141,6 +145,7 @@ def prepare_existing_file_upload(
     file: dict,
     local_file: Path | None = None,
     overwrite: bool = False,
+    message: str | None = None,
 ) -> UploadPreparationResult:
     """Prepare an upload for a file already stored on the server."""
     try:
@@ -201,6 +206,8 @@ def prepare_existing_file_upload(
                 "description": descriptor["description"],
                 "data_type": descriptor["data_type"],
             }
+        if message is not None:
+            payload["message"] = message
         job = UploadJob(project["id"], local_file, response["urls"][0], payload)
         job.last_modified_key = timestamp_key
         return UploadPreparationResult(job, status=ExistingUploadStatus.READY)

@@ -34,24 +34,30 @@ class FakeInterface:
 class FakeLoader:
     def __init__(self):
         self.data_items = None
+        self.data_message = None
         self.style_items = None
 
-    def upload_existing_files(self, items):
+    def upload_existing_files(self, items, message=None):
         self.data_items = items
+        self.data_message = message
 
     def upload_styles(self, items):
         self.style_items = items
 
 
 class FakeSyncDialog:
-    def __init__(self, *args, selected):
+    def __init__(self, *args, selected, message=None):
         self._selected = selected
+        self._message = message
 
     def exec(self):
         return QDialog.DialogCode.Accepted
 
     def selected(self, kind):
         return self._selected
+
+    def message(self):
+        return self._message
 
 
 @pytest.mark.parametrize("kind", [SyncKind.DATA, SyncKind.STYLE])

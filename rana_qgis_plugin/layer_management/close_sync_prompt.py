@@ -154,7 +154,9 @@ class SyncPromptAction:
             dialog.selected(SyncKind.STYLE) if confirmed else set(),
             dialog.selected(SyncKind.DATA) if confirmed else set(),
             self.layer_tree_menu.dispatch_style_items,
-            self.layer_tree_menu.dispatch_data_items,
+            lambda items: self.layer_tree_menu.dispatch_data_items(
+                items, dialog.message()
+            ),
         )
 
 

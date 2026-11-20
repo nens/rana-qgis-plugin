@@ -124,6 +124,40 @@ def test_confirm_is_disabled_when_nothing_is_checked(qgis_application):
     assert not dialog.confirm_button.isEnabled()
 
 
+def test_commit_message_field_only_exists_for_data_changes(qgis_application):
+    data_dialog = make_dialog([make_layer("a", "a.gpkg", "d1")])
+    style_dialog = make_dialog(
+        [make_layer("a", "a.gpkg", "d1", style=True)], kind=SyncKind.STYLE
+    )
+
+    assert data_dialog.commit_message is not None
+    assert style_dialog.commit_message is None
+
+
+def test_commit_message_is_disabled_without_selected_data(qgis_application):
+    dialog = make_dialog([make_layer("a", "a.gpkg", "d1")])
+    message_field = dialog.commit_message
+    assert message_field is not None
+    assert message_field.isEnabled()
+
+    find_item(dialog, "a.gpkg").setCheckState(0, Qt.CheckState.Unchecked)
+    assert not message_field.isEnabled()
+
+    find_item(dialog, "a.gpkg").setCheckState(0, Qt.CheckState.Checked)
+    assert message_field.isEnabled()
+
+
+def test_commit_message_strips_text_and_omits_empty_input(qgis_application):
+    dialog = make_dialog([make_layer("a", "a.gpkg", "d1")])
+
+    assert dialog.message() is None
+    assert dialog.commit_message is not None
+    dialog.commit_message.setPlainText("  update roads\n  ")
+    assert dialog.message() == "update roads"
+    dialog.commit_message.setPlainText("   ")
+    assert dialog.message() is None
+
+
 def test_upload_item_keys_match_the_tree_rows(qgis_application):
     layer = make_layer("roads", "folder/roads.gpkg", "desc-1", style=True)
     dialog = make_dialog([layer])

@@ -25,6 +25,23 @@ def make_loader():
     return Loader(communication), communication
 
 
+@pytest.fixture(autouse=True)
+def no_commit_message_dialog(monkeypatch):
+    class FakeCommitMessageDialog:
+        def __init__(self, parent=None):
+            pass
+
+        def exec(self):
+            return None
+
+        def message(self):
+            return None
+
+    monkeypatch.setattr(
+        "rana_qgis_plugin.loader.CommitMessageDialog", FakeCommitMessageDialog
+    )
+
+
 def wait_for(condition, timeout=3.0):
     """Process Qt events until condition is true or timeout expires."""
     deadline = time.monotonic() + timeout
