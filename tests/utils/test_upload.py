@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rana_qgis_plugin.workers import upload as upload_module
 from rana_qgis_plugin.workers.upload import (
     FileUploadTask,
     UploadJob,
@@ -388,9 +387,7 @@ def test_geopackage_preprocess_moves_wal_edits_into_main_file(tmp_path):
     writer.close()
 
 
-def test_geopackage_preprocess_fails_when_checkpoint_stays_busy(tmp_path, monkeypatch):
-    monkeypatch.setattr(upload_module, "CHECKPOINT_TIMEOUT", 0.05)
-    monkeypatch.setattr(upload_module, "CHECKPOINT_RETRY_DELAY", 0.01)
+def test_geopackage_preprocess_fails_when_checkpoint_stays_busy(tmp_path):
     path = tmp_path / "file.gpkg"
     writer = make_wal_geopackage(path)
     reader = sqlite3.connect(path)
@@ -400,7 +397,11 @@ def test_geopackage_preprocess_fails_when_checkpoint_stays_busy(tmp_path, monkey
     writer.commit()
     job = UploadJob("project", path, "https://upload", {})
 
-    with pytest.raises(RuntimeError, match="file.gpkg"):
+    with (
+        patch("rana_qgis_plugin.workers.upload.CHECKPOINT_TIMEOUT", 0.05),
+        patch("rana_qgis_plugin.workers.upload.CHECKPOINT_RETRY_DELAY", 0.01),
+        pytest.raises(RuntimeError, match="file.gpkg"),
+    ):
         job.preprocess()
 
     reader.close()
