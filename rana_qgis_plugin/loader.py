@@ -55,7 +55,11 @@ from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     finish_raster_upload,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
-from rana_qgis_plugin.layer_management.upload_lock import FileLock, lock_jobs
+from rana_qgis_plugin.layer_management.upload_lock import (
+    FileLock,
+    layers_for_file,
+    lock_jobs,
+)
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
@@ -1750,7 +1754,7 @@ class Loader(QObject):
         task = FileUploadTask(jobs)
         task.file_failed.connect(self.handle_upload_file_failed)
         task.file_started.connect(
-            lambda file_name: self.set_progress_bar_busy(f"Downloading {file_name}")
+            lambda file_name: self.set_progress_bar_busy(f"Uploading {file_name}")
         )
         task.taskCompleted.connect(
             lambda: self.handle_upload_completed(
@@ -1799,6 +1803,22 @@ class Loader(QObject):
                 verified_items.append(item)
         if not verified_items:
             return
+
+        # Refuse before preparing, so no upload session is opened on the server
+        # for a file that cannot be locked. lock_jobs checks again later.
+        in_edit_mode = [
+            item
+            for item in verified_items
+            if any(
+                layer.isEditable() for layer in layers_for_file(item.local_file_path)
+            )
+        ]
+        if in_edit_mode:
+            names = ", ".join(item.local_file_path.name for item in in_edit_mode)
+            self.communication.bar_warn(f"Save or discard your edits first: {names}")
+            verified_items = [i for i in verified_items if i not in in_edit_mode]
+            if not verified_items:
+                return
 
         jobs: list[UploadJob] = []
         conflicts: list[tuple[UploadableLayerItem, UploadPreparationResult]] = []

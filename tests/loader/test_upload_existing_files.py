@@ -77,13 +77,13 @@ def test_releasing_file_locks_unlocks_all_files_and_is_repeatable(loader, tmp_pa
 @pytest.fixture
 def server() -> Iterator[SimpleNamespace]:
     """Fake the Rana server answers and the QGIS task manager for one upload."""
-    fake = SimpleNamespace(prepared={}, task_manager=MagicMock())
+    fake = SimpleNamespace(prepared={}, task_manager=MagicMock(), prepare=None)
     with (
         patch.object(Loader, "verify_data_target", return_value=True),
         patch(
             "rana_qgis_plugin.loader.prepare_existing_file_upload",
             side_effect=lambda project, file, **kwargs: fake.prepared[file["id"]],
-        ),
+        ) as fake.prepare,
         patch(
             "rana_qgis_plugin.loader.QgsApplication.taskManager",
             return_value=fake.task_manager,
@@ -129,3 +129,23 @@ def test_file_without_a_job_is_never_locked(loader, server, tmp_path):
     assert uploaded.readOnly()
     assert not skipped.readOnly()
     assert not loader.layer_lock_registry.is_locked(sync_key("project", "skipped.gpkg"))
+
+
+def test_file_with_a_layer_in_edit_mode_is_refused_before_preparing(
+    loader, server, tmp_path
+):
+    path = tmp_path / "roads.gpkg"
+    layer = linked_vector_layer(path)
+    server.prepared[path.name] = UploadPreparationResult(job_for(path))
+    layer.startEditing()
+
+    upload(loader, path)
+
+    server.prepare.assert_not_called()
+    server.task_manager.addTask.assert_not_called()
+    assert (
+        "Save or discard your edits first"
+        in (loader.communication.bar_warn.call_args.args[0])
+    )
+    assert layer.isEditable()
+    layer.rollBack()
