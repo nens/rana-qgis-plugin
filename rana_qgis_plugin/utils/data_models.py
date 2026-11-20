@@ -43,6 +43,7 @@ class StyleUploadItem:
     layer_in_file: str | None = None
     project_id: str | None = None
     descriptor_id: str | None = None
+    file_id: str | None = None
     layer_source: Optional["LayerSource"] = None
 
 

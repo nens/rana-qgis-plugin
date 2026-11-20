@@ -349,6 +349,7 @@ def make_file_style_upload_item(
     layer_source: LayerSource,
     layer_in_file: str | None = None,
     project_id: str | None = None,
+    file_id: str | None = None,
 ) -> StyleUploadItem:
     """Build a style item for the file-descriptor styling endpoint."""
 
@@ -363,5 +364,6 @@ def make_file_style_upload_item(
         layer_in_file=layer_in_file,
         project_id=project_id,
         descriptor_id=descriptor_id,
+        file_id=file_id,
         layer_source=layer_source,
     )

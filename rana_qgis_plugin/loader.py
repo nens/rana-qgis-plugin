@@ -52,7 +52,7 @@ from rana_qgis_plugin.layer_management.layer_manager import (
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
 )
-from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
@@ -1790,12 +1790,7 @@ class Loader(QObject):
         verified_items: list[UploadableLayerItem] = []
         for item in items:
             layers = self.layers_for_keys(
-                [
-                    (
-                        item.rana_ref.project_id,
-                        item.rana_ref.descriptor_id or item.rana_ref.file_id,
-                    )
-                ]
+                [sync_key(item.rana_ref.project_id, item.rana_ref.file_id)]
             )
             if self.verify_data_target(item, layers):
                 verified_items.append(item)
@@ -1866,10 +1861,7 @@ class Loader(QObject):
             return
         keys = list(
             {
-                (
-                    item.rana_ref.project_id,
-                    item.rana_ref.descriptor_id or item.rana_ref.file_id,
-                )
+                sync_key(item.rana_ref.project_id, item.rana_ref.file_id)
                 for item in verified_items
             }
         )
@@ -1911,9 +1903,9 @@ class Loader(QObject):
             return
         keys = list(
             {
-                (item.project_id, item.descriptor_id)
+                sync_key(item.project_id, item.file_id)
                 for item in items
-                if item.project_id is not None and item.descriptor_id is not None
+                if item.project_id is not None and item.file_id is not None
             }
         )
         if not self.acquire_sync_keys(keys):
@@ -1922,9 +1914,9 @@ class Loader(QObject):
             return
 
         for item in items:
-            if item.project_id is None or item.descriptor_id is None:
+            if item.project_id is None or item.file_id is None:
                 continue
-            layers = self.layers_for_keys([(item.project_id, item.descriptor_id)])
+            layers = self.layers_for_keys([sync_key(item.project_id, item.file_id)])
             if not self.verify_style_target(item, layers):
                 self.release_sync_keys(keys)
                 discard_layer_sources(items)
@@ -2034,10 +2026,7 @@ class Loader(QObject):
             return layers
         for layer in project.mapLayers().values():
             ref = get_rana_refs(layer)
-            if (
-                ref is not None
-                and (ref.project_id, ref.descriptor_id or ref.file_id) in keys
-            ):
+            if ref is not None and sync_key(ref.project_id, ref.file_id) in keys:
                 layers.append(layer)
         return layers
 
