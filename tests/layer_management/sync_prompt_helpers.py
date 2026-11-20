@@ -127,6 +127,9 @@ class ChoiceRecorder:
                     if key.ref not in recorder.unchecked
                 }
 
+            def message(self) -> str | None:
+                return None
+
         return FakeSyncDialog
 
 
@@ -171,6 +174,7 @@ class SyncRecorder:
         self.data_groups = []
         self.captured_style_items: list[FakeStyleItem] = []
         self.capture_for_close: list[bool] = []
+        self.data_messages: list[str | None] = []
 
     def capture_style_items(self, groups, for_close: bool = False):
         self.capture_for_close.append(for_close)
@@ -187,7 +191,8 @@ class SyncRecorder:
     def capture_data_items(self, groups):
         return [FakeDataItem(file_id_for_group(group)) for group in groups]
 
-    def dispatch_data_items(self, items):
+    def dispatch_data_items(self, items, message=None):
+        self.data_messages.append(message)
         self.data_groups.extend(
             PurePosixPath(item.rana_ref.file_id).name for item in items
         )
