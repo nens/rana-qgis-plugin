@@ -181,7 +181,7 @@ For a Rana-linked group, "Sync style to Rana" is enabled when any contained
 layer has `has_unsynced_style()`; "Sync data to Rana" is enabled when any
 contained layer's `layer_sync_state()` is not `clean` (so `dirty` or
 `unknown`). Both are disabled while the file's sync key is locked (see
-[Sync locking](#sync-locking)), regardless of dirty state. Choosing either action opens `SyncDialog` to
+[Sync locking](sync_locking.md)), regardless of dirty state. Choosing either action opens `SyncDialog` to
 confirm (see `LayerTreeMenuProvider.sync`); the on-demand route also lists
 layers whose data state is `unknown` (`include_unknown_data`), matching the
 enabled state of the action, whereas the close/removal prompt does not.
@@ -293,45 +293,3 @@ flowchart LR
   calls) still produces a single prompt instead of one per child group. If
   another removal starts before the timer fires, it's restarted rather than
   duplicated, so it only ever fires once per settled batch.
-
-## Sync locking
-
-[`LayerLockRegistry`](../rana_qgis_plugin/layer_management/sync_lock.py) is a
-shared registry of `(project_id, file_id)` keys, built with `sync_key()`. The
-stable `file_id` is used because the server assigns a new `descriptor_id` on
-every upload. It isn't dirty-state and doesn't read it — it's an orthogonal
-gate that disables the save actions and causes a new sync or open to be
-refused while a file's key is locked, regardless of whether that file is
-`dirty` or `unknown`.
-
-Both uploads and downloads (opening a file) take the key. The context menu
-uses it to disable actions on a file already syncing, `Loader` uses it to
-refuse a second sync or open of the same file, and batch opens skip files
-that are currently being uploaded.
-
-### Upload locks
-
-[`lock_jobs()`](../rana_qgis_plugin/layer_management/upload_lock.py) runs on
-the main thread before an upload task starts. For each job it:
-
-- refuses the file, with a warning, if one of its vector layers is in edit
-  mode with unsaved changes, or if the key is already held;
-- acquires the key; and
-- makes every vector layer that reads from the file (all GeoPackage tables)
-  read-only, saving the previous read-only state in the `rana/upload_lock`
-  layer property.
-
-Each file gets its own `FileLock`. It is released as soon as that file's
-upload completes or fails, and again, harmlessly, when the task completes or
-is terminated. A lock releases only once, so a repeated release cannot free
-a key that a newer lock has taken. Releasing restores the saved read-only
-state. If a project is saved during an upload, `restore_stale_upload_locks()`
-clears the leftover state when it is loaded.
-
-Raster layers are not locked: QGIS cannot edit them, so there is nothing to
-make read-only. A raster changed on disk during the upload is detected
-afterwards by the start-fingerprint comparison described in
-[How state is cleared](#how-state-is-cleared).
-
-A download holds a `FileLock` without layers and releases it when the file
-has been downloaded, before the layer is opened.

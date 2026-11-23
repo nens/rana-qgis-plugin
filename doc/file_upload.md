@@ -43,7 +43,7 @@ Only after all files are prepared is the background task created.
 Before the task is created, `lock_jobs()` runs on the main thread. It drops
 jobs whose file is already being synced or has unsaved edits (with a warning),
 and makes the remaining files' vector layers read-only until each file has
-uploaded. See [Upload locks](dirty_tracking.md#upload-locks).
+uploaded. See [Sync locking](sync_locking.md#data-upload).
 
 #### `prepare_new_file_upload`
 

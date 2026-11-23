@@ -115,7 +115,7 @@ individual layer inside a multi-layer vector file. A central lock registry
 prevents concurrent uploads and downloads of the same Rana file: opening a
 file that is being uploaded is refused, and batch opens skip it. While a file
 uploads, its vector layers are read-only, and a file with unsaved edits is not
-uploaded. See [Sync locking](dirty_tracking.md#sync-locking). The loader also
+uploaded. See [Sync locking](sync_locking.md). The loader also
 checks that the remote target still exists immediately before saving.
 
 ## Local reference updates
