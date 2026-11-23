@@ -1,5 +1,7 @@
 """Central locking for Rana file synchronization."""
 
+from qgis.core import Qgis, QgsMessageLog
+
 SyncKey = tuple[str, str]
 
 
@@ -21,13 +23,22 @@ class LayerLockRegistry:
     def acquire(self, key: SyncKey) -> bool:
         """Acquire *key*, returning False when it is already locked."""
         if key in self._locked_keys:
+            QgsMessageLog.logMessage(
+                f"Lock acquire refused: {key}", "Rana", Qgis.MessageLevel.Info
+            )
             return False
         self._locked_keys.add(key)
+        QgsMessageLog.logMessage(
+            f"Lock acquired: {key}", "Rana", Qgis.MessageLevel.Info
+        )
         return True
 
     def release(self, key: SyncKey) -> None:
         """Release *key* if it is currently locked."""
         self._locked_keys.discard(key)
+        QgsMessageLog.logMessage(
+            f"Lock released: {key}", "Rana", Qgis.MessageLevel.Info
+        )
 
     def is_locked(self, key: SyncKey) -> bool:
         """Return whether *key* is currently locked."""
