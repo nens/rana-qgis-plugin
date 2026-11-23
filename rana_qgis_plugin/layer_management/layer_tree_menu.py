@@ -126,7 +126,7 @@ class LayerTreeMenuProvider:
         if ref is None:
             return
         locked = self.layer_lock_registry.is_locked(
-            (ref.project_id, ref.descriptor_id or ref.file_id)
+            sync_key(ref.project_id, ref.file_id)
         )
 
         is_file_group = any(
@@ -241,7 +241,7 @@ class LayerTreeMenuProvider:
         for group, ref, layer in self.iterate_file_groups(groups):
             if ref is None:
                 continue
-            key = (ref.project_id, ref.descriptor_id or ref.file_id)
+            key = sync_key(ref.project_id, ref.file_id)
             if key in seen:
                 continue
             items.append(

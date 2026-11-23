@@ -8,7 +8,7 @@ from qgis.PyQt.QtWidgets import QMenu
 
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
-from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 
 
 class FakeInterface:
@@ -20,7 +20,7 @@ class FakeInterface:
 
 
 @contextmanager
-def build_menu(project, group, qgis_application):
+def build_menu(project, group, qgis_application, registry=None):
     """Build the Rana context menu for `group` and tear the view down again.
 
     The view schedules its own layout work on a Qt timer, so it has to be
@@ -34,7 +34,7 @@ def build_menu(project, group, qgis_application):
     view.setCurrentNode(group)
     menu = QMenu()
     provider = LayerTreeMenuProvider(
-        cast(QgisInterface, FakeInterface(view)), LayerLockRegistry()
+        cast(QgisInterface, FakeInterface(view)), registry or LayerLockRegistry()
     )
     provider.on_context_menu(menu)
     try:
@@ -78,3 +78,19 @@ def test_raster_unknown_data_keeps_group_data_sync_enabled(qgis_application):
         actions = {action.text(): action for action in menu.actions() if action.text()}
         assert not actions["Sync style to Rana"].isEnabled()
         assert actions["Sync data to Rana"].isEnabled()
+
+
+def test_locked_file_disables_data_sync(qgis_application):
+    project = QgsProject()
+    group = project.layerTreeRoot().addGroup("file")
+    group.setCustomProperty("rana/project_id", "project")
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", "layer", "memory")
+    set_rana_refs(layer, RanaLayerRef("project", "file.gpkg", descriptor_id="desc"))
+    layer.setCustomProperty("rana/data_sync_state", "dirty")
+    project.addMapLayer(layer, False)
+    group.addLayer(layer)
+    registry = LayerLockRegistry()
+    registry.acquire(sync_key("project", "file.gpkg"))
+    with build_menu(project, group, qgis_application, registry) as menu:
+        actions = {action.text(): action for action in menu.actions() if action.text()}
+        assert not actions["Sync data to Rana"].isEnabled()
