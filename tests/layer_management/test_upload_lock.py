@@ -7,6 +7,7 @@ from qgis.core import QgsFeature, QgsProject, QgsRasterLayer, QgsVectorLayer
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 from rana_qgis_plugin.layer_management.upload_lock import (
     UPLOAD_LOCK_PROPERTY,
+    FileLock,
     layers_for_file,
     lock_jobs,
     restore_stale_upload_locks,
@@ -118,6 +119,34 @@ def test_second_release_leaves_a_newer_lock_on_the_same_file_intact(gpkg):
     assert roads.customProperty(UPLOAD_LOCK_PROPERTY) == "false"
     new_locks[job.sync_key].release()
     assert not roads.readOnly()
+
+
+def test_repeated_download_lock_release_leaves_a_newer_lock_intact():
+    """A download lock is released from several task signals; only the first counts.
+
+    The loader connects the same lock's release to file_downloaded,
+    taskCompleted and taskTerminated, so it can be called more than once.
+    The registry only stores keys and does not know who holds them, so a
+    repeated release must not free a key that a newer lock has since taken.
+    """
+    registry = LayerLockRegistry()
+    key = sync_key("project", "file")
+    assert registry.acquire(key)
+    download_lock = FileLock(key, registry, [])
+
+    # First release (file_downloaded): frees the key.
+    download_lock.release()
+    assert not registry.is_locked(key)
+
+    # A newer lock (e.g. an upload of the same file) takes the key.
+    assert registry.acquire(key)
+
+    # Later signals (taskCompleted, taskTerminated) release the old lock again.
+    # Because the old lock already released, these must do nothing.
+    download_lock.release()
+    download_lock.release()
+
+    assert registry.is_locked(key), "old lock freed the newer lock's key"
 
 
 def test_job_with_editable_layer_is_refused(gpkg):

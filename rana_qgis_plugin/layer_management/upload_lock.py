@@ -92,12 +92,7 @@ def lock_jobs(
                 for layer in layers_for_file(job.local_path)
                 if isinstance(layer, QgsVectorLayer)
             ]
-            if any(
-                isinstance(layer, QgsVectorLayer)
-                and layer.isEditable()
-                and layer.isModified()
-                for layer in layers
-            ):
+            if any(layer.isEditable() and layer.isModified() for layer in layers):
                 warnings.append(
                     f"{job.local_path.name}: save or discard your edits first."
                 )

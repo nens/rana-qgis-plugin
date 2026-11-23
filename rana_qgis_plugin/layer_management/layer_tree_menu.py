@@ -280,11 +280,7 @@ class LayerTreeMenuProvider:
             for child in group.children():
                 if isinstance(child, QgsLayerTreeGroup):
                     result.extend(LayerTreeMenuProvider.file_groups([child]))
-        return [
-            item
-            for nested in result
-            for item in (nested if isinstance(nested, list) else [nested])
-        ]
+        return result
 
     @staticmethod
     def collect_all_layers(groups: list[QgsLayerTreeGroup]) -> list[QgsMapLayer]:
