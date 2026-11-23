@@ -1,5 +1,6 @@
 """End-to-end tests for opening and synchronizing Rana layers."""
 
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -53,6 +54,7 @@ from rana_qgis_plugin.utils.api import (
     get_tenant_project_file_history_page,
     get_tenant_project_files,
 )
+from rana_qgis_plugin.workers import upload as upload_worker
 from rana_qgis_plugin.workers.upload import FileUploadTask, prepare_new_file_upload
 
 from .conftest import configure_rana_auth
@@ -525,7 +527,7 @@ def sync_dialog_text(dialog):
     return "\n".join(texts)
 
 
-def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
+def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup, monkeypatch):
     """Verify data/style upload and local rename/delete reference handling."""
     rana_project, folder_name = layer_sync_setup
     (
@@ -571,11 +573,41 @@ def test_sync_lifecycle(plugin, qtbot, qgis_application, layer_sync_setup):
         vector_layer.setCustomProperty("rana/data_sync_state", "dirty")
     assert is_data_dirty(vector_layer)
 
+    finish_started = threading.Event()
+    continue_finish = threading.Event()
+    original_finish = upload_worker.finish_file_upload
+
+    def pause_before_finish(*args, **kwargs):
+        finish_started.set()
+        assert continue_finish.wait(timeout=30)
+        return original_finish(*args, **kwargs)
+
+    monkeypatch.setattr(upload_worker, "finish_file_upload", pause_before_finish)
+
     # Trigger "Sync data to Rana" from the layer tree context menu
     commit_message = f"Vector sync {uuid.uuid4().hex}"
     trigger_sync_action(
         qtbot, plugin, vector_group, "Sync data to Rana", commit_message
     )
+    qtbot.waitUntil(finish_started.is_set, timeout=30000)
+
+    assert all(
+        layer.readOnly()
+        for layer in plugin.layer_tree_menu.collect_all_layers([vector_group])
+    )
+    locked_menu = get_layer_tree_context_menu(plugin, vector_group)
+    locked_actions = {
+        action.text(): action for action in locked_menu.actions() if action.text()
+    }
+    assert not locked_actions["Sync data to Rana"].isEnabled()
+    assert not locked_actions["Sync style to Rana"].isEnabled()
+    assert any(
+        indicator.toolTip() == "Uploading to Rana — read-only until the upload finishes"
+        for indicator in plugin.iface.layerTreeView().indicators(
+            vector_group.findLayer(vector_layer.id())
+        )
+    )
+    continue_finish.set()
     wait_for_qgis_tasks(qtbot)
 
     # Verify data dirty flag is cleared
