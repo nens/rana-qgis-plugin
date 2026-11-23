@@ -51,9 +51,9 @@ class IndicatorManager:
         self.project = project
         self.layer_tree_view = layer_tree_view
         self._tracked_layers: dict[str, tuple[QgsMapLayer, Callable[[str], None]]] = {}
-        self._indicators: list[
-            tuple[QgsLayerTreeNode, IndicatorKind, QgsLayerTreeViewIndicator]
-        ] = []
+        self._indicators: dict[
+            tuple[QgsLayerTreeNode, IndicatorKind], QgsLayerTreeViewIndicator
+        ] = {}
 
     def connect(self) -> None:
         """Start tracking layers added to the project."""
@@ -172,32 +172,23 @@ class IndicatorManager:
             indicator.setIcon(QgsApplication.getThemeIcon(icon))
             indicator.setToolTip(tooltip)
             self.layer_tree_view.addIndicator(node, indicator)
-            self._indicators.append((node, kind, indicator))
+            self._indicators[(node, kind)] = indicator
         elif not show and indicator is not None:
-            self.detach_indicator(node, indicator)
+            self.detach_indicator(node, kind)
 
-    def detach_indicator(
-        self, node: QgsLayerTreeNode, indicator: QgsLayerTreeViewIndicator
-    ) -> None:
+    def detach_indicator(self, node: QgsLayerTreeNode, kind: IndicatorKind) -> None:
         """Remove one managed indicator from its node and forget it."""
+        indicator = self._indicators.pop((node, kind), None)
+        if indicator is None:
+            return
         self.layer_tree_view.removeIndicator(node, indicator)
         indicator.deleteLater()
-        self._indicators = [
-            entry for entry in self._indicators if entry[2] != indicator
-        ]
 
     def managed_indicator(
         self, node: QgsLayerTreeNode, kind: IndicatorKind
     ) -> QgsLayerTreeViewIndicator | None:
         """Return this manager's indicator of one kind on a node, if attached."""
-        return next(
-            (
-                indicator
-                for tracked_node, tracked_kind, indicator in self._indicators
-                if tracked_node == node and tracked_kind == kind
-            ),
-            None,
-        )
+        return self._indicators.get((node, kind))
 
     def on_will_remove_children(
         self, parent: QgsLayerTreeNode, index_from: int, index_to: int
@@ -221,9 +212,8 @@ class IndicatorManager:
 
     def remove_subtree_indicators(self, node: QgsLayerTreeNode) -> None:
         """Detach indicators owned by this manager from a removed subtree."""
-        for tracked_node, _kind, indicator in list(self._indicators):
-            if tracked_node == node:
-                self.detach_indicator(node, indicator)
+        for kind in IndicatorKind:
+            self.detach_indicator(node, kind)
         if isinstance(node, QgsLayerTreeGroup):
             for child in node.children():
                 self.remove_subtree_indicators(child)
