@@ -111,6 +111,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - Task 7 is split into 7a (core wiring) and 7b (pre-check, stale locks, wording). Order of work: 2, 7a, 7b, 6, 8, with a review stop after each.
 - Complexity check: one new module (`upload_lock.py`) plus its test file; everything else modifies existing files. The shared `sync_key` function has 4 call sites (data upload, style upload, `layers_for_keys`, download); extraction accepted by the engineer.
 - Out of scope / deferred: locking layers for new-file uploads (unlikely; fix when it turns up), downloading over un-uploaded local edits, remote conflict detection (`If-Match`), unused server upload sessions after conflict skip/abort, edits by external programs.
+- Style read-only locking is deferred: QGIS has no style equivalent of the vector provider read-only flag. Style uploads keep their file lock, but style changes remain possible and are outside the upload snapshot.
 - Windows-only rare read failure on rollback-mode GeoPackages over 1 GB: a failed upload can be retried; no task.
 
 ## Progress

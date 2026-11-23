@@ -1,10 +1,8 @@
 import copy
 import json
 import math
-import os
 import shutil
 import tempfile
-import time
 import zipfile
 from functools import cached_property
 from pathlib import Path
@@ -279,9 +277,6 @@ class StyleUploadTask(QgsTask):
             )
 
     def run(self) -> bool:
-        delay = float(os.environ.get("RANA_DEBUG_UPLOAD_DELAY_SECONDS", "30"))
-        if delay > 0:
-            time.sleep(delay)
         for index, item in enumerate(self.items):
             if self.isCanceled():
                 return False

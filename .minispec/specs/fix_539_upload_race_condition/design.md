@@ -20,10 +20,17 @@ WAL mode can also miss recently committed edits, because only the main `.gpkg`
 is uploaded. Opening the same file from Rana during an upload downloads over
 the file in place (`workers/download.py:240`).
 
-Fix: make vector layers of a file read-only for the duration of its upload,
+Fix: make vector layers of a file read-only for the duration of its data upload,
 checkpoint GeoPackages before sending, make downloads and uploads of the same
 file mutually exclusive, and decide raster clean/dirty state by comparing
 fingerprints. No file copies are made (files can be hundreds of MB).
+
+Style uploads currently keep their existing batch file lock, but do not make
+layers read-only. QGIS has no equivalent style-read-only flag: the vector
+layer read-only setting hides data editing controls but does not disable the
+layer-properties style editors. A future style lock would need either UI
+interception or a style snapshot-and-restore guard. For now, style changes
+during a style upload are allowed and are not part of that upload's snapshot.
 
 ## User Stories
 
