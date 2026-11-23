@@ -1749,7 +1749,7 @@ class Loader(QObject):
         task = FileUploadTask(jobs)
         task.file_failed.connect(self.handle_upload_file_failed)
         task.file_started.connect(
-            lambda file_name: self.set_progress_bar_busy(f"Downloading {file_name}")
+            lambda file_name: self.set_progress_bar_busy(f"Uploading {file_name}")
         )
         task.taskCompleted.connect(
             lambda: self.handle_upload_completed(
@@ -1838,6 +1838,12 @@ class Loader(QObject):
         errors: list[str] = []
         for item in verified_items:
             ref = item.rana_ref
+            layers = self.layers_for_keys([sync_key(ref.project_id, ref.file_id)])
+            if any(layer.isEditable() for layer in layers):
+                self.communication.show_warn(
+                    f"{item.layer_name}: save or discard your edits first."
+                )
+                continue
             result = prepare_existing_file_upload(
                 {"id": ref.project_id, "name": item.project_name},
                 {"id": ref.file_id, "descriptor_id": ref.descriptor_id},
