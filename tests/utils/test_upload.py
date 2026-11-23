@@ -321,3 +321,30 @@ def test_upload_task_failed_finish(finish, put, tmp_path):
     assert task.failed_files == [
         (tmp_path / "file.tif", "Failed to complete file upload")
     ]
+
+
+@patch("rana_qgis_plugin.workers.upload.requests.put")
+@patch(
+    "rana_qgis_plugin.workers.upload.finish_file_upload",
+    side_effect=[{"id": "first"}, None, {"id": "third"}],
+)
+def test_upload_task_emits_file_completed_once_per_successful_file(
+    finish, put, tmp_path
+):
+    jobs = []
+    for name in ("first.tif", "second.tif", "third.tif"):
+        path = tmp_path / name
+        path.write_bytes(b"data")
+        jobs.append(UploadJob("project", path, "https://upload", {"path": name}))
+    task = make_task(jobs)
+    completed: list[UploadJob] = []
+    task.file_completed.connect(completed.append)
+
+    with (
+        patch.object(FileUploadTask, "isCanceled", return_value=False),
+        patch.object(FileUploadTask, "setProgress"),
+    ):
+        assert task.run() is False
+
+    assert completed == [jobs[0], jobs[2]]
+    assert len(task.failed_files) == 1

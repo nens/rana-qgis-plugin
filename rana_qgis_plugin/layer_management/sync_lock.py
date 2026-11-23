@@ -3,6 +3,15 @@
 SyncKey = tuple[str, str]
 
 
+def sync_key(project_id: str, file_id: str) -> SyncKey:
+    """Return the lock key for a Rana file.
+
+    The server assigns a new descriptor_id on every upload, so the key uses
+    the stable file_id instead.
+    """
+    return (project_id, file_id)
+
+
 class LayerLockRegistry:
     """Track locks for Rana-linked layers/files."""
 

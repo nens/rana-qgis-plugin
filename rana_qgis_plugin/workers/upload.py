@@ -7,6 +7,8 @@ import requests
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import QSettings, pyqtSignal
 
+from rana_qgis_plugin.layer_management.file_fingerprint import fingerprint_file
+from rana_qgis_plugin.layer_management.sync_lock import SyncKey
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.utils.api import (
     finish_file_upload,
@@ -28,6 +30,8 @@ class UploadJob:
     upload_url: str
     payload: dict
     last_modified_key: str | None = field(default=None, init=False, compare=False)
+    sync_key: SyncKey | None = field(default=None, init=False, compare=False)
+    start_fingerprint: str | None = field(default=None, init=False, compare=False)
 
     def preprocess(self) -> None:
         """Perform any work required before transferring the file."""
@@ -218,7 +222,8 @@ def prepare_existing_file_upload(
 class FileUploadTask(QgsTask):
     """Upload prepared files without blocking QGIS's main thread."""
 
-    file_failed = pyqtSignal(str, str)
+    file_completed = pyqtSignal(object)
+    file_failed = pyqtSignal(object, str)
     file_started = pyqtSignal(str)
 
     def __init__(self, jobs: list[UploadJob]):
@@ -241,6 +246,8 @@ class FileUploadTask(QgsTask):
             self.file_started.emit(job.local_path.name)
             try:
                 job.preprocess()
+                # Taken right before the file is read, so later changes show up.
+                job.start_fingerprint = fingerprint_file(job.local_path)
                 with job.local_path.open("rb") as file:
                     # timout guerds against failing to reach the server
                     # no read timeout because S3 only responds at the end of the PUT
@@ -262,6 +269,8 @@ class FileUploadTask(QgsTask):
                 self.successful_files.append(job.local_path)
             except Exception as error:
                 self.failed_files.append((job.local_path, str(error)))
-                self.file_failed.emit(str(job.local_path), str(error))
+                self.file_failed.emit(job, str(error))
+            else:
+                self.file_completed.emit(job)
             self.setProgress((index + 1) * 100 / len(self.jobs))
         return len(self.failed_files) == 0

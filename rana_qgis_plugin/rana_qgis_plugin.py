@@ -25,6 +25,7 @@ from rana_qgis_plugin.layer_management.indicator_manager import IndicatorManager
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
 from rana_qgis_plugin.layer_management.local_linking import LocalLinkingListener
 from rana_qgis_plugin.layer_management.raster_watch import RasterWatch
+from rana_qgis_plugin.layer_management.upload_lock import restore_stale_upload_locks
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.settings import initialize_settings
 
@@ -125,12 +126,18 @@ class RanaQgisPlugin(QObject):
         self.raster_watch.connect()
         self.project_close_sync_prompt.connect()
         self.layer_removal_sync_prompt.connect()
+        project = QgsProject.instance()
+        if project is not None:
+            project.readProject.connect(self.restore_stale_upload_locks)
         self.iface.mainWindow().installEventFilter(self)
 
     def unload(self):
         self.iface.mainWindow().removeEventFilter(self)
         self.layer_removal_sync_prompt.disconnect()
         self.project_close_sync_prompt.disconnect()
+        project = QgsProject.instance()
+        if project is not None:
+            project.readProject.disconnect(self.restore_stale_upload_locks)
         self.indicator_manager.disconnect()
         self.raster_watch.disconnect()
         self.local_linking.disconnect()
@@ -144,6 +151,12 @@ class RanaQgisPlugin(QObject):
         gui_registry = QgsGui.dataItemGuiProviderRegistry()
         if gui_registry is not None:
             gui_registry.removeProvider(self.data_item_gui_provider)
+
+    def restore_stale_upload_locks(self) -> None:
+        """Clear read-only markers persisted by an interrupted upload."""
+        project = QgsProject.instance()
+        if project is not None:
+            restore_stale_upload_locks(project)
 
     def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.Type.WindowDeactivate:

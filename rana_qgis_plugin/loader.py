@@ -5,7 +5,13 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
 
-from qgis.core import QgsApplication, QgsProject, QgsRasterLayer, QgsTask
+from qgis.core import (
+    QgsApplication,
+    QgsProject,
+    QgsRasterLayer,
+    QgsTask,
+    QgsVectorLayer,
+)
 from qgis.PyQt.QtCore import (
     QObject,
     QSettings,
@@ -51,8 +57,10 @@ from rana_qgis_plugin.layer_management.layer_manager import (
 )
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
+    finish_raster_upload,
 )
-from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
+from rana_qgis_plugin.layer_management.upload_lock import FileLock, lock_jobs
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
@@ -1747,7 +1755,7 @@ class Loader(QObject):
         task = FileUploadTask(jobs)
         task.file_failed.connect(self.handle_upload_file_failed)
         task.file_started.connect(
-            lambda file_name: self.set_progress_bar_busy(f"Downloading {file_name}")
+            lambda file_name: self.set_progress_bar_busy(f"Uploading {file_name}")
         )
         task.taskCompleted.connect(
             lambda: self.handle_upload_completed(
@@ -1758,10 +1766,44 @@ class Loader(QObject):
         self._track_task(task)
         task_manager.addTask(task)
 
-    @pyqtSlot(str, str)
-    def handle_upload_file_failed(self, local_path: str, error: str) -> None:
+    @pyqtSlot(object, str)
+    def handle_upload_file_failed(self, local_path: object, error: str) -> None:
         """Log an individual upload failure reported by the task."""
         self.communication.log_err(f"Failed to upload {local_path}: {error}")
+
+    def handle_data_file_completed(
+        self, job: UploadJob, task: FileUploadTask, locks: dict
+    ) -> None:
+        lock = locks.get(job.sync_key)
+        if job.sync_key is None:
+            return
+        try:
+            for layer in self.layers_for_keys([job.sync_key]):
+                if isinstance(layer, QgsRasterLayer):
+                    finish_raster_upload(layer, job.start_fingerprint)
+                else:
+                    set_data_sync_state(layer, "clean")
+                ref = get_rana_refs(layer)
+                if ref is not None:
+                    descriptor_id = task.updated_descriptors.get(ref.file_id)
+                    if descriptor_id:
+                        layer.setCustomProperty("rana/descriptor_id", descriptor_id)
+        finally:
+            if lock is not None:
+                lock.release()
+
+    def handle_data_file_failed(self, job: UploadJob, error: str, locks: dict) -> None:
+        try:
+            self.communication.log_err(f"Failed to upload {job.local_path}: {error}")
+        finally:
+            lock = locks.get(job.sync_key)
+            if lock is not None:
+                lock.release()
+
+    @staticmethod
+    def release_file_locks(locks: dict[tuple[str, str], FileLock]) -> None:
+        for lock in locks.values():
+            lock.release()
 
     def handle_upload_completed(
         self,
@@ -1790,12 +1832,7 @@ class Loader(QObject):
         verified_items: list[UploadableLayerItem] = []
         for item in items:
             layers = self.layers_for_keys(
-                [
-                    (
-                        item.rana_ref.project_id,
-                        item.rana_ref.descriptor_id or item.rana_ref.file_id,
-                    )
-                ]
+                [sync_key(item.rana_ref.project_id, item.rana_ref.file_id)]
             )
             if self.verify_data_target(item, layers):
                 verified_items.append(item)
@@ -1807,6 +1844,17 @@ class Loader(QObject):
         errors: list[str] = []
         for item in verified_items:
             ref = item.rana_ref
+            layers = self.layers_for_keys([sync_key(ref.project_id, ref.file_id)])
+            if any(
+                isinstance(layer, QgsVectorLayer)
+                and layer.isEditable()
+                and layer.isModified()
+                for layer in layers
+            ):
+                self.communication.show_warn(
+                    f"{item.layer_name}: save or discard your edits first."
+                )
+                continue
             result = prepare_existing_file_upload(
                 {"id": ref.project_id, "name": item.project_name},
                 {"id": ref.file_id, "descriptor_id": ref.descriptor_id},
@@ -1819,6 +1867,7 @@ class Loader(QObject):
             if result.error:
                 errors.append(f"{item.layer_name}: {result.error}")
             if result.job is not None:
+                result.job.sync_key = sync_key(ref.project_id, ref.file_id)
                 jobs.append(result.job)
         for error in errors:
             self.communication.log_err(error)
@@ -1857,6 +1906,7 @@ class Loader(QObject):
                 message=message,
             )
             if result.job is not None:
+                result.job.sync_key = sync_key(ref.project_id, ref.file_id)
                 jobs.append(result.job)
         if not jobs:
             return
@@ -1864,41 +1914,36 @@ class Loader(QObject):
         if task_manager is None:
             self.communication.bar_error("Could not start file sync.")
             return
-        keys = list(
-            {
-                (
-                    item.rana_ref.project_id,
-                    item.rana_ref.descriptor_id or item.rana_ref.file_id,
-                )
-                for item in verified_items
-            }
-        )
-        if not self.acquire_sync_keys(keys):
-            self.communication.bar_warn("A sync is already in progress.")
+        locks, warnings = lock_jobs(jobs, self.layer_lock_registry)
+        for warning in warnings:
+            self.communication.show_warn(warning)
+        jobs = [job for job in jobs if job.sync_key in locks]
+        if not jobs:
             return
 
         task = FileUploadTask(jobs)
-        task.rana_sync_keys = keys
-        task.file_failed.connect(self.handle_upload_file_failed)
+        task.file_failed.connect(
+            lambda job, error: self.handle_data_file_failed(job, error, locks)
+        )
+        task.file_completed.connect(
+            lambda job: self.handle_data_file_completed(job, task, locks)
+        )
         task.file_started.connect(
             lambda name: self.set_progress_bar_busy(f"Uploading {name}")
         )
         task.file_started.connect(
             lambda name: self.communication.log_msg(f"uploading {name}")
         )
-        task.taskCompleted.connect(
-            lambda: self.handle_sync_completed(
-                task,
-                DATA_SYNC_STATE_PROPERTY,
-                "Data saved to Rana.",
-                task.failed_files,
-            )
-        )
-        task.taskCompleted.connect(lambda: self.update_descriptor_ids(task))
-        task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
+        task.taskCompleted.connect(lambda: self.handle_upload_completed(True, task))
+        task.taskCompleted.connect(lambda: self.release_file_locks(locks))
+        task.taskTerminated.connect(lambda: self.release_file_locks(locks))
         task.taskTerminated.connect(lambda: self.handle_data_sync_terminated(task))
         self._track_task(task)
-        task_manager.addTask(task)
+        try:
+            task_manager.addTask(task)
+        except Exception:
+            self.release_file_locks(locks)
+            raise
 
     def upload_styles(self, items: list[StyleUploadItem]) -> None:
         """Submit a background task for the supplied style uploads."""
@@ -1911,9 +1956,9 @@ class Loader(QObject):
             return
         keys = list(
             {
-                (item.project_id, item.descriptor_id)
+                sync_key(item.project_id, item.file_id)
                 for item in items
-                if item.project_id is not None and item.descriptor_id is not None
+                if item.project_id is not None and item.file_id is not None
             }
         )
         if not self.acquire_sync_keys(keys):
@@ -1922,9 +1967,9 @@ class Loader(QObject):
             return
 
         for item in items:
-            if item.project_id is None or item.descriptor_id is None:
+            if item.project_id is None or item.file_id is None:
                 continue
-            layers = self.layers_for_keys([(item.project_id, item.descriptor_id)])
+            layers = self.layers_for_keys([sync_key(item.project_id, item.file_id)])
             if not self.verify_style_target(item, layers):
                 self.release_sync_keys(keys)
                 discard_layer_sources(items)
@@ -2034,10 +2079,7 @@ class Loader(QObject):
             return layers
         for layer in project.mapLayers().values():
             ref = get_rana_refs(layer)
-            if (
-                ref is not None
-                and (ref.project_id, ref.descriptor_id or ref.file_id) in keys
-            ):
+            if ref is not None and sync_key(ref.project_id, ref.file_id) in keys:
                 layers.append(layer)
         return layers
 
@@ -2177,6 +2219,28 @@ class Loader(QObject):
                 len(scenario_requests)
             )
 
+        skipped_locked = 0
+        available: list[
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenScenarioRequest
+            | OpenVectorFileRequest
+        ] = []
+        for request in resolved:
+            if isinstance(
+                request, (OpenFileRequest, OpenVectorFileRequest)
+            ) and self.layer_lock_registry.is_locked(
+                sync_key(request.project["id"], request.file_item["id"])
+            ):
+                skipped_locked += 1
+                continue
+            available.append(request)
+        if skipped_locked:
+            self.communication.bar_warn(
+                f"Skipped {skipped_locked} file(s) that are currently being uploaded."
+            )
+        resolved = available
+
         # Phase 2: dispatch by type
         for request in resolved:
             if isinstance(request, OpenSchematisationRequest):
@@ -2266,6 +2330,15 @@ class Loader(QObject):
             self.communication.bar_error("Could not start file download.")
             return
 
+        key = sync_key(project["id"], file_item["id"])
+        if not self.layer_lock_registry.acquire(key):
+            self.communication.bar_warn(
+                f"{PurePosixPath(file_item['id']).name} is being uploaded. "
+                "Open it again when the upload has finished."
+            )
+            return
+        download_lock = FileLock(key, self.layer_lock_registry, [])
+
         task = DownloadTask([downloader])
         task.file_started.connect(
             lambda file_id: self.set_progress_bar_busy(
@@ -2273,6 +2346,10 @@ class Loader(QObject):
             )
         )
         task.file_failed.connect(self.handle_download_file_failed)
+        # Release before opening the downloaded layer.  This is the primary
+        # success-path release; the task signals below remain safety nets for
+        # cancellation and unusual task-manager termination ordering.
+        task.file_downloaded.connect(lambda _path: download_lock.release())
         task.file_downloaded.connect(
             lambda local_path: callback(local_path, project, file_item)
         )
@@ -2280,9 +2357,15 @@ class Loader(QObject):
             lambda local_path: self.communication.log_msg(f"downloaded {local_path}")
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
+        task.taskCompleted.connect(download_lock.release)
+        task.taskTerminated.connect(download_lock.release)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
         self._track_task(task)
-        task_manager.addTask(task)
+        try:
+            task_manager.addTask(task)
+        except Exception:
+            download_lock.release()
+            raise
 
     def open_scenario_results(self, request: OpenScenarioRequest) -> None:
         """Open one scenario with interactive result selection."""

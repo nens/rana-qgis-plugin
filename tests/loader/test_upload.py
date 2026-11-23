@@ -478,7 +478,7 @@ def test_upload_files_full_chain_success(qgis_application, tmp_path):
         assert wait_for(lambda: communication.bar_info.called), "upload never completed"
 
     communication.progress_bar.assert_called_once_with(
-        "Downloading file.tif", minimum=0, maximum=0
+        "Uploading file.tif", minimum=0, maximum=0
     )
     communication.bar_info.assert_called_once()
     communication.bar_error.assert_not_called()
@@ -522,7 +522,7 @@ def test_upload_files_full_chain_failure(qgis_application, tmp_path):
         )
 
     communication.progress_bar.assert_called_once_with(
-        "Downloading file.tif", minimum=0, maximum=0
+        "Uploading file.tif", minimum=0, maximum=0
     )
     communication.bar_error.assert_called_once()
     communication.bar_info.assert_not_called()

@@ -125,14 +125,22 @@ baseline/fingerprint model for style; any change marks it dirty.
 
 ## How state is cleared
 
-Clearing only happens after the corresponding sync task reports success
-(`Loader.handle_sync_completed()` in `loader.py`), and differs by kind:
+Clearing only happens after the corresponding sync reports success, and
+differs by kind:
 
-- **Style sync** — `rana/style_dirty` is removed.
+- **Style sync** — `rana/style_dirty` is removed
+  (`Loader.handle_sync_completed()` in `loader.py`).
 - **Vector data sync** — `rana/data_sync_state` is set back to `clean`.
-- **Raster data sync** — `capture_raster_baseline()` is called again, since a
-  re-upload only matches a *new* baseline (the file's mtime/size changed, but
-  the content is now what's on the server).
+- **Raster data sync** — `finish_raster_upload()` compares the file's current
+  fingerprint with the `start_fingerprint` taken just before the upload read
+  the file. If they match, `capture_raster_baseline()` stores the new
+  baseline (the file's mtime/size changed, but the content is now what's on
+  the server). If the file changed during the upload, the layer stays `dirty`,
+  because those edits were not uploaded. A missing start fingerprint counts as
+  changed.
+
+Data sync is cleared per file, from `Loader.handle_data_file_completed()`,
+as soon as that file has uploaded, not when the whole task finishes.
 
 A failed or canceled task leaves the dirty state untouched.
 
@@ -173,7 +181,7 @@ For a Rana-linked group, "Sync style to Rana" is enabled when any contained
 layer has `has_unsynced_style()`; "Sync data to Rana" is enabled when any
 contained layer's `layer_sync_state()` is not `clean` (so `dirty` or
 `unknown`). Both are disabled while the file's sync key is locked (see
-[Sync locking](#sync-locking)), regardless of dirty state. Choosing either action opens `SyncDialog` to
+[Sync locking](sync_locking.md)), regardless of dirty state. Choosing either action opens `SyncDialog` to
 confirm (see `LayerTreeMenuProvider.sync`); the on-demand route also lists
 layers whose data state is `unknown` (`include_unknown_data`), matching the
 enabled state of the action, whereas the close/removal prompt does not.
@@ -285,15 +293,3 @@ flowchart LR
   calls) still produces a single prompt instead of one per child group. If
   another removal starts before the timer fires, it's restarted rather than
   duplicated, so it only ever fires once per settled batch.
-
-## Sync locking
-
-[`LayerLockRegistry`](../rana_qgis_plugin/layer_management/sync_lock.py) is a
-shared registry of `(project_id, descriptor_id or file_id)` keys. It isn't
-dirty-state and doesn't read it — it's an orthogonal gate that disables the
-save actions and causes a new sync to be refused while a file's key is
-already locked, regardless of whether that file is `dirty` or `unknown`. It
-is consulted by the context menu (to disable actions on a file already
-syncing) and by `Loader` (to refuse starting a second sync task for the same
-file), and released when that task completes or is canceled.
-

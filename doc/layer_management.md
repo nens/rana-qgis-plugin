@@ -112,7 +112,10 @@ files are synchronized. See [`dirty_tracking.md`](dirty_tracking.md).
 
 Data upload replaces the complete Rana file, so it is not offered for an
 individual layer inside a multi-layer vector file. A central lock registry
-prevents concurrent synchronization of the same Rana file. The loader also
+prevents concurrent uploads and downloads of the same Rana file: opening a
+file that is being uploaded is refused, and batch opens skip it. While a file
+uploads, its vector layers are read-only, and a file with unsaved edits is not
+uploaded. See [Sync locking](sync_locking.md). The loader also
 checks that the remote target still exists immediately before saving.
 
 ## Local reference updates

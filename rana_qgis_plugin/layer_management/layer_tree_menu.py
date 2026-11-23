@@ -25,7 +25,7 @@ from rana_qgis_plugin.layer_management.sync_changes import (
     SyncChanges,
     SyncKind,
 )
-from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry
+from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
     SyncDialog,
     dispatch_selected,
@@ -126,7 +126,7 @@ class LayerTreeMenuProvider:
         if ref is None:
             return
         locked = self.layer_lock_registry.is_locked(
-            (ref.project_id, ref.descriptor_id or ref.file_id)
+            sync_key(ref.project_id, ref.file_id)
         )
 
         is_file_group = any(
@@ -167,7 +167,7 @@ class LayerTreeMenuProvider:
         for group, ref, layer in self.iterate_file_groups(groups):
             if ref is None or not ref.descriptor_id:
                 continue
-            key = (ref.project_id, ref.descriptor_id)
+            key = sync_key(ref.project_id, ref.file_id)
             if key in seen:
                 continue
             data_type = (
@@ -189,6 +189,7 @@ class LayerTreeMenuProvider:
                     f"file {ref.file_id}",
                     layer_source,
                     project_id=ref.project_id,
+                    file_id=ref.file_id,
                 )
             )
             seen.add(key)
@@ -240,7 +241,7 @@ class LayerTreeMenuProvider:
         for group, ref, layer in self.iterate_file_groups(groups):
             if ref is None:
                 continue
-            key = (ref.project_id, ref.descriptor_id or ref.file_id)
+            key = sync_key(ref.project_id, ref.file_id)
             if key in seen:
                 continue
             items.append(
@@ -279,11 +280,7 @@ class LayerTreeMenuProvider:
             for child in group.children():
                 if isinstance(child, QgsLayerTreeGroup):
                     result.extend(LayerTreeMenuProvider.file_groups([child]))
-        return [
-            item
-            for nested in result
-            for item in (nested if isinstance(nested, list) else [nested])
-        ]
+        return result
 
     @staticmethod
     def collect_all_layers(groups: list[QgsLayerTreeGroup]) -> list[QgsMapLayer]:

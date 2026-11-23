@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from qgis.core import QgsRasterLayer, QgsVectorLayer
 
+from rana_qgis_plugin.layer_management.file_fingerprint import fingerprint_file
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_FINGERPRINT_PROPERTY,
     DATA_SYNC_STATE_PROPERTY,
@@ -16,6 +17,7 @@ from rana_qgis_plugin.layer_management.layer_sync_state import LayerSyncState
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
     evaluate_raster_data_dirty,
+    finish_raster_upload,
 )
 
 
@@ -133,3 +135,40 @@ def test_clear_rana_refs_removes_fingerprint_without_changing_vector_dirty_state
 
     assert vector.customProperty(DATA_FINGERPRINT_PROPERTY) is None
     assert vector.customProperty(DATA_SYNC_STATE_PROPERTY) is None
+
+
+def test_finish_raster_upload_unchanged_file_ends_clean_with_baseline(
+    tmp_path: Path, qgis_application
+):
+    cache_dir = tmp_path / "cache"
+    layer, source_dir = _linked_raster(cache_dir, qgis_application)
+    with patch(
+        "rana_qgis_plugin.layer_management.file_fingerprint.rana_cache_dir",
+        return_value=str(cache_dir),
+    ):
+        start = fingerprint_file(source_dir / "raster.tif")
+
+        finish_raster_upload(layer, start)
+
+        assert layer.customProperty(DATA_FINGERPRINT_PROPERTY) == start
+        assert evaluate_raster_data_dirty(layer) is LayerSyncState.CLEAN
+
+
+def test_finish_raster_upload_file_changed_during_upload_stays_dirty(
+    tmp_path: Path, qgis_application
+):
+    cache_dir = tmp_path / "cache"
+    layer, source_dir = _linked_raster(cache_dir, qgis_application)
+    with patch(
+        "rana_qgis_plugin.layer_management.file_fingerprint.rana_cache_dir",
+        return_value=str(cache_dir),
+    ):
+        start = fingerprint_file(source_dir / "raster.tif")
+        (source_dir / "raster.tif").write_bytes(b"overwritten during upload")
+
+        finish_raster_upload(layer, start)
+
+        assert (
+            layer.customProperty(DATA_SYNC_STATE_PROPERTY) == LayerSyncState.DIRTY.value
+        )
+        assert evaluate_raster_data_dirty(layer) is not LayerSyncState.CLEAN
