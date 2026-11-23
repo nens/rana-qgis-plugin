@@ -6,14 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qgis.core import (
-    Qgis,
-    QgsLayerTreeGroup,
-    QgsLayerTreeLayer,
-    QgsMapLayer,
-    QgsMessageLog,
-    QgsRasterLayer,
-)
+from qgis.core import QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsRasterLayer
 from qgis.PyQt.QtWidgets import QAction, QDialog, QMenu
 
 from rana_qgis_plugin.icons import rana_icon
@@ -146,14 +139,6 @@ class LayerTreeMenuProvider:
         style_dirty = any(has_unsynced_style(layer) for layer in all_layers)
         data_dirty = any(
             layer_sync_state(layer) is not LayerSyncState.CLEAN for layer in all_layers
-        )
-        QgsMessageLog.logMessage(
-            f"Context menu for {ref.file_id}: locked={locked}, "
-            f"layers={[layer.name() for layer in all_layers]}, "
-            f"data_dirty={data_dirty}, style_dirty={style_dirty}, "
-            f"states={[layer_sync_state(layer).value for layer in all_layers]}",
-            "Rana",
-            Qgis.MessageLevel.Info,
         )
         if locked or not style_dirty:
             sync_style.setEnabled(False)
