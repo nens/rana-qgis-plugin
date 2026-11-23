@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from qgis.core import QgsTask
 
-from rana_qgis_plugin.workers.rana_jobs import JobsFetchTask
+from rana_qgis_plugin.workers.rana_jobs import JobLogsFetchTask, JobsFetchTask
 
 
 def test_jobs_fetch_task_stores_result():
@@ -47,12 +47,45 @@ def test_jobs_fetch_task_copies_filter_params():
     fetch.assert_called_once_with("project-1", params={"search": "model"})
 
 
-def test_jobs_fetch_task_is_cancelled_without_shutdown_prompt():
+def test_jobs_fetch_task_is_hidden_and_not_cancellable():
     task = JobsFetchTask("project-1")
 
-    assert int(task.flags() & QgsTask.Flag.CanCancel) != 0
-    assert int(task.flags() & QgsTask.Flag.CancelWithoutPrompt) != 0
+    assert int(task.flags() & QgsTask.Flag.Hidden) != 0
+    assert int(task.flags() & QgsTask.Flag.CanCancel) == 0
     assert int(task.flags() & QgsTask.Flag.Silent) != 0
+
+
+def test_job_logs_fetch_task_stores_result():
+    result = {"items": [{"message": "hello"}]}
+    task = JobLogsFetchTask("job-1")
+
+    with patch(
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs", return_value=result
+    ) as fetch:
+        assert task.run()
+
+    fetch.assert_called_once_with("job-1")
+    assert task.job_id == "job-1"
+    assert task.result is result
+    assert task.error is None
+
+
+def test_job_logs_fetch_task_stores_error():
+    error = RuntimeError("logs failed")
+    task = JobLogsFetchTask("job-1")
+
+    with patch("rana_qgis_plugin.workers.rana_jobs.get_job_logs", side_effect=error):
+        assert not task.run()
+
+    assert task.result is None
+    assert task.error is error
+
+
+def test_job_logs_fetch_task_is_hidden_and_not_cancellable():
+    task = JobLogsFetchTask("job-1")
+
+    assert int(task.flags() & QgsTask.Flag.Hidden) != 0
+    assert int(task.flags() & QgsTask.Flag.CanCancel) == 0
 
 
 def test_cancelled_jobs_fetch_task_skips_request():

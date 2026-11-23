@@ -51,7 +51,7 @@ from rana_qgis_plugin.widgets.jobs_models import (
     JobParseError,
     job_can_be_cancelled,
 )
-from rana_qgis_plugin.workers.rana_jobs import JobsFetchTask
+from rana_qgis_plugin.workers.rana_jobs import JobLogsFetchTask, JobsFetchTask
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -90,6 +90,8 @@ class JobsTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._jobs: list[JobData] = []
         self._highlighted_job_ids: set[str | int] = set()
+        self._updating = False
+        self._pending_jobs: list[JobData] | None = None
 
     def rowCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._jobs)
@@ -184,7 +186,24 @@ class JobsTableModel(QAbstractTableModel):
                 )
 
     def update_jobs(self, jobs: list[JobData]) -> None:
-        """Reconcile jobs incrementally, preserving the API response order."""
+        """Reconcile jobs incrementally, preserving the API response order.
+
+        A nested call (e.g. triggered by a selection change while rows are being
+        removed) is queued and applied after the current update finishes, so
+        `_jobs` is never mutated while an update is in progress.
+        """
+        self._pending_jobs = jobs
+        if self._updating:
+            return
+        self._updating = True
+        try:
+            while self._pending_jobs is not None:
+                pending, self._pending_jobs = self._pending_jobs, None
+                self._apply_jobs(pending)
+        finally:
+            self._updating = False
+
+    def _apply_jobs(self, jobs: list[JobData]) -> None:
         incoming_by_id = {job.id: job for job in jobs}
 
         for row in range(len(self._jobs) - 1, -1, -1):
@@ -320,6 +339,7 @@ class ProcessesPanel(QWidget):
         layout.addWidget(self._splitter)
 
         self._current_task: JobsFetchTask | None = None
+        self._logs_task: JobLogsFetchTask | None = None
         self._filters: dict = {}
         self._fetch_requested = False
         self._highlight_job_ids: set[str | int] = set()
@@ -418,7 +438,13 @@ class ProcessesPanel(QWidget):
     def _fetch_completed(self, task: JobsFetchTask) -> None:
         if task is not self._current_task:
             return
-        self._current_task = None
+        try:
+            self._apply_fetch_result(task)
+        finally:
+            self._current_task = None
+        self._continue_requested_fetch()
+
+    def _apply_fetch_result(self, task: JobsFetchTask) -> None:
         if not self._stopped and self._visible and task.error is None:
             if task.params != self._filters:
                 self._fetch_requested = True
@@ -441,8 +467,6 @@ class ProcessesPanel(QWidget):
                         self._highlight_job_ids.clear()
         elif self._stopped or not self._visible:
             self._fetch_requested = False
-
-        self._continue_requested_fetch()
 
     def highlight_jobs(self, job_ids: list[str]) -> None:
         """Refresh now and temporarily select/highlight matching jobs."""
@@ -538,10 +562,20 @@ class ProcessesPanel(QWidget):
         if not self._log_box.isCollapsed() and self._splitter.sizes()[1] > 0:
             self._log_height = self._splitter.sizes()[1]
 
+    def _selected_job_id(self) -> str | None:
+        selection_model = self.table.selectionModel()
+        if selection_model is None or not selection_model.hasSelection():
+            return None
+        selected_rows = selection_model.selectedRows()
+        if not selected_rows:
+            return None
+        return str(self.model.job_id_at(selected_rows[0].row()))
+
     def _refresh_selected_job_logs(self) -> None:
         selection_model = self.table.selectionModel()
         if selection_model is None or not selection_model.hasSelection():
             self._logs_job_id = None
+            self._logs_task = None
             self.logs.clear()
             self.logs.setPlaceholderText("Select a job to view its logs.")
             return
@@ -549,6 +583,7 @@ class ProcessesPanel(QWidget):
         selected_rows = selection_model.selectedRows()
         if not selected_rows:
             self._logs_job_id = None
+            self._logs_task = None
             self.logs.clear()
             self.logs.setPlaceholderText("Select a job to view its logs.")
             return
@@ -559,23 +594,40 @@ class ProcessesPanel(QWidget):
             self.logs.setPlaceholderText(f"Loading logs for {job.name}…")
             self._logs_job_id = job.id
         if self._log_box.isCollapsed():
+            self._logs_task = None
             return
-        try:
-            response = get_job_logs(str(job.id))
-        except (NetworkTimeoutError, NetworkUnavailableError, RanaFetchError) as error:
+        if self._logs_task is not None and self._logs_task.job_id == str(job.id):
+            return
+        self._start_logs_task(str(job.id))
+
+    def _start_logs_task(self, job_id: str) -> None:
+        task = JobLogsFetchTask(job_id)
+        self._logs_task = task
+        task.taskCompleted.connect(lambda task=task: self._logs_finished(task))
+        task.taskTerminated.connect(lambda task=task: self._logs_finished(task))
+        task_manager = QgsApplication.taskManager()
+        if task_manager is None:
+            self._logs_task = None
+            return
+        task_manager.addTask(task)
+
+    def _logs_finished(self, task: JobLogsFetchTask) -> None:
+        if task is not self._logs_task:
+            return
+        self._logs_task = None
+        if self._log_box.isCollapsed() or self._selected_job_id() != task.job_id:
+            return
+        if task.error is not None:
             self.logs.setPlaceholderText("Could not load job logs.")
-            self._report_fetch_error(error)
+            if isinstance(
+                task.error,
+                (NetworkTimeoutError, NetworkUnavailableError, RanaFetchError),
+            ):
+                self._report_fetch_error(task.error)
             return
+        self._render_logs(task.result or {})
 
-        current_selection = self.table.selectionModel()
-        if (
-            current_selection is None
-            or not current_selection.hasSelection()
-            or current_selection.selectedRows()[0].row() >= self.model.rowCount()
-            or self.model.job_at(current_selection.selectedRows()[0].row()).id != job.id
-        ):
-            return
-
+    def _render_logs(self, response: dict) -> None:
         entries = response.get("items", [])
         if not entries:
             self.logs.setPlaceholderText("No logs available for this job.")

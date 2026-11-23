@@ -40,6 +40,25 @@ def simulation_tracker_process_id():
         yield
 
 
+@pytest.fixture(autouse=True)
+def task_manager():
+    """Capture background tasks instead of running them on a worker thread."""
+    with patch(
+        "rana_qgis_plugin.widgets.processes_panel.QgsApplication.taskManager"
+    ) as manager:
+        yield manager
+
+
+def complete_logs_task(panel):
+    """Run the pending logs task on the test thread and emit its completion signal."""
+    task = panel._logs_task
+    assert task is not None
+    if task.run():
+        task.taskCompleted.emit()
+    else:
+        task.taskTerminated.emit()
+
+
 def make_job(job_id: int, name: str, progress: int = 0) -> JobData:
     return JobData(
         id=job_id,
@@ -170,6 +189,27 @@ def test_word_wrap_delegate_sizes_name_from_display_text(qgis_application):
 
     assert size.width() == 100
     assert size.height() > option.fontMetrics.height()
+
+
+def test_jobs_table_model_defers_nested_update_until_outer_update_finishes(
+    qgis_application,
+):
+    model = JobsTableModel()
+    job_a = make_job(1, "A")
+    job_b = make_job(2, "B")
+    model.update_jobs([job_a, job_b])
+    nested_updates = []
+
+    def nested_update(*_args):
+        if not nested_updates:
+            nested_updates.append(True)
+            model.update_jobs([])
+
+    model.rowsRemoved.connect(nested_update)
+    model.update_jobs([job_a])
+
+    assert nested_updates == [True]
+    assert model.rowCount() == 0
 
 
 def test_processes_panel_builds_filter_params_and_keeps_stable_combo(
@@ -547,7 +587,7 @@ def test_selected_job_logs_show_timestamp_level_message_and_exception(
     assert selection_model is not None
 
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         return_value=logs_response,
     ) as fetch_logs:
         selection_model.select(
@@ -558,6 +598,7 @@ def test_selected_job_logs_show_timestamp_level_message_and_exception(
                 | QItemSelectionModel.SelectionFlag.Rows,
             ),
         )
+        complete_logs_task(panel)
 
     assert isinstance(panel.logs, QTextEdit)
     panel.logs.setPlaceholderText("")
@@ -568,54 +609,99 @@ def test_selected_job_logs_show_timestamp_level_message_and_exception(
     fetch_logs.assert_called_once_with("1")
 
 
-def test_stale_logs_response_does_not_replace_new_selection(qgis_application, loader):
+def test_stale_logs_result_does_not_replace_new_selection(qgis_application, loader):
     panel = ProcessesPanel(
         {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
     )
     panel.model.update_jobs([make_job(1, "First"), make_job(2, "Second")])
+    panel._log_box.setCollapsed(False)
     selection_model = panel.table.selectionModel()
     assert selection_model is not None
-    selection_model.select(
-        panel.model.index(0, 0),
-        cast(
-            QItemSelectionModel.SelectionFlags,
-            QItemSelectionModel.SelectionFlag.Select
-            | QItemSelectionModel.SelectionFlag.Rows,
-        ),
-    )
-    response = {
-        "items": [
-            {
-                "timestamp": "first response",
-                "log_level": 20,
-                "message": "first job logs",
-            }
-        ]
+    responses = {
+        "1": {"items": [{"timestamp": "t", "log_level": 20, "message": "first"}]},
+        "2": {"items": [{"timestamp": "t", "log_level": 20, "message": "second"}]},
     }
 
-    def select_another_job(*_args, **_kwargs):
-        selection_model.blockSignals(True)
-        try:
-            selection_model.clearSelection()
-            selection_model.select(
-                panel.model.index(1, 0),
-                cast(
-                    QItemSelectionModel.SelectionFlags,
-                    QItemSelectionModel.SelectionFlag.Select
-                    | QItemSelectionModel.SelectionFlag.Rows,
-                ),
-            )
-        finally:
-            selection_model.blockSignals(False)
-        return response
-
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
-        side_effect=select_another_job,
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
+        side_effect=lambda job_id: responses[job_id],
     ):
-        panel._refresh_selected_job_logs()
+        select_first_row(panel)
+        first_task = panel._logs_task
+        selection_model.clearSelection()
+        selection_model.select(
+            panel.model.index(1, 0),
+            cast(
+                QItemSelectionModel.SelectionFlags,
+                QItemSelectionModel.SelectionFlag.Select
+                | QItemSelectionModel.SelectionFlag.Rows,
+            ),
+        )
+        second_task = panel._logs_task
+        assert first_task is not None and second_task is not None
+        assert first_task is not second_task
 
+        assert first_task.run()
+        first_task.taskCompleted.emit()
+        assert panel.logs.toPlainText() == ""
+        assert panel._logs_task is second_task
+
+        complete_logs_task(panel)
+
+    panel.logs.setPlaceholderText("")
+    assert panel.logs.toPlainText() == "t | 20 | second"
+
+
+def test_logs_result_is_discarded_when_selection_is_cleared(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+    panel._log_box.setCollapsed(False)
+    with patch(
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
+        return_value={"items": [{"timestamp": "t", "log_level": 20, "message": "m"}]},
+    ):
+        selection_model = select_first_row(panel)
+        task = panel._logs_task
+        selection_model.clearSelection()
+        assert task is not None
+        assert task.run()
+        task.taskCompleted.emit()
+
+    assert panel._logs_task is None
     assert panel.logs.toPlainText() == ""
+
+
+def test_logs_fetch_runs_in_hidden_background_task(
+    qgis_application, loader, task_manager
+):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+    panel._log_box.setCollapsed(False)
+
+    select_first_row(panel)
+
+    task = panel._logs_task
+    assert task is not None
+    assert task.job_id == "1"
+    task_manager.return_value.addTask.assert_called_once_with(task)
+
+
+def test_logs_refresh_for_same_job_does_not_start_second_task(qgis_application, loader):
+    panel = ProcessesPanel(
+        {"id": "project-1", "slug": "project"}, ApiErrorSignals(), loader
+    )
+    panel.model.update_jobs([make_job(1, "Job")])
+    panel._log_box.setCollapsed(False)
+    select_first_row(panel)
+    task = panel._logs_task
+
+    panel._refresh_selected_job_logs()
+
+    assert panel._logs_task is task
 
 
 def test_logs_clear_when_no_job_is_selected(qgis_application, loader):
@@ -625,7 +711,7 @@ def test_logs_clear_when_no_job_is_selected(qgis_application, loader):
     panel.logs.setPlainText("previous job logs")
     panel.model.update_jobs([make_job(1, "No selection")])
 
-    with patch("rana_qgis_plugin.widgets.processes_panel.get_job_logs") as fetch_logs:
+    with patch("rana_qgis_plugin.workers.rana_jobs.get_job_logs") as fetch_logs:
         panel._refresh_selected_job_logs()
 
     assert panel.logs.toPlainText() == ""
@@ -650,10 +736,11 @@ def test_selected_job_without_logs_shows_empty_state(qgis_application, loader):
     )
 
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         return_value={"items": []},
     ):
         panel._refresh_selected_job_logs()
+        complete_logs_task(panel)
 
     assert panel.logs.toPlainText() == ""
     assert panel.logs.placeholderText() == "No logs available for this job."
@@ -680,10 +767,11 @@ def test_selected_job_log_error_is_reported(qgis_application, loader):
     )
 
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         side_effect=RanaFetchError("logs unavailable", "url", {}),
     ):
         panel._refresh_selected_job_logs()
+        complete_logs_task(panel)
 
     assert panel.logs.placeholderText() == "Could not load job logs."
     assert errors == [("logs unavailable. URL: url. params: {}", False)]
@@ -720,7 +808,7 @@ def test_selecting_a_job_opens_log_with_hide_label(qgis_application, loader):
     panel.model.update_jobs([make_job(1, "Job")])
 
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         return_value={"items": []},
     ):
         select_first_row(panel)
@@ -736,7 +824,7 @@ def test_collapsing_log_switches_label_to_show(qgis_application, loader):
     )
     panel.model.update_jobs([make_job(1, "Job")])
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         return_value={"items": []},
     ):
         select_first_row(panel)
@@ -753,7 +841,7 @@ def test_clearing_selection_hides_and_collapses_log_box(qgis_application, loader
     )
     panel.model.update_jobs([make_job(1, "Job")])
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         return_value={"items": []},
     ):
         selection_model = select_first_row(panel)
@@ -772,7 +860,7 @@ def test_collapsed_log_does_not_fetch_logs(qgis_application, loader):
     panel._log_box.setCollapsed(True)
 
     with patch(
-        "rana_qgis_plugin.widgets.processes_panel.get_job_logs",
+        "rana_qgis_plugin.workers.rana_jobs.get_job_logs",
         return_value={"items": []},
     ) as fetch_logs:
         panel._refresh_selected_job_logs()
