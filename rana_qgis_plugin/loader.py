@@ -2297,6 +2297,15 @@ class Loader(QObject):
             self.communication.bar_error("Could not start file download.")
             return
 
+        key = sync_key(project["id"], file_item["id"])
+        if not self.layer_lock_registry.acquire(key):
+            self.communication.bar_warn(
+                f"{PurePosixPath(file_item['id']).name} is being uploaded. "
+                "Open it again when the upload has finished."
+            )
+            return
+        download_lock = FileLock(key, self.layer_lock_registry, [])
+
         task = DownloadTask([downloader])
         task.file_started.connect(
             lambda file_id: self.set_progress_bar_busy(
@@ -2311,9 +2320,15 @@ class Loader(QObject):
             lambda local_path: self.communication.log_msg(f"downloaded {local_path}")
         )
         task.taskCompleted.connect(self.communication.clear_message_bar)
+        task.taskCompleted.connect(download_lock.release)
+        task.taskTerminated.connect(download_lock.release)
         task.taskTerminated.connect(lambda: self.handle_download_terminated(task))
         self._track_task(task)
-        task_manager.addTask(task)
+        try:
+            task_manager.addTask(task)
+        except Exception:
+            download_lock.release()
+            raise
 
     def open_scenario_results(self, request: OpenScenarioRequest) -> None:
         """Open one scenario with interactive result selection."""
