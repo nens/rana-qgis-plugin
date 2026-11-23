@@ -1,12 +1,10 @@
 import math
 import os
-import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
-from osgeo import gdal
 from qgis.core import QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice, QSettings, Qt
 from qgis.PyQt.QtGui import QFont, QFontMetrics, QImage, QStandardItem
@@ -83,62 +81,6 @@ def parse_url(url: str) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
     }
     query_params = parse_qs(parsed.query)
     return path_params, query_params
-
-
-def split_scenario_extent(grid, resolution=None, max_pixel_count=1 * 10**8):
-    """
-    Split raster task spatial bounds to fit in to maximum pixel count limit.
-    Reimplemented code from https://github.com/nens/threedi-scenario-downloader
-    """
-    x1 = grid["x"]["origin"]
-    y1 = grid["y"]["origin"]
-    size_x = grid["x"]["size"]
-    size_y = grid["y"]["size"]
-    x2 = x1 + size_x
-    y2 = y1 + size_y
-    if resolution is None:
-        pixelsize_x = grid["x"]["cell_size"]
-        pixelsize_y = grid["y"]["cell_size"]
-    else:
-        pixelsize_x = resolution
-        pixelsize_y = resolution
-    pixelcount_x = abs(size_x / pixelsize_x)
-    pixelcount_y = abs(size_y / pixelsize_y)
-    if not pixelcount_x.is_integer():
-        pixelcount_x = math.ceil(pixelcount_x)
-        x2 = (pixelcount_x * pixelsize_x) + x1
-    if not pixelcount_y.is_integer():
-        pixelcount_y = math.ceil(pixelcount_y)
-        y2 = (pixelcount_y * pixelsize_y) + y1
-    raster_pixel_count = pixelcount_x * pixelcount_y
-    if raster_pixel_count > max_pixel_count:
-        max_pixel_per_axis = int(math.sqrt(max_pixel_count))
-        columns_count = math.ceil(pixelcount_x / max_pixel_per_axis)
-        rows_count = math.ceil(pixelcount_y / max_pixel_per_axis)
-        sub_pixelcount_x = max_pixel_per_axis * pixelsize_x
-        sub_pixelcount_y = max_pixel_per_axis * pixelsize_y
-        bboxes = []
-        for column_idx in range(columns_count):
-            sub_x1 = x1 + (column_idx * sub_pixelcount_x)
-            sub_x2 = sub_x1 + sub_pixelcount_x
-            for row_idx in range(rows_count):
-                sub_y1 = y1 + (row_idx * sub_pixelcount_y)
-                sub_y2 = sub_y1 + sub_pixelcount_y
-                sub_bbox = (sub_x1, sub_y1, sub_x2, sub_y2)
-                bboxes.append(sub_bbox)
-        spatial_bounds = (bboxes, sub_pixelcount_x, sub_pixelcount_y)
-    else:
-        bboxes = [(x1, y1, x2, y2)]
-        spatial_bounds = (bboxes, pixelcount_x, pixelcount_y)
-    return spatial_bounds
-
-
-def build_vrt(output_filepath, raster_filepaths, **vrt_options):
-    """Build VRT for the list of rasters."""
-    gdal.UseExceptions()
-    options = gdal.BuildVRTOptions(**vrt_options)
-    vrt_ds = gdal.BuildVRT(output_filepath, raster_filepaths, options=options)
-    vrt_ds = None
 
 
 def get_file_icon_name(data_type: str) -> str:

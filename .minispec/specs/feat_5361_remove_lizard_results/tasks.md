@@ -54,5 +54,5 @@ Remove the "Generate raster results" group from the results browser and all code
 ## Progress
 - [x] Task 1: Remove raster generation from ResultBrowser and loader
 - [x] Task 2: Remove LizardResultDownloader
-- [ ] Task 3: Remove unused API and generic helpers
+- [x] Task 3: Remove unused API and generic helpers
 - [ ] Task 4: Remove unused ScenarioInfo properties and tests
