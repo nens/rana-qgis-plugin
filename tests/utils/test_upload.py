@@ -1,4 +1,3 @@
-import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -349,69 +348,3 @@ def test_upload_task_emits_file_completed_once_per_successful_file(
 
     assert completed == [jobs[0], jobs[2]]
     assert len(task.failed_files) == 1
-
-
-def rows_in_main_file_only(path: Path) -> int:
-    """Count rows as seen by a copy of the main file, without its -wal file."""
-    copy = path.with_name("copy.gpkg")
-    copy.write_bytes(path.read_bytes())
-    with sqlite3.connect(copy) as connection:
-        count = connection.execute("SELECT count(*) FROM points").fetchone()[0]
-    connection.close()
-    copy.unlink()
-    return count
-
-
-def make_wal_geopackage(path: Path) -> sqlite3.Connection:
-    """Create a GeoPackage-like file in WAL mode with one row only in the -wal."""
-    connection = sqlite3.connect(path)
-    connection.execute("PRAGMA journal_mode=WAL")
-    connection.execute("PRAGMA wal_autocheckpoint=0")
-    connection.execute("CREATE TABLE points (id INTEGER)")
-    connection.commit()
-    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    connection.execute("INSERT INTO points VALUES (1)")
-    connection.commit()
-    return connection
-
-
-def test_geopackage_preprocess_moves_wal_edits_into_main_file(tmp_path):
-    path = tmp_path / "file.gpkg"
-    writer = make_wal_geopackage(path)
-    job = UploadJob("project", path, "https://upload", {})
-    assert rows_in_main_file_only(path) == 0
-
-    job.preprocess()
-
-    assert rows_in_main_file_only(path) == 1
-    writer.close()
-
-
-def test_geopackage_preprocess_fails_when_checkpoint_stays_busy(tmp_path):
-    path = tmp_path / "file.gpkg"
-    writer = make_wal_geopackage(path)
-    reader = sqlite3.connect(path)
-    reader.execute("BEGIN")
-    reader.execute("SELECT count(*) FROM points").fetchone()
-    writer.execute("INSERT INTO points VALUES (2)")
-    writer.commit()
-    job = UploadJob("project", path, "https://upload", {})
-
-    with (
-        patch("rana_qgis_plugin.workers.upload.CHECKPOINT_TIMEOUT", 0.05),
-        patch("rana_qgis_plugin.workers.upload.CHECKPOINT_RETRY_DELAY", 0.01),
-        pytest.raises(RuntimeError, match="file.gpkg"),
-    ):
-        job.preprocess()
-
-    reader.close()
-    writer.close()
-
-
-def test_non_geopackage_preprocess_does_nothing(tmp_path):
-    job = make_job(tmp_path)
-
-    with patch("rana_qgis_plugin.workers.upload.sqlite3.connect") as connect:
-        job.preprocess()
-
-    connect.assert_not_called()

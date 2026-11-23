@@ -65,7 +65,7 @@ flowchart TD
     Start([FileUploadTask.run]) --> A{isCanceled?}
     A -- Yes --> Abort([return False])
     A -- No --> B[Open file as binary]
-    B --> B2[Capture start_fingerprint\nCheckpoint GeoPackage WAL]
+    B --> B2[Capture start_fingerprint]
     B2 --> C[requests.put — presigned URL]
     C -- HTTP error --> D[Log error\nEmit file_failed\nAppend to failed_files]
     D --> Abort
@@ -83,9 +83,6 @@ Key points:
 - Cancellation is checked between files, not mid-transfer.
 - Before each file is read, its fingerprint is stored as `start_fingerprint`,
   so a raster changed during the upload can be detected afterwards.
-- A GeoPackage is checkpointed first (`PRAGMA wal_checkpoint(TRUNCATE)`, up to
-  3 attempts), because QGIS may keep recent commits in the WAL file. If the
-  file stays busy, the job fails with an explanatory error.
 
 **Signals:**
 

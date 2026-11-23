@@ -1,5 +1,3 @@
-import sqlite3
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
@@ -22,10 +20,6 @@ from rana_qgis_plugin.utils.local_paths import get_local_file_path
 from rana_qgis_plugin.utils.qgis import convert_vectorfile_to_geopackage
 from rana_qgis_plugin.utils.time import convert_timestamp_str_to_local_time
 
-CHECKPOINT_ATTEMPTS = 3
-CHECKPOINT_TIMEOUT = 1.0
-CHECKPOINT_RETRY_DELAY = 0.5
-
 
 @dataclass
 class UploadJob:
@@ -41,30 +35,6 @@ class UploadJob:
 
     def preprocess(self) -> None:
         """Perform any work required before transferring the file."""
-        if self.local_path.suffix.lower() == ".gpkg":
-            self.checkpoint_geopackage()
-
-    def checkpoint_geopackage(self) -> None:
-        """Move committed edits from the WAL into the main GeoPackage file.
-
-        QGIS can keep a GeoPackage in WAL mode while it is open, so the main
-        file alone may miss recent commits. Runs on the worker thread.
-        """
-        for attempt in range(CHECKPOINT_ATTEMPTS):
-            connection = sqlite3.connect(self.local_path, timeout=CHECKPOINT_TIMEOUT)
-            try:
-                result = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                busy = result.fetchone()[0]
-            finally:
-                connection.close()
-            if not busy:
-                return
-            if attempt < CHECKPOINT_ATTEMPTS - 1:
-                time.sleep(CHECKPOINT_RETRY_DELAY)
-        raise RuntimeError(
-            f"Could not write the latest edits of {self.local_path.name} to the "
-            "file because another program is using it. Try again later."
-        )
 
 
 @dataclass
