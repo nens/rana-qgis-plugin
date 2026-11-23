@@ -102,6 +102,15 @@ def simple_fetch(url: str, params: Optional[dict] = None) -> dict:
     authcfg_id = get_authcfg_id()
     network_manager = NetworkManager(url, authcfg_id)
     status, error = network_manager.fetch(params)
+    if status and error:
+        # A redirect (ManualRedirectPolicy) returns its target in the error slot
+        # and leaves no content. Never return None silently.
+        raise RanaFetchError(
+            f"Unexpected redirect to {error}",
+            url,
+            params,
+            network_manager.last_http_status,
+        )
     if status:
         return network_manager.content
     else:
