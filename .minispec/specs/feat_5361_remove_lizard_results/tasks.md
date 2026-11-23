@@ -1,6 +1,6 @@
 ---
 feature: feat_5361_remove_lizard_results
-status: planned
+status: done
 created: 2026-11-23
 chunk_size: medium
 total_tasks: 4
@@ -55,4 +55,4 @@ Remove the "Generate raster results" group from the results browser and all code
 - [x] Task 1: Remove raster generation from ResultBrowser and loader
 - [x] Task 2: Remove LizardResultDownloader
 - [x] Task 3: Remove unused API and generic helpers
-- [ ] Task 4: Remove unused ScenarioInfo properties and tests
+- [x] Task 4: Remove unused ScenarioInfo properties and tests
