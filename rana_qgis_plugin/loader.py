@@ -2219,6 +2219,28 @@ class Loader(QObject):
                 len(scenario_requests)
             )
 
+        skipped_locked = 0
+        available: list[
+            OpenFileRequest
+            | OpenSchematisationRequest
+            | OpenScenarioRequest
+            | OpenVectorFileRequest
+        ] = []
+        for request in resolved:
+            if isinstance(
+                request, (OpenFileRequest, OpenVectorFileRequest)
+            ) and self.layer_lock_registry.is_locked(
+                sync_key(request.project["id"], request.file_item["id"])
+            ):
+                skipped_locked += 1
+                continue
+            available.append(request)
+        if skipped_locked:
+            self.communication.bar_warn(
+                f"Skipped {skipped_locked} file(s) that are currently being uploaded."
+            )
+        resolved = available
+
         # Phase 2: dispatch by type
         for request in resolved:
             if isinstance(request, OpenSchematisationRequest):
