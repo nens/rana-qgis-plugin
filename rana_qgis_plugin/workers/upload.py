@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -270,6 +271,9 @@ class FileUploadTask(QgsTask):
 
     def run(self) -> bool:
         """PUT and finish each prepared upload, stopping on cancellation."""
+        delay = float(os.environ.get("RANA_DEBUG_UPLOAD_DELAY_SECONDS", "0"))
+        if delay > 0:
+            time.sleep(delay)
         for index, job in enumerate(self.jobs):
             if self.isCanceled():
                 return False
