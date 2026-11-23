@@ -6,6 +6,7 @@ from qgis.gui import QgisInterface, QgsLayerTreeView
 from qgis.PyQt import sip
 from qgis.PyQt.QtWidgets import QMenu
 
+from rana_qgis_plugin.layer_management.layer_dirty_flags import attach_dirty_tracking
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
@@ -94,3 +95,23 @@ def test_locked_file_disables_data_sync(qgis_application):
     with build_menu(project, group, qgis_application, registry) as menu:
         actions = {action.text(): action for action in menu.actions() if action.text()}
         assert not actions["Sync data to Rana"].isEnabled()
+
+
+def test_dirty_linked_layer_enables_data_and_style_sync(qgis_application):
+    project = QgsProject()
+    group = project.layerTreeRoot().addGroup("file")
+    group.setCustomProperty("rana/project_id", "project")
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", "layer", "memory")
+    set_rana_refs(layer, RanaLayerRef("project", "file.gpkg"))
+    attach_dirty_tracking(layer)
+    project.addMapLayer(layer, False)
+    group.addLayer(layer)
+
+    layer.startEditing()
+    layer.commitChanges()
+    layer.styleChanged.emit()
+
+    with build_menu(project, group, qgis_application) as menu:
+        actions = {action.text(): action for action in menu.actions() if action.text()}
+        assert actions["Sync style to Rana"].isEnabled()
+        assert actions["Sync data to Rana"].isEnabled()
