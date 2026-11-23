@@ -52,7 +52,7 @@ Remove the "Generate raster results" group from the results browser and all code
 - Tasks 3 and 4 can run in parallel; every task leaves the plugin in a working state.
 
 ## Progress
-- [ ] Task 1: Remove raster generation from ResultBrowser and loader
+- [x] Task 1: Remove raster generation from ResultBrowser and loader
 - [ ] Task 2: Remove LizardResultDownloader
 - [ ] Task 3: Remove unused API and generic helpers
 - [ ] Task 4: Remove unused ScenarioInfo properties and tests
