@@ -253,7 +253,7 @@ class FileUploadTask(QgsTask):
     """Upload prepared files without blocking QGIS's main thread."""
 
     file_completed = pyqtSignal(object)
-    file_failed = pyqtSignal(str, str)
+    file_failed = pyqtSignal(object, str)
     file_started = pyqtSignal(str)
 
     def __init__(self, jobs: list[UploadJob]):
@@ -299,7 +299,7 @@ class FileUploadTask(QgsTask):
                 self.successful_files.append(job.local_path)
             except Exception as error:
                 self.failed_files.append((job.local_path, str(error)))
-                self.file_failed.emit(str(job.local_path), str(error))
+                self.file_failed.emit(job, str(error))
             else:
                 self.file_completed.emit(job)
             self.setProgress((index + 1) * 100 / len(self.jobs))

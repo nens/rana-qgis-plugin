@@ -51,8 +51,10 @@ from rana_qgis_plugin.layer_management.layer_manager import (
 )
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
+    finish_raster_upload,
 )
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
+from rana_qgis_plugin.layer_management.upload_lock import FileLock, lock_jobs
 from rana_qgis_plugin.network_manager import NetworkUnavailableError
 from rana_qgis_plugin.simulation.model_selection import ModelSelectionDialog
 from rana_qgis_plugin.simulation.simulation_init import SimulationInit
@@ -1758,10 +1760,44 @@ class Loader(QObject):
         self._track_task(task)
         task_manager.addTask(task)
 
-    @pyqtSlot(str, str)
-    def handle_upload_file_failed(self, local_path: str, error: str) -> None:
+    @pyqtSlot(object, str)
+    def handle_upload_file_failed(self, local_path: object, error: str) -> None:
         """Log an individual upload failure reported by the task."""
         self.communication.log_err(f"Failed to upload {local_path}: {error}")
+
+    def handle_data_file_completed(
+        self, job: UploadJob, task: FileUploadTask, locks: dict
+    ) -> None:
+        lock = locks.get(job.sync_key)
+        if job.sync_key is None:
+            return
+        try:
+            for layer in self.layers_for_keys([job.sync_key]):
+                if isinstance(layer, QgsRasterLayer):
+                    finish_raster_upload(layer, job.start_fingerprint)
+                else:
+                    set_data_sync_state(layer, "clean")
+                ref = get_rana_refs(layer)
+                if ref is not None:
+                    descriptor_id = task.updated_descriptors.get(ref.file_id)
+                    if descriptor_id:
+                        layer.setCustomProperty("rana/descriptor_id", descriptor_id)
+        finally:
+            if lock is not None:
+                lock.release()
+
+    def handle_data_file_failed(self, job: UploadJob, error: str, locks: dict) -> None:
+        try:
+            self.communication.log_err(f"Failed to upload {job.local_path}: {error}")
+        finally:
+            lock = locks.get(job.sync_key)
+            if lock is not None:
+                lock.release()
+
+    @staticmethod
+    def release_file_locks(locks: dict[tuple[str, str], FileLock]) -> None:
+        for lock in locks.values():
+            lock.release()
 
     def handle_upload_completed(
         self,
@@ -1814,6 +1850,7 @@ class Loader(QObject):
             if result.error:
                 errors.append(f"{item.layer_name}: {result.error}")
             if result.job is not None:
+                result.job.sync_key = sync_key(ref.project_id, ref.file_id)
                 jobs.append(result.job)
         for error in errors:
             self.communication.log_err(error)
@@ -1852,6 +1889,7 @@ class Loader(QObject):
                 message=message,
             )
             if result.job is not None:
+                result.job.sync_key = sync_key(ref.project_id, ref.file_id)
                 jobs.append(result.job)
         if not jobs:
             return
@@ -1859,38 +1897,36 @@ class Loader(QObject):
         if task_manager is None:
             self.communication.bar_error("Could not start file sync.")
             return
-        keys = list(
-            {
-                sync_key(item.rana_ref.project_id, item.rana_ref.file_id)
-                for item in verified_items
-            }
-        )
-        if not self.acquire_sync_keys(keys):
-            self.communication.bar_warn("A sync is already in progress.")
+        locks, warnings = lock_jobs(jobs, self.layer_lock_registry)
+        for warning in warnings:
+            self.communication.show_warn(warning)
+        jobs = [job for job in jobs if job.sync_key in locks]
+        if not jobs:
             return
 
         task = FileUploadTask(jobs)
-        task.rana_sync_keys = keys
-        task.file_failed.connect(self.handle_upload_file_failed)
+        task.file_failed.connect(
+            lambda job, error: self.handle_data_file_failed(job, error, locks)
+        )
+        task.file_completed.connect(
+            lambda job: self.handle_data_file_completed(job, task, locks)
+        )
         task.file_started.connect(
             lambda name: self.set_progress_bar_busy(f"Uploading {name}")
         )
         task.file_started.connect(
             lambda name: self.communication.log_msg(f"uploading {name}")
         )
-        task.taskCompleted.connect(
-            lambda: self.handle_sync_completed(
-                task,
-                DATA_SYNC_STATE_PROPERTY,
-                "Data saved to Rana.",
-                task.failed_files,
-            )
-        )
-        task.taskCompleted.connect(lambda: self.update_descriptor_ids(task))
-        task.taskTerminated.connect(lambda: self.release_sync_keys(task.rana_sync_keys))
+        task.taskCompleted.connect(lambda: self.handle_upload_completed(True, task))
+        task.taskCompleted.connect(lambda: self.release_file_locks(locks))
+        task.taskTerminated.connect(lambda: self.release_file_locks(locks))
         task.taskTerminated.connect(lambda: self.handle_data_sync_terminated(task))
         self._track_task(task)
-        task_manager.addTask(task)
+        try:
+            task_manager.addTask(task)
+        except Exception:
+            self.release_file_locks(locks)
+            raise
 
     def upload_styles(self, items: list[StyleUploadItem]) -> None:
         """Submit a background task for the supplied style uploads."""
