@@ -125,14 +125,22 @@ baseline/fingerprint model for style; any change marks it dirty.
 
 ## How state is cleared
 
-Clearing only happens after the corresponding sync task reports success
-(`Loader.handle_sync_completed()` in `loader.py`), and differs by kind:
+Clearing only happens after the corresponding sync reports success, and
+differs by kind:
 
-- **Style sync** — `rana/style_dirty` is removed.
+- **Style sync** — `rana/style_dirty` is removed
+  (`Loader.handle_sync_completed()` in `loader.py`).
 - **Vector data sync** — `rana/data_sync_state` is set back to `clean`.
-- **Raster data sync** — `capture_raster_baseline()` is called again, since a
-  re-upload only matches a *new* baseline (the file's mtime/size changed, but
-  the content is now what's on the server).
+- **Raster data sync** — `finish_raster_upload()` compares the file's current
+  fingerprint with the `start_fingerprint` taken just before the upload read
+  the file. If they match, `capture_raster_baseline()` stores the new
+  baseline (the file's mtime/size changed, but the content is now what's on
+  the server). If the file changed during the upload, the layer stays `dirty`,
+  because those edits were not uploaded. A missing start fingerprint counts as
+  changed.
+
+Data sync is cleared per file, from `Loader.handle_data_file_completed()`,
+as soon as that file has uploaded, not when the whole task finishes.
 
 A failed or canceled task leaves the dirty state untouched.
 
@@ -289,11 +297,41 @@ flowchart LR
 ## Sync locking
 
 [`LayerLockRegistry`](../rana_qgis_plugin/layer_management/sync_lock.py) is a
-shared registry of `(project_id, descriptor_id or file_id)` keys. It isn't
-dirty-state and doesn't read it — it's an orthogonal gate that disables the
-save actions and causes a new sync to be refused while a file's key is
-already locked, regardless of whether that file is `dirty` or `unknown`. It
-is consulted by the context menu (to disable actions on a file already
-syncing) and by `Loader` (to refuse starting a second sync task for the same
-file), and released when that task completes or is canceled.
+shared registry of `(project_id, file_id)` keys, built with `sync_key()`. The
+stable `file_id` is used because the server assigns a new `descriptor_id` on
+every upload. It isn't dirty-state and doesn't read it — it's an orthogonal
+gate that disables the save actions and causes a new sync or open to be
+refused while a file's key is locked, regardless of whether that file is
+`dirty` or `unknown`.
 
+Both uploads and downloads (opening a file) take the key. The context menu
+uses it to disable actions on a file already syncing, `Loader` uses it to
+refuse a second sync or open of the same file, and batch opens skip files
+that are currently being uploaded.
+
+### Upload locks
+
+[`lock_jobs()`](../rana_qgis_plugin/layer_management/upload_lock.py) runs on
+the main thread before an upload task starts. For each job it:
+
+- refuses the file, with a warning, if one of its vector layers is in edit
+  mode with unsaved changes, or if the key is already held;
+- acquires the key; and
+- makes every vector layer that reads from the file (all GeoPackage tables)
+  read-only, saving the previous read-only state in the `rana/upload_lock`
+  layer property.
+
+Each file gets its own `FileLock`. It is released as soon as that file's
+upload completes or fails, and again, harmlessly, when the task completes or
+is terminated. A lock releases only once, so a repeated release cannot free
+a key that a newer lock has taken. Releasing restores the saved read-only
+state. If a project is saved during an upload, `restore_stale_upload_locks()`
+clears the leftover state when it is loaded.
+
+Raster layers are not locked: QGIS cannot edit them, so there is nothing to
+make read-only. A raster changed on disk during the upload is detected
+afterwards by the start-fingerprint comparison described in
+[How state is cleared](#how-state-is-cleared).
+
+A download holds a `FileLock` without layers and releases it when the file
+has been downloaded, before the layer is opened.

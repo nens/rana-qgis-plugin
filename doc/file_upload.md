@@ -40,6 +40,11 @@ Preparation resolves what needs to happen before any data is transferred. For ea
 
 Only after all files are prepared is the background task created.
 
+Before the task is created, `lock_jobs()` runs on the main thread. It drops
+jobs whose file is already being synced or has unsaved edits (with a warning),
+and makes the remaining files' vector layers read-only until each file has
+uploaded. See [Upload locks](dirty_tracking.md#upload-locks).
+
 #### `prepare_new_file_upload`
 
 Checks whether the file already exists on the server, initiates the upload session, and returns an `UploadJob` with a pre-signed URL ready for execution. As part of preparation the function checks for case-sensitive and case-insensitive filename conflicts and returns that result. 
@@ -60,12 +65,13 @@ flowchart TD
     Start([FileUploadTask.run]) --> A{isCanceled?}
     A -- Yes --> Abort([return False])
     A -- No --> B[Open file as binary]
-    B --> C[requests.put — presigned URL]
+    B --> B2[Capture start_fingerprint\nCheckpoint GeoPackage WAL]
+    B2 --> C[requests.put — presigned URL]
     C -- HTTP error --> D[Log error\nEmit file_failed\nAppend to failed_files]
     D --> Abort
     C -- 200 OK --> E[finish_file_upload payload]
     E -- Failure --> D
-    E -- Success --> F[Append to successful_files\nsetProgress]
+    E -- Success --> F[Append to successful_files\nEmit file_completed\nsetProgress]
     F --> G{More jobs?}
     G -- Yes --> A
     G -- No --> Done([return True])
@@ -75,13 +81,19 @@ Key points:
 
 - Files are streamed in a single `requests.put()` — no chunking. The pre-signed URL is self-authorising; no QGIS auth headers needed for the PUT.
 - Cancellation is checked between files, not mid-transfer.
+- Before each file is read, its fingerprint is stored as `start_fingerprint`,
+  so a raster changed during the upload can be detected afterwards.
+- A GeoPackage is checkpointed first (`PRAGMA wal_checkpoint(TRUNCATE)`, up to
+  3 attempts), because QGIS may keep recent commits in the WAL file. If the
+  file stays busy, the job fails with an explanatory error.
 
 **Signals:**
 
 | Signal | When emitted | Payload |
 |--------|-------------|---------|
 | `file_started(str)` | Before each PUT | Filename |
-| `file_failed(str, str)` | On error | (path, error message) |
+| `file_completed(object)` | After a file has uploaded | The `UploadJob` |
+| `file_failed(object, str)` | On error | (`UploadJob`, error message) |
 
 ### Stage 3 — Completion
 
@@ -90,6 +102,11 @@ After `run()` returns, the caller's completion handler receives the outcome:
 - **Success** → all jobs in `successful_files`
 - **Failure** → failed files listed in `failed_files`
 - **Cancelled** → `isCanceled()` was true
+
+Per-file results are handled as they arrive. `file_completed` updates the
+layers' sync state and releases that file's lock; `file_failed` logs the error
+and releases the lock. The task's `taskCompleted` and `taskTerminated`
+signals release any locks still held.
 
 
 ### Known limitations
