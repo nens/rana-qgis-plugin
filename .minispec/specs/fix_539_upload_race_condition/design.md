@@ -54,11 +54,11 @@ uploads (`:1912-1918`) and downloads. Today the key is
 layer's stored ref and a folder listing can hold different values for the same
 file and the lock would silently not apply. `file_id` (the path within the
 project) is stable for the duration of an upload. Style upload items need the
-ref's `file_id` for this (add the field if missing). Keys are acquired and
-released per file instead of per batch. `taskCompleted`/`taskTerminated` still release leftovers (release is
-idempotent, `sync_lock.py:21`). Fix the leak between `acquire_sync_keys`
-(`:1876`) and `addTask` (`:1901`): wrap in try/except, release keys and unlock
-layers on error.
+ref's `file_id` for this (add the field if missing). For data uploads and
+downloads, keys are acquired and released per file through a `FileLock` (see
+Lock Lifecycle); style uploads keep their per-batch keys. Fix the leak between
+`acquire_sync_keys` (`:1876`) and `addTask` (`:1901`): wrap in try/except,
+release locks on error.
 
 ### `layers_for_file(path)` (new, `layer_management/`)
 
@@ -165,6 +165,9 @@ Unit:
   property removed.
 - `lock_jobs`: a job whose key is already held is dropped; a failure part way
   releases what was taken; `FileLock.release()` twice is harmless.
+- Ownership: after file A's lock is released and a new lock on A is taken, a
+  second `release()` of the old lock (task-end safety net) leaves the new key
+  held and the layers read-only.
 
 Manual (QGIS):
 - Upload a multi-table GeoPackage: all its layers read-only, unlocked as soon as
@@ -208,32 +211,48 @@ Rules:
   failure `:2254-2262`,
   `task_manager is None` `:2264-2267`).
 - **Single helper, all-or-nothing.** A function `lock_jobs(jobs)` takes the key
-  and read-only-locks the layers of each job and returns one `FileLock` per job
-  it managed to lock. A job that cannot be locked (key already held, or a layer
-  became editable since the pre-check) is dropped with a warning and not
-  uploaded. If nothing remains, return without creating a task. If locking
-  raises part way, it releases what it already took.
+  and read-only-locks the layers of each job and returns a
+  `{sync_key: FileLock}` dict with one entry per job it managed to lock. A job
+  that cannot be locked (key already held, or a layer became editable since the
+  pre-check) is dropped with a warning and not uploaded. If nothing remains,
+  return without creating a task. If locking raises part way, it releases what
+  it already took.
+- **One owner per lock.** The registry does not know who holds a key, so a
+  stray release can free a key (and restore layers) that a *later* upload of
+  the same file has taken in the meantime. Therefore a file's key and layers
+  are released **only** by its own `FileLock.release()`, and only once: the
+  `FileLock` has a `released` flag and a second call does nothing. Data
+  uploads do not use `task.rana_sync_keys`; neither `handle_sync_completed`
+  nor `taskTerminated` releases keys for them directly.
+- **Handlers find their lock by key.** `file_completed` and `file_failed` both
+  emit the `UploadJob` (today `file_failed` emits a path string), and the
+  handlers look up `locks[job.sync_key]`.
+- **Per-file completion does all per-file work.** Set the sync state (vector
+  clean, raster by fingerprint) and update the layer's `descriptor_id` from
+  `task.updated_descriptors` before releasing. `update_descriptor_ids` no longer
+  runs at task end for data uploads; otherwise a new upload of the same file
+  could start in between with a stale `descriptor_id`.
 - **Cheap pre-check before preparing.** Check "layer in edit mode" at the top of
   `upload_existing_files`, before `prepare_existing_file_upload`, so a refused
   file does not open an upload session on the server. The check is repeated
   inside `lock_jobs` because modal conflict dialogs run in between.
-- **`FileLock.release()` is idempotent** (like `LayerLockRegistry.release`,
-  `sync_lock.py:21`): it releases the key and restores read-only state by layer
-  ID, skipping layers that no longer exist (removed layer, project closed).
+- **`FileLock.release()`** releases the key and restores read-only state by
+  layer ID, skipping layers that no longer exist (removed layer, project
+  closed). It does nothing when called again.
 - **Task setup guarded.** Everything from the `lock_jobs` call to
   `task_manager.addTask` is in try/except; on any exception all `FileLock`s are
   released, an error is shown, and the exception is logged.
 - **Release triggers per file:** `file_completed` and `file_failed`, each in
   try/finally so a failing handler cannot leave the lock behind.
 - **Release triggers per task (safety net):** `taskCompleted` and
-  `taskTerminated` release every lock of the task that is still held. This covers
-  cancellation (including between files: `run()` returns on `isCanceled()`,
-  `workers/upload.py:238-240`), an uncaught exception in `run()`, and files
-  never reached because an earlier file failed. Today `handle_sync_completed`
-  already releases unconditionally (`loader.py:2059`) and `taskTerminated`
-  releases keys (`:1898`); the new code keeps that and adds layer unlocking.
-- **Downloads** take the same key after their own early returns and release it
-  in `taskCompleted`/`taskTerminated` of the `DownloadTask` (`loader.py:2282-2283`).
+  `taskTerminated` call `release()` on every `FileLock` of the task; for files
+  already finished this does nothing. This covers cancellation (including
+  between files: `run()` returns on `isCanceled()`), an uncaught exception in
+  `run()`, and files never reached because an earlier file failed.
+- **Downloads** use the same `FileLock`, with no layers (it only holds the key).
+  `download_and_open` runs one file per `DownloadTask`, so per file equals per
+  task: take it after the early returns and release it in
+  `taskCompleted`/`taskTerminated`.
 
 Known leftover, not fixed here: `prepare_existing_file_upload` starts an upload
 session on the server before the conflict dialog, so choosing skip or abort

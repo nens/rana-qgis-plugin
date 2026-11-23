@@ -3,7 +3,7 @@ feature: fix_539_upload_race_condition
 status: planned
 created: 2026-11-20
 chunk_size: adaptive
-total_tasks: 9
+total_tasks: 10
 estimated_lines: 570
 ---
 
@@ -32,9 +32,9 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 #### Task 2: `layers_for_file` and `FileLock` / `lock_jobs`
 - **Estimate:** ~130 lines (incl. tests)
 - **Files:** new `rana_qgis_plugin/layer_management/upload_lock.py`, new `tests/layer_management/test_upload_lock.py`
-- **Description:** `layers_for_file(path)` finds all project layers whose source resolves to the file (via `QgsProviderRegistry.decodeUri`, resolved paths; all tables of a GeoPackage). `FileLock` holds the sync key and the locked layer IDs; locking stores the previous read-only state in custom property `rana/upload_lock` and sets `setReadOnly(True)`. `release()` is idempotent, restores from the property and removes it, skipping removed layers. `lock_jobs(jobs, registry)` takes key + locks layers per job, drops jobs that cannot be locked (key held, layer editable), releases what it took if it fails part way, and returns the locks plus warnings. `restore_stale_upload_locks(project)` restores and clears any leftover `rana/upload_lock` (project saved mid-upload).
+- **Description:** `layers_for_file(path)` finds all project layers whose source resolves to the file (via `QgsProviderRegistry.decodeUri`, resolved paths; all tables of a GeoPackage). `FileLock` holds the sync key and the locked layer IDs; locking stores the previous read-only state in custom property `rana/upload_lock` and sets `setReadOnly(True)`. `release()` restores from the property and removes it, skipping removed layers, then releases the key; a `released` flag makes later calls do nothing, so a late call cannot free a key or layers taken by a newer lock on the same file. `lock_jobs(jobs, registry)` takes key + locks layers per job, drops jobs that cannot be locked (key held, layer editable), releases what it took if it fails part way, and returns `({sync_key: FileLock}, warnings)`. `restore_stale_upload_locks(project)` restores and clears any leftover `rana/upload_lock` (project saved mid-upload).
 - **Depends on:** Task 1
-- **Acceptance:** Matching works for `file.gpkg|layername=x`, shapefiles and non-matching files; refusal when a layer is editable; previous read-only state restored; double `release()` harmless; stale property cleaned up.
+- **Acceptance:** Matching works for `file.gpkg|layername=x`, shapefiles and non-matching files; refusal when a layer is editable; previous read-only state restored; second `release()` does nothing, also when a newer lock holds the same key; stale property cleaned up.
 - **Evidence:** new unit tests pass.
 
 #### Task 3: Per-file completion on the upload task
@@ -71,19 +71,27 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - **Acceptance:** Indicator appears when the property is set and disappears when it is removed; dirty indicator unaffected.
 - **Evidence:** unit tests on `IndicatorManager` with a real layer tree view.
 
-#### Task 7: Wire locking into `upload_existing_files`
-- **Estimate:** ~110 lines (incl. tests)
-- **Files:** `rana_qgis_plugin/loader.py` (`:1784-1901`, `:2020-2022`, `:2044-2059`, `:1750`), plugin project-read hookup, `tests/loader/`
-- **Description:** Pre-check for editable layers before `prepare_existing_file_upload` ("Save or discard your edits first."); call `lock_jobs` after all early returns (items empty, conflict abort/skip, no jobs, no task manager) and only for the files that have a job (fixes keys for skipped files); try/except from lock to `addTask` that releases all locks; `file_completed` handler (unlock, vector -> clean, raster -> Task 5) and `file_failed` handler, each in try/finally; `taskCompleted`/`taskTerminated` release any remaining locks. Remove the data-sync state updates (`capture_raster_baseline` / `set_data_sync_state`) from `handle_sync_completed` for data uploads, so the task-level handler cannot override the per-file raster decision. Call `restore_stale_upload_locks` on project read. Drive-by: new-file upload shows "Downloading {name}" (`:1750`); change to "Uploading {name}".
+#### Task 7a: Wire locking into `upload_existing_files` (core)
+- **Estimate:** ~120 lines (incl. tests)
+- **Files:** `rana_qgis_plugin/loader.py`, `rana_qgis_plugin/workers/upload.py` (`file_failed` emits the job), `tests/loader/`
+- **Description:** Set `sync_key` on each prepared job. Call `lock_jobs` after all early returns (items empty, conflict abort/skip, no jobs, no task manager), only for files that have a job (fixes keys for skipped files). One try/except from lock to `addTask` releases all locks. Only `FileLock.release()` releases a data upload's keys: drop `task.rana_sync_keys` for data uploads and the key releases in `handle_sync_completed`/`taskTerminated` for them. `file_completed` handler (vector -> clean, raster -> Task 5, update `descriptor_id` from `task.updated_descriptors`, then release) and `file_failed` handler (log, release), each in try/finally, looking up `locks[job.sync_key]`. `taskCompleted`/`taskTerminated` call `release()` on all locks. Remove the data-sync state updates and `update_descriptor_ids` at task end for data uploads.
 - **Depends on:** Tasks 2, 3, 5
-- **Acceptance:** Per-file unlock as each file finishes; skipped/errored files never locked; failures, cancel and setup exceptions leave nothing locked or read-only.
-- **Evidence:** loader unit tests (the raster-changed-during-upload test runs the real `FileUploadTask` with only the network stubbed, so it also guards that `start_fingerprint` is taken right before the file is read, `workers/upload.py` `run()`; lock released on completed, failed, terminated, and on exception during task setup; skipped job never locked; raster changed during upload is still dirty after `taskCompleted`). Manual test paths in Notes.
+- **Acceptance:** Per-file unlock as each file finishes; skipped/errored files never locked; failures, cancel and setup exceptions leave nothing locked or read-only; a task ending after its file was re-locked by a new upload leaves the new lock intact.
+- **Evidence:** loader unit tests: lock released on completed, failed, terminated, and on exception during task setup; skipped job never locked; raster changed during upload is still dirty after `taskCompleted` (real `FileUploadTask`, network stubbed); re-locked file survives the old task's end. Manual test paths in Notes.
+
+#### Task 7b: Pre-check and stale locks on project read
+- **Estimate:** ~50 lines (incl. tests)
+- **Files:** `rana_qgis_plugin/loader.py` (`upload_existing_files` start, `:1750`), `rana_qgis_plugin/rana_qgis_plugin.py`, `tests/loader/`
+- **Description:** Pre-check for editable layers before `prepare_existing_file_upload` ("Save or discard your edits first."), so a refused file does not open an upload session. Call `restore_stale_upload_locks` on project read (`QgsProject.readProject`, connected in `initGui`, disconnected in `unload`). Drive-by: new-file upload shows "Downloading {name}" (`:1750`); change to "Uploading {name}".
+- **Depends on:** Task 7a
+- **Acceptance:** A file with a layer in edit mode is refused before preparing; a project saved mid-upload and reopened has nothing read-only.
+- **Evidence:** loader unit test for the refusal (no `prepare_existing_file_upload` call). Manual: edit-mode refusal, save project during upload and reopen.
 
 #### Task 8: Download takes the same file lock
 - **Estimate:** ~70 lines (incl. tests)
 - **Files:** `rana_qgis_plugin/loader.py` (`download_and_open` `:2245-2285`, folder dispatch `:2181-2191`), `tests/loader/`
-- **Description:** After the `resolve_url` and `task_manager` early returns, take `sync_key(project["id"], file_item["id"])`; if held by an upload show "`<file>` is being uploaded. Open it again when the upload has finished." and do not download. Release in `taskCompleted`/`taskTerminated` of the `DownloadTask`, with guarded setup. In folder opens, skip such files and report how many were skipped. An upload of a file being downloaded is refused by the existing message.
-- **Depends on:** Task 1 (shared key), Task 7 (key semantics per file)
+- **Description:** After the `resolve_url` and `task_manager` early returns, take a `FileLock` with no layers for `sync_key(project["id"], file_item["id"])`; if the key is held by an upload show "`<file>` is being uploaded. Open it again when the upload has finished." and do not download. `download_and_open` runs one file per `DownloadTask`, so release in its `taskCompleted`/`taskTerminated`, with guarded setup. In folder opens, skip such files and report how many were skipped. An upload of a file being downloaded is refused by the existing message.
+- **Depends on:** Task 1 (shared key), Tasks 2 and 7a (`FileLock`)
 - **Acceptance:** No download starts while the file's upload key is held; key released after download success, failure and cancel.
 - **Evidence:** unit tests for refusal, release paths, and folder skip count.
 
@@ -100,7 +108,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 ## Notes
 
 - Parallel: Tasks 1 and 3 are independent; Tasks 4 and 5 can run together after Task 3; Task 6 can run after Task 2.
-- Task 7 is the largest and riskiest; if review feels heavy, split off the per-file handlers (unlock/state) from the setup guard.
+- Task 7 is split into 7a (core wiring) and 7b (pre-check, stale locks, wording). Order of work: 2, 7a, 7b, 6, 8, with a review stop after each.
 - Complexity check: one new module (`upload_lock.py`) plus its test file; everything else modifies existing files. The shared `sync_key` function has 4 call sites (data upload, style upload, `layers_for_keys`, download); extraction accepted by the engineer.
 - Out of scope / deferred: locking layers for new-file uploads (unlikely; fix when it turns up), downloading over un-uploaded local edits, remote conflict detection (`If-Match`), unused server upload sessions after conflict skip/abort, edits by external programs.
 - Windows-only rare read failure on rollback-mode GeoPackages over 1 GB: a failed upload can be retried; no task.
@@ -112,6 +120,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - [x] Task 4: GeoPackage checkpoint before upload
 - [x] Task 5: Raster completion decision
 - [ ] Task 6: Upload lock indicator
-- [ ] Task 7: Wire locking into `upload_existing_files`
+- [ ] Task 7a: Wire locking into `upload_existing_files` (core)
+- [ ] Task 7b: Pre-check and stale locks on project read
 - [ ] Task 8: Download takes the same file lock
 - [ ] Task 9: Manual verification and PR notes
