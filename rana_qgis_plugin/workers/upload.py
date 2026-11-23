@@ -271,7 +271,7 @@ class FileUploadTask(QgsTask):
 
     def run(self) -> bool:
         """PUT and finish each prepared upload, stopping on cancellation."""
-        delay = float(os.environ.get("RANA_DEBUG_UPLOAD_DELAY_SECONDS", "0"))
+        delay = float(os.environ.get("RANA_DEBUG_UPLOAD_DELAY_SECONDS", "30"))
         if delay > 0:
             time.sleep(delay)
         for index, job in enumerate(self.jobs):

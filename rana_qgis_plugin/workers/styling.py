@@ -279,7 +279,7 @@ class StyleUploadTask(QgsTask):
             )
 
     def run(self) -> bool:
-        delay = float(os.environ.get("RANA_DEBUG_UPLOAD_DELAY_SECONDS", "0"))
+        delay = float(os.environ.get("RANA_DEBUG_UPLOAD_DELAY_SECONDS", "30"))
         if delay > 0:
             time.sleep(delay)
         for index, item in enumerate(self.items):
