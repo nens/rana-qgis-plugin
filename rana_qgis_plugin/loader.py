@@ -2316,7 +2316,7 @@ class Loader(QObject):
         # Release before opening the downloaded layer.  This is the primary
         # success-path release; the task signals below remain safety nets for
         # cancellation and unusual task-manager termination ordering.
-        task.file_downloaded.connect(download_lock.release)
+        task.file_downloaded.connect(lambda _path: download_lock.release())
         task.file_downloaded.connect(
             lambda local_path: callback(local_path, project, file_item)
         )
