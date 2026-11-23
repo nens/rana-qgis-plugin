@@ -12,9 +12,8 @@ estimated_lines: 570
 ## Overview
 
 Implements `design.md`: read-only layer locking per file during upload (with a
-layer tree indicator), GeoPackage checkpoint before upload, raster fingerprint
-decision on completion, and a shared upload/download file lock keyed on
-`(project_id, file_id)`. Tests are bundled with each task (unit tests only; no
+layer tree indicator), raster fingerprint decision on completion, and a
+shared upload/download file lock keyed on `(project_id, file_id)`. Tests are bundled with each task (unit tests only; no
 E2E tests are proposed). Run unit tests and pre-commit before each commit.
 
 ## Task List
@@ -46,14 +45,6 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - **Evidence:** unit test with a stubbed requests/`finish_file_upload` showing emissions; existing upload tests still pass.
 
 ### Core Implementation
-
-#### Task 4: GeoPackage checkpoint before upload [P]
-- **Estimate:** ~60 lines (incl. tests)
-- **Files:** `rana_qgis_plugin/workers/upload.py` (preprocess for gpkg jobs), tests in `tests/workers/`
-- **Description:** On the worker thread, open a separate `sqlite3` connection with a timeout and run `PRAGMA wal_checkpoint(TRUNCATE)`; retry a few times if the result is busy, then fail that file with a clear message. Skip for non-GeoPackage and shapefile jobs (converted first).
-- **Depends on:** Task 3 (preprocess hook placement)
-- **Acceptance:** Rows that exist only in `-wal` are in the main file afterwards; busy result leads to a failed file with message.
-- **Evidence:** unit test using a temp GeoPackage in WAL mode with `wal_autocheckpoint=0`.
 
 #### Task 5: Raster completion decision [P]
 - **Estimate:** ~50 lines (incl. tests)
@@ -100,7 +91,7 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 #### Task 9: Manual verification and PR notes
 - **Estimate:** ~0 lines (checklist)
 - **Files:** none (PR description)
-- **Description:** Run the manual QGIS checks from `design.md` and record results: multi-table GeoPackage locked/unlocked per file with lock indicator; batch unlock one by one; edit mode refusal; cancel and forced failure; skipped file never locked; close project / remove layer during upload; save project during upload and reopen; raster overwritten during upload stays dirty; commit, upload, download shows edits; reopen a file during its upload refused and folder skips it; style upload during data upload of the same file refused. Also check bytes 18-19 of a `.gpkg` after closing QGIS (WAL question in the design).
+- **Description:** Run the manual QGIS checks from `design.md` and record results: multi-table GeoPackage locked/unlocked per file with lock indicator; batch unlock one by one; edit mode refusal; cancel and forced failure; skipped file never locked; close project / remove layer during upload; save project during upload and reopen; raster overwritten during upload stays dirty; commit, upload, download shows edits; reopen a file during its upload refused and folder skips it; style upload during data upload of the same file refused.
 - **Depends on:** Tasks 1-8
 - **Acceptance:** All checks pass or are filed as follow-ups.
 - **Evidence:** checklist in the PR description. E2E tests are not added; propose them only with explicit permission.
@@ -118,7 +109,6 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - [x] Task 1: Stable shared `sync_key(project_id, file_id)`
 - [x] Task 2: `layers_for_file` and `FileLock` / `lock_jobs`
 - [x] Task 3: Per-file completion on the upload task
-- [x] Task 4: GeoPackage checkpoint before upload
 - [x] Task 5: Raster completion decision
 - [x] Task 6: Upload lock indicator
 - [x] Task 7a: Wire locking into `upload_existing_files` (core)

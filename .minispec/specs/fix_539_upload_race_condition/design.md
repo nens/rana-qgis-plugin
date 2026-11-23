@@ -15,15 +15,13 @@ decisions:
 `FileUploadTask.run` streams the live local file to Rana
 (`workers/upload.py:244-250`) with no snapshot, lock or post-check. A save during
 the upload can send a mixed file, and completion then marks the layer clean
-(`loader.py:2048-2055`) even though newer edits were never sent. GeoPackages in
-WAL mode can also miss recently committed edits, because only the main `.gpkg`
-is uploaded. Opening the same file from Rana during an upload downloads over
-the file in place (`workers/download.py:240`).
+(`loader.py:2048-2055`) even though newer edits were never sent. Opening the
+same file from Rana during an upload downloads over the file in place
+(`workers/download.py:240`).
 
 Fix: make vector layers of a file read-only for the duration of its data upload,
-checkpoint GeoPackages before sending, make downloads and uploads of the same
-file mutually exclusive, and decide raster clean/dirty state by comparing
-fingerprints. No file copies are made (files can be hundreds of MB).
+make downloads and uploads of the same file mutually exclusive, and decide
+raster clean/dirty state by comparing fingerprints. No file copies are made (files can be hundreds of MB).
 
 Style uploads currently keep their existing batch file lock, but do not make
 layers read-only. QGIS has no equivalent style-read-only flag: the vector
@@ -102,14 +100,6 @@ that carry it. The managed-indicator bookkeeping becomes keyed by node and
 indicator kind, so the dirty and upload indicators can coexist. Layer nodes
 only, no group indicator.
 
-### GeoPackage checkpoint (`workers/upload.py`, `preprocess`)
-
-After locking, on the worker thread: open a separate `sqlite3` connection with
-a timeout and run `PRAGMA wal_checkpoint(TRUNCATE)` so committed edits are in
-the main file. If the result reports busy, retry a few times, then fail that
-file with a clear message. Not needed for shapefiles (converted to a new
-GeoPackage first).
-
 ### Raster dirty state (`loader.py:2044-2059`, `raster_dirty_evaluator.py`)
 
 Store `fingerprint_file(path)` on the job when it is prepared (main thread). On
@@ -158,8 +148,6 @@ Unit:
 - `layers_for_file`: GeoPackage with `|layername=`, shapefile, non-matching file.
 - Lock/unlock: previous read-only state restored, removed layers skipped,
   upload refused when a layer is editable.
-- Checkpoint: temporary GeoPackage in WAL mode with `wal_autocheckpoint=0`;
-  rows only in `-wal` end up in the main file.
 - Raster decision: matching vs changed fingerprint.
 - Raster changed during upload is still dirty after `taskCompleted`
   (`handle_sync_completed` does not override the per-file decision).
@@ -268,9 +256,6 @@ state.
 
 ## Open Questions
 
-- Verify whether QGIS/GDAL really uses WAL mode for GeoPackages and whether it
-  switches back to rollback mode on close (check bytes 18-19 of the file after
-  closing QGIS). The checkpoint is harmless in either case.
 - Windows only: a plain read of a rollback-mode GeoPackage over 1 GB can fail
   transiently if a commit happens at that moment. Locked layers make this
   unlikely; a failed upload can simply be retried.
