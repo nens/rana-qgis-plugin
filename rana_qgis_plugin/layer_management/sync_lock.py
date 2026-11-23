@@ -42,4 +42,10 @@ class LayerLockRegistry:
 
     def is_locked(self, key: SyncKey) -> bool:
         """Return whether *key* is currently locked."""
-        return key in self._locked_keys
+        locked = key in self._locked_keys
+        QgsMessageLog.logMessage(
+            f"Lock checked: {key} -> {locked}; keys={sorted(self._locked_keys)}",
+            "Rana",
+            Qgis.MessageLevel.Info,
+        )
+        return locked
