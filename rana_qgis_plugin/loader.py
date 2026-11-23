@@ -5,7 +5,13 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
 
-from qgis.core import QgsApplication, QgsProject, QgsRasterLayer, QgsTask
+from qgis.core import (
+    QgsApplication,
+    QgsProject,
+    QgsRasterLayer,
+    QgsTask,
+    QgsVectorLayer,
+)
 from qgis.PyQt.QtCore import (
     QObject,
     QSettings,
@@ -1839,7 +1845,12 @@ class Loader(QObject):
         for item in verified_items:
             ref = item.rana_ref
             layers = self.layers_for_keys([sync_key(ref.project_id, ref.file_id)])
-            if any(layer.isEditable() for layer in layers):
+            if any(
+                isinstance(layer, QgsVectorLayer)
+                and layer.isEditable()
+                and layer.isModified()
+                for layer in layers
+            ):
                 self.communication.show_warn(
                     f"{item.layer_name}: save or discard your edits first."
                 )

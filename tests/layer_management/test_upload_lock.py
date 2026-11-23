@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from osgeo import ogr, osr
-from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.core import QgsFeature, QgsProject, QgsRasterLayer, QgsVectorLayer
 
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 from rana_qgis_plugin.layer_management.upload_lock import (
@@ -123,6 +123,7 @@ def test_second_release_leaves_a_newer_lock_on_the_same_file_intact(gpkg):
 def test_job_with_editable_layer_is_refused(gpkg):
     roads = add_layer(f"{gpkg}|layername=roads", "roads")
     roads.startEditing()
+    roads.addFeature(QgsFeature(roads.fields()))
     registry = LayerLockRegistry()
     job = make_job(gpkg)
 
