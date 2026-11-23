@@ -121,6 +121,6 @@ E2E tests are proposed). Run unit tests and pre-commit before each commit.
 - [x] Task 5: Raster completion decision
 - [ ] Task 6: Upload lock indicator
 - [ ] Task 7a: Wire locking into `upload_existing_files` (core)
-- [ ] Task 7b: Pre-check and stale locks on project read
+- [x] Task 7b: Pre-check and stale locks on project read
 - [ ] Task 8: Download takes the same file lock
 - [ ] Task 9: Manual verification and PR notes
