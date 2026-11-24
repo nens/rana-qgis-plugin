@@ -150,4 +150,4 @@ Processes-panel hand-off for model creation. Tests are bundled with each task.
 - [x] Task 2: Pre-dialog bars
 - [x] Task 3: Post-dialog progress item
 - [x] Task 4: Model hand-off to Processes + plumbing
-- [ ] Task 5: Docs
+- [x] Task 5: Docs

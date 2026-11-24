@@ -32,7 +32,7 @@ sequenceDiagram
     Task-->>Loader: model_requested
     Loader->>Loader: handle_initial_model_requested (step 2)
     Loader->>Loader: start_model_tracker_process
-    Loader->>Loader: finish_step_progress (item removed)
+    Loader->>Loader: communication.finish_progress (item removed)
     Loader->>Panel: point_user_to_processes
 ```
 
@@ -67,9 +67,9 @@ In the native datasource, the schematisation is registered in Rana first (`_crea
 | 1: Initial upload | 33-66% | loader | "Uploading initial revision", "Uploading revision: <name>" |
 | 2: Model hand-off | 66-100% | loader | "Starting model creation" |
 
-`SchematisationWizardBase.update_step_progress(pb, step, step_pct, detail=None)` sets the overall value to `(step + step_pct / 100) * 100 / 3` and optionally replaces the message text. `QgsMessageBar` shows the text in a `QTextBrowser` of the widget holding the bar, so the helper finds it through the progress bar's parent. If no text widget is found, the detail is logged.
+`communication.update_step_progress(pb, step, step_pct, detail=None)` sets the overall value to `(step + step_pct / 100) * 100 / 3` and optionally replaces the message text. `QgsMessageBar` shows the text in a `QTextBrowser` of the widget holding the bar, so the helper finds it through the progress bar's parent. If no text widget is found, the detail is logged.
 
-`finish_step_progress(iface, pb)` removes the message-bar item. Both helpers accept `None` and handle a progress bar the user has already dismissed (`sip.isdeleted`): the update is logged instead of raising.
+`communication.finish_progress(iface, pb)` removes the message-bar item. The helpers accept `None` and handle a progress bar the user has already dismissed (`sip.isdeleted`): the update is logged instead of raising.
 
 ## Schema migration
 
