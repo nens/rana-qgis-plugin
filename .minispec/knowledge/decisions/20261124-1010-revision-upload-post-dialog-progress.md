@@ -56,8 +56,8 @@ The new-schematisation flow fixed the same problem in f977fda
   `progress_changed` updates it in place: value = task overall progress, label
   = a friendly name for the current step (`MAKE MODEL` → "Waiting for model
   checker"). Ticks after hand-off are ignored.
-- `model_requested`: label "Starting model creation", start the model tracker,
-  remove the item, then `point_user_to_processes` with
+- `model_requested`: start the model tracker, remove the item, then
+  `point_user_to_processes` with
   "Track model creation for <name> in the Processes window?". If the job id or
   project cannot be determined, show one info message pointing to the
   Processes panel.

@@ -228,7 +228,7 @@ class Loader(QObject):
     def open_processes_dock(
         self,
         project: dict,
-        error_signals: ApiErrorSignals | None = None,
+        error_signals: ApiErrorSignals,
     ) -> QDockWidget:
         """Open or raise the Processes dock for a Rana project."""
         project_id = str(project["id"])
@@ -263,7 +263,7 @@ class Loader(QObject):
         dock.setWidget(
             ProcessesPanel(
                 project,
-                error_signals or ApiErrorSignals(),
+                error_signals,
                 loader=self,
                 parent=dock,
             )
@@ -286,7 +286,7 @@ class Loader(QObject):
         self,
         project: dict,
         job_ids: list[str],
-        error_signals: ApiErrorSignals | None = None,
+        error_signals: ApiErrorSignals,
         parent=None,
         question: str = "Track progress in the Processes window?",
         info_message: str = "See the Processes panel for progress.",
@@ -1060,6 +1060,12 @@ class Loader(QObject):
             )
             finish_progress(self.communication.iface, progress_bar)
             if upload.exec() == QDialog.DialogCode.Accepted and upload.new_upload:
+                task_manager = QgsApplication.taskManager()
+                if task_manager is None:
+                    self.communication.bar_error(
+                        "Could not start schematisation upload."
+                    )
+                    return None
                 task = SchematisationUploadTask(api, local, upload.new_upload)
                 self.wire_revision_upload(
                     task,
@@ -1069,17 +1075,10 @@ class Loader(QObject):
                     error_signals,
                     project,
                 )
-                task_manager = QgsApplication.taskManager()
-                if task_manager is None:
-                    self.communication.bar_error(
-                        "Could not start schematisation upload."
-                    )
-                    return None
                 self._revision_uploads_in_progress.add(schematisation_id)
                 self._track_task(task)
                 task_manager.addTask(task)
                 return task
-            finish_progress(self.communication.iface, progress_bar)
             return None
         except (OSError, ValueError) as error:
             finish_progress(self.communication.iface, progress_bar)
@@ -1122,7 +1121,6 @@ class Loader(QObject):
         def on_model_requested():
             nonlocal handed_off
             handed_off = True
-            update_progress(progress_bar, 100, detail="Starting model creation")
             finish_progress(self.communication.iface, progress_bar)
             response = self.start_model_tracker_process(
                 project_id,
@@ -1134,26 +1132,14 @@ class Loader(QObject):
             if response is None:
                 return
             job_id = response.get("job_id") or response.get("id")
-            if not job_id:
-                return
-            try:
-                process_project = project or get_tenant_project(project_id)
-            except (RanaFetchError, NetworkUnavailableError):
-                self.communication.bar_info(
-                    "Model creation started. See the Processes panel for progress."
-                )
-                return
-            if error_signals is None:
-                self.communication.bar_info(
-                    "Model creation started. See the Processes panel for progress."
-                )
-                return
-            self.point_user_to_processes(
-                process_project,
-                [str(job_id)],
-                error_signals,
-                self.communication.iface.mainWindow(),
-                question=f"Track model creation for {schematisation_name} in the Processes window?",
+            process_project = project
+            if job_id and process_project is None:
+                try:
+                    process_project = get_tenant_project(project_id)
+                except (RanaFetchError, NetworkUnavailableError):
+                    pass
+            self.point_user_to_model_creation(
+                process_project, job_id, error_signals, schematisation_name
             )
 
         def on_upload_succeeded(revision_number):
@@ -1192,7 +1178,7 @@ class Loader(QObject):
         self,
         group,
         parent,
-        error_signals: ApiErrorSignals | None = None,
+        error_signals: ApiErrorSignals,
         project: dict | None = None,
     ) -> SchematisationUploadTask | None:
         """Prepare and upload a revision represented by an open layer group."""
@@ -1244,7 +1230,7 @@ class Loader(QObject):
             revision_number,
             filepath,
             parent,
-            error_signals or ApiErrorSignals(),
+            error_signals,
             project,
         )
         return task
@@ -1255,7 +1241,7 @@ class Loader(QObject):
         file_item: dict,
         descriptor_id: str,
         parent,
-        error_signals: ApiErrorSignals | None = None,
+        error_signals: ApiErrorSignals,
     ) -> SchematisationUploadTask | None:
         """Find and upload a local WIP revision without opening it first."""
         api = get_threedi_api()
@@ -1318,7 +1304,7 @@ class Loader(QObject):
             wip_revision.number,
             db_filepath,
             parent,
-            error_signals or ApiErrorSignals(),
+            error_signals,
             project,
         )
 
@@ -1493,14 +1479,32 @@ class Loader(QObject):
         if response is None:
             return
         job_id = response.get("job_id") or response.get("id")
-        if job_id:
-            self.point_user_to_processes(
-                project,
-                [str(job_id)],
-                error_signals,
-                self.communication.iface.mainWindow(),
-                question=f"Track model creation for {display_name} in the Processes window?",
+        self.point_user_to_model_creation(project, job_id, error_signals, display_name)
+
+    def point_user_to_model_creation(
+        self,
+        project: dict | None,
+        job_id: str | None,
+        error_signals: ApiErrorSignals,
+        display_name: str,
+    ) -> None:
+        """Offer to track a started model creation in the Processes panel.
+
+        Without a job id or project there is nothing to highlight, so only an
+        info message points to the Processes panel.
+        """
+        if not job_id or project is None:
+            self.communication.bar_info(
+                "Model creation started. See the Processes panel for progress."
             )
+            return
+        self.point_user_to_processes(
+            project,
+            [str(job_id)],
+            error_signals,
+            self.communication.iface.mainWindow(),
+            question=f"Track model creation for {display_name} in the Processes window?",
+        )
 
     def handle_initial_revision_upload_failure(
         self, task: SchematisationUploadTask, progress_bar
@@ -1546,9 +1550,7 @@ class Loader(QObject):
             "name": f"{schematisation_name}_rev{revision_id}",
         }
         try:
-            response = start_tenant_process(track_process, params)
-            self.communication.bar_info("Revision uploaded; model creation started.")
-            return response
+            return start_tenant_process(track_process, params)
         except RanaPostError as e:
             self.communication.bar_error(f"Failed to start model tracker process")
             self.communication.log_err(f"{e.msg}")

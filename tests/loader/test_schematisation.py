@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from qgis.PyQt.QtWidgets import QDialog
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.utils.api import RanaPostError
 from rana_qgis_plugin.utils.data_models import (
@@ -61,24 +62,24 @@ def test_resolve_schematisation_rejects_unwritable_directory():
     communication.bar_error.assert_called_once()
 
 
-def test_save_revision_requires_authenticated_api():
+def test_save_revision_requires_authenticated_api(step_bar):
+    iface, message_bar, progress_bar = step_bar
     communication = MagicMock()
-    progress_bar = MagicMock()
+    communication.iface = iface
     communication.progress_bar.return_value = progress_bar
     loader = Loader(communication)
 
     with patch("rana_qgis_plugin.loader.get_threedi_api", return_value=None):
-        result = loader.save_revision("project", 1, 1, "/tmp/schema.gpkg", None)
+        result = loader.save_revision(
+            "project", 1, 1, "/tmp/schema.gpkg", None, ApiErrorSignals()
+        )
 
     assert result is None
     communication.bar_error.assert_called_once_with(
         "Not authenticated with HCC API — cannot save schematisation revision."
     )
     communication.clear_message_bar.assert_not_called()
-    communication.iface.messageBar.assert_called_once_with()
-    communication.iface.messageBar.return_value.popWidget.assert_called_once_with(
-        progress_bar.parentWidget()
-    )
+    assert message_bar.items() == []
 
 
 def test_save_revision_refuses_schematisation_with_upload_in_progress():
@@ -87,7 +88,9 @@ def test_save_revision_refuses_schematisation_with_upload_in_progress():
     loader._revision_uploads_in_progress.add(1)
 
     with patch("rana_qgis_plugin.loader.get_threedi_api") as get_api:
-        result = loader.save_revision("project", 1, 1, "/tmp/schema.gpkg", None)
+        result = loader.save_revision(
+            "project", 1, 1, "/tmp/schema.gpkg", None, ApiErrorSignals()
+        )
 
     assert result is None
     get_api.assert_not_called()
@@ -116,14 +119,17 @@ def test_commit_opened_revision_cancel_stops_before_save():
         ),
         patch.object(loader, "save_revision") as save_revision,
     ):
-        assert loader.commit_opened_revision(group, None) is None
+        assert loader.commit_opened_revision(group, None, ApiErrorSignals()) is None
 
     save_revision.assert_not_called()
     communication.clear_message_bar.assert_not_called()
 
 
-def test_commit_opened_revision_reports_layer_save_failure():
+def test_commit_opened_revision_reports_layer_save_failure(step_bar):
+    iface, message_bar, progress_bar = step_bar
     communication = MagicMock()
+    communication.iface = iface
+    communication.progress_bar.return_value = progress_bar
     communication.custom_ask.return_value = "Save Changes"
     loader = Loader(communication)
     group = MagicMock()
@@ -144,13 +150,14 @@ def test_commit_opened_revision_reports_layer_save_failure():
         ),
         patch.object(loader, "save_revision") as save_revision,
     ):
-        assert loader.commit_opened_revision(group, None) is None
+        assert loader.commit_opened_revision(group, None, ApiErrorSignals()) is None
 
     save_revision.assert_not_called()
     communication.bar_error.assert_called_once_with(
         "Failed to save changes in layer 'roads': locked"
     )
     communication.clear_message_bar.assert_not_called()
+    assert message_bar.items() == []
 
 
 def test_commit_opened_revision_locked_stops_before_prompt():
@@ -165,7 +172,7 @@ def test_commit_opened_revision_locked_stops_before_prompt():
     }.get
 
     with patch("rana_qgis_plugin.loader.get_editable_layers_for_file") as get_editable:
-        assert loader.commit_opened_revision(group, None) is None
+        assert loader.commit_opened_revision(group, None, ApiErrorSignals()) is None
 
     get_editable.assert_not_called()
     communication.custom_ask.assert_not_called()

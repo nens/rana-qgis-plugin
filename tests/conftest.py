@@ -1,5 +1,10 @@
+from unittest.mock import MagicMock
+
 import pytest
 from qgis.core import QgsApplication
+from qgis.gui import QgsMessageBar
+
+from rana_qgis_plugin.communication import UICommunication
 
 
 class _QgsApplicationFactory:
@@ -31,3 +36,13 @@ def qgis_application(qapp):
     yield qapp
     qapp.processEvents()
     qapp.exitQgis()
+
+
+@pytest.fixture
+def step_bar(qgis_application):
+    """A real message-bar progress item: (iface, message_bar, progress_bar)."""
+    message_bar = QgsMessageBar()
+    iface = MagicMock()
+    iface.messageBar.return_value = message_bar
+    pb = UICommunication(iface=iface).progress_bar("Preparing", maximum=100)
+    return iface, message_bar, pb

@@ -1,24 +1,13 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from qgis.gui import QgsMessageBar
 from qgis.PyQt import sip
-from qgis.PyQt.QtWidgets import QTextBrowser
+from qgis.PyQt.QtWidgets import QProgressBar, QTextBrowser, QWidget
 
 from rana_qgis_plugin.communication import (
-    UICommunication,
     finish_progress,
     update_step_progress,
 )
-
-
-@pytest.fixture
-def step_bar(qgis_application):
-    message_bar = QgsMessageBar()
-    iface = MagicMock()
-    iface.messageBar.return_value = message_bar
-    pb = UICommunication(iface=iface).progress_bar("Preparing", maximum=100)
-    return iface, message_bar, pb
 
 
 @pytest.mark.parametrize(
@@ -73,3 +62,20 @@ def test_progress_helpers_log_instead_when_progress_item_is_dismissed(step_bar):
         "Progress item was dismissed: Uploading",
         "Progress item was dismissed before the process finished",
     ]
+
+
+def test_progress_helpers_ignore_missing_progress_bar():
+    iface = MagicMock()
+    update_step_progress(None, 0, 50, detail="x")
+    finish_progress(iface, None)
+    iface.messageBar.assert_not_called()
+
+
+def test_update_step_progress_without_text_browser_still_sets_value(
+    qgis_application,
+):
+    container = QWidget()
+    bar = QProgressBar(container)
+    bar.setMaximum(100)
+    update_step_progress(bar, 1, 0, detail="text")
+    assert bar.value() == 33
