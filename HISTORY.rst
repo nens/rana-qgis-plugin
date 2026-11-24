@@ -5,7 +5,7 @@ History
 1.2.26 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Remove Lizard download option from results browser (nens/rana#5361)
 
 
 1.2.25 (2026-11-19)
