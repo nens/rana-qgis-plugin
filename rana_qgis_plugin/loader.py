@@ -13,6 +13,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import (
+    QCoreApplication,
     QObject,
     QSettings,
     Qt,
@@ -1008,11 +1009,15 @@ class Loader(QObject):
                 "Wait until it has finished."
             )
             return None
-        self.communication.progress_bar("preparing for save revision", 0, 0, 0)
+        progress_bar = self.communication.progress_bar(
+            "Preparing revision upload", 0, 0, 0
+        )
+        QCoreApplication.processEvents()
         try:
             # TODO: this takes quite some time and progress bar is blocked during that time
             api = get_threedi_api()
             if api is None:
+                finish_progress(self.communication.iface, progress_bar)
                 self.communication.bar_error(
                     "Not authenticated with HCC API — cannot save schematisation revision."
                 )
@@ -1022,11 +1027,13 @@ class Loader(QObject):
             organisations = {org.unique_id: org for org in tc.fetch_organisations()}
             organisation = organisations.get(schematisation.owner)
         except (RanaFetchError, NetworkUnavailableError) as error:
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 f"Could not retrieve schematisation details: {error}"
             )
             return None
         if organisation is None:
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 "Could not determine the schematisation organisation."
             )
@@ -1048,6 +1055,7 @@ class Loader(QObject):
                 tc,
                 parent,
             )
+            finish_progress(self.communication.iface, progress_bar)
             if upload.exec() == QDialog.DialogCode.Accepted and upload.new_upload:
                 task = SchematisationUploadTask(api, local, upload.new_upload)
                 task.model_requested.connect(
@@ -1103,9 +1111,10 @@ class Loader(QObject):
                 self._track_task(task)
                 task_manager.addTask(task)
                 return task
-            self.communication.clear_message_bar()
+            finish_progress(self.communication.iface, progress_bar)
             return None
         except (OSError, ValueError) as error:
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 f"Could not open the local schematisation: {error}"
             )
@@ -1139,15 +1148,19 @@ class Loader(QObject):
                 if choice == "Cancel Upload":
                     return None
                 if choice == "Save Changes":
-                    for layer in editable:
-                        self.communication.progress_bar("Save changed layers", 0, 0, 0)
-                        ok, save_error = save_layer_changes(layer)
-                        if not ok:
-                            self.communication.bar_error(
-                                f"Failed to save changes in layer '{layer.name()}': {save_error}"
-                            )
-                            return None
-            self.communication.clear_message_bar()
+                    progress_bar = self.communication.progress_bar(
+                        "Saving layer changes", 0, 0, 0
+                    )
+                    try:
+                        for layer in editable:
+                            ok, save_error = save_layer_changes(layer)
+                            if not ok:
+                                self.communication.bar_error(
+                                    f"Failed to save changes in layer '{layer.name()}': {save_error}"
+                                )
+                                return None
+                    finally:
+                        finish_progress(self.communication.iface, progress_bar)
         except (OSError, ValueError) as error:
             self.communication.bar_error(f"Could not save layer changes: {error}")
             return None

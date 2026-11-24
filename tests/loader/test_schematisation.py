@@ -63,6 +63,8 @@ def test_resolve_schematisation_rejects_unwritable_directory():
 
 def test_save_revision_requires_authenticated_api():
     communication = MagicMock()
+    progress_bar = MagicMock()
+    communication.progress_bar.return_value = progress_bar
     loader = Loader(communication)
 
     with patch("rana_qgis_plugin.loader.get_threedi_api", return_value=None):
@@ -71,6 +73,11 @@ def test_save_revision_requires_authenticated_api():
     assert result is None
     communication.bar_error.assert_called_once_with(
         "Not authenticated with HCC API — cannot save schematisation revision."
+    )
+    communication.clear_message_bar.assert_not_called()
+    communication.iface.messageBar.assert_called_once_with()
+    communication.iface.messageBar.return_value.popWidget.assert_called_once_with(
+        progress_bar.parentWidget()
     )
 
 
@@ -112,6 +119,7 @@ def test_commit_opened_revision_cancel_stops_before_save():
         assert loader.commit_opened_revision(group, None) is None
 
     save_revision.assert_not_called()
+    communication.clear_message_bar.assert_not_called()
 
 
 def test_commit_opened_revision_reports_layer_save_failure():
@@ -142,6 +150,7 @@ def test_commit_opened_revision_reports_layer_save_failure():
     communication.bar_error.assert_called_once_with(
         "Failed to save changes in layer 'roads': locked"
     )
+    communication.clear_message_bar.assert_not_called()
 
 
 def test_commit_opened_revision_locked_stops_before_prompt():

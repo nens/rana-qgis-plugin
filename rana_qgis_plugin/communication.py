@@ -20,7 +20,11 @@ def update_progress(pb, value, detail=None):
     """Set a progress bar value and, if given, its message text."""
     if pb is None:
         return
-    if sip.isdeleted(pb):
+    try:
+        dismissed = sip.isdeleted(pb)
+    except TypeError:
+        dismissed = False
+    if dismissed:
         plugin_log_info(f"Progress item was dismissed: {detail or value}")
         return
     pb.setValue(int(value))
@@ -43,7 +47,11 @@ def finish_progress(iface, pb):
     """Remove the message-bar item that holds a progress bar."""
     if pb is None:
         return
-    if sip.isdeleted(pb):
+    try:
+        dismissed = sip.isdeleted(pb)
+    except TypeError:
+        dismissed = False
+    if dismissed:
         plugin_log_info("Progress item was dismissed before the process finished")
         return
     iface.messageBar().popWidget(pb.parentWidget())

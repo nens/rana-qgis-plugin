@@ -14,6 +14,15 @@ from rana_qgis_plugin.widgets.schematisation_new_wizard import (
 )
 
 
+@pytest.fixture
+def step_bar(qgis_application):
+    message_bar = QgsMessageBar()
+    iface = MagicMock()
+    iface.messageBar.return_value = message_bar
+    pb = UICommunication(iface=iface).progress_bar("Preparing", maximum=100)
+    return iface, message_bar, pb
+
+
 def test_get_paths_from_geopackage_extracts_referenced_raster_fields(tmp_path):
     layer = MagicMock()
     layer.isValid.return_value = True
