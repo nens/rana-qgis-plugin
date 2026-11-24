@@ -97,6 +97,7 @@ from rana_qgis_plugin.utils.api import (
     get_default_result,
     get_process_id_for_tag,
     get_tenant_file_descriptor,
+    get_tenant_project,
     get_tenant_project_file,
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -227,7 +228,7 @@ class Loader(QObject):
     def open_processes_dock(
         self,
         project: dict,
-        error_signals: ApiErrorSignals,
+        error_signals: ApiErrorSignals | None = None,
     ) -> QDockWidget:
         """Open or raise the Processes dock for a Rana project."""
         project_id = str(project["id"])
@@ -262,7 +263,7 @@ class Loader(QObject):
         dock.setWidget(
             ProcessesPanel(
                 project,
-                error_signals,
+                error_signals or ApiErrorSignals(),
                 loader=self,
                 parent=dock,
             )
@@ -285,7 +286,7 @@ class Loader(QObject):
         self,
         project: dict,
         job_ids: list[str],
-        error_signals: ApiErrorSignals,
+        error_signals: ApiErrorSignals | None = None,
         parent=None,
         question: str = "Track progress in the Processes window?",
         info_message: str = "See the Processes panel for progress.",
@@ -1001,6 +1002,8 @@ class Loader(QObject):
         revision_number: int,
         schematisation_db_filepath: str,
         parent: object,
+        error_signals: ApiErrorSignals,
+        project: dict | None = None,
     ) -> SchematisationUploadTask | None:
         """Prepare a local schematisation revision for upload."""
         if self.is_revision_upload_in_progress(schematisation_id):
@@ -1063,6 +1066,8 @@ class Loader(QObject):
                     project_id,
                     schematisation_id,
                     schematisation.name,
+                    error_signals,
+                    project,
                 )
                 task_manager = QgsApplication.taskManager()
                 if task_manager is None:
@@ -1089,6 +1094,8 @@ class Loader(QObject):
         project_id: str,
         schematisation_id: int,
         schematisation_name: str,
+        error_signals: ApiErrorSignals,
+        project: dict | None = None,
     ) -> None:
         """Wire progress and terminal messages for a revision upload task."""
         progress_bar = self.communication.progress_bar("Uploading revision", 0, 100, 0)
@@ -1116,15 +1123,38 @@ class Loader(QObject):
             nonlocal handed_off
             handed_off = True
             update_progress(progress_bar, 100, detail="Starting model creation")
-            self.start_model_tracker_process(
+            finish_progress(self.communication.iface, progress_bar)
+            response = self.start_model_tracker_process(
                 project_id,
                 schematisation_id,
                 schematisation_name,
                 task.revision.id,
                 task.upload_specification["cb_inherit_templates"],
             )
-            finish_progress(self.communication.iface, progress_bar)
-            self.communication.bar_info("Model creation started.")
+            if response is None:
+                return
+            job_id = response.get("job_id") or response.get("id")
+            if not job_id:
+                return
+            try:
+                process_project = project or get_tenant_project(project_id)
+            except (RanaFetchError, NetworkUnavailableError):
+                self.communication.bar_info(
+                    "Model creation started. See the Processes panel for progress."
+                )
+                return
+            if error_signals is None:
+                self.communication.bar_info(
+                    "Model creation started. See the Processes panel for progress."
+                )
+                return
+            self.point_user_to_processes(
+                process_project,
+                [str(job_id)],
+                error_signals,
+                self.communication.iface.mainWindow(),
+                question=f"Track model creation for {schematisation_name} in the Processes window?",
+            )
 
         def on_upload_succeeded(revision_number):
             if handed_off:
@@ -1158,7 +1188,13 @@ class Loader(QObject):
             lambda: self._revision_uploads_in_progress.discard(schematisation_id)
         )
 
-    def commit_opened_revision(self, group, parent) -> SchematisationUploadTask | None:
+    def commit_opened_revision(
+        self,
+        group,
+        parent,
+        error_signals: ApiErrorSignals | None = None,
+        project: dict | None = None,
+    ) -> SchematisationUploadTask | None:
         """Prepare and upload a revision represented by an open layer group."""
         project_id = group.customProperty("rana/project_id")
         schematisation_id = group.customProperty("rana/schematisation_id")
@@ -1203,12 +1239,23 @@ class Loader(QObject):
             self.communication.bar_error(f"Could not save layer changes: {error}")
             return None
         task = self.save_revision(
-            project_id, schematisation_id, revision_number, filepath, parent
+            project_id,
+            schematisation_id,
+            revision_number,
+            filepath,
+            parent,
+            error_signals or ApiErrorSignals(),
+            project,
         )
         return task
 
     def commit_stored_revision(
-        self, project: dict, file_item: dict, descriptor_id: str, parent
+        self,
+        project: dict,
+        file_item: dict,
+        descriptor_id: str,
+        parent,
+        error_signals: ApiErrorSignals | None = None,
     ) -> SchematisationUploadTask | None:
         """Find and upload a local WIP revision without opening it first."""
         api = get_threedi_api()
@@ -1264,13 +1311,15 @@ class Loader(QObject):
             return None
         group = find_schematisation_group(db_filepath)
         if group is not None:
-            return self.commit_opened_revision(group, parent)
+            return self.commit_opened_revision(group, parent, error_signals, project)
         return self.save_revision(
             project["id"],
             schematisation_id,
             wip_revision.number,
             db_filepath,
             parent,
+            error_signals or ApiErrorSignals(),
+            project,
         )
 
     def is_revision_upload_in_progress(self, schematisation_id: int) -> bool:

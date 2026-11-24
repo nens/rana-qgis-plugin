@@ -149,5 +149,5 @@ Processes-panel hand-off for model creation. Tests are bundled with each task.
 - [x] Task 1: Move progress helpers to communication.py
 - [x] Task 2: Pre-dialog bars
 - [x] Task 3: Post-dialog progress item
-- [ ] Task 4: Model hand-off to Processes + plumbing
+- [x] Task 4: Model hand-off to Processes + plumbing
 - [ ] Task 5: Docs

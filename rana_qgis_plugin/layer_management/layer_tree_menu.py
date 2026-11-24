@@ -64,10 +64,12 @@ class LayerTreeMenuProvider:
         iface: "QgisInterface",
         layer_lock_registry: LayerLockRegistry,
         loader=None,
+        error_signals=None,
     ) -> None:
         self.iface = iface
         self.layer_lock_registry = layer_lock_registry
         self.loader = loader
+        self.error_signals = error_signals
 
     def collect_sync_changes(
         self, kind: SyncKind, groups: list[QgsLayerTreeGroup]
@@ -268,7 +270,9 @@ class LayerTreeMenuProvider:
         if self.loader is None or len(groups) != 1:
             return
         group = groups[0]
-        self.loader.commit_opened_revision(group, self.iface.mainWindow())
+        self.loader.commit_opened_revision(
+            group, self.iface.mainWindow(), self.error_signals
+        )
 
     @staticmethod
     def file_groups(groups: list[QgsLayerTreeGroup]) -> list[QgsLayerTreeGroup]:

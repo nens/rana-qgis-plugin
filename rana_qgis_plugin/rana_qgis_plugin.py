@@ -85,10 +85,11 @@ class RanaQgisPlugin(QObject):
         self.iface = iface
         self.communication = UICommunication(iface, PLUGIN_NAME)
         self.loader = Loader(self.communication)
+        self.error_signals = ApiErrorSignals()
         self.data_item_provider = RanaDataItemProvider(self.communication, self.loader)
         self.data_item_gui_provider = RanaDataItemGuiProvider()
         self.layer_tree_menu = LayerTreeMenuProvider(
-            iface, self.loader.layer_lock_registry, self.loader
+            iface, self.loader.layer_lock_registry, self.loader, self.error_signals
         )
         self.local_linking = LocalLinkingListener(self.loader)
         project = QgsProject.instance()
