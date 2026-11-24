@@ -1058,48 +1058,11 @@ class Loader(QObject):
             finish_progress(self.communication.iface, progress_bar)
             if upload.exec() == QDialog.DialogCode.Accepted and upload.new_upload:
                 task = SchematisationUploadTask(api, local, upload.new_upload)
-                task.model_requested.connect(
-                    lambda: (
-                        self.start_model_tracker_process(
-                            project_id,
-                            schematisation_id,
-                            schematisation.name,
-                            task.revision.id,
-                            task.upload_specification["cb_inherit_templates"],
-                        ),
-                        None,
-                    )[1]
-                )
-                task.progress_changed.connect(
-                    lambda name, current, total, per_task: (
-                        self.communication.progress_bar(
-                            f"Uploading revision: {name}",
-                            0,
-                            100,
-                            int(total + current * per_task / 100),
-                        )
-                    )
-                )
-                task.taskCompleted.connect(
-                    lambda: self.communication.bar_info(
-                        "Schematisation revision uploaded successfully."
-                    )
-                )
-                task.taskTerminated.connect(
-                    lambda: self.communication.show_error(
-                        task.error_message
-                        or "Schematisation upload failed or was cancelled."
-                    )
-                )
-                task.taskCompleted.connect(
-                    lambda: self._revision_uploads_in_progress.discard(
-                        schematisation_id
-                    )
-                )
-                task.taskTerminated.connect(
-                    lambda: self._revision_uploads_in_progress.discard(
-                        schematisation_id
-                    )
+                self.wire_revision_upload(
+                    task,
+                    project_id,
+                    schematisation_id,
+                    schematisation.name,
                 )
                 task_manager = QgsApplication.taskManager()
                 if task_manager is None:
@@ -1119,6 +1082,81 @@ class Loader(QObject):
                 f"Could not open the local schematisation: {error}"
             )
             return None
+
+    def wire_revision_upload(
+        self,
+        task: SchematisationUploadTask,
+        project_id: str,
+        schematisation_id: int,
+        schematisation_name: str,
+    ) -> None:
+        """Wire progress and terminal messages for a revision upload task."""
+        progress_bar = self.communication.progress_bar("Uploading revision", 0, 100, 0)
+        handed_off = False
+        committed_revision = None
+
+        def on_upload_progress(name, current, total, per_task):
+            if not handed_off:
+                label = (
+                    "Waiting for model checker"
+                    if name == "MAKE MODEL"
+                    else f"Uploading revision: {name}"
+                )
+                update_progress(
+                    progress_bar,
+                    total + current * per_task / 100,
+                    detail=label,
+                )
+
+        def on_revision_committed(revision_number):
+            nonlocal committed_revision
+            committed_revision = revision_number
+
+        def on_model_requested():
+            nonlocal handed_off
+            handed_off = True
+            update_progress(progress_bar, 100, detail="Starting model creation")
+            self.start_model_tracker_process(
+                project_id,
+                schematisation_id,
+                schematisation_name,
+                task.revision.id,
+                task.upload_specification["cb_inherit_templates"],
+            )
+            finish_progress(self.communication.iface, progress_bar)
+            self.communication.bar_info("Model creation started.")
+
+        def on_upload_succeeded(revision_number):
+            if handed_off:
+                return
+            finish_progress(self.communication.iface, progress_bar)
+            self.communication.bar_info(f"Revision {revision_number} uploaded.")
+
+        def on_task_terminated():
+            finish_progress(self.communication.iface, progress_bar)
+            if task.isCanceled():
+                self.communication.bar_warn("Revision upload cancelled.")
+            elif committed_revision is not None:
+                self.communication.bar_error(
+                    f"Revision {committed_revision} was uploaded, but no model was created: "
+                    f"{task.error_message}"
+                )
+            else:
+                self.communication.bar_error(
+                    f"Revision upload failed: {task.error_message}"
+                )
+
+        task.progress_changed.connect(on_upload_progress)
+        task.revision_committed.connect(on_revision_committed)
+        task.model_requested.connect(on_model_requested)
+        task.upload_succeeded.connect(on_upload_succeeded)
+        task.taskTerminated.connect(on_task_terminated)
+        task.taskCompleted.connect(
+            lambda: self._revision_uploads_in_progress.discard(schematisation_id)
+        )
+        task.taskTerminated.connect(
+            lambda: self._revision_uploads_in_progress.discard(schematisation_id)
+        )
 
     def commit_opened_revision(self, group, parent) -> SchematisationUploadTask | None:
         """Prepare and upload a revision represented by an open layer group."""
