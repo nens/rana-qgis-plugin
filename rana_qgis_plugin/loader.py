@@ -101,7 +101,6 @@ from rana_qgis_plugin.workers.avatars import (
 from rana_qgis_plugin.workers.download import (
     BatchFileDownloadWorker,
     FileDownloadContext,
-    LizardResultDownloader,
     PublicationFileDownloadContext,
     RanaFileDownloader,
     RanaRawResultsDownloader,
@@ -1145,13 +1144,9 @@ class Loader(QObject):
             result_browser = ResultBrowser(
                 parent=None,
                 results=scenario_info.lizard_results,
-                scenario_crs=scenario_info.crs,
-                pixel_size=scenario_info.pixel_size,
             )
             if result_browser.exec() == QDialog.DialogCode.Accepted:
-                result_ids, nodata, pixelsize, crs = (
-                    result_browser.get_selected_results()
-                )
+                result_ids = result_browser.get_selected_results()
                 if (
                     len(result_ids) == 0
                     and not result_browser.get_download_raw_result()
@@ -1163,9 +1158,6 @@ class Loader(QObject):
                     file,
                     scenario_info,
                     result_ids,
-                    nodata,
-                    pixelsize,
-                    crs,
                     download_raw=result_browser.get_download_raw_result(),
                 )
                 if not downloaders:
@@ -1216,9 +1208,6 @@ class Loader(QObject):
         file: dict,
         scenario_info: ScenarioInfo,
         result_ids: list,
-        nodata: int,
-        pixelsize: float,
-        crs: str,
         download_raw: bool,
     ) -> list:
         """Build list of downloaders for scenario result downloads.
@@ -1253,20 +1242,7 @@ class Loader(QObject):
                     return []
                 elif file_overwrite == "Continue":
                     continue
-            if result.get("attachment_url"):
-                downloaders.append(RanaResultDownloader(context, result))
-            else:
-                downloaders.append(
-                    LizardResultDownloader(
-                        download_context=context,
-                        descriptor_id=file["descriptor_id"],
-                        result=result,
-                        grid=scenario_info.grid,
-                        nodata=nodata,
-                        pixelsize=pixelsize,
-                        crs=crs,
-                    )
-                )
+            downloaders.append(RanaResultDownloader(context, result))
         return downloaders
 
     @pyqtSlot(dict, dict)
