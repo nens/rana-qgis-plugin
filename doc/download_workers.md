@@ -50,7 +50,6 @@ classDiagram
     class RanaFileDownloader
     class RanaRawResultsDownloader
     class RanaResultDownloader
-    class LizardResultDownloader
     class SchematisationGeopackageDownloader
     class SchematisationRevisionDownloader
 
@@ -58,7 +57,6 @@ classDiagram
     RanaDownloader <|-- RanaFileDownloader
     RanaDownloader <|-- RanaRawResultsDownloader
     BaseDownloader <|-- RanaResultDownloader
-    BaseDownloader <|-- LizardResultDownloader
     BaseDownloader <|-- SchematisationGeopackageDownloader
     BaseDownloader <|-- SchematisationRevisionDownloader
     BaseDownloader --> AbstractDownloadContext : uses
@@ -86,7 +84,6 @@ Downloaders implement resource-specific download and post-processing:
 - `RanaFileDownloader` downloads vector/raster files and processes QML styles.
 - `RanaRawResultsDownloader` downloads and extracts raw result archives.
 - `RanaResultDownloader` downloads an existing result attachment.
-- `LizardResultDownloader` downloads generated tiles and can build a VRT.
 - `SchematisationGeopackageDownloader` downloads, extracts, and upgrades a
   schematisation geopackage.
 - `SchematisationRevisionDownloader` downloads a complete revision, including

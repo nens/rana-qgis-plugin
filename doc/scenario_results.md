@@ -136,15 +136,14 @@ classDiagram
     class ScenarioTask {
         RanaRawResultsDownloader (optional)
         RanaResultDownloader (optional)
-        LizardResultDownloader (optional)
         enqueue Results Analysis hand-off
     }
     DownloadTask <|-- RegularFileTask
     DownloadTask <|-- ScenarioTask
 ```
 
-The interactive continuation uses `ResultBrowser` to choose Lizard results,
-generated-raster parameters, and whether to download raw results. The batch
+The interactive continuation uses `ResultBrowser` to choose attached Lizard
+results and whether to download raw results. The batch
 continuation skips the dialog and selects the default attached result when one
 is available. Both paths may include the raw result archive, and successful
 3Di downloads are queued for Results Analysis.
@@ -251,4 +250,3 @@ When changing scenario handling, preserve these invariants:
 - Metadata resolution completes before `ResultsDownloadContext` paths are
   constructed.
 - Raw-only scenarios are not queued for Results Analysis.
-

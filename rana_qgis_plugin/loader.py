@@ -135,7 +135,6 @@ from rana_qgis_plugin.workers.download import (
     BaseDownloader,
     DownloadTask,
     FileDownloadContext,
-    LizardResultDownloader,
     RanaFileDownloader,
     RanaRawResultsDownloader,
     RanaResultDownloader,
@@ -2566,13 +2565,11 @@ class Loader(QObject):
             result_browser = ResultBrowser(
                 parent=self.parent(),
                 results=scenario_info.lizard_results,
-                scenario_crs=scenario_info.crs or "",
-                pixel_size=scenario_info.pixel_size,
             )
             if result_browser.exec() != QDialog.DialogCode.Accepted:
                 self.release_scenario_action()
                 return
-            result_ids, nodata, pixelsize, crs = result_browser.get_selected_results()
+            result_ids = result_browser.get_selected_results()
             download_raw = result_browser.get_download_raw_result()
             if not result_ids and not download_raw:
                 self.communication.bar_warn("No scenario results selected.")
@@ -2582,9 +2579,6 @@ class Loader(QObject):
                 request,
                 scenario_info,
                 result_ids,
-                nodata,
-                pixelsize,
-                crs,
                 download_raw,
             )
         else:
@@ -2602,9 +2596,6 @@ class Loader(QObject):
                 request,
                 scenario_info,
                 [],
-                None,
-                None,
-                None,
                 True,
             )
 
@@ -2654,9 +2645,6 @@ class Loader(QObject):
         request: OpenScenarioRequest,
         scenario_info: ScenarioInfo,
         result_ids: list[int],
-        nodata: float | None,
-        pixelsize: float | None,
-        crs: str | None,
         download_raw: bool,
     ) -> list[BaseDownloader]:
         project = request.project
@@ -2706,22 +2694,7 @@ class Loader(QObject):
                     return []
                 if choice == "Continue":
                     continue
-            if result.get("attachment_url"):
-                downloaders.append(RanaResultDownloader(context, result))
-            else:
-                if nodata is None or pixelsize is None or crs is None:
-                    return []
-                downloaders.append(
-                    LizardResultDownloader(
-                        download_context=context,
-                        descriptor_id=file_item["descriptor_id"],
-                        result=result,
-                        grid=scenario_info.grid,
-                        nodata=nodata,
-                        pixelsize=pixelsize,
-                        crs=crs,
-                    )
-                )
+            downloaders.append(RanaResultDownloader(context, result))
         return downloaders
 
     def build_batch_scenario_result_downloaders(

@@ -4,7 +4,6 @@ import warnings
 import zipfile
 from functools import cached_property
 from pathlib import Path
-from time import sleep
 from typing import Optional, cast
 
 import requests
@@ -18,16 +17,12 @@ from rana_qgis_plugin.simulation.threedi_calls import ThreediCalls
 from rana_qgis_plugin.utils.api import (
     get_file_descriptor_style,
     get_publication_style,
-    get_raster_file_link,
     get_tenant_file_descriptor,
     get_tenant_file_url,
-    request_raster_generate,
 )
 from rana_qgis_plugin.utils.data_models import DataType, RanaPublicationFileData
 from rana_qgis_plugin.utils.generic import (
-    build_vrt,
     get_threedi_api,
-    split_scenario_extent,
 )
 from rana_qgis_plugin.utils.local_paths import (
     get_local_dir_structure,
@@ -644,164 +639,6 @@ class SchematisationRevisionDownloader(BaseDownloader):
             else self.revision.number
         )
         return f"schematisation-{schematisation_id}-rev{revision_number}"
-
-
-class LizardResultDownloader(BaseDownloader):
-    """Downloads a result raster that requires on-demand generation from Lizard."""
-
-    def __init__(
-        self,
-        download_context: ResultsDownloadContext,
-        descriptor_id: str,
-        result: dict,
-        grid: dict,
-        nodata: float | None,
-        pixelsize: float,
-        crs: str,
-    ):
-        super().__init__(download_context)
-        self.descriptor_id = descriptor_id
-        self.result = result
-        self.grid = grid
-        self.nodata = nodata
-        self.pixelsize = pixelsize
-        self.crs = crs
-
-    @property
-    def url(self) -> str:
-        raise NotImplementedError("LizardResultDownloader overrides download_file")
-
-    @property
-    def file_id(self) -> str:
-        return self.result["id"]
-
-    def postprocess(self):
-        pass
-
-    def download_file(self, signals: FileDownloadWorkerSignals, download_file=True):
-        """Generate raster tiles, poll until ready, download, and build VRT."""
-        file_name = self.download_context.local_file_path.stem
-        target_dir = self.download_context.local_dir
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        # Split extent into tiles
-        spatial_bounds = split_scenario_extent(
-            grid=self.grid, resolution=self.pixelsize, max_pixel_count=1 * 10**8
-        )
-        bboxes, width, height = spatial_bounds
-
-        # Request generation for each tile
-        raster_tasks = []
-        for i, (x1, y1, x2, y2) in enumerate(bboxes):
-            bbox = f"{x1},{y1},{x2},{y2}"
-            payload = {
-                "width": width,
-                "height": height,
-                "bbox": bbox,
-                "projection": self.crs,
-                "format": "geotiff",
-                "async": "true",
-            }
-            if self.nodata is not None:
-                payload["nodata"] = self.nodata
-            r = request_raster_generate(
-                descriptor_id=self.descriptor_id,
-                raster_id=self.result["raster_id"],
-                payload=payload,
-            )
-            raster_tasks.append(r)
-            progress = int(((i + 1) / len(bboxes)) * 10)
-            signals.progress.emit(progress, file_name)
-
-        # Multi-tile: poll and download each tile
-        if len(raster_tasks) > 1:
-            rasters = {
-                raster_task_id: {
-                    "downloaded": False,
-                    "filepath": get_safe_local_path(
-                        target_dir / f"{file_name}{task_number:02d}.tif"
-                    ),
-                }
-                for task_number, raster_task_id in enumerate(raster_tasks)
-            }
-            task_counter = 0
-
-            while False in [task["downloaded"] for task in rasters.values()]:
-                sleep(5)
-                for raster_task_id in rasters.keys():
-                    if not rasters[raster_task_id]["downloaded"]:
-                        try:
-                            file_link = get_raster_file_link(
-                                descriptor_id=self.descriptor_id,
-                                task_id=raster_task_id,
-                            )
-                            if file_link:
-                                self._download_tile(
-                                    file_link, rasters[raster_task_id]["filepath"]
-                                )
-                                rasters[raster_task_id]["downloaded"] = True
-                                task_counter += 1
-                                progress = int(
-                                    10 + (task_counter / len(raster_tasks)) * 80
-                                )
-                                signals.progress.emit(progress, file_name)
-                        except requests.exceptions.RequestException as e:
-                            signals.failed.emit(f"Failed to download file: {str(e)}")
-                            return
-                        except Exception as e:
-                            signals.failed.emit(f"An error occurred: {str(e)}")
-                            return
-
-            raster_filepaths = [item["filepath"] for item in rasters.values()]
-            raster_filepaths.sort()
-            first_raster_filepath = raster_filepaths[0]
-            vrt_filepath = first_raster_filepath.replace("_01", "").replace(
-                ".tif", ".vrt"
-            )
-            vrt_options = {
-                "resolution": "average",
-                "resampleAlg": "nearest",
-                "srcNodata": self.nodata,
-            }
-            build_vrt(vrt_filepath, raster_filepaths, **vrt_options)
-            signals.progress.emit(100, file_name)
-
-        # Single-tile: poll and download
-        else:
-            target_file = Path(get_safe_local_path(target_dir / (file_name + ".tif")))
-            file_link = False
-            while not file_link:
-                sleep(5)
-                try:
-                    file_link = get_raster_file_link(
-                        descriptor_id=self.descriptor_id, task_id=raster_tasks[0]
-                    )
-                    if not file_link:
-                        continue
-                    self.download_url(
-                        file_link,
-                        target_file,
-                        signals.progress,
-                        progress_min=10,
-                        progress_max=100,
-                    )
-                except requests.exceptions.RequestException as e:
-                    signals.failed.emit(f"Failed to download file: {str(e)}")
-                    return
-                except Exception as e:
-                    signals.failed.emit(f"An error occurred: {str(e)}")
-                    return
-
-        signals.finished.emit()
-
-    @staticmethod
-    def _download_tile(file_link: str, target_file: str):
-        """Download a single tile without progress tracking."""
-        with requests.get(file_link, stream=True) as response:
-            response.raise_for_status()
-            with open(target_file, "wb") as f:
-                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                    f.write(chunk)
 
 
 class DownloadTask(QgsTask):
