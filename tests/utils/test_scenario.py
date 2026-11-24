@@ -169,34 +169,3 @@ class TestScenarioInfo:
             scenario.set_simulation_info_from_threedi(object())
 
         assert not scenario.has_3di_simulation
-
-    def test_grid(self):
-        assert (
-            us.ScenarioInfo(self.basic_descriptor).grid
-            == self.basic_descriptor["meta"]["grid"]
-        )
-        copy_descriptor = self._get_descriptor_copy()
-        copy_descriptor["meta"]["grid"] = None
-        assert us.ScenarioInfo(copy_descriptor).grid == {}
-
-    def test_get_grid(self):
-        grid_copy = us.ScenarioInfo(self.basic_descriptor).get_grid()
-        # grid_copy should be different object with the same contents
-        assert grid_copy is not self.basic_descriptor["meta"]["grid"]
-        assert grid_copy == self.basic_descriptor["meta"]["grid"]
-
-    def test_crs(self):
-        assert (
-            us.ScenarioInfo(self.basic_descriptor).crs
-            == self.basic_descriptor["meta"]["grid"]["crs"]
-        )
-
-    def test_pixel_size(self):
-        assert us.ScenarioInfo(self.basic_descriptor).pixel_size == 10
-        copy_descriptor = self._get_descriptor_copy()
-        copy_descriptor["meta"]["grid"]["x"] = {}
-        assert us.ScenarioInfo(copy_descriptor).pixel_size == 1
-        copy_descriptor["meta"]["grid"]["x"] = None
-        assert us.ScenarioInfo(copy_descriptor).pixel_size == 1
-        copy_descriptor["meta"]["grid"] = None
-        assert us.ScenarioInfo(copy_descriptor).pixel_size == 1

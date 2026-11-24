@@ -208,12 +208,7 @@ def test_open_scenario_results_shows_dialog_and_builds_selected_downloaders(
     request = scenario_request()
     browser = MagicMock()
     browser.exec.return_value = QDialog.DialogCode.Accepted
-    browser.get_selected_results.return_value = (
-        [1],
-        -9999.0,
-        10.0,
-        "EPSG:4326",
-    )
+    browser.get_selected_results.return_value = [1]
     browser.get_download_raw_result.return_value = True
     results = [
         {

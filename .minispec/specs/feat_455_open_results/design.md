@@ -165,7 +165,7 @@ Main thread                         ScenarioResolveTask (background)      Main t
 ### Functional Requirements
 
 - **FR-001**: The current `Loader` MUST provide the scenario-results entry point and MUST use `DownloadTask` rather than legacy `QThread` workers.
-- **FR-002**: The individual-scenario flow MUST preserve the `ResultBrowser` choices for attached results, raw results, nodata, pixel size, and CRS.
+- **FR-002**: The individual-scenario flow MUST preserve the `ResultBrowser` choices for attached results and raw results.
 - **FR-003**: The result-selection dialog MUST be moved from `legacy/widgets` to the current `widgets` package, with no dependency on the legacy loader.
 - **FR-004**: Batch and folder operations MUST accept scenario files and MUST use defaults without displaying `ResultBrowser`.
 - **FR-005**: Batch defaults MUST download raw `results.zip` and the attached result named `max water depth (file)`; generated raster results MUST NOT be requested in batch mode.
@@ -181,7 +181,7 @@ Main thread                         ScenarioResolveTask (background)      Main t
 
 - **Scenario request**: A project/file pair representing one scenario to open, optionally originating from a context action, multi-selection, or folder expansion.
 - **Scenario download record**: Loader-owned context for one scenario containing its metadata, project/file identity, and target results directory — needed to invoke Results Analysis once that scenario's `DownloadTask` completes.
-- **Result selection**: Interactive result IDs and generation parameters returned by `ResultBrowser`; batch selections are the fixed defaults above.
+- **Result selection**: Interactive result IDs and raw-result choice returned by `ResultBrowser`; batch selections are the fixed defaults above.
 - **`ScenarioResolveTask`**: A `QgsTask` that resolves 3Di simulation metadata for one `ScenarioInfo` in the background (see "Threading Considerations"). One instance per scenario being opened.
 
 ## API and Component Changes

@@ -1,6 +1,5 @@
-from copy import deepcopy
 from functools import cached_property
-from typing import Any, Optional
+from typing import Any
 
 from threedi_api_client.openapi import ApiException
 
@@ -102,9 +101,6 @@ class ScenarioInfo:
             "id"
         ) is not None and get_lizard_ready_state_from_descriptor(self.descriptor)
 
-    def get_grid(self) -> dict:
-        return deepcopy(self.grid) or {}
-
     @cached_property
     def lizard_results(self) -> list:
         if self.has_lizard_results:
@@ -113,15 +109,3 @@ class ScenarioInfo:
                 "lizard-scenario-results",
             )
         return []
-
-    @cached_property
-    def grid(self) -> dict:
-        return self.meta.get("grid") or {}
-
-    @cached_property
-    def crs(self) -> Optional[Any]:
-        return self.grid.get("crs")
-
-    @cached_property
-    def pixel_size(self) -> float:
-        return (self.grid.get("x") or {}).get("cell_size", 1)
