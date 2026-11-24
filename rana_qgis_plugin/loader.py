@@ -97,7 +97,6 @@ from rana_qgis_plugin.utils.api import (
     get_default_result,
     get_process_id_for_tag,
     get_tenant_file_descriptor,
-    get_tenant_project,
     get_tenant_project_file,
     get_tenant_project_files,
     get_threedi_schematisation,
@@ -161,6 +160,10 @@ from rana_qgis_plugin.workers.upload import (
     prepare_existing_file_upload,
     prepare_new_file_upload,
 )
+from rana_qgis_plugin.workers.upload_handlers import (
+    InitialRevisionUploadHandler,
+    RevisionUploadHandler,
+)
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.communication import UICommunication
@@ -173,6 +176,39 @@ class UploadChoice(Enum):
     OVERWRITE = "Overwrite"
     OVERWRITE_ALL = "Overwrite all conflicts"
     ABORT = "Cancel"
+
+
+def collect_initial_upload_files(
+    geopackage_path: str,
+    raster_dir: str,
+    raster_paths: dict,
+) -> tuple[dict, list[tuple[str, str]]]:
+    """Return the selected files for an initial upload and the rasters that are missing."""
+    selected_files = {
+        "geopackage": {
+            "filepath": geopackage_path,
+            "make_action": True,
+            "remote_raster": None,
+            "status": UploadFileStatus.NEW,
+            "type": UploadFileType.DB,
+        }
+    }
+    missing_rasters = []
+    for raster_fields in raster_paths.values():
+        for raster_name, relative_path in raster_fields.items():
+            if not relative_path:
+                continue
+            raster_path = Path(raster_dir) / relative_path
+            if not raster_path.is_file():
+                missing_rasters.append((raster_name, relative_path))
+            selected_files[raster_name] = {
+                "filepath": str(raster_path),
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.RASTER,
+            }
+    return selected_files, missing_rasters
 
 
 class Loader(QObject):
@@ -1098,81 +1134,20 @@ class Loader(QObject):
     ) -> None:
         """Wire progress and terminal messages for a revision upload task."""
         progress_bar = self.communication.progress_bar("Uploading revision", 0, 100, 0)
-        handed_off = False
-        committed_revision = None
-
-        def on_upload_progress(name, current, total, per_task):
-            if not handed_off:
-                label = (
-                    "Waiting for model checker"
-                    if name == "MAKE MODEL"
-                    else f"Uploading revision: {name}"
-                )
-                update_progress(
-                    progress_bar,
-                    total + current * per_task / 100,
-                    detail=label,
-                )
-
-        def on_revision_committed(revision_number):
-            nonlocal committed_revision
-            committed_revision = revision_number
-
-        def on_model_requested():
-            nonlocal handed_off
-            handed_off = True
-            finish_progress(self.communication.iface, progress_bar)
-            response = self.start_model_tracker_process(
-                project_id,
-                schematisation_id,
-                schematisation_name,
-                task.revision.id,
-                task.upload_specification["cb_inherit_templates"],
-            )
-            if response is None:
-                return
-            job_id = response.get("job_id") or response.get("id")
-            process_project = project
-            if job_id and process_project is None:
-                try:
-                    process_project = get_tenant_project(project_id)
-                except (RanaFetchError, NetworkUnavailableError):
-                    pass
-            self.point_user_to_model_creation(
-                process_project, job_id, error_signals, schematisation_name
-            )
-
-        def on_upload_succeeded(revision_number):
-            if handed_off:
-                return
-            finish_progress(self.communication.iface, progress_bar)
-            self.communication.bar_info(f"Revision {revision_number} uploaded.")
-
-        def on_task_terminated():
-            finish_progress(self.communication.iface, progress_bar)
-            if task.isCanceled():
-                self.communication.bar_warn("Revision upload cancelled.")
-            elif committed_revision is not None:
-                self.communication.bar_error(
-                    f"Revision {committed_revision} was uploaded, but no model was created: "
-                    f"{task.error_message}"
-                )
-            else:
-                self.communication.bar_error(
-                    f"Revision upload failed: {task.error_message}"
-                )
-
-        task.progress_changed.connect(on_upload_progress)
-        task.revision_committed.connect(on_revision_committed)
-        task.model_requested.connect(on_model_requested)
-        task.upload_succeeded.connect(on_upload_succeeded)
-        task.taskTerminated.connect(on_task_terminated)
-        task.taskCompleted.connect(
-            lambda: self._revision_uploads_in_progress.discard(schematisation_id)
+        handler = RevisionUploadHandler(
+            self,
+            task,
+            progress_bar,
+            project_id,
+            schematisation_id,
+            schematisation_name,
+            error_signals,
+            project,
+            on_finished=lambda: self._revision_uploads_in_progress.discard(
+                schematisation_id
+            ),
         )
-        task.taskTerminated.connect(
-            lambda: self._revision_uploads_in_progress.discard(schematisation_id)
-        )
+        handler.attach()
 
     def commit_opened_revision(
         self,
@@ -1369,31 +1344,11 @@ class Loader(QObject):
             )
             return None
 
-        selected_files = {
-            "geopackage": {
-                "filepath": local_schematisation.schematisation_db_filepath,
-                "make_action": True,
-                "remote_raster": None,
-                "status": UploadFileStatus.NEW,
-                "type": UploadFileType.DB,
-            }
-        }
-        missing_rasters = []
-        for raster_fields in raster_paths.values():
-            for raster_name, relative_path in raster_fields.items():
-                if not relative_path:
-                    continue
-                raster_path = Path(wip_revision.raster_dir) / relative_path
-                if not raster_path.is_file():
-                    missing_rasters.append((raster_name, relative_path))
-                selected_files[raster_name] = {
-                    "filepath": str(raster_path),
-                    "make_action": True,
-                    "remote_raster": None,
-                    "status": UploadFileStatus.NEW,
-                    "type": UploadFileType.RASTER,
-                }
-
+        selected_files, missing_rasters = collect_initial_upload_files(
+            local_schematisation.schematisation_db_filepath,
+            wip_revision.raster_dir,
+            raster_paths,
+        )
         if missing_rasters:
             missing = "\n".join(
                 f"{name}: {path}" for name, path in sorted(missing_rasters)
@@ -1419,37 +1374,17 @@ class Loader(QObject):
 
         task = SchematisationUploadTask(api, local_schematisation, upload_specification)
         update_step_progress(progress_bar, 1, 0, detail="Uploading initial revision")
-        handed_off = False
-
-        def on_upload_progress(name, current, total, per_task):
-            # Queued ticks can arrive after the hand-off and the bar is gone by then.
-            if not handed_off:
-                update_step_progress(
-                    progress_bar,
-                    1,
-                    total + current * per_task / 100,
-                    detail=f"Uploading revision: {name}",
-                )
-
-        def on_model_requested():
-            nonlocal handed_off
-            handed_off = True
-            self.handle_initial_model_requested(
-                project,
-                schematisation,
-                task.revision.id,
-                upload_specification["cb_inherit_templates"],
-                progress_bar,
-                error_signals,
-                display_name,
-            )
-
-        task.progress_changed.connect(on_upload_progress)
-        task.model_requested.connect(on_model_requested)
-        task.upload_succeeded.connect(lambda _revision_number: refresh_callback())
-        task.taskTerminated.connect(
-            lambda: self.handle_initial_revision_upload_failure(task, progress_bar)
+        handler = InitialRevisionUploadHandler(
+            self,
+            task,
+            project,
+            schematisation,
+            progress_bar,
+            error_signals,
+            display_name,
+            refresh_callback,
         )
+        handler.attach()
         self._track_task(task)
         task_manager.addTask(task)
         return task
@@ -1552,7 +1487,7 @@ class Loader(QObject):
         try:
             return start_tenant_process(track_process, params)
         except RanaPostError as e:
-            self.communication.bar_error(f"Failed to start model tracker process")
+            self.communication.bar_error("Failed to start model tracker process")
             self.communication.log_err(f"{e.msg}")
             return None
 

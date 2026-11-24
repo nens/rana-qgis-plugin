@@ -11,6 +11,7 @@ from rana_qgis_plugin.simulation.utils import UploadFileStatus, UploadFileType
 def step_progress():
     with (
         patch("rana_qgis_plugin.loader.update_step_progress") as update,
+        patch("rana_qgis_plugin.workers.upload_handlers.update_step_progress", update),
         patch("rana_qgis_plugin.loader.update_progress"),
         patch("rana_qgis_plugin.loader.finish_progress") as finish,
     ):

@@ -1197,6 +1197,8 @@ class SchematisationUploadTask(QgsTask):
         self.schematisation = self.upload_specification["schematisation"]
         self.revision = self.upload_specification["latest_revision"]
         self.error_message = None
+        self.committed_revision = None
+        self._upload_handler = None
 
     def run(self):
         """Run all schematisation upload tasks."""
@@ -1416,6 +1418,7 @@ class SchematisationUploadTask(QgsTask):
         self.current_task_progress = 100
         self.report_upload_progress()
         self.local_schematisation.update_wip_revision(self.revision.number)
+        self.committed_revision = self.revision.number
         self.revision_committed.emit(self.revision.number)
 
     def create_3di_model_task(self, inherit_templates=False):

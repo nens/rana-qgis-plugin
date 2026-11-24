@@ -98,7 +98,7 @@ def test_failure_after_commit_reports_revision_without_model(message_bar_loader)
     task = make_task()
     wire(loader, task)
 
-    task.revision_committed.emit(3)
+    task.committed_revision = 3
     task.error_message = "Model checker failed"
     task.taskTerminated.emit()
 
@@ -130,7 +130,9 @@ def test_model_hand_off_points_to_processes_with_given_project(message_bar_loade
         patch.object(
             loader, "start_model_tracker_process", return_value={"job_id": "job-9"}
         ) as start,
-        patch("rana_qgis_plugin.loader.get_tenant_project") as get_project,
+        patch(
+            "rana_qgis_plugin.workers.upload_handlers.get_tenant_project"
+        ) as get_project,
         patch.object(loader, "point_user_to_processes") as point_user,
     ):
         task.model_requested.emit()
@@ -160,7 +162,8 @@ def test_model_hand_off_fetches_project_when_not_given(message_bar_loader):
             loader, "start_model_tracker_process", return_value={"id": "job-9"}
         ),
         patch(
-            "rana_qgis_plugin.loader.get_tenant_project", return_value=PROJECT
+            "rana_qgis_plugin.workers.upload_handlers.get_tenant_project",
+            return_value=PROJECT,
         ) as get_project,
         patch.object(loader, "point_user_to_processes") as point_user,
     ):
@@ -190,7 +193,10 @@ def test_model_hand_off_without_job_or_project_shows_info(
 
     with (
         patch.object(loader, "start_model_tracker_process", return_value=response),
-        patch("rana_qgis_plugin.loader.get_tenant_project", **project_lookup),
+        patch(
+            "rana_qgis_plugin.workers.upload_handlers.get_tenant_project",
+            **project_lookup,
+        ),
         patch.object(loader, "point_user_to_processes") as point_user,
     ):
         task.model_requested.emit()
