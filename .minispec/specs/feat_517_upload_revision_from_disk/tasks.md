@@ -34,7 +34,7 @@ allowing one revision upload per schematisation at a time.
 - **Description:** Add `find_schematisation_group(db_filepath)` (normalized path match on `rana/schematisation_db_filepath`, `None` if not found).
 - **Depends on:** None
 - **Acceptance:** Helpers exist in `layer_manager.py` and work against a real `QgsLayerTree`.
-- **Evidence:** Unit tests: match with differently normalized paths, no match returns `None`, revision number updated on `upload_succeeded`.
+- **Evidence:** Unit tests: match with differently normalized paths and no match returns `None`. The layer group's revision number is intentionally not updated on `upload_succeeded`; it remains the revision with which the group was opened.
 
 ### Core Implementation
 
