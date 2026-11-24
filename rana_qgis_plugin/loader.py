@@ -36,6 +36,11 @@ from threedi_api_client.openapi import (
 from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.communication import (
+    finish_progress,
+    update_progress,
+    update_step_progress,
+)
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_SYNC_STATE_PROPERTY,
     STYLE_DIRTY_PROPERTY,
@@ -1244,9 +1249,7 @@ class Loader(QObject):
             display_name,
         )
         if task is None:
-            SchematisationWizardBase.finish_step_progress(
-                self.communication.iface, progress_bar
-            )
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 f"Schematisation {display_name} was created, but its initial "
                 "revision was not uploaded.",
@@ -1329,15 +1332,13 @@ class Loader(QObject):
             return None
 
         task = SchematisationUploadTask(api, local_schematisation, upload_specification)
-        SchematisationWizardBase.update_step_progress(
-            progress_bar, 1, 0, detail="Uploading initial revision"
-        )
+        update_step_progress(progress_bar, 1, 0, detail="Uploading initial revision")
         handed_off = False
 
         def on_upload_progress(name, current, total, per_task):
             # Queued ticks can arrive after the hand-off and the bar is gone by then.
             if not handed_off:
-                SchematisationWizardBase.update_step_progress(
+                update_step_progress(
                     progress_bar,
                     1,
                     total + current * per_task / 100,
@@ -1378,9 +1379,7 @@ class Loader(QObject):
         display_name: str,
     ) -> None:
         """Start model creation, complete the progress item and point to the Processes panel."""
-        SchematisationWizardBase.update_step_progress(
-            progress_bar, 2, 0, detail="Starting model creation"
-        )
+        update_step_progress(progress_bar, 2, 0, detail="Starting model creation")
         response = self.start_model_tracker_process(
             project["id"],
             schematisation.id,
@@ -1389,10 +1388,8 @@ class Loader(QObject):
             inherit_from_previous_revision,
         )
         if response is not None:
-            SchematisationWizardBase.update_step_progress(progress_bar, 2, 100)
-        SchematisationWizardBase.finish_step_progress(
-            self.communication.iface, progress_bar
-        )
+            update_progress(progress_bar, 100)
+        finish_progress(self.communication.iface, progress_bar)
         if response is None:
             return
         job_id = response.get("job_id") or response.get("id")
@@ -1409,9 +1406,7 @@ class Loader(QObject):
         self, task: SchematisationUploadTask, progress_bar
     ) -> None:
         """Report cancellation or failure of an initial revision upload."""
-        SchematisationWizardBase.finish_step_progress(
-            self.communication.iface, progress_bar
-        )
+        finish_progress(self.communication.iface, progress_bar)
         if task.isCanceled():
             self.communication.bar_warn("Initial schematisation upload cancelled.")
         else:

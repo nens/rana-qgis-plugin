@@ -5,16 +5,13 @@ import pytest
 
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.simulation.utils import UploadFileStatus, UploadFileType
-from rana_qgis_plugin.widgets.schematisation_new_wizard import (
-    SchematisationWizardBase,
-)
 
 
 @pytest.fixture
 def step_progress():
     with (
-        patch.object(SchematisationWizardBase, "update_step_progress") as update,
-        patch.object(SchematisationWizardBase, "finish_step_progress") as finish,
+        patch("rana_qgis_plugin.loader.update_step_progress") as update,
+        patch("rana_qgis_plugin.loader.finish_progress") as finish,
     ):
         yield SimpleNamespace(update=update, finish=finish)
 
