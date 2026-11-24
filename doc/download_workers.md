@@ -161,12 +161,6 @@ Downloaders implement the **what** and **how** aspects of downloading:
   - Uses the default `BaseDownloader.download_file()` flow
   - Simple: download to `local_file_path`, no post-processing
 
-- **LizardResultDownloader**: Downloads results requiring on-demand raster generation
-  - Splits extent into tiles, requests generation from Lizard API
-  - Polls until tiles are ready, then downloads each tile
-  - Builds VRT if multi-tile
-  - Progress: 0-10% requesting, 10-90% downloading tiles, 90-100% VRT
-
 - **SchematisationGeopackageDownloader**: Specialized downloader for Rana schematisation geopackages (used in schematisation export)
   - Downloads from Rana HCC API using schematisation and revision IDs
   - Post-processes by:
@@ -226,18 +220,6 @@ classDiagram
         +postprocess()
     }
 
-    class LizardResultDownloader {
-        -descriptor_id: str
-        -result: dict
-        -grid: dict
-        -nodata: int
-        -pixelsize: float
-        -crs: str
-        +file_id: str
-        +download_file(signals, download_file=True)
-        +postprocess()
-    }
-
     class SchematisationGeopackageDownloader {
         -schematisation_id: int
         -revision: dict
@@ -260,7 +242,6 @@ classDiagram
 
     BaseDownloader <|-- RanaDownloader
     BaseDownloader <|-- RanaResultDownloader
-    BaseDownloader <|-- LizardResultDownloader
     BaseDownloader <|-- SchematisationGeopackageDownloader
     BaseDownloader <|-- SchematisationRevisionDownloader
     RanaDownloader <|-- RanaFileDownloader
@@ -355,7 +336,7 @@ The Loader class demonstrates three main usage patterns for the download workers
 **Key points:**
 - Loader's `download_results()` builds a list of downloaders for one scenario file:
   - `RanaRawResultsDownloader` (if raw download requested)
-  - For each selected result: `RanaResultDownloader` (if `attachment_url`) or `LizardResultDownloader` (if generation needed)
+  - For each selected result: `RanaResultDownloader`
 - Uses `ResultsDownloadContext` with appropriate filename per downloader
 - Checks for existing files and prompts overwrite/skip/cancel
 - `BatchFileDownloadWorker` handles downloading all downloaders sequentially
