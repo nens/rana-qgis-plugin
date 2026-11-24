@@ -85,9 +85,14 @@ The loader consumes task signals and presents progress or completion through
 the communication layer. It does not re-emit the task signals.
 
 The initial revision upload of a new schematisation (`SchematisationUploadTask`) is
-handled differently: its `progress_changed` and `model_requested` signals update the
-progress item created by the schematisation wizard instead of a separate bar. See
-[schematisation_wizard.md](schematisation_wizard.md).
+handled differently: an `InitialRevisionUploadHandler` connects the task's signals
+and updates the progress item created by the schematisation wizard instead of a
+separate bar. Later-revision uploads use a `RevisionUploadHandler` in the same way.
+The handlers connect `progress_changed`, `model_requested`, `upload_succeeded`,
+`taskCompleted` and `taskTerminated`, and call back into `Loader`. See
+[Upload handlers](schematisation_lifecycle.md#upload-handlers) for the flow and
+the lifetime rule, and [schematisation_wizard.md](schematisation_wizard.md) for
+the wizard side.
 
 ## Browser actions
 
