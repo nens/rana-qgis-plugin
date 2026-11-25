@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from qgis.core import QgsSettings
+from qgis.core import Qgis, QgsSettings
 from qgis.PyQt.QtCore import QEvent, Qt, QTimer
 from qgis.PyQt.QtWidgets import QApplication, QDialog, QDialogButtonBox, QTreeView
 
@@ -68,9 +68,30 @@ def test_login_logout(plugin, qtbot, request):
     assert not QgsSettings().value(RANA_AUTHCFG_ENTRY)
 
 
-def test_refocus_triggers_refresh(plugin, qgis_application):
+def test_refocus_triggers_refresh(plugin, qtbot, qgis_application):
     """WindowDeactivate→WindowActivate from external app triggers refresh."""
     root = plugin.data_item_provider.root_item
+    tree = plugin.browser_dock.findChild(QTreeView)
+    assert tree is not None, "Browser tree not found"
+    model = tree.model()
+    root_index = next(
+        (
+            model.index(row, 0)
+            for row in range(model.rowCount())
+            if model.sourceModel().dataItem(model.mapToSource(model.index(row, 0)))
+            is root
+        ),
+        None,
+    )
+    assert root_index is not None, "No browser index for Rana root"
+    tree.expand(root_index)
+    qtbot.waitUntil(
+        lambda: (
+            root.children() is not None
+            and root.state() == Qgis.BrowserItemState.Populated
+        ),
+        timeout=30000,
+    )
 
     with patch.object(root, "refresh") as mock_refresh:
         simulate_external_refocus(plugin, qgis_application)
