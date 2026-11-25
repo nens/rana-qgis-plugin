@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from rana_qgis_plugin.loader import collect_initial_upload_files
+from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.simulation.utils import UploadFileType
 from rana_qgis_plugin.workers.upload_handlers import InitialRevisionUploadHandler
 
@@ -9,7 +9,7 @@ def test_collects_geopackage_and_existing_rasters(tmp_path):
     (tmp_path / "dem.tif").write_bytes(b"")
     raster_paths = {"group": {"dem": "dem.tif"}}
 
-    selected, missing = collect_initial_upload_files(
+    selected, missing = Loader.select_initial_revision_files(
         "/models/schematisation.gpkg", str(tmp_path), raster_paths
     )
 
@@ -23,7 +23,7 @@ def test_collects_geopackage_and_existing_rasters(tmp_path):
 def test_reports_missing_rasters_and_skips_empty_paths(tmp_path):
     raster_paths = {"group": {"dem": "missing.tif", "unused": ""}}
 
-    selected, missing = collect_initial_upload_files(
+    selected, missing = Loader.select_initial_revision_files(
         "/models/schematisation.gpkg", str(tmp_path), raster_paths
     )
 

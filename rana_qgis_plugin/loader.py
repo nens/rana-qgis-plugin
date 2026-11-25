@@ -178,39 +178,6 @@ class UploadChoice(Enum):
     ABORT = "Cancel"
 
 
-def collect_initial_upload_files(
-    geopackage_path: str,
-    raster_dir: str,
-    raster_paths: dict,
-) -> tuple[dict, list[tuple[str, str]]]:
-    """Return the selected files for an initial upload and the rasters that are missing."""
-    selected_files = {
-        "geopackage": {
-            "filepath": geopackage_path,
-            "make_action": True,
-            "remote_raster": None,
-            "status": UploadFileStatus.NEW,
-            "type": UploadFileType.DB,
-        }
-    }
-    missing_rasters = []
-    for raster_fields in raster_paths.values():
-        for raster_name, relative_path in raster_fields.items():
-            if not relative_path:
-                continue
-            raster_path = Path(raster_dir) / relative_path
-            if not raster_path.is_file():
-                missing_rasters.append((raster_name, relative_path))
-            selected_files[raster_name] = {
-                "filepath": str(raster_path),
-                "make_action": True,
-                "remote_raster": None,
-                "status": UploadFileStatus.NEW,
-                "type": UploadFileType.RASTER,
-            }
-    return selected_files, missing_rasters
-
-
 class Loader(QObject):
     """Signal-based orchestrator for background work.
 
@@ -1287,6 +1254,39 @@ class Loader(QObject):
         """Return whether a revision upload is running for a schematisation."""
         return schematisation_id in self._revision_uploads_in_progress
 
+    @staticmethod
+    def select_initial_revision_files(
+        geopackage_path: str,
+        raster_dir: str,
+        raster_paths: dict,
+    ) -> tuple[dict, list[tuple[str, str]]]:
+        """Return the files for an initial revision upload and the rasters that are missing."""
+        selected_files = {
+            "geopackage": {
+                "filepath": geopackage_path,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.DB,
+            }
+        }
+        missing_rasters = []
+        for raster_fields in raster_paths.values():
+            for raster_name, relative_path in raster_fields.items():
+                if not relative_path:
+                    continue
+                raster_path = Path(raster_dir) / relative_path
+                if not raster_path.is_file():
+                    missing_rasters.append((raster_name, relative_path))
+                selected_files[raster_name] = {
+                    "filepath": str(raster_path),
+                    "make_action": True,
+                    "remote_raster": None,
+                    "status": UploadFileStatus.NEW,
+                    "type": UploadFileType.RASTER,
+                }
+        return selected_files, missing_rasters
+
     def save_initial_revision(
         self,
         project: dict,
@@ -1344,7 +1344,7 @@ class Loader(QObject):
             )
             return None
 
-        selected_files, missing_rasters = collect_initial_upload_files(
+        selected_files, missing_rasters = self.select_initial_revision_files(
             local_schematisation.schematisation_db_filepath,
             wip_revision.raster_dir,
             raster_paths,
