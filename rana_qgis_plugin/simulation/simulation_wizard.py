@@ -13,6 +13,7 @@ from typing import List, Optional
 import pyqtgraph as pg
 from dateutil.relativedelta import relativedelta
 from qgis.core import (
+    QgsApplication,
     QgsMapLayer,
     QgsMapLayerProxyModel,
     QgsProject,
@@ -38,6 +39,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import (
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QGridLayout,
@@ -69,6 +71,7 @@ from .initial_concentrations import (
     Initial1DConcentrationsWidget,
     Initial2DConcentrationsWidget,
 )
+from .rana_folder_picker import RanaFolderPicker
 from .substance_concentrations import SubstanceConcentrationsWidget
 from .utils import (
     CACHE_PATH,
@@ -3936,6 +3939,7 @@ class SimulationWizard(QWizard):
         threedi_api,
         communication,
         init_conditions_dlg,
+        project,
         schematisation_folder,
         parent,
     ):
@@ -3947,6 +3951,8 @@ class SimulationWizard(QWizard):
         self.current_model = current_model
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
+        self.project = project
+        self.schematisation_folder = schematisation_folder
         self.results_folder = schematisation_folder
         self.working_dir = working_dir
         self.local_schematisations = list_local_schematisations(
@@ -3966,6 +3972,13 @@ class SimulationWizard(QWizard):
         init_conditions = self.init_conditions_dlg.initial_conditions
         self.name_page = NamePage(self)
         self.addPage(self.name_page)
+        name_widget = self.name_page.main_widget
+        name_widget.btn_browse_results.clicked.connect(self.browse_results_folder)
+        name_widget.btn_reset_results.clicked.connect(self.clear_results_folder)
+        name_widget.btn_reset_results.setIcon(
+            QgsApplication.getThemeIcon("mActionUndo.svg")
+        )
+        self.update_results_folder_label()
         self.duration_page = SimulationDurationPage(self)
         self.addPage(self.duration_page)
         if init_conditions.include_substances:
@@ -4635,6 +4648,27 @@ class SimulationWizard(QWizard):
                     post_processing_widget.cbo_repair_building.setCurrentText(
                         repair_time_seconds_map[repair_time_buildings]
                     )
+
+    def update_results_folder_label(self):
+        name_widget = self.name_page.main_widget
+        is_default = self.results_folder == self.schematisation_folder
+        path = f"/{self.results_folder}"
+        # Zero-width spaces after slashes let long paths wrap onto several lines.
+        name_widget.label_results_folder.setText(path.replace("/", "/\u200b"))
+        name_widget.label_results_folder.setToolTip(
+            "Next to the schematisation" if is_default else ""
+        )
+        name_widget.btn_reset_results.setVisible(not is_default)
+
+    def browse_results_folder(self):
+        picker = RanaFolderPicker(self.project, self.results_folder, parent=self)
+        if picker.exec() == QDialog.DialogCode.Accepted:
+            self.results_folder = picker.selected_folder()
+            self.update_results_folder_label()
+
+    def clear_results_folder(self):
+        self.results_folder = self.schematisation_folder
+        self.update_results_folder_label()
 
     def run_new_simulation(self):
         """Collect the configured simulations and hand them to the caller."""

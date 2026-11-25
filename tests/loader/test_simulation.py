@@ -203,12 +203,12 @@ def test_start_simulation_tracker_process_starts_trackers_for_simulations():
     error_signals = ApiErrorSignals()
     simulations = [
         SimpleNamespace(
+            results_folder="folder/",
             simulation=SimpleNamespace(
                 id_to_start="simulation-to-start",
                 name="Test simulation",
                 id="simulation-id",
-                results_folder="folder/",
-            )
+            ),
         )
     ]
 
@@ -256,12 +256,12 @@ def test_start_simulation_tracker_process_continues_after_failure():
     error_signals = ApiErrorSignals()
     simulations = [
         SimpleNamespace(
+            results_folder="folder/",
             simulation=SimpleNamespace(
                 id_to_start=f"simulation-to-start-{index}",
                 name=f"Test simulation {index}",
                 id=f"simulation-id-{index}",
-                results_folder="folder/",
-            )
+            ),
         )
         for index in range(2)
     ]

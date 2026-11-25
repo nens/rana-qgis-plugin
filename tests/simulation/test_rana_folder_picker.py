@@ -2,7 +2,10 @@ from unittest.mock import patch
 
 from qgis.PyQt.QtWidgets import QDialog
 
-from rana_qgis_plugin.simulation.rana_folder_picker import RanaFolderPicker
+from rana_qgis_plugin.simulation.rana_folder_picker import (
+    VIRTUAL_ROLE,
+    RanaFolderPicker,
+)
 from rana_qgis_plugin.utils.api import RanaFetchError
 
 PROJECT = {"id": "project-id", "name": "My project"}
@@ -113,3 +116,111 @@ def test_initial_load_error_closes_dialog_with_message(qtbot):
 
     assert picker.result() == QDialog.DialogCode.Rejected
     warning.assert_called_once()
+
+
+def root_item(picker):
+    return picker.tree.topLevelItem(0)
+
+
+def test_nested_virtual_folder_gives_derived_selected_path(qtbot):
+    picker, _ = open_picker(qtbot, TREE, start_folder="models/")
+    models = picker.find_child(root_item(picker), "models")
+
+    assert picker.create_virtual_folder(models, "2026") is None
+    year = picker.find_child(models, "2026")
+    assert picker.create_virtual_folder(year, "results") is None
+    picker.tree.setCurrentItem(picker.find_child(year, "results"))
+
+    assert picker.selected_folder() == "models/2026/results/"
+
+
+def test_case_only_duplicate_of_real_folder_is_rejected(qtbot):
+    picker, _ = open_picker(qtbot, TREE)
+
+    error = picker.create_virtual_folder(root_item(picker), "MODELS")
+
+    assert error is not None
+    assert "already exists" in error
+
+
+def test_duplicate_under_unexpanded_real_folder_is_rejected(qtbot):
+    picker, list_folders = open_picker(qtbot, TREE)
+    models = picker.find_child(root_item(picker), "models")
+    assert not models.isExpanded()
+
+    error = picker.create_virtual_folder(models, "River")
+
+    assert error is not None
+    assert list_folders.calls.count("models/") == 1
+
+
+def test_case_only_rename_of_virtual_folder_is_allowed(qtbot):
+    picker, _ = open_picker(qtbot, TREE, start_folder="models/")
+    models = picker.find_child(root_item(picker), "models")
+    picker.create_virtual_folder(models, "data")
+    item = picker.find_child(models, "data")
+
+    assert picker.rename_virtual_folder(item, "Data") is None
+
+    assert item.text(0) == "Data"
+
+
+def test_renaming_virtual_parent_changes_child_path(qtbot):
+    picker, _ = open_picker(qtbot, TREE, start_folder="models/")
+    models = picker.find_child(root_item(picker), "models")
+    picker.create_virtual_folder(models, "a")
+    parent = picker.find_child(models, "a")
+    picker.create_virtual_folder(parent, "b")
+    child = picker.find_child(parent, "b")
+
+    picker.rename_virtual_folder(parent, "c")
+
+    assert picker.item_path(child) == "models/c/b/"
+
+
+def test_delete_removes_subtree_and_selects_parent(qtbot):
+    picker, _ = open_picker(qtbot, TREE, start_folder="models/")
+    models = picker.find_child(root_item(picker), "models")
+    picker.create_virtual_folder(models, "a")
+    picker.create_virtual_folder(picker.find_child(models, "a"), "b")
+    picker.tree.setCurrentItem(picker.find_child(models, "a"))
+
+    picker.delete_folder()
+
+    assert picker.find_child(models, "a") is None
+    assert picker.tree.currentItem() is models
+
+
+def test_rename_and_delete_are_disabled_for_real_folders(qtbot):
+    picker, _ = open_picker(qtbot, TREE, start_folder="models/")
+    models = picker.find_child(root_item(picker), "models")
+
+    picker.tree.setCurrentItem(models)
+    assert not picker.rename_button.isEnabled()
+    assert not picker.delete_button.isEnabled()
+
+    picker.create_virtual_folder(models, "virtual")
+    picker.tree.setCurrentItem(picker.find_child(models, "virtual"))
+    assert picker.rename_button.isEnabled()
+    assert picker.delete_button.isEnabled()
+
+
+def test_expanding_virtual_folder_fetches_nothing(qtbot):
+    picker, list_folders = open_picker(qtbot, TREE, start_folder="models/")
+    models = picker.find_child(root_item(picker), "models")
+    picker.create_virtual_folder(models, "virtual")
+    calls_before = len(list_folders.calls)
+
+    picker.find_child(models, "virtual").setExpanded(True)
+
+    assert len(list_folders.calls) == calls_before
+
+
+def test_missing_start_path_segments_become_virtual_folders(qtbot):
+    picker, _ = open_picker(qtbot, TREE, start_folder="models/new/nested/")
+
+    assert picker.selected_folder() == "models/new/nested/"
+    new = picker.find_child(picker.find_child(root_item(picker), "models"), "new")
+    assert new is not None
+    assert new.data(0, VIRTUAL_ROLE)
+    assert picker.find_child(new, "nested").data(0, VIRTUAL_ROLE)
