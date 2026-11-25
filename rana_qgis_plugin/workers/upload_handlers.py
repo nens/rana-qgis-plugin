@@ -24,9 +24,8 @@ class UploadHandler(ABC):
     """Shared wiring for an upload task.
 
     Subclasses supply the flow-specific hooks. The handler keeps the state the
-    callbacks share, so no closure needs `nonlocal`. `attach` stores the handler
-    on the task, so it lives as long as the task; without that reference PyQt
-    would silently stop calling the slots once the handler is garbage-collected.
+    callbacks share. `attach` stores the handler on the task, so it lives as long as the task;
+    without that reference PyQt would silently stop calling the slots once the handler is garbage-collected.
     """
 
     def __init__(self, task: SchematisationUploadTask, progress_bar) -> None:
@@ -90,9 +89,7 @@ class InitialRevisionUploadHandler(UploadHandler):
         self.refresh_callback = refresh_callback
 
     def show_progress(self, name: str, value: float) -> None:
-        update_step_progress(
-            self.progress_bar, 1, value, detail=f"Uploading revision: {name}"
-        )
+        update_step_progress(self.progress_bar, 1, value, detail=name)
 
     def start_model_creation(self) -> None:
         self.loader.handle_initial_model_requested(
@@ -142,12 +139,7 @@ class RevisionUploadHandler(UploadHandler):
         self.task.taskTerminated.connect(self.on_finished)
 
     def show_progress(self, name: str, value: float) -> None:
-        label = (
-            "Waiting for model checker"
-            if name == "MAKE MODEL"
-            else f"Uploading revision: {name}"
-        )
-        update_progress(self.progress_bar, value, detail=label)
+        update_progress(self.progress_bar, value, detail=name)
 
     def start_model_creation(self) -> None:
         finish_progress(self.loader.communication.iface, self.progress_bar)

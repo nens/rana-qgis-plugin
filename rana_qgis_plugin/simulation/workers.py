@@ -1287,7 +1287,7 @@ class SchematisationUploadTask(QgsTask):
 
     def create_revision_task(self):
         """Run creation of the new revision task."""
-        self.current_task = "CREATE REVISION"
+        self.current_task = "Uploading revision: creating revision"
         self.current_task_progress = 0
         self.report_upload_progress()
         self.revision = self.tc.create_schematisation_revision(self.schematisation.id)
@@ -1296,7 +1296,7 @@ class SchematisationUploadTask(QgsTask):
 
     def upload_sqlite_task(self):
         """Run sqlite file upload task."""
-        self.current_task = "UPLOAD SCHEMATISATION DATABASE"
+        self.current_task = "Uploading revision: schematisation database"
         self.current_task_progress = 0
         self.report_upload_progress()
         schematisation_geopackage = self.upload_specification["selected_files"][
@@ -1319,7 +1319,7 @@ class SchematisationUploadTask(QgsTask):
 
     def delete_sqlite_task(self):
         """Run sqlite file deletion task."""
-        self.current_task = "DELETE SCHEMATISATION DATABASE"
+        self.current_task = "Uploading revision: deleting schematisation database"
         self.current_task_progress = 0
         self.report_upload_progress()
         self.tc.delete_schematisation_revision_sqlite(
@@ -1330,7 +1330,7 @@ class SchematisationUploadTask(QgsTask):
 
     def upload_raster_task(self, raster_type):
         """Run raster file upload task."""
-        self.current_task = f"UPLOAD RASTER ({raster_type})"
+        self.current_task = f"Uploading revision: raster ({raster_type})"
         self.current_task_progress = 0
         self.report_upload_progress()
         raster_filepath = self.upload_specification["selected_files"][raster_type][
@@ -1366,7 +1366,7 @@ class SchematisationUploadTask(QgsTask):
             types_to_delete.append(
                 "dem_raw_file"
             )  # We need to remove legacy 'dem_raw_file` as well
-        self.current_task = f"DELETE RASTER ({raster_type})"
+        self.current_task = f"Uploading revision: deleting raster ({raster_type})"
         self.current_task_progress = 0
         self.report_upload_progress()
         for revision_raster in self.revision.rasters:
@@ -1381,7 +1381,7 @@ class SchematisationUploadTask(QgsTask):
 
     def commit_revision_task(self):
         """Run committing revision task."""
-        self.current_task = "COMMIT REVISION"
+        self.current_task = "Uploading revision: committing"
         self.current_task_progress = 0
         self.report_upload_progress()
         commit_ready_file_states = {FileState.UPLOADED, FileState.PROCESSED}
@@ -1422,8 +1422,8 @@ class SchematisationUploadTask(QgsTask):
         self.revision_committed.emit(self.revision.number)
 
     def create_3di_model_task(self, inherit_templates=False):
-        """Run creation of the new model out of revision data."""
-        self.current_task = "MAKE MODEL"
+        """Wait for the model checker, then request creation of the new model."""
+        self.current_task = "Waiting for model checker"
         self.current_task_progress = 0
         self.report_upload_progress()
         # Wait for the 'modelchecker' validations

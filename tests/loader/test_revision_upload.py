@@ -53,7 +53,7 @@ def test_upload_progress_updates_a_single_item(message_bar_loader):
     wire(loader, task)
 
     task.progress_changed.emit("UPLOAD DEM", 50, 0, 50)
-    task.progress_changed.emit("MAKE MODEL", 0, 50, 50)
+    task.progress_changed.emit("Waiting for model checker", 0, 50, 50)
 
     assert item_texts(message_bar) == ["Waiting for model checker"]
 
@@ -136,7 +136,7 @@ def test_model_hand_off_points_to_processes_with_given_project(message_bar_loade
         patch.object(loader, "point_user_to_processes") as point_user,
     ):
         task.model_requested.emit()
-        task.progress_changed.emit("MAKE MODEL", 100, 50, 50)
+        task.progress_changed.emit("Waiting for model checker", 100, 50, 50)
         task.upload_succeeded.emit(3)
 
     start.assert_called_once_with("project", 1, "Model", 7, False)
