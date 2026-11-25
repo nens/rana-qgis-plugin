@@ -168,6 +168,10 @@ class RanaQgisPlugin(QObject):
         elif event.type() == QEvent.Type.WindowActivate:
             if self._externally_deactivated:
                 self._externally_deactivated = False
-                if self.data_item_provider.root_item is not None:
-                    self.data_item_provider.root_item.refresh()
+                root_item = self.data_item_provider.root_item
+                if (
+                    root_item is not None
+                    and root_item.state() == Qgis.BrowserItemState.Populated
+                ):
+                    root_item.refresh()
         return False
