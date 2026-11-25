@@ -207,6 +207,7 @@ def test_start_simulation_tracker_process_starts_trackers_for_simulations():
                 id_to_start="simulation-to-start",
                 name="Test simulation",
                 id="simulation-id",
+                results_folder="folder/",
             )
         )
     ]
@@ -259,6 +260,7 @@ def test_start_simulation_tracker_process_continues_after_failure():
                 id_to_start=f"simulation-to-start-{index}",
                 name=f"Test simulation {index}",
                 id=f"simulation-id-{index}",
+                results_folder="folder/",
             )
         )
         for index in range(2)

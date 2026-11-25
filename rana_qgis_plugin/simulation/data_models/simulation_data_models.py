@@ -226,6 +226,7 @@ class NewSimulation:
     start_datetime: datetime
     end_datetime: datetime
     duration: float
+    results_folder: str  # Rana project path with trailing slash, e.g. "models/river/"
     started_from: str = "Rana Desktop Client"
     init_options: InitOptions = None
     boundary_conditions: BoundaryConditions = None

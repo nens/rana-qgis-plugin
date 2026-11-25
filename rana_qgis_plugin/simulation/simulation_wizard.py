@@ -3936,6 +3936,7 @@ class SimulationWizard(QWizard):
         threedi_api,
         communication,
         init_conditions_dlg,
+        schematisation_folder,
         parent,
     ):
         super().__init__(parent)
@@ -3946,6 +3947,7 @@ class SimulationWizard(QWizard):
         self.current_model = current_model
         self.organisation = organisation
         self.init_conditions_dlg = init_conditions_dlg
+        self.results_folder = schematisation_folder
         self.working_dir = working_dir
         self.local_schematisations = list_local_schematisations(
             self.working_dir, use_config_for_revisions=False
@@ -4999,6 +5001,7 @@ class SimulationWizard(QWizard):
                 start_datetime,
                 end_datetime,
                 duration,
+                self.results_folder,
             )
             new_simulation.init_options = init_options
             new_simulation.substances = substances

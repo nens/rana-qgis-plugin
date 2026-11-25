@@ -695,6 +695,7 @@ class Loader(QObject):
                 threedi_api,
                 self.communication,
                 simulation_init,
+                file_item["id"].rpartition("/")[0] + file_item["id"].rpartition("/")[1],
                 parent,
             )
             if template_data.simulation is not None:
@@ -907,12 +908,10 @@ class Loader(QObject):
             self.communication.log_err("No simulation tracker available")
             return
 
-        output_file_path = (
-            file_item["id"].rpartition("/")[0] + file_item["id"].rpartition("/")[1]
-        )
         job_ids = []
         for simulation in simulations:
             simulation_name = simulation.simulation.name
+            output_file_path = simulation.simulation.results_folder
             params = {
                 "project_id": project["id"],
                 "inputs": {"simulation_id": simulation.simulation.id_to_start},

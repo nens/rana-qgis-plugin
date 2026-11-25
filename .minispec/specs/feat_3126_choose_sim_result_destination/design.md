@@ -189,22 +189,22 @@ Location: a small module next to the wizard (e.g.
 
 - `start_simulation` passes `project` and the schematisation folder to
   the wizard.
-- `start_simulation_tracker_process` uses `simulation.results_folder` if set,
-  otherwise the current schematisation folder.
+- `start_simulation_tracker_process` uses `simulation.results_folder` only.
+  The default (schematisation folder) is set by the wizard.
 
 ## Data Model
 
 `dm.NewSimulation` gets:
 
 ```python
-results_folder: str | None = None  # Rana project path with trailing slash, e.g. "models/river/results/"
+results_folder: str  # Rana project path with trailing slash, e.g. "models/river/results/"; required, default set by the wizard
 ```
 
 ## Testing
 
 - Unit: `resolve_results_folder` (phase 2), covering the table above
   (parametrized).
-- Unit: the tracker output id with and without `results_folder`, through the
+- Unit: the tracker output id from `results_folder`, through the
   existing `start_simulation_tracker_process` tests.
 - Unit (pytest-qt, fake `list_folders`): folders only; root boundary; expanding
   to the start folder; a failing initial load closes the dialog with a

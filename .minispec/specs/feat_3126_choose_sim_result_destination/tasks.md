@@ -32,23 +32,25 @@ Estimates: ~265 lines of code, ~180 lines of tests.
 - **Files:** `rana_qgis_plugin/simulation/data_models/simulation_data_models.py`,
   `rana_qgis_plugin/loader.py`, `tests/loader/test_simulation.py`
 - **Description:**
-  - Add `results_folder: str | None = None` to `NewSimulation`. It holds a
-    project path with a trailing slash, e.g. `models/river/results/`.
+  - Add `results_folder: str` to `NewSimulation`, as a required field after
+    `duration`. It holds a project path with a trailing slash, e.g.
+    `models/river/results/`.
+  - `SimulationWizard` gets a `schematisation_folder` argument (trailing
+    slash), passed from `Loader.start_simulation`. It sets
+    `self.results_folder` to it on init. `run_new_simulation` reads
+    `self.results_folder`, so the default is decided in one place and the
+    picker later only changes `self.results_folder`.
   - In `start_simulation_tracker_process`, build the output id from
-    `simulation.results_folder` when set. Otherwise use the current
-    schematisation folder (derived from `file_item["id"]`). The file name stays
+    `simulation.results_folder` only. The file name stays
     `{name}_{id}_results.zip`.
-  - Use `getattr(simulation, "results_folder", None)` only if needed for
-    existing callers. Prefer the plain attribute, since all callers pass
-    `NewSimulation`.
 - **Depends on:** None
-- **Acceptance:** With `results_folder` set, the tracker receives
-  `<results_folder><name>_<id>_results.zip`. Without it, the behaviour is
-  unchanged.
-- **Evidence:** A new test in `tests/loader/test_simulation.py` sets
-  `results_folder` and asserts the output id. The existing tracker tests still
-  pass. The existing `SimpleNamespace` fixtures get `results_folder=None` if
-  needed.
+- **Acceptance:** The tracker receives `<results_folder><name>_<id>_results.zip`.
+  Without a chosen folder, the wizard sets `results_folder` to the schematisation
+  folder, so the default location is unchanged.
+- **Evidence:** The tracker tests in `tests/loader/test_simulation.py` set
+  `results_folder` on their fixtures and assert the output id. The wizard
+  sets the default: a test or manual check that `run_new_simulation` passes
+  the schematisation folder.
 
 #### Task 2: `RanaFolderPicker`, browsing real folders [P]
 - **Estimate:** ~110 lines of code, ~70 lines of tests
@@ -181,7 +183,7 @@ Estimates: ~265 lines of code, ~180 lines of tests.
     (`Foo/` vs `foo/`).
 
 ## Progress
-- [ ] Task 1: `results_folder` on `NewSimulation`, used by the tracker
+- [x] Task 1: `results_folder` on `NewSimulation`, used by the tracker
 - [ ] Task 2: `RanaFolderPicker`, browsing real folders
 - [ ] Task 3: Virtual folders in the picker
 - [ ] Task 4: Results-folder row in the wizard

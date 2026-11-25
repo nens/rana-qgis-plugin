@@ -23,24 +23,29 @@ objects arrive in `Loader.start_simulation_tracker_process`, which builds
 
 ## Options Considered
 
-- **Field on `NewSimulation`** (chosen): `results_folder: str | None = None`.
+- **Required field on `NewSimulation`** (chosen): `results_folder: str`, set
+  by the wizard to the schematisation folder unless the user chose another.
 - Separate argument passed through `start_simulations`, the
   `initializing_simulations_finished` lambda and the tracker: keeps the data
   model free of Rana fields, but needs changes in three signatures.
 
 ## Decision
 
-- `NewSimulation.results_folder` holds the resolved project path, with a
-  trailing slash (e.g. `models/river/results/`), or `None`.
-- The wizard sets it on every simulation it creates (batch runs included).
-- The tracker uses `simulation.results_folder`, or the schematisation folder
-  when it is `None`. The file name stays `{name}_{id}_results.zip`.
-- `SimulationWizard` gets two new constructor arguments, `project` (dict; the
-  folder picker needs the project name for the root label) and
-  `schematisation_folder`, passed from `Loader.start_simulation`.
+- `NewSimulation.results_folder` always holds a Rana project path with a
+  trailing slash (e.g. `models/river/results/`). There is no `None` default.
+- `SimulationWizard.results_folder` holds the chosen folder. It is initialized
+  from the `schematisation_folder` argument on init, and the picker (Task 3/4)
+  will modify it. The wizard copies it to every simulation it creates (batch
+  runs included).
+- The tracker uses `simulation.results_folder` only. The file name stays
+  `{name}_{id}_results.zip`.
+- `SimulationWizard` gets a new constructor argument `schematisation_folder`
+  (trailing slash), passed from `Loader.start_simulation`. The picker will
+  additionally need `project` (dict, for the root label) in Task 4.
 
 ## Consequences
 
 - The data model gets one Rana-specific field (there is already a precedent:
   `started_from`).
+- One source of truth: the tracker no longer decides a default.
 - No changes to `start_simulations` or the signal wiring.
