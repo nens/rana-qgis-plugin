@@ -184,6 +184,6 @@ Estimates: ~265 lines of code, ~180 lines of tests.
 
 ## Progress
 - [x] Task 1: `results_folder` on `NewSimulation`, used by the tracker
-- [ ] Task 2: `RanaFolderPicker`, browsing real folders
+- [x] Task 2: `RanaFolderPicker`, browsing real folders
 - [ ] Task 3: Virtual folders in the picker
 - [ ] Task 4: Results-folder row in the wizard
