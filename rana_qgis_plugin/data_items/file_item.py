@@ -181,6 +181,7 @@ class RanaFileDataItem(QgsDataItem):
                         self.file_item,
                         cast(str, self.descriptor_id),
                         parent,
+                        self.error_signals,
                     )
                 )
             elif action is FileAction.VERSION_HISTORY:

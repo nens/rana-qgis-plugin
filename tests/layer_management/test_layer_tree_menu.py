@@ -6,6 +6,7 @@ from qgis.gui import QgisInterface, QgsLayerTreeView
 from qgis.PyQt import sip
 from qgis.PyQt.QtWidgets import QMenu
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.layer_management.layer_dirty_flags import attach_dirty_tracking
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef, set_rana_refs
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
@@ -35,7 +36,9 @@ def build_menu(project, group, qgis_application, registry=None):
     view.setCurrentNode(group)
     menu = QMenu()
     provider = LayerTreeMenuProvider(
-        cast(QgisInterface, FakeInterface(view)), registry or LayerLockRegistry()
+        cast(QgisInterface, FakeInterface(view)),
+        registry or LayerLockRegistry(),
+        ApiErrorSignals(),
     )
     provider.on_context_menu(menu)
     try:

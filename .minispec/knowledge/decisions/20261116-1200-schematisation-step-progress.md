@@ -52,3 +52,5 @@ existing stages and messages avoids introducing new user-facing terminology.
 - The remote model's later progress remains in the Processes panel.
 - Other message-bar progress behavior is deliberately unchanged and may be
   addressed by a separate feature.
+- The helpers were implemented on `SchematisationWizardBase`; they move to
+  `communication.py` in `20261124-1020-progress-helpers-in-communication`.

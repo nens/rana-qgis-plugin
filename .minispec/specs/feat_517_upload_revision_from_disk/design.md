@@ -50,7 +50,8 @@ started it.
    new revision?" (Upload / Cancel).
 7. After confirming, the loader looks for an open layer group for the WIP DB:
    - Found: `commit_opened_revision(group, parent)` (unsaved-edits prompt: Save
-     changes / Discard changes / Cancel; the group's revision number is updated
+      changes / Discard changes / Cancel; the group's revision number remains
+      the revision with which the group was opened
      after a successful upload).
    - Not found: `save_revision` directly.
 8. `save_revision` runs the existing flow: `UploadWizard` (start page, model

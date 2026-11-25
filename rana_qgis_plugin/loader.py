@@ -13,6 +13,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import (
+    QCoreApplication,
     QObject,
     QSettings,
     Qt,
@@ -36,6 +37,11 @@ from threedi_api_client.openapi import (
 from threedi_mi_utils import LocalSchematisation
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
+from rana_qgis_plugin.communication import (
+    finish_progress,
+    update_progress,
+    update_step_progress,
+)
 from rana_qgis_plugin.layer_management.layer_dirty_flags import (
     DATA_SYNC_STATE_PROPERTY,
     STYLE_DIRTY_PROPERTY,
@@ -152,6 +158,10 @@ from rana_qgis_plugin.workers.upload import (
     UploadPreparationResult,
     prepare_existing_file_upload,
     prepare_new_file_upload,
+)
+from rana_qgis_plugin.workers.upload_handlers import (
+    InitialRevisionUploadHandler,
+    RevisionUploadHandler,
 )
 
 if TYPE_CHECKING:
@@ -994,6 +1004,8 @@ class Loader(QObject):
         revision_number: int,
         schematisation_db_filepath: str,
         parent: object,
+        error_signals: ApiErrorSignals,
+        project: dict | None = None,
     ) -> SchematisationUploadTask | None:
         """Prepare a local schematisation revision for upload."""
         if self.is_revision_upload_in_progress(schematisation_id):
@@ -1002,11 +1014,15 @@ class Loader(QObject):
                 "Wait until it has finished."
             )
             return None
-        self.communication.progress_bar("preparing for save revision", 0, 0, 0)
+        progress_bar = self.communication.progress_bar(
+            "Preparing revision upload", 0, 0, 0
+        )
+        QCoreApplication.processEvents()
         try:
             # TODO: this takes quite some time and progress bar is blocked during that time
             api = get_threedi_api()
             if api is None:
+                finish_progress(self.communication.iface, progress_bar)
                 self.communication.bar_error(
                     "Not authenticated with HCC API — cannot save schematisation revision."
                 )
@@ -1016,11 +1032,13 @@ class Loader(QObject):
             organisations = {org.unique_id: org for org in tc.fetch_organisations()}
             organisation = organisations.get(schematisation.owner)
         except (RanaFetchError, NetworkUnavailableError) as error:
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 f"Could not retrieve schematisation details: {error}"
             )
             return None
         if organisation is None:
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 "Could not determine the schematisation organisation."
             )
@@ -1042,70 +1060,68 @@ class Loader(QObject):
                 tc,
                 parent,
             )
+            finish_progress(self.communication.iface, progress_bar)
             if upload.exec() == QDialog.DialogCode.Accepted and upload.new_upload:
-                task = SchematisationUploadTask(api, local, upload.new_upload)
-                task.model_requested.connect(
-                    lambda: (
-                        self.start_model_tracker_process(
-                            project_id,
-                            schematisation_id,
-                            schematisation.name,
-                            task.revision.id,
-                            task.upload_specification["cb_inherit_templates"],
-                        ),
-                        None,
-                    )[1]
-                )
-                task.progress_changed.connect(
-                    lambda name, current, total, per_task: (
-                        self.communication.progress_bar(
-                            f"Uploading revision: {name}",
-                            0,
-                            100,
-                            int(total + current * per_task / 100),
-                        )
-                    )
-                )
-                task.taskCompleted.connect(
-                    lambda: self.communication.bar_info(
-                        "Schematisation revision uploaded successfully."
-                    )
-                )
-                task.taskTerminated.connect(
-                    lambda: self.communication.show_error(
-                        task.error_message
-                        or "Schematisation upload failed or was cancelled."
-                    )
-                )
-                task.taskCompleted.connect(
-                    lambda: self._revision_uploads_in_progress.discard(
-                        schematisation_id
-                    )
-                )
-                task.taskTerminated.connect(
-                    lambda: self._revision_uploads_in_progress.discard(
-                        schematisation_id
-                    )
-                )
                 task_manager = QgsApplication.taskManager()
                 if task_manager is None:
                     self.communication.bar_error(
                         "Could not start schematisation upload."
                     )
                     return None
+                task = SchematisationUploadTask(api, local, upload.new_upload)
+                self.wire_revision_upload(
+                    task,
+                    project_id,
+                    schematisation_id,
+                    schematisation.name,
+                    error_signals,
+                    project,
+                )
                 self._revision_uploads_in_progress.add(schematisation_id)
                 self._track_task(task)
                 task_manager.addTask(task)
                 return task
-            self.communication.clear_message_bar()
             return None
         except (OSError, ValueError) as error:
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 f"Could not open the local schematisation: {error}"
             )
             return None
 
-    def commit_opened_revision(self, group, parent) -> SchematisationUploadTask | None:
+    def wire_revision_upload(
+        self,
+        task: SchematisationUploadTask,
+        project_id: str,
+        schematisation_id: int,
+        schematisation_name: str,
+        error_signals: ApiErrorSignals,
+        project: dict | None = None,
+    ) -> None:
+        """Wire progress and terminal messages for a revision upload task."""
+        progress_bar = self.communication.progress_bar("Uploading revision", 0, 100, 0)
+        handler = RevisionUploadHandler(
+            self,
+            task,
+            progress_bar,
+            project_id,
+            schematisation_id,
+            schematisation_name,
+            error_signals,
+            project,
+            on_finished=lambda: self._revision_uploads_in_progress.discard(
+                schematisation_id
+            ),
+        )
+        handler.attach()
+
+    def commit_opened_revision(
+        self,
+        group,
+        parent,
+        error_signals: ApiErrorSignals,
+        project: dict | None = None,
+    ) -> SchematisationUploadTask | None:
         """Prepare and upload a revision represented by an open layer group."""
         project_id = group.customProperty("rana/project_id")
         schematisation_id = group.customProperty("rana/schematisation_id")
@@ -1133,25 +1149,40 @@ class Loader(QObject):
                 if choice == "Cancel Upload":
                     return None
                 if choice == "Save Changes":
-                    for layer in editable:
-                        self.communication.progress_bar("Save changed layers", 0, 0, 0)
-                        ok, save_error = save_layer_changes(layer)
-                        if not ok:
-                            self.communication.bar_error(
-                                f"Failed to save changes in layer '{layer.name()}': {save_error}"
-                            )
-                            return None
-            self.communication.clear_message_bar()
+                    progress_bar = self.communication.progress_bar(
+                        "Saving layer changes", 0, 0, 0
+                    )
+                    try:
+                        for layer in editable:
+                            ok, save_error = save_layer_changes(layer)
+                            if not ok:
+                                self.communication.bar_error(
+                                    f"Failed to save changes in layer '{layer.name()}': {save_error}"
+                                )
+                                return None
+                    finally:
+                        finish_progress(self.communication.iface, progress_bar)
         except (OSError, ValueError) as error:
             self.communication.bar_error(f"Could not save layer changes: {error}")
             return None
         task = self.save_revision(
-            project_id, schematisation_id, revision_number, filepath, parent
+            project_id,
+            schematisation_id,
+            revision_number,
+            filepath,
+            parent,
+            error_signals,
+            project,
         )
         return task
 
     def commit_stored_revision(
-        self, project: dict, file_item: dict, descriptor_id: str, parent
+        self,
+        project: dict,
+        file_item: dict,
+        descriptor_id: str,
+        parent,
+        error_signals: ApiErrorSignals,
     ) -> SchematisationUploadTask | None:
         """Find and upload a local WIP revision without opening it first."""
         api = get_threedi_api()
@@ -1207,18 +1238,53 @@ class Loader(QObject):
             return None
         group = find_schematisation_group(db_filepath)
         if group is not None:
-            return self.commit_opened_revision(group, parent)
+            return self.commit_opened_revision(group, parent, error_signals, project)
         return self.save_revision(
             project["id"],
             schematisation_id,
             wip_revision.number,
             db_filepath,
             parent,
+            error_signals,
+            project,
         )
 
     def is_revision_upload_in_progress(self, schematisation_id: int) -> bool:
         """Return whether a revision upload is running for a schematisation."""
         return schematisation_id in self._revision_uploads_in_progress
+
+    @staticmethod
+    def select_initial_revision_files(
+        geopackage_path: str,
+        raster_dir: str,
+        raster_paths: dict,
+    ) -> tuple[dict, list[tuple[str, str]]]:
+        """Return the files for an initial revision upload and the rasters that are missing."""
+        selected_files = {
+            "geopackage": {
+                "filepath": geopackage_path,
+                "make_action": True,
+                "remote_raster": None,
+                "status": UploadFileStatus.NEW,
+                "type": UploadFileType.DB,
+            }
+        }
+        missing_rasters = []
+        for raster_fields in raster_paths.values():
+            for raster_name, relative_path in raster_fields.items():
+                if not relative_path:
+                    continue
+                raster_path = Path(raster_dir) / relative_path
+                if not raster_path.is_file():
+                    missing_rasters.append((raster_name, relative_path))
+                selected_files[raster_name] = {
+                    "filepath": str(raster_path),
+                    "make_action": True,
+                    "remote_raster": None,
+                    "status": UploadFileStatus.NEW,
+                    "type": UploadFileType.RASTER,
+                }
+        return selected_files, missing_rasters
 
     def save_initial_revision(
         self,
@@ -1243,9 +1309,7 @@ class Loader(QObject):
             display_name,
         )
         if task is None:
-            SchematisationWizardBase.finish_step_progress(
-                self.communication.iface, progress_bar
-            )
+            finish_progress(self.communication.iface, progress_bar)
             self.communication.bar_error(
                 f"Schematisation {display_name} was created, but its initial "
                 "revision was not uploaded.",
@@ -1279,31 +1343,11 @@ class Loader(QObject):
             )
             return None
 
-        selected_files = {
-            "geopackage": {
-                "filepath": local_schematisation.schematisation_db_filepath,
-                "make_action": True,
-                "remote_raster": None,
-                "status": UploadFileStatus.NEW,
-                "type": UploadFileType.DB,
-            }
-        }
-        missing_rasters = []
-        for raster_fields in raster_paths.values():
-            for raster_name, relative_path in raster_fields.items():
-                if not relative_path:
-                    continue
-                raster_path = Path(wip_revision.raster_dir) / relative_path
-                if not raster_path.is_file():
-                    missing_rasters.append((raster_name, relative_path))
-                selected_files[raster_name] = {
-                    "filepath": str(raster_path),
-                    "make_action": True,
-                    "remote_raster": None,
-                    "status": UploadFileStatus.NEW,
-                    "type": UploadFileType.RASTER,
-                }
-
+        selected_files, missing_rasters = self.select_initial_revision_files(
+            local_schematisation.schematisation_db_filepath,
+            wip_revision.raster_dir,
+            raster_paths,
+        )
         if missing_rasters:
             missing = "\n".join(
                 f"{name}: {path}" for name, path in sorted(missing_rasters)
@@ -1328,40 +1372,18 @@ class Loader(QObject):
             return None
 
         task = SchematisationUploadTask(api, local_schematisation, upload_specification)
-        SchematisationWizardBase.update_step_progress(
-            progress_bar, 1, 0, detail="Uploading initial revision"
+        update_step_progress(progress_bar, 1, 0, detail="Uploading initial revision")
+        handler = InitialRevisionUploadHandler(
+            self,
+            task,
+            project,
+            schematisation,
+            progress_bar,
+            error_signals,
+            display_name,
+            refresh_callback,
         )
-        handed_off = False
-
-        def on_upload_progress(name, current, total, per_task):
-            # Queued ticks can arrive after the hand-off and the bar is gone by then.
-            if not handed_off:
-                SchematisationWizardBase.update_step_progress(
-                    progress_bar,
-                    1,
-                    total + current * per_task / 100,
-                    detail=f"Uploading revision: {name}",
-                )
-
-        def on_model_requested():
-            nonlocal handed_off
-            handed_off = True
-            self.handle_initial_model_requested(
-                project,
-                schematisation,
-                task.revision.id,
-                upload_specification["cb_inherit_templates"],
-                progress_bar,
-                error_signals,
-                display_name,
-            )
-
-        task.progress_changed.connect(on_upload_progress)
-        task.model_requested.connect(on_model_requested)
-        task.upload_succeeded.connect(lambda _revision_number: refresh_callback())
-        task.taskTerminated.connect(
-            lambda: self.handle_initial_revision_upload_failure(task, progress_bar)
-        )
+        handler.attach()
         self._track_task(task)
         task_manager.addTask(task)
         return task
@@ -1377,9 +1399,7 @@ class Loader(QObject):
         display_name: str,
     ) -> None:
         """Start model creation, complete the progress item and point to the Processes panel."""
-        SchematisationWizardBase.update_step_progress(
-            progress_bar, 2, 0, detail="Starting model creation"
-        )
+        update_step_progress(progress_bar, 2, 0, detail="Starting model creation")
         response = self.start_model_tracker_process(
             project["id"],
             schematisation.id,
@@ -1388,29 +1408,43 @@ class Loader(QObject):
             inherit_from_previous_revision,
         )
         if response is not None:
-            SchematisationWizardBase.update_step_progress(progress_bar, 2, 100)
-        SchematisationWizardBase.finish_step_progress(
-            self.communication.iface, progress_bar
-        )
+            update_progress(progress_bar, 100)
+        finish_progress(self.communication.iface, progress_bar)
         if response is None:
             return
         job_id = response.get("job_id") or response.get("id")
-        if job_id:
-            self.point_user_to_processes(
-                project,
-                [str(job_id)],
-                error_signals,
-                self.communication.iface.mainWindow(),
-                question=f"Track model creation for {display_name} in the Processes window?",
+        self.point_user_to_model_creation(project, job_id, error_signals, display_name)
+
+    def point_user_to_model_creation(
+        self,
+        project: dict | None,
+        job_id: str | None,
+        error_signals: ApiErrorSignals,
+        display_name: str,
+    ) -> None:
+        """Offer to track a started model creation in the Processes panel.
+
+        Without a job id or project there is nothing to highlight, so only an
+        info message points to the Processes panel.
+        """
+        if not job_id or project is None:
+            self.communication.bar_info(
+                "Model creation started. See the Processes panel for progress."
             )
+            return
+        self.point_user_to_processes(
+            project,
+            [str(job_id)],
+            error_signals,
+            self.communication.iface.mainWindow(),
+            question=f"Track model creation for {display_name} in the Processes window?",
+        )
 
     def handle_initial_revision_upload_failure(
         self, task: SchematisationUploadTask, progress_bar
     ) -> None:
         """Report cancellation or failure of an initial revision upload."""
-        SchematisationWizardBase.finish_step_progress(
-            self.communication.iface, progress_bar
-        )
+        finish_progress(self.communication.iface, progress_bar)
         if task.isCanceled():
             self.communication.bar_warn("Initial schematisation upload cancelled.")
         else:
@@ -1450,11 +1484,9 @@ class Loader(QObject):
             "name": f"{schematisation_name}_rev{revision_id}",
         }
         try:
-            response = start_tenant_process(track_process, params)
-            self.communication.bar_info("Revision uploaded; model creation started.")
-            return response
+            return start_tenant_process(track_process, params)
         except RanaPostError as e:
-            self.communication.bar_error(f"Failed to start model tracker process")
+            self.communication.bar_error("Failed to start model tracker process")
             self.communication.log_err(f"{e.msg}")
             return None
 

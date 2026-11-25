@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from qgis.core import QgsLayerTreeGroup, QgsLayerTreeLayer, QgsMapLayer, QgsRasterLayer
 from qgis.PyQt.QtWidgets import QAction, QDialog, QMenu
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.icons import rana_icon
 from rana_qgis_plugin.layer_management.layer_manager import (
     _GROUP_SCHEMATISATION_ID_KEY,
@@ -63,11 +64,13 @@ class LayerTreeMenuProvider:
         self,
         iface: "QgisInterface",
         layer_lock_registry: LayerLockRegistry,
+        error_signals: ApiErrorSignals,
         loader=None,
     ) -> None:
         self.iface = iface
         self.layer_lock_registry = layer_lock_registry
         self.loader = loader
+        self.error_signals = error_signals
 
     def collect_sync_changes(
         self, kind: SyncKind, groups: list[QgsLayerTreeGroup]
@@ -268,7 +271,9 @@ class LayerTreeMenuProvider:
         if self.loader is None or len(groups) != 1:
             return
         group = groups[0]
-        self.loader.commit_opened_revision(group, self.iface.mainWindow())
+        self.loader.commit_opened_revision(
+            group, self.iface.mainWindow(), self.error_signals
+        )
 
     @staticmethod
     def file_groups(groups: list[QgsLayerTreeGroup]) -> list[QgsLayerTreeGroup]:

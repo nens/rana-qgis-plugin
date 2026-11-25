@@ -6,6 +6,7 @@ Main code:
 
 - [widgets/schematisation_new_wizard.py](../rana_qgis_plugin/widgets/schematisation_new_wizard.py): `SchematisationWizardBase`, `NewSchematisationWizard`, `UploadExistingSchematisationWizard`
 - [loader.py](../rana_qgis_plugin/loader.py): `save_initial_revision`, `build_initial_revision_task`, `handle_initial_model_requested`, `start_model_tracker_process`
+- [workers/upload_handlers.py](../rana_qgis_plugin/workers/upload_handlers.py): `InitialRevisionUploadHandler`, which wires the progress and messages of the initial upload
 - [data_items/folder_item.py](../rana_qgis_plugin/data_items/folder_item.py): starts the wizard and the loader upload
 
 
@@ -32,7 +33,7 @@ sequenceDiagram
     Task-->>Loader: model_requested
     Loader->>Loader: handle_initial_model_requested (step 2)
     Loader->>Loader: start_model_tracker_process
-    Loader->>Loader: finish_step_progress (item removed)
+    Loader->>Loader: communication.finish_progress (item removed)
     Loader->>Panel: point_user_to_processes
 ```
 
@@ -67,9 +68,9 @@ In the native datasource, the schematisation is registered in Rana first (`_crea
 | 1: Initial upload | 33-66% | loader | "Uploading initial revision", "Uploading revision: <name>" |
 | 2: Model hand-off | 66-100% | loader | "Starting model creation" |
 
-`SchematisationWizardBase.update_step_progress(pb, step, step_pct, detail=None)` sets the overall value to `(step + step_pct / 100) * 100 / 3` and optionally replaces the message text. `QgsMessageBar` shows the text in a `QTextBrowser` of the widget holding the bar, so the helper finds it through the progress bar's parent. If no text widget is found, the detail is logged.
+`communication.update_step_progress(pb, step, step_pct, detail=None)` sets the overall value to `(step + step_pct / 100) * 100 / 3` and optionally replaces the message text. `QgsMessageBar` shows the text in a `QTextBrowser` of the widget holding the bar, so the helper finds it through the progress bar's parent. If no text widget is found, the detail is logged.
 
-`finish_step_progress(iface, pb)` removes the message-bar item. Both helpers accept `None` and handle a progress bar the user has already dismissed (`sip.isdeleted`): the update is logged instead of raising.
+`communication.finish_progress(iface, pb)` removes the message-bar item. The helpers accept `None` and handle a progress bar the user has already dismissed (`sip.isdeleted`): the update is logged instead of raising.
 
 ## Schema migration
 
@@ -77,12 +78,14 @@ For both wizards, `schema.upgrade` reports progress through `feedback_callback`,
 
 ## Initial revision upload
 
-`Loader.save_initial_revision` builds a `SchematisationUploadTask` (`build_initial_revision_task`) and connects its signals:
+`Loader.save_initial_revision` builds a `SchematisationUploadTask` (`build_initial_revision_task`) and attaches an `InitialRevisionUploadHandler` to it. The handler connects the task's signals:
 
-- `progress_changed`: updates step 1. A `handed_off` flag ignores queued ticks that arrive after the hand-off, when the progress item is already gone.
-- `model_requested`: sets `handed_off` and calls `handle_initial_model_requested`.
+- `progress_changed`: updates step 1. The handler's `handed_off` flag ignores queued ticks that arrive after the hand-off, when the progress item is already gone.
+- `model_requested`: sets `handed_off` and calls `Loader.handle_initial_model_requested`.
 - `upload_succeeded`: calls the refresh callback of the invoking Browser item.
-- `upload_failed`: `handle_initial_revision_upload_failure` removes the progress item and shows either a cancellation warning or the task's error.
+- `taskTerminated`: calls `Loader.handle_initial_revision_upload_failure`, which removes the progress item and shows either a cancellation warning or the task's error.
+
+The task stores a reference to its handler, so the handler lives as long as the task and its connections stay active.
 
 If the task cannot be built, `save_initial_revision` removes the progress item and shows a persistent error that the schematisation was created but its initial revision was not uploaded.
 

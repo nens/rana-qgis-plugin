@@ -6,13 +6,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 from qgis.core import QgsFeature
-from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSettings, QSize
-from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QTextBrowser, QWizard
+from qgis.PyQt.QtWidgets import QApplication, QSizePolicy, QWizard
 from threedi_api_client.openapi import ApiException
 from threedi_mi_utils import LocalSchematisation
 from threedi_schema import ThreediDatabase
 
+from rana_qgis_plugin.communication import finish_progress, update_step_progress
 from rana_qgis_plugin.simulation.threedi_calls import (
     SchematisationApiMapper,
     ThreediCalls,
@@ -23,7 +23,6 @@ from rana_qgis_plugin.simulation.utils import (
 )
 from rana_qgis_plugin.simulation.utils_ui import ensure_valid_schema
 from rana_qgis_plugin.utils.api import RanaPostError, create_rana_schematisation
-from rana_qgis_plugin.utils.log import plugin_log_info
 from rana_qgis_plugin.widgets.new_wizard_pages.explain import (
     SchematisationExplainPage,
 )
@@ -145,7 +144,7 @@ class SchematisationWizardBase(QWizard):
                 f"('{self.new_schematisation.name}', id {self.new_schematisation.id}) "
                 "before this error occurred."
             )
-        self.finish_step_progress(self.communication.iface, self.progress_bar)
+        finish_progress(self.communication.iface, self.progress_bar)
         self.progress_bar = None
         self._reset_outputs()
         self.communication.bar_error(message)
@@ -181,43 +180,6 @@ class SchematisationWizardBase(QWizard):
                 field_value = set_feat[field_name]
                 paths[table_name][field_name] = field_value if field_value else None
         return paths
-
-    @staticmethod
-    def update_step_progress(pb, step, step_pct, detail=None):
-        """Set the overall value of a progress bar and, if given, its message text.
-
-        If the user has dismissed the message-bar item, the update is logged instead.
-
-        Three equally weighted steps (0-based): 0-33, 33-66 and 66-100.
-        QgsMessageBar shows the message text in a QTextBrowser of the message
-        widget that holds the progress bar.
-        """
-        if pb is None:
-            return
-        if sip.isdeleted(pb):
-            plugin_log_info(
-                f"Progress item was dismissed: {detail or f'step {step}, {step_pct:.0f}%'}"
-            )
-            return
-        pb.setValue(int((step + step_pct / 100) * 100 / 3))
-        if detail is None:
-            return
-        container = pb.parentWidget()
-        browser = container.findChild(QTextBrowser) if container else None
-        if browser is None:
-            plugin_log_info(f"Progress: {detail}")
-            return
-        browser.setPlainText(detail)
-
-    @staticmethod
-    def finish_step_progress(iface, pb):
-        """Remove the message-bar item that holds the progress bar."""
-        if pb is None:
-            return
-        if sip.isdeleted(pb):
-            plugin_log_info("Progress item was dismissed before the process finished")
-            return
-        iface.messageBar().popWidget(pb.parentWidget())
 
 
 class NewSchematisationWizard(SchematisationWizardBase):
@@ -265,9 +227,7 @@ class NewSchematisationWizard(SchematisationWizardBase):
 
         # A new empty database must first be upgraded to the first schema revision.
         def feedback_callback(progress, message):
-            SchematisationWizardBase.update_step_progress(
-                progress_bar, 0, progress, detail=message
-            )
+            update_step_progress(progress_bar, 0, progress, detail=message)
             QApplication.processEvents()
 
         database.schema.upgrade(revision="0200")
@@ -355,7 +315,7 @@ class NewSchematisationWizard(SchematisationWizardBase):
             self.progress_bar,
         )
         self.raster_paths = self.get_paths_from_geopackage(geopackage_filepath)
-        self.update_step_progress(self.progress_bar, 0, 100)
+        update_step_progress(self.progress_bar, 0, 100)
 
 
 class UploadExistingSchematisationWizard(SchematisationWizardBase):
@@ -485,4 +445,4 @@ class UploadExistingSchematisationWizard(SchematisationWizardBase):
         self.copy_existing_schematisation_content(
             src_db, raster_paths, name, wip_revision
         )
-        self.update_step_progress(self.progress_bar, 0, 100)
+        update_step_progress(self.progress_bar, 0, 100)

@@ -51,6 +51,15 @@ A schematisation's local revision can also be uploaded from the Browser without
 opening it as a WIP layer group. The file-browser **Save local revision** action
 is that non-open-WIP entry point.
 
+Both revision-upload entry points use the same message-bar lifecycle. A busy
+bar shows while layer changes and revision metadata are prepared, and is
+removed before the upload wizard opens. After the wizard is accepted, one
+progress item is updated in place for the upload; progress ticks do not create
+additional message-bar items. The item is removed on success, cancellation,
+or failure, followed by a single final message. A model-checker failure makes
+clear that the revision was uploaded but no model was created. When model
+creation starts, the user can follow the job in the Processes panel.
+
 
 ## Layer-tree groups
 

@@ -5,6 +5,7 @@ import pytest
 from qgis.core import QgsProject, QgsVectorLayer
 from qgis.PyQt.QtWidgets import QDialog
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.layer_management import layer_tree_menu
 from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef
 from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
@@ -64,7 +65,7 @@ class FakeSyncDialog:
 def test_sync_dispatches_only_selected_items(kind, qgis_application):
     loader = FakeLoader()
     provider = LayerTreeMenuProvider(
-        FakeInterface(), LayerLockRegistry(), loader=loader
+        FakeInterface(), LayerLockRegistry(), ApiErrorSignals(), loader=loader
     )
     data_items = [
         UploadableLayerItem(
@@ -139,7 +140,7 @@ def test_sync_dispatches_the_file_the_user_kept_checked(kind, qgis_application):
 
     loader = FakeLoader()
     provider = LayerTreeMenuProvider(
-        FakeInterface(), LayerLockRegistry(), loader=loader
+        FakeInterface(), LayerLockRegistry(), ApiErrorSignals(), loader=loader
     )
     with ChoiceRecorder(
         layer_tree_menu,

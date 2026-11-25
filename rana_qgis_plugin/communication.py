@@ -1,6 +1,7 @@
 # Rana plugin for QGIS
 # Copyright (C) 2023 by Lutra Consulting for 3Di Water Management
 from qgis.core import Qgis, QgsMessageLog
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -8,8 +9,44 @@ from qgis.PyQt.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QTextBrowser,
 )
 from threedi_mi_utils.ui import ColoredProgressBar
+
+from rana_qgis_plugin.utils.log import plugin_log_info
+
+
+def update_progress(pb, value, detail=None):
+    """Set a progress bar value and, if given, its message text."""
+    if pb is None:
+        return
+    if sip.isdeleted(pb):
+        plugin_log_info(f"Progress item was dismissed: {detail or value}")
+        return
+    pb.setValue(int(value))
+    if detail is None:
+        return
+    container = pb.parentWidget()
+    browser = container.findChild(QTextBrowser) if container else None
+    if browser is None:
+        plugin_log_info(f"Progress: {detail}")
+        return
+    browser.setPlainText(detail)
+
+
+def update_step_progress(pb, step, step_pct, detail=None):
+    """Set progress using three equally weighted steps."""
+    update_progress(pb, (step + step_pct / 100) * 100 / 3, detail)
+
+
+def finish_progress(iface, pb):
+    """Remove the message-bar item that holds a progress bar."""
+    if pb is None:
+        return
+    if sip.isdeleted(pb):
+        plugin_log_info("Progress item was dismissed before the process finished")
+        return
+    iface.messageBar().popWidget(pb.parentWidget())
 
 
 def resolve_parent(parent=None):

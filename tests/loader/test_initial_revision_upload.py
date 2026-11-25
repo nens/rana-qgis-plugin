@@ -5,16 +5,15 @@ import pytest
 
 from rana_qgis_plugin.loader import Loader
 from rana_qgis_plugin.simulation.utils import UploadFileStatus, UploadFileType
-from rana_qgis_plugin.widgets.schematisation_new_wizard import (
-    SchematisationWizardBase,
-)
 
 
 @pytest.fixture
 def step_progress():
     with (
-        patch.object(SchematisationWizardBase, "update_step_progress") as update,
-        patch.object(SchematisationWizardBase, "finish_step_progress") as finish,
+        patch("rana_qgis_plugin.loader.update_step_progress") as update,
+        patch("rana_qgis_plugin.workers.upload_handlers.update_step_progress", update),
+        patch("rana_qgis_plugin.loader.update_progress"),
+        patch("rana_qgis_plugin.loader.finish_progress") as finish,
     ):
         yield SimpleNamespace(update=update, finish=finish)
 
@@ -300,3 +299,29 @@ def test_model_request_points_user_to_processes_with_job_id(
     args = point_user.call_args.args
     assert args[:4] == (project, ["job-9"], error_signals, main_window)
     assert point_user.call_args.kwargs["question"]
+
+
+def test_model_request_without_job_id_points_to_processes_panel(
+    qgis_application, step_progress
+):
+    communication = MagicMock()
+    loader = Loader(communication)
+
+    with (
+        patch.object(loader, "start_model_tracker_process", return_value={}),
+        patch.object(loader, "point_user_to_processes") as point_user,
+    ):
+        loader.handle_initial_model_requested(
+            {"id": "project"},
+            SimpleNamespace(id=1, name="Model"),
+            7,
+            False,
+            MagicMock(),
+            MagicMock(),
+            "Model",
+        )
+
+    point_user.assert_not_called()
+    communication.bar_info.assert_called_once_with(
+        "Model creation started. See the Processes panel for progress."
+    )
