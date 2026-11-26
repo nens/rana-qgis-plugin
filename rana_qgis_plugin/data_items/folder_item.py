@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, cast
 
 from qgis.core import Qgis, QgsDataItem, QgsErrorItem
 from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtGui import QDesktopServices
+from qgis.PyQt.QtGui import QDesktopServices, QIcon
 from qgis.PyQt.QtWidgets import QAction, QMenu, QMessageBox
 
 from rana_qgis_plugin.api_error_signals import ApiErrorSignals
@@ -45,6 +45,7 @@ class RanaFolderDataItem(QgsDataItem):
         self.project = project
         self.folder_path = folder_path
         self.error_signals = error_signals
+        self._icon_loaded = False
         super().__init__(
             Qgis.BrowserItemType.Collection,
             parent,
@@ -54,7 +55,6 @@ class RanaFolderDataItem(QgsDataItem):
             else f"{parent.path()}/files",
             "Rana",
         )
-        self.setIcon(dir_icon)
         self.setSortKey(f"0:{display_name.lower()}")
         self.setCapabilitiesV2(
             cast(
@@ -64,6 +64,13 @@ class RanaFolderDataItem(QgsDataItem):
                 | Qgis.BrowserItemCapability.RefreshChildrenWhenItemIsRefreshed,
             )
         )
+
+    def icon(self) -> QIcon:
+        """Create the bundled icon lazily on the GUI thread, as QGIS calls this there."""
+        if not self._icon_loaded:
+            self.setIcon(dir_icon)
+            self._icon_loaded = True
+        return super().icon()
 
     def createChildren(self) -> list:
         """Fetch and return the immediate contents of this folder."""

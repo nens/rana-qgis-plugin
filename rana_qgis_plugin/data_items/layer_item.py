@@ -14,7 +14,6 @@ from rana_qgis_plugin.utils.data_models import (
     VectorLayerRef,
 )
 from rana_qgis_plugin.utils.generic import get_file_icon_name
-from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -45,9 +44,7 @@ class RanaLayerDataItem(QgsDataItem):
             f"{parent.path()}/{layer_id}",
             "Rana",
         )
-        self.setIcon(
-            get_icon_from_theme(get_file_icon_name((geometry_type or "").lower()))
-        )
+        self.setIconName(get_file_icon_name((geometry_type or "").lower()))
         self.setState(Qgis.BrowserItemState.Populated)
 
     def actions(self, parent) -> list:

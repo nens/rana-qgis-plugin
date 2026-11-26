@@ -10,7 +10,6 @@ from qgis.PyQt.QtWidgets import QAction
 from rana_qgis_plugin.data_items.file_actions import FileAction
 from rana_qgis_plugin.utils.data_models import OpenVectorFileRequest, VectorTableRef
 from rana_qgis_plugin.utils.generic import get_file_icon_name
-from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 
 if TYPE_CHECKING:
     from rana_qgis_plugin.loader import Loader
@@ -35,7 +34,7 @@ class RanaTableDataItem(QgsDataItem):
             f"{parent.path()}/{table_id}",
             "Rana",
         )
-        self.setIcon(get_icon_from_theme(get_file_icon_name("table")))
+        self.setIconName(get_file_icon_name("table"))
         self.setState(Qgis.BrowserItemState.Populated)
 
     def actions(self, parent) -> list:

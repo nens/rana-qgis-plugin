@@ -32,6 +32,7 @@ class RanaProjectDataItem(QgsDataItem):
         self.project = project
         self.slug = project.get("slug", "")
         self.error_signals = error_signals
+        self._icon_loaded = False
         super().__init__(
             Qgis.BrowserItemType.Collection,
             parent,
@@ -39,7 +40,6 @@ class RanaProjectDataItem(QgsDataItem):
             f"/Rana/projects/{project['id']}",
             "Rana",
         )
-        self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
         self.setCapabilitiesV2(
             cast(
                 Qgis.BrowserItemCapabilities,
@@ -48,6 +48,13 @@ class RanaProjectDataItem(QgsDataItem):
                 | Qgis.BrowserItemCapability.RefreshChildrenWhenItemIsRefreshed,
             )
         )
+
+    def icon(self) -> QIcon:
+        """Create the bundled icon lazily on the GUI thread, as QGIS calls this there."""
+        if not self._icon_loaded:
+            self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
+            self._icon_loaded = True
+        return super().icon()
 
     def createChildren(self) -> list:
         """Return the files container for this project."""

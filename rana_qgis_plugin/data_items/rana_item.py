@@ -84,10 +84,10 @@ class RanaRootDataItem(QgsDataItem):
         self.loader = loader
         self.error_signals = error_signals
         self.projects_selection_dialog: Optional[ProjectsSelectionDialog] = None
+        self._icon_loaded = False
         super().__init__(
             Qgis.BrowserItemType.Collection, parent, "Rana", "/Rana", "Rana"
         )
-        self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
         self.setCapabilitiesV2(
             cast(
                 Qgis.BrowserItemCapabilities,
@@ -103,6 +103,13 @@ class RanaRootDataItem(QgsDataItem):
             # logged out. When authenticated the item stays NotPopulated, so
             # expanding it triggers createChildren() and loads the projects.
             self.setState(Qgis.BrowserItemState.Populated)
+
+    def icon(self) -> QIcon:
+        """Create the bundled icon lazily on the GUI thread, as QGIS calls this there."""
+        if not self._icon_loaded:
+            self.setIcon(QIcon(str(ICONS_DIR / "rana.svg")))
+            self._icon_loaded = True
+        return super().icon()
 
     def createChildren(self) -> list:
         """Fetch and return project items. Called by QGIS in a background thread."""

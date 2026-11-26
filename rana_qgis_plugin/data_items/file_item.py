@@ -36,7 +36,6 @@ from rana_qgis_plugin.widgets.file_info_dialog import (
     SchematisationFileInfoDialog,
 )
 from rana_qgis_plugin.widgets.name_input_dialog import NameInputDialog
-from rana_qgis_plugin.widgets.utils_icons import get_icon_from_theme
 from rana_qgis_plugin.widgets.version_history_dialog import (
     RanaHistoryDialog,
     SchematisationRevisionHistoryDialog,
@@ -72,7 +71,7 @@ class RanaFileDataItem(QgsDataItem):
             f"{parent.path()}/{file_item['id']}",
             "Rana",
         )
-        self.setIcon(get_icon_from_theme(get_file_icon_name(self.data_type)))
+        self.setIconName(get_file_icon_name(self.data_type))
         self.setSortKey(f"1:{display_name.lower()}")
         if self.data_type == "vector":
             self.setCapabilitiesV2(
