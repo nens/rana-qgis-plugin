@@ -1,3 +1,4 @@
+import io
 import json
 import zipfile
 from pathlib import Path
@@ -14,10 +15,14 @@ from rana_qgis_plugin.workers.style_layers import (
     capture_layer_styles,
 )
 from rana_qgis_plugin.workers.styling import (
+    PreparedStyleItem,
     RasterStyleBuilder,
+    StyleUploadTask,
     VectorStyleBuilderAllLayers,
     VectorStyleBuilderSingleLayer,
     make_file_style_upload_item,
+    prepare_style_item,
+    write_style_files,
 )
 
 
@@ -68,14 +73,12 @@ def test_vector_builder_all_layers_writes_qml_zip(tmp_path, qgis_application):
     builder = VectorStyleBuilderAllLayers(
         str(source), "layers.gpkg", LiveLayerSource(layers)
     )
-    builder.tempdir.mkdir(parents=True, exist_ok=True)
-    files = builder.get_files()
+    files = write_style_files(builder.prepare(), tmp_path)
 
     qml_zip = next(Path(path) for _, name, path, _ in files if name == "qml.zip")
     assert qml_zip.exists()
     with zipfile.ZipFile(qml_zip) as archive:
         assert {"roads.qml", "water.qml"}.issubset(archive.namelist())
-    builder.clean()
 
 
 def test_vector_builder_single_layer_only_writes_requested_qml(
@@ -87,13 +90,11 @@ def test_vector_builder_single_layer_only_writes_requested_qml(
     builder = VectorStyleBuilderSingleLayer(
         str(source), "layers.gpkg", LiveLayerSource(layers), "roads"
     )
-    builder.tempdir.mkdir(parents=True, exist_ok=True)
-    files = builder.get_files()
+    files = write_style_files(builder.prepare(), tmp_path)
 
     qml_zip = next(Path(path) for _, name, path, _ in files if name == "qml.zip")
     with zipfile.ZipFile(qml_zip) as archive:
         assert archive.namelist() == ["roads.qml"]
-    builder.clean()
 
 
 def test_raster_builder_writes_qml_and_colormap(tmp_path, qgis_application):
@@ -105,8 +106,7 @@ def test_raster_builder_writes_qml_and_colormap(tmp_path, qgis_application):
     QgsProject.instance().addMapLayer(layer)
 
     builder = RasterStyleBuilder(str(source), "elevation.tif", LiveLayerSource([layer]))
-    builder.tempdir.mkdir(parents=True, exist_ok=True)
-    files = builder.get_files()
+    files = write_style_files(builder.prepare(), tmp_path)
 
     names = {name for _, name, _, _ in files}
     assert "qml.zip" in names
@@ -115,7 +115,6 @@ def test_raster_builder_writes_qml_and_colormap(tmp_path, qgis_application):
         assert Path(path).exists()
         if name == "colormap.json":
             json.loads(Path(path).read_text())
-    builder.clean()
 
 
 def test_vector_builder_uses_snapshot_after_project_is_cleared(
@@ -129,13 +128,11 @@ def test_vector_builder_uses_snapshot_after_project_is_cleared(
 
     builder = VectorStyleBuilderAllLayers(str(source), "layers.gpkg", layer_source)
     assert builder.validate_layers()
-    builder.tempdir.mkdir(parents=True, exist_ok=True)
-    files = builder.get_files()
+    files = write_style_files(builder.prepare(), tmp_path)
 
     qml_zip = next(Path(path) for _, name, path, _ in files if name == "qml.zip")
     with zipfile.ZipFile(qml_zip) as archive:
         assert {"roads.qml", "water.qml"}.issubset(archive.namelist())
-    builder.clean()
     layer_source.discard()
 
 
@@ -170,10 +167,8 @@ def test_raster_snapshot_survives_project_clear(tmp_path, qgis_application):
 
     builder = RasterStyleBuilder(str(source), "elevation.tif", layer_source)
     assert builder.validate_layers()
-    builder.tempdir.mkdir(parents=True, exist_ok=True)
-    names = {name for _, name, _, _ in builder.get_files()}
+    names = {name for _, name, _, _ in write_style_files(builder.prepare(), tmp_path)}
     assert {"qml.zip", "colormap.json"}.issubset(names)
-    builder.clean()
     layer_source.discard()
 
 
@@ -185,8 +180,10 @@ def test_discard_removes_the_captured_qml_directory(tmp_path, qgis_application):
     assert qml_dir.exists()
 
     layer_source.discard()
+    layer_source.discard()
 
     assert not qml_dir.exists()
+    assert layer_source.layers == []
 
 
 def test_live_layer_source_is_not_affected_by_discard(tmp_path, qgis_application):
@@ -216,3 +213,57 @@ def test_make_file_style_upload_item_carries_the_layer_source(
     )
 
     assert item.layer_source is layer_source
+
+
+def test_prepare_style_item_captures_missing_layer_on_the_item(
+    tmp_path, qgis_application
+):
+    source = tmp_path / "layers.gpkg"
+    item = make_file_style_upload_item(
+        "descriptor",
+        DataType.vector,
+        str(source),
+        "file layers.gpkg",
+        LiveLayerSource([]),
+        layer_in_file="missing",
+    )
+
+    prepared = prepare_style_item(item)
+
+    assert prepared.style is None
+    assert prepared.error == "Layer not found for file layers.gpkg"
+
+
+def test_upload_task_writes_prepared_style_and_reports_failures(
+    tmp_path, qgis_application
+):
+    from rana_qgis_plugin.workers.styling import PreparedStyle
+
+    uploaded: list[dict[str, bytes]] = []
+
+    def capture(files: list) -> None:
+        uploaded.append({name: Path(path).read_bytes() for _, name, path, _ in files})
+
+    good = PreparedStyleItem(
+        "good",
+        capture,
+        style=PreparedStyle(
+            qml_files={"roads.qml": b"<qgis/>"},
+            json_files=[("style", {"version": 8})],
+            png_files=[("sprite", b"\x89PNG")],
+        ),
+    )
+    bad = PreparedStyleItem("bad", capture, error="conversion broke")
+    task = StyleUploadTask([good, bad])
+    failures: list[tuple[str, str]] = []
+    task.item_failed.connect(lambda name, error: failures.append((name, error)))
+
+    assert task.run() is False
+
+    assert failures == [("bad", "conversion broke")]
+    (files,) = uploaded
+    assert list(files) == ["qml.zip", "style.json", "sprite.png"]
+    with zipfile.ZipFile(io.BytesIO(files["qml.zip"])) as archive:
+        assert archive.read("roads.qml") == b"<qgis/>"
+    assert json.loads(files["style.json"]) == {"version": 8}
+    assert files["sprite.png"] == b"\x89PNG"

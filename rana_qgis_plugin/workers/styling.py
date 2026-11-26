@@ -1,20 +1,17 @@
 import copy
 import json
 import math
-import shutil
 import tempfile
 import zipfile
-from functools import cached_property
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-import requests
 from bridgestyle.mapboxgl.fromgeostyler import convertGroup
 from bridgestyle.qgis import togeostyler
-from qgis.core import QgsTask
+from qgis.core import QgsMapLayer, QgsTask
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
-from rana_qgis_plugin.constant import STYLE_DIR
 from rana_qgis_plugin.utils.api import (
     upload_file_styling,
     upload_publication_style,
@@ -24,13 +21,39 @@ from rana_qgis_plugin.utils.generic import (
     image_to_bytes,
 )
 from rana_qgis_plugin.utils.lizard import import_from_geostyler
-from rana_qgis_plugin.utils.local_paths import get_local_publication_file_path
 from rana_qgis_plugin.utils.qgis import strip_rana_properties_from_qml
 from rana_qgis_plugin.workers.style_layers import LayerSource
 
 
+@dataclass
+class PreparedStyle:
+    """Plain styling data built on the main thread and written out by the worker.
+
+    Holds only bytes, strings and dicts so the upload task never touches QGIS
+    layers, renderers or bridgestyle.
+    """
+
+    qml_files: dict[str, bytes] = field(default_factory=dict)
+    json_files: list[tuple[str, str | dict]] = field(default_factory=list)
+    png_files: list[tuple[str, bytes]] = field(default_factory=list)
+
+
+@dataclass
+class PreparedStyleItem:
+    """One style upload with its styling already prepared, or the reason it failed."""
+
+    file_ref_str: str
+    upload_func: Any
+    style: PreparedStyle | None = None
+    error: str | None = None
+
+
 class StyleBuilder(QObject):
-    """Style builder takes care of collecting style files; it is unaware of any context"""
+    """Style builder takes care of collecting style data; it is unaware of any context.
+
+    ``prepare`` must run on the main thread: it reads live QGIS layers and calls
+    bridgestyle, which are not safe to use from a worker thread.
+    """
 
     failed = pyqtSignal(str)
     warning = pyqtSignal(str)
@@ -43,68 +66,40 @@ class StyleBuilder(QObject):
         self.file_ref_str = file_ref_str
         self.layer_source = layer_source
 
-    def get_files(self) -> list:
+    def prepare(self) -> PreparedStyle:
         raise NotImplementedError
 
-    def clean(self):
-        # Clean up - don't worry too much about errors because tempdir will be cleaned on reboot anyway
-        try:
-            shutil.rmtree(self.tempdir)
-        except (FileNotFoundError, PermissionError, OSError) as e:
-            pass
-
-    @cached_property
-    def tempdir(self) -> Path:
-        return Path(tempfile.mkdtemp())
-
     @property
-    def layers(self):
+    def layers(self) -> list[QgsMapLayer]:
         return self.layer_source.layers
 
     def validate_layers(self) -> bool:
         raise NotImplementedError
 
-    def _create_qml_zip(self, zip_path: str):
-        """Craete a QML zip file for all the qml files in the local directory"""
-        try:
-            with zipfile.ZipFile(zip_path, "w") as zip_file:
-                for file_path in self.tempdir.rglob("*.qml"):
-                    zip_file.write(file_path, file_path.relative_to(self.tempdir))
-        except Exception as e:
-            self.failed.emit(f"Failed to create QML zip: {str(e)}")
-
-    def layer_qml_path(self, layer_name: str) -> Path:
-        return self.tempdir.joinpath(f"{layer_name}.qml")
-
-    def save_qml_style_to_file(self) -> tuple:
-        # Save QML style files for each layer to local directory
-        for layer in self.layers:
-            # TODO: this breaks with non writable paths due to illegal characters
-            qml_path = self.layer_qml_path(layer.name())
-            layer.saveNamedStyle(str(qml_path))
-            strip_rana_properties_from_qml(qml_path)
-        zip_path = str(self.tempdir.joinpath("qml.zip"))
-        self._create_qml_zip(zip_path)
-        return ("files", "qml.zip", zip_path, "application/zip")
+    def qml_bytes(self, layer: QgsMapLayer, scratch_dir: Path) -> bytes:
+        qml_path = scratch_dir.joinpath("style.qml")
+        layer.saveNamedStyle(str(qml_path))
+        strip_rana_properties_from_qml(qml_path)
+        return qml_path.read_bytes()
 
 
 class RasterStyleBuilder(StyleBuilder):
     def validate_layers(self) -> bool:
         return len(self.layers) == 1
 
-    def layer_qml_path(self, layer_name: str) -> Path:
-        return self.tempdir.joinpath(
-            Path(self.local_file_path).with_suffix(".qml").name
-        )
+    def prepare(self) -> PreparedStyle:
+        style = PreparedStyle()
+        qml_name = Path(self.local_file_path).with_suffix(".qml").name
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            style.qml_files[qml_name] = self.qml_bytes(
+                self.layers[0], Path(scratch_dir)
+            )
+        lizard_styling = self._lizard_styling()
+        if lizard_styling is not None:
+            style.json_files.append(("colormap", lizard_styling))
+        return style
 
-    def get_files(self) -> list:
-        zip_files = self.save_qml_style_to_file()
-        lizard_styling_files = self._save_lizard_style_to_file()
-        if lizard_styling_files:
-            return [zip_files, lizard_styling_files]
-        return [zip_files]
-
-    def _save_lizard_style_to_file(self) -> Optional[tuple]:
+    def _lizard_styling(self) -> Optional[dict]:
         layer = self.layers[0]
         geostyler, _, _, warnings = togeostyler.convert(layer)
         if len(geostyler["rules"]) != 1:
@@ -135,44 +130,22 @@ class RasterStyleBuilder(StyleBuilder):
                     return None
         if warnings:
             self.warning.emit(", ".join(set(warnings)))
-        lizard_styling_path = self.tempdir.joinpath("colormap.json")
-        with open(lizard_styling_path, "w") as f:
-            json.dump(lizard_styling, f)
-        return ("files", "colormap.json", str(lizard_styling_path), "application/json")
+        return lizard_styling
 
 
 class VectorStyleBuilder(StyleBuilder):
-    def get_files(self) -> list:
-        zip_path = self.save_qml_style_to_file()
-        qgis_styling_files = self.get_qgis_styling_files()
+    def prepare(self) -> PreparedStyle:
+        style = PreparedStyle()
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            for layer in self.layers:
+                style.qml_files[f"{layer.name()}.qml"] = self.qml_bytes(
+                    layer, Path(scratch_dir)
+                )
+        self._add_qgis_styling(style)
+        return style
 
-        return [zip_path] + qgis_styling_files
-
-    def _collect_json_files(self, json_data: list[tuple[str, dict]]) -> list:
-        files = []
-        for name, data in json_data:
-            json_path = self.tempdir.joinpath(name).with_suffix(".json")
-            with open(json_path, "w") as f:
-                with open(json_path, "w") as f:
-                    if isinstance(data, str):
-                        f.write(data)
-                    else:
-                        json.dump(data, f)
-            files.append(("files", json_path.name, str(json_path), "application/json"))
-        return files
-
-    def _collect_png_files(self, png_data: list[tuple[str, Any]]) -> list:
-        files = []
-        for name, img_data in png_data:
-            png_path = self.tempdir.joinpath(name).with_suffix(".png")
-            with open(png_path, "wb") as f:
-                f.write(image_to_bytes(img_data))
-            files.append(("files", png_path.name, str(png_path), "image/png"))
-        return files
-
-    def get_qgis_styling_files(self) -> list:
-        files: list[tuple[str, str, str, str]] = []
-        # Convert QGIS layers to styling files for the Rana Web Client
+    def _add_qgis_styling(self, style: PreparedStyle) -> None:
+        # Convert QGIS layers to styling for the Rana Web Client
         try:
             _, warnings, mb_style, sprite_sheet = convertGroup(
                 {"layers": [layer.name() for layer in self.layers]},
@@ -185,24 +158,13 @@ class VectorStyleBuilder(StyleBuilder):
                 self.warning.emit(", ".join(set(warnings)))
         except Exception as e:
             self.failed.emit(f"Failed to convert local styling: {str(e)}")
-            return files
-        # Save styling to file
-        files += self._collect_json_files([("style", mb_style)])
-        # Save sprite sheet to file
+            return
+        style.json_files.append(("style", mb_style))
         if sprite_sheet and sprite_sheet.get("img") and sprite_sheet.get("img2x"):
-            files += self._collect_json_files(
-                [
-                    ("sprite", sprite_sheet["json"]),
-                    ("sprite@2x", sprite_sheet["json2x"]),
-                ],
-            )
-            files += self._collect_png_files(
-                [
-                    ("sprite", sprite_sheet["img"]),
-                    ("sprite@2x", sprite_sheet["img2x"]),
-                ],
-            )
-        return files
+            style.json_files.append(("sprite", sprite_sheet["json"]))
+            style.json_files.append(("sprite@2x", sprite_sheet["json2x"]))
+            style.png_files.append(("sprite", image_to_bytes(sprite_sheet["img"])))
+            style.png_files.append(("sprite@2x", image_to_bytes(sprite_sheet["img2x"])))
 
 
 class VectorStyleBuilderAllLayers(VectorStyleBuilder):
@@ -226,7 +188,7 @@ class VectorStyleBuilderSingleLayer(VectorStyleBuilder):
         self.layer_in_file = layer_in_file
 
     @property
-    def layers(self):
+    def layers(self) -> list[QgsMapLayer]:
         layer = next(
             (layer for layer in super().layers if layer.name() == self.layer_in_file),
             None,
@@ -237,44 +199,95 @@ class VectorStyleBuilderSingleLayer(VectorStyleBuilder):
         return len(self.layers) == 1
 
 
+def make_builder(item: StyleUploadItem) -> StyleBuilder:
+    """Build the appropriate StyleBuilder based on data_type."""
+    if item.layer_source is None:
+        raise RuntimeError(f"No layers captured for {item.file_ref_str}")
+    if item.data_type == DataType.raster:
+        return RasterStyleBuilder(
+            item.local_file_path, item.file_ref_str, item.layer_source
+        )
+    elif item.data_type == DataType.vector:
+        if item.layer_in_file:
+            return VectorStyleBuilderSingleLayer(
+                item.local_file_path,
+                item.file_ref_str,
+                item.layer_source,
+                item.layer_in_file,
+            )
+        return VectorStyleBuilderAllLayers(
+            item.local_file_path, item.file_ref_str, item.layer_source
+        )
+    else:
+        raise ValueError(
+            f"Unsupported data type for style upload: {item.data_type.value}"
+        )
+
+
+def prepare_style_item(item: StyleUploadItem) -> PreparedStyleItem:
+    """Convert one item's layers to plain styling data. Must run on the main thread.
+
+    Failures are captured on the result rather than raised, so the upload task
+    reports them per item exactly like worker-side failures.
+    """
+    name = item.file_ref_str
+    try:
+        builder = make_builder(item)
+        if not builder.validate_layers():
+            raise RuntimeError(f"Layer not found for {name}")
+        return PreparedStyleItem(name, item.upload_func, style=builder.prepare())
+    except Exception as error:
+        return PreparedStyleItem(name, item.upload_func, error=str(error))
+    finally:
+        if item.layer_source is not None:
+            item.layer_source.discard()
+
+
+def prepare_style_items(items: list[StyleUploadItem]) -> list[PreparedStyleItem]:
+    """Prepare every item on the main thread before the upload task is started."""
+    return [prepare_style_item(item) for item in items]
+
+
+def write_style_files(style: PreparedStyle, directory: Path) -> list[tuple]:
+    """Write prepared styling into ``directory`` and describe the files for upload."""
+    files: list[tuple[str, str, str, str]] = []
+    zip_path = directory.joinpath("qml.zip")
+    with zipfile.ZipFile(zip_path, "w") as zip_file:
+        for name, content in style.qml_files.items():
+            zip_file.writestr(name, content)
+    files.append(("files", "qml.zip", str(zip_path), "application/zip"))
+    for name, payload in style.json_files:
+        json_path = directory.joinpath(name).with_suffix(".json")
+        with open(json_path, "w") as f:
+            if isinstance(payload, str):
+                f.write(payload)
+            else:
+                json.dump(payload, f)
+        files.append(("files", json_path.name, str(json_path), "application/json"))
+    for name, data in style.png_files:
+        png_path = directory.joinpath(name).with_suffix(".png")
+        png_path.write_bytes(data)
+        files.append(("files", png_path.name, str(png_path), "image/png"))
+    return files
+
+
 class StyleUploadTask(QgsTask):
-    """Build and upload styles for one or more items."""
+    """Write and upload prepared styles for one or more items.
+
+    Runs on a worker thread: it only touches plain data and the filesystem.
+    """
 
     item_finished = pyqtSignal(str)
     item_started = pyqtSignal(str)
     item_failed = pyqtSignal(str, str)
     warning = pyqtSignal(str)
 
-    def __init__(self, items: list[StyleUploadItem]):
+    def __init__(self, items: list[PreparedStyleItem]):
         # avoid importing task flags for typing compatibility in tests
         super().__init__("Upload styling")
         self.items = items
         self.failed_items: list[tuple[str, str]] = []
         self.rana_sync_keys: list[tuple[str, str]] = []
-
-    def make_builder(self, item: StyleUploadItem) -> StyleBuilder:
-        """Build the appropriate StyleBuilder based on data_type."""
-        if item.layer_source is None:
-            raise RuntimeError(f"No layers captured for {item.file_ref_str}")
-        if item.data_type == DataType.raster:
-            return RasterStyleBuilder(
-                item.local_file_path, item.file_ref_str, item.layer_source
-            )
-        elif item.data_type == DataType.vector:
-            if item.layer_in_file:
-                return VectorStyleBuilderSingleLayer(
-                    item.local_file_path,
-                    item.file_ref_str,
-                    item.layer_source,
-                    item.layer_in_file,
-                )
-            return VectorStyleBuilderAllLayers(
-                item.local_file_path, item.file_ref_str, item.layer_source
-            )
-        else:
-            raise ValueError(
-                f"Unsupported data type for style upload: {item.data_type.value}"
-            )
 
     def run(self) -> bool:
         for index, item in enumerate(self.items):
@@ -282,25 +295,20 @@ class StyleUploadTask(QgsTask):
                 return False
             name = item.file_ref_str
             self.item_started.emit(name)
-            builder = None
             try:
-                builder = self.make_builder(item)
-                if not builder.validate_layers():
-                    raise RuntimeError(f"Layer not found for {name}")
-                builder.tempdir.mkdir(parents=True, exist_ok=True)
-                files = builder.get_files()
-                if not files:
-                    raise RuntimeError(f"No style files generated for {name}")
-                item.upload_func(files)
+                if item.error is not None:
+                    raise RuntimeError(item.error)
+                if item.style is None:
+                    raise RuntimeError(f"Styling was not prepared for {name}")
+                with tempfile.TemporaryDirectory() as directory:
+                    files = write_style_files(item.style, Path(directory))
+                    if not files:
+                        raise RuntimeError(f"No style files generated for {name}")
+                    item.upload_func(files)
                 self.item_finished.emit(name)
             except Exception as error:
                 self.failed_items.append((name, str(error)))
                 self.item_failed.emit(name, str(error))
-            finally:
-                if builder is not None:
-                    builder.clean()
-                if item.layer_source is not None:
-                    item.layer_source.discard()
             self.setProgress((index + 1) * 100 / len(self.items))
         return not self.failed_items
 

@@ -1,5 +1,6 @@
 """Central loader: owns background workers and the avatar cache."""
 
+import traceback
 from collections.abc import Callable, Sequence
 from enum import Enum
 from pathlib import Path, PurePosixPath
@@ -23,6 +24,7 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QImage, QPixmap
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QDialog,
     QDockWidget,
     QFileDialog,
@@ -148,7 +150,11 @@ from rana_qgis_plugin.workers.download import (
     SchematisationRevisionDownloadContext,
     SchematisationRevisionDownloader,
 )
-from rana_qgis_plugin.workers.styling import StyleUploadTask, discard_layer_sources
+from rana_qgis_plugin.workers.styling import (
+    StyleUploadTask,
+    discard_layer_sources,
+    prepare_style_items,
+)
 from rana_qgis_plugin.workers.threedi_resolve import ScenarioResolveTask
 from rana_qgis_plugin.workers.upload import (
     ExistingUploadStatus,
@@ -2005,7 +2011,22 @@ class Loader(QObject):
                 self.release_sync_keys(keys)
                 discard_layer_sources(items)
                 return None
-        task = StyleUploadTask(items)
+        # Preparing converts live layers on the main thread and blocks the UI, so
+        # only a wait cursor is shown: a message bar would not repaint before the block.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            prepared = prepare_style_items(items)
+        except Exception:
+            self.communication.log_err(
+                f"Style preparation failed:\n{traceback.format_exc()}"
+            )
+            self.communication.bar_error("Could not prepare styles for upload.")
+            self.release_sync_keys(keys)
+            discard_layer_sources(items)
+            return None
+        finally:
+            QApplication.restoreOverrideCursor()
+        task = StyleUploadTask(prepared)
         task.rana_sync_keys = keys
         task.item_started.connect(
             lambda name: self.set_progress_bar_busy(f"Uploading style {name}")

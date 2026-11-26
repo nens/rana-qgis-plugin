@@ -9,7 +9,7 @@ case once a project is cleared or a layer tree node is removed.
 These sources decouple the builders from that assumption. The menu-driven save
 hands over the live layers it already has; the close prompt captures a cheap
 QML snapshot while the layers are still alive and restores equivalent layers
-later on the worker thread.
+during style preparation on the main thread.
 """
 
 from __future__ import annotations
@@ -64,9 +64,9 @@ class LiveLayerSource:
 class SnapshotLayerSource:
     """Rebuilds styled layers from a snapshot taken before they were removed.
 
-    Reconstruction is deferred until ``layers`` is first read so it happens on
-    the upload task's worker thread rather than in the signal handler that
-    captured the snapshot.
+    Reconstruction is deferred until ``layers`` is first read, which happens
+    during style preparation on the main thread (see ``prepare_style_items``),
+    rather than in the signal handler that captured the snapshot.
     """
 
     def __init__(self, snapshots: list[LayerStyleSnapshot], qml_dir: Path):
@@ -86,6 +86,13 @@ class SnapshotLayerSource:
         return self._layers
 
     def discard(self) -> None:
+        """Release the rebuilt layers and the QML directory.
+
+        Idempotent: after the first call ``layers`` is empty and nothing is
+        rebuilt. Dropping the layers closes their providers, which matters for
+        file locks (e.g. GeoPackage) on Windows.
+        """
+        self._layers = []
         shutil.rmtree(self.qml_dir, ignore_errors=True)
 
 
