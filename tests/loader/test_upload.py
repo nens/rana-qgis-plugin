@@ -16,7 +16,9 @@ from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
     evaluate_raster_data_dirty,
 )
+from rana_qgis_plugin.layer_management.sync_lock import sync_key
 from rana_qgis_plugin.loader import Loader, UploadChoice
+from rana_qgis_plugin.utils.data_models import DataType, StyleUploadItem
 from rana_qgis_plugin.workers.upload import UploadJob, UploadPreparationResult
 
 
@@ -527,3 +529,65 @@ def test_upload_files_full_chain_failure(qgis_application, tmp_path):
     communication.bar_error.assert_called_once()
     communication.bar_info.assert_not_called()
     callback.assert_not_called()
+
+
+class FakeTaskManager:
+    def __init__(self):
+        self.tasks = []
+
+    def addTask(self, task):
+        self.tasks.append(task)
+
+
+@pytest.fixture
+def task_manager(monkeypatch):
+    manager = FakeTaskManager()
+    monkeypatch.setattr(
+        "rana_qgis_plugin.loader.QgsApplication.taskManager",
+        staticmethod(lambda: manager),
+    )
+    monkeypatch.setattr("rana_qgis_plugin.loader.prepare_style_items", lambda items: [])
+    return manager
+
+
+def make_style_item(file_id: str = "file.gpkg") -> StyleUploadItem:
+    return StyleUploadItem(
+        data_type=DataType.vector,
+        local_file_path=file_id,
+        file_ref_str=f"file {file_id}",
+        upload_func=lambda files: None,
+        project_id="project",
+        descriptor_id="descriptor",
+        file_id=file_id,
+    )
+
+
+def test_upload_styles_returns_started_task(task_manager):
+    loader, _ = make_loader()
+    loader.verify_style_target = lambda item, layers: True
+
+    task = loader.upload_styles([make_style_item()])
+
+    assert task is not None
+    assert task_manager.tasks == [task]
+    assert loader.layer_lock_registry.is_locked(("project", "file.gpkg"))
+
+
+def test_upload_styles_returns_none_when_sync_key_is_held(task_manager):
+    loader, communication = make_loader()
+    assert loader.layer_lock_registry.acquire(("project", "file.gpkg"))
+
+    assert loader.upload_styles([make_style_item()]) is None
+
+    assert task_manager.tasks == []
+    communication.bar_warn.assert_called_once_with("A sync is already in progress.")
+
+
+def test_upload_styles_returns_none_when_style_target_fails(task_manager):
+    loader, _ = make_loader()
+    loader.verify_style_target = lambda item, layers: False
+
+    assert loader.upload_styles([make_style_item()]) is None
+
+    assert task_manager.tasks == []
+    assert not loader.layer_lock_registry.is_locked(("project", "file.gpkg"))

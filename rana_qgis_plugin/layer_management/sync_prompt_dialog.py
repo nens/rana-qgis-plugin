@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import PurePosixPath
 
 from qgis.PyQt.QtCore import Qt
@@ -194,15 +193,13 @@ class SyncDialog(QDialog):
         return message or None
 
 
-def dispatch_selected(
+def select_items(
     style_items: list[StyleUploadItem],
     data_items: list[UploadableLayerItem],
     selected_style: set[SyncFileKey],
     selected_data: set[SyncFileKey],
-    dispatch_style: Callable[[list[StyleUploadItem]], None],
-    dispatch_data: Callable[[list[UploadableLayerItem]], None],
-) -> None:
-    """Dispatch the items whose file is selected and release the other styles."""
+) -> tuple[list[StyleUploadItem], list[UploadableLayerItem]]:
+    """Return the style and data items to sync and release the unselected styles."""
     style_to_sync = [
         item
         for item in style_items
@@ -222,7 +219,4 @@ def dispatch_selected(
     discard_layer_sources(
         [item for item in style_items if id(item) not in synced_style_ids]
     )
-    if style_to_sync:
-        dispatch_style(style_to_sync)
-    if data_to_sync:
-        dispatch_data(data_to_sync)
+    return style_to_sync, data_to_sync

@@ -29,7 +29,7 @@ from rana_qgis_plugin.layer_management.sync_changes import (
 from rana_qgis_plugin.layer_management.sync_lock import LayerLockRegistry, sync_key
 from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
     SyncDialog,
-    dispatch_selected,
+    select_items,
 )
 from rana_qgis_plugin.utils.data_models import (
     DataType,
@@ -41,6 +41,7 @@ from rana_qgis_plugin.workers.style_layers import (
     capture_layer_styles,
 )
 from rana_qgis_plugin.workers.styling import (
+    StyleUploadTask,
     discard_layer_sources,
     make_file_style_upload_item,
 )
@@ -198,12 +199,14 @@ class LayerTreeMenuProvider:
             seen.add(key)
         return items
 
-    def dispatch_style_items(self, items: list[StyleUploadItem]) -> None:
+    def dispatch_style_items(
+        self, items: list[StyleUploadItem]
+    ) -> StyleUploadTask | None:
         """Delegate previously-captured style upload inputs to Loader."""
         if self.loader is None:
             discard_layer_sources(items)
-            return
-        self.loader.upload_styles(items)
+            return None
+        return self.loader.upload_styles(items)
 
     def sync(self, kind: SyncKind, groups: list[QgsLayerTreeGroup]) -> None:
         """Ask which files of one kind to sync, then dispatch the checked ones."""
@@ -226,14 +229,16 @@ class LayerTreeMenuProvider:
             show_kinds=False,
         )
         confirmed = dialog.exec() == QDialog.DialogCode.Accepted
-        dispatch_selected(
+        style_to_sync, data_to_sync = select_items(
             style_items,
             data_items,
             dialog.selected(SyncKind.STYLE) if confirmed else set(),
             dialog.selected(SyncKind.DATA) if confirmed else set(),
-            self.dispatch_style_items,
-            lambda items: self.dispatch_data_items(items, dialog.message()),
         )
+        if style_to_sync:
+            self.dispatch_style_items(style_to_sync)
+        if data_to_sync:
+            self.dispatch_data_items(data_to_sync, dialog.message())
 
     def capture_data_items(
         self, groups: list[QgsLayerTreeGroup]

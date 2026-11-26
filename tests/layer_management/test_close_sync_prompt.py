@@ -1,17 +1,34 @@
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
+import pytest
 from osgeo import gdal
 from qgis.core import QgsLayerTreeGroup, QgsRasterLayer, QgsVectorLayer
+from qgis.PyQt.QtWidgets import QDialog
 
+from rana_qgis_plugin.api_error_signals import ApiErrorSignals
 from rana_qgis_plugin.layer_management.close_sync_prompt import (
+    SyncPromptAction,
     collect_dirty_file_groups,
 )
 from rana_qgis_plugin.layer_management.layer_dirty_flags import DATA_SYNC_STATE_PROPERTY
+from rana_qgis_plugin.layer_management.layer_manager import RanaLayerRef
 from rana_qgis_plugin.layer_management.layer_sync_state import LayerSyncState
+from rana_qgis_plugin.layer_management.layer_tree_menu import LayerTreeMenuProvider
 from rana_qgis_plugin.layer_management.raster_dirty_evaluator import (
     capture_raster_baseline,
 )
+from rana_qgis_plugin.layer_management.sync_changes import SyncKind, file_key
+from rana_qgis_plugin.layer_management.sync_lock import sync_key
+from rana_qgis_plugin.layer_management.upload_lock import lock_jobs
+from rana_qgis_plugin.loader import Loader
+from rana_qgis_plugin.utils.data_models import (
+    DataType,
+    StyleUploadItem,
+    UploadableLayerItem,
+)
+from rana_qgis_plugin.workers.upload import UploadJob
 from tests.layer_management.sync_prompt_helpers import add_file_group, make_linked_layer
 
 
@@ -150,3 +167,144 @@ def test_file_group_is_listed_once_when_multiple_layers_are_dirty(qgis_applicati
 
     assert style_groups == [group]
     assert data_groups == []
+
+
+class FakeCloseSyncDialog:
+    def __init__(self, *args, selected_style, selected_data):
+        self._selected = {SyncKind.STYLE: selected_style, SyncKind.DATA: selected_data}
+
+    def exec(self):
+        return QDialog.DialogCode.Accepted
+
+    def selected(self, kind):
+        return self._selected[kind]
+
+    def message(self):
+        return "commit message"
+
+
+class FakeCloseTaskManager:
+    def __init__(self):
+        self.tasks = []
+
+    def addTask(self, task):
+        self.tasks.append(task)
+
+
+@pytest.fixture
+def close_sync(monkeypatch, qgis_application):
+    manager = FakeCloseTaskManager()
+    monkeypatch.setattr(
+        "rana_qgis_plugin.loader.QgsApplication.taskManager",
+        staticmethod(lambda: manager),
+    )
+    monkeypatch.setattr("rana_qgis_plugin.loader.prepare_style_items", lambda items: [])
+    loader = Loader(MagicMock())
+    loader.verify_style_target = lambda item, layers: True
+    uploads = []
+
+    def record_upload(items, message=None):
+        job = UploadJob("project", Path("file.gpkg"), "https://upload", {})
+        job.sync_key = sync_key("project", "file.gpkg")
+        locks, warnings = lock_jobs([job], loader.layer_lock_registry)
+        for lock in locks.values():
+            lock.release()
+        uploads.append((message, warnings))
+
+    loader.upload_existing_files = record_upload
+    menu = LayerTreeMenuProvider(
+        MagicMock(),
+        loader.layer_lock_registry,
+        ApiErrorSignals(),
+        loader=loader,
+    )
+    return SimpleNamespace(manager=manager, loader=loader, uploads=uploads, menu=menu)
+
+
+def close_sync_items(file_id: str = "file.gpkg", style: bool = True, data: bool = True):
+    style_items = (
+        [
+            StyleUploadItem(
+                data_type=DataType.vector,
+                local_file_path=file_id,
+                file_ref_str=f"file {file_id}",
+                upload_func=lambda files: None,
+                project_id="project",
+                descriptor_id="descriptor",
+                file_id=file_id,
+            )
+        ]
+        if style
+        else []
+    )
+    data_items = (
+        [
+            UploadableLayerItem(
+                RanaLayerRef("project", file_id, descriptor_id="descriptor"),
+                Path(file_id),
+                "layer",
+                "project",
+            )
+        ]
+        if data
+        else []
+    )
+    return style_items, data_items
+
+
+def run_close_sync(close_sync, style_items, data_items, selected_style, selected_data):
+    selected_style_keys = (
+        {file_key("project", "descriptor", None)} if selected_style else set()
+    )
+    selected_data_keys = (
+        {file_key("project", "descriptor", "file.gpkg")} if selected_data else set()
+    )
+    with patch(
+        "rana_qgis_plugin.layer_management.close_sync_prompt.SyncDialog",
+        lambda *args, **kwargs: FakeCloseSyncDialog(
+            selected_style=selected_style_keys, selected_data=selected_data_keys
+        ),
+    ):
+        SyncPromptAction(close_sync.menu).prompt_and_dispatch(
+            style_items, data_items, MagicMock()
+        )
+
+
+def test_close_sync_data_waits_for_style_completion(close_sync):
+    style_items, data_items = close_sync_items()
+
+    run_close_sync(close_sync, style_items, data_items, True, True)
+
+    assert close_sync.uploads == []
+    style_task = close_sync.manager.tasks[0]
+    style_task.taskCompleted.emit()
+    assert close_sync.uploads == [("commit message", [])]
+
+
+def test_close_sync_data_waits_for_style_termination(close_sync):
+    style_items, data_items = close_sync_items()
+
+    run_close_sync(close_sync, style_items, data_items, True, True)
+    assert close_sync.uploads == []
+    close_sync.manager.tasks[0].taskTerminated.emit()
+
+    assert close_sync.uploads == [("commit message", [])]
+
+
+def test_close_sync_data_uploads_immediately_when_style_not_started(close_sync):
+    close_sync.loader.verify_style_target = lambda item, layers: False
+    style_items, data_items = close_sync_items()
+
+    run_close_sync(close_sync, style_items, data_items, True, True)
+
+    assert close_sync.manager.tasks == []
+    assert close_sync.uploads == [("commit message", [])]
+
+
+def test_close_sync_data_uploads_immediately_when_no_style_selected(close_sync):
+    style_items, data_items = close_sync_items()
+
+    run_close_sync(close_sync, style_items, data_items, False, True)
+
+    assert close_sync.manager.tasks == []
+    assert close_sync.uploads == [("commit message", [])]

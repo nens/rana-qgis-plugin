@@ -1982,15 +1982,18 @@ class Loader(QObject):
             self.release_file_locks(locks)
             raise
 
-    def upload_styles(self, items: list[StyleUploadItem]) -> None:
-        """Submit a background task for the supplied style uploads."""
+    def upload_styles(self, items: list[StyleUploadItem]) -> StyleUploadTask | None:
+        """Submit a background task for the supplied style uploads.
+
+        Returns the started task, or None when no task was started.
+        """
         if not items:
-            return
+            return None
         task_manager = QgsApplication.taskManager()
         if task_manager is None:
             self.communication.bar_error("Could not start style upload.")
             discard_layer_sources(items)
-            return
+            return None
         keys = list(
             {
                 sync_key(item.project_id, item.file_id)
@@ -2001,7 +2004,7 @@ class Loader(QObject):
         if not self.acquire_sync_keys(keys):
             self.communication.bar_warn("A sync is already in progress.")
             discard_layer_sources(items)
-            return
+            return None
 
         for item in items:
             if item.project_id is None or item.file_id is None:
@@ -2045,6 +2048,7 @@ class Loader(QObject):
         task.taskTerminated.connect(lambda: self.handle_style_sync_terminated(task))
         self._track_task(task)
         task_manager.addTask(task)
+        return task
 
     def acquire_sync_keys(self, keys: list[tuple[str, str]]) -> bool:
         acquired: list[tuple[str, str]] = []

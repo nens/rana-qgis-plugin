@@ -19,6 +19,8 @@ prompt). See `doc/signals.md` for the full connection/sequence diagrams and
 `doc/dirty_tracking.md` for flowcharts of each route.
 """
 
+from functools import partial
+
 from qgis.core import (
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
@@ -46,7 +48,7 @@ from rana_qgis_plugin.layer_management.sync_changes import (
 )
 from rana_qgis_plugin.layer_management.sync_prompt_dialog import (
     SyncDialog,
-    dispatch_selected,
+    select_items,
 )
 from rana_qgis_plugin.utils.data_models import (
     StyleUploadItem,
@@ -148,16 +150,30 @@ class SyncPromptAction:
             changes,
         )
         confirmed = dialog.exec() == QDialog.DialogCode.Accepted
-        dispatch_selected(
+        message = dialog.message()
+        style_to_sync, data_to_sync = select_items(
             style_items,
             data_items,
             dialog.selected(SyncKind.STYLE) if confirmed else set(),
             dialog.selected(SyncKind.DATA) if confirmed else set(),
-            self.layer_tree_menu.dispatch_style_items,
-            lambda items: self.layer_tree_menu.dispatch_data_items(
-                items, dialog.message()
-            ),
         )
+        style_task = (
+            self.layer_tree_menu.dispatch_style_items(style_to_sync)
+            if style_to_sync
+            else None
+        )
+        if data_to_sync:
+            upload_data = partial(
+                self.layer_tree_menu.dispatch_data_items, data_to_sync, message
+            )
+            if style_task is None:
+                upload_data()
+            else:
+                # Loader connects its sync-key-releasing handlers before returning the
+                # task, and Qt invokes slots in connection order, so the key is free
+                # here. QgsTask emits exactly one of taskCompleted/taskTerminated, once.
+                style_task.taskCompleted.connect(upload_data)
+                style_task.taskTerminated.connect(upload_data)
 
 
 class ProjectCloseSyncPrompt:
